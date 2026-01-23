@@ -1,0 +1,90 @@
+export type ZoneId = string;
+
+export interface Zone {
+  id: ZoneId;
+  name: string;
+  description: string;
+}
+
+export interface MembershipTier {
+  id: number;
+  name: string;
+  price: number;
+  maxZones: number; 
+  description: string;
+  isFullBody: boolean;
+  stripePriceId: string;
+}
+
+export interface UserSubscription {
+  membershipId: number;
+  selectedZones: ZoneId[];
+  startDate: string;
+  status: 'active' | 'pending' | 'cancelled' | 'past_due' | 'paused';
+}
+
+export enum Resolution {
+  ONE_K = '1K',
+  TWO_K = '2K',
+  FOUR_K = '4K'
+}
+
+// --- SECURITY & COMPLIANCE TYPES ---
+
+export type UserRole = 'admin' | 'reception' | 'operator' | 'member';
+
+export interface AuditLogEntry {
+  id: string;
+  timestamp: string;
+  user: string;
+  role: UserRole;
+  action: string;
+  resource: string;
+  ip: string; // Critical for audit
+  status: 'success' | 'failed';
+}
+
+export interface LegalDocument {
+  id: string;
+  type: 'informed_consent' | 'privacy_notice' | 'medical_history';
+  title: string;
+  signed: boolean;
+  signedAt?: string;
+  signatureUrl?: string; // Base64 signature
+  version: string;
+}
+
+export interface Member {
+  id: number;
+  name: string;
+  email: string;
+  role: UserRole;
+  phone?: string;
+  dob?: string;
+  plan?: string;
+  amount?: number;
+  subscriptionStatus?: string;
+  nextBillingDate?: string;
+  lastPaymentDate?: string;
+  paymentMethod?: { type: string; last4: string; expiry: string };
+  history?: any[];
+  clinical?: {
+    fitzpatrickType?: string;
+    allergies?: string;
+    medications?: string;
+    surgicalHistory?: string;
+    consentFormSigned?: boolean;
+    lastUpdate?: string;
+    sessions?: any[];
+    documents?: LegalDocument[];
+  };
+  passwordHash?: string;
+}
+
+// Window augmentation for AI Studio
+declare global {
+  interface AIStudio {
+    hasSelectedApiKey: () => Promise<boolean>;
+    openSelectKey: () => Promise<void>;
+  }
+}
