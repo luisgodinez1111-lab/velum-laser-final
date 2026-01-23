@@ -49,7 +49,7 @@ export const Dashboard: React.FC = () => {
     if (!currentDocToSign || !user) return;
 
     try {
-        await documentService.signDocument(user.id, currentDocToSign.id, signatureData);
+        await documentService.signDocument(currentDocToSign.id, signatureData);
         // Refresh data to show signed status
         const updatedData = await memberService.getById(user.id);
         setMemberData(updatedData || null);

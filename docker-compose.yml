@@ -4,11 +4,14 @@ services:
     build:
       context: ./server
     env_file:
-      - ./server/.env.example
+      - ./server/.env
     ports:
       - "4000:4000"
     depends_on:
       - postgres
+    volumes:
+      - /var/velum/uploads:/var/velum/uploads
+    restart: unless-stopped
   postgres:
     image: postgres:16-alpine
     environment:
@@ -19,5 +22,20 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+  nginx:
+    build:
+      context: .
+      dockerfile: deploy/nginx.Dockerfile
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      - api
+    volumes:
+      - /var/velum/uploads:/var/velum/uploads:ro
+      - ./deploy/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - /var/www/certbot:/var/www/certbot
+    restart: unless-stopped
 volumes:
   postgres_data:

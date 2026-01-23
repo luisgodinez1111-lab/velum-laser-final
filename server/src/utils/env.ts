@@ -14,11 +14,9 @@ export const env = {
   stripeSecretKey: process.env.STRIPE_SECRET_KEY ?? "",
   stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET ?? "",
   stripePortalReturnUrl: process.env.STRIPE_PORTAL_RETURN_URL ?? "http://localhost:5173/account",
-  s3Region: process.env.S3_REGION ?? "us-east-1",
-  s3Bucket: process.env.S3_BUCKET ?? "",
-  s3AccessKeyId: process.env.S3_ACCESS_KEY_ID ?? "",
-  s3SecretAccessKey: process.env.S3_SECRET_ACCESS_KEY ?? "",
-  s3Endpoint: process.env.S3_ENDPOINT,
+  uploadDir: process.env.UPLOAD_DIR ?? "/var/velum/uploads",
+  uploadMaxSize: Number(process.env.UPLOAD_MAX_SIZE ?? 10 * 1024 * 1024),
+  gracePeriodDays: Number(process.env.GRACE_PERIOD_DAYS ?? 5),
   corsOrigin: process.env.CORS_ORIGIN ?? "http://localhost:5173"
 };
 

@@ -2,14 +2,13 @@ import React, { useState } from 'react';
 import { Button } from '../components/Button';
 import { ChevronLeft, ChevronRight, Lock, User, Sparkles } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 
 type ViewState = 'intro' | 'login' | 'register' | 'calendar';
 type AppointmentType = 'standard' | 'valuation';
 
 export const Agenda: React.FC = () => {
-  const { login, isAuthenticated, user } = useAuth();
-  const navigate = useNavigate();
+  const { login, register, isAuthenticated, user } = useAuth();
 
   const [viewState, setViewState] = useState<ViewState>('intro');
   const [appointmentType, setAppointmentType] = useState<AppointmentType>('standard');
@@ -17,6 +16,8 @@ export const Agenda: React.FC = () => {
   // Login State
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
 
   // --- Calendar Logic ---
   const days = Array.from({ length: 30 }, (_, i) => i + 1);
@@ -30,7 +31,17 @@ export const Agenda: React.FC = () => {
         await login(email, password);
         setViewState('calendar');
     } catch (e) {
-        alert("Credenciales incorrectas (Demo: ana.garcia@gmail.com / hashed_secret_123)");
+        alert("Credenciales incorrectas.");
+    }
+  };
+
+  const handleRegisterSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await register({ email, password, firstName, lastName });
+      setViewState('calendar');
+    } catch (e) {
+      alert("No se pudo completar el registro.");
     }
   };
 
@@ -63,7 +74,7 @@ export const Agenda: React.FC = () => {
            </div>
 
            <div 
-             onClick={() => alert("El registro público está deshabilitado en esta demo. Por favor usa una cuenta de socio existente.")}
+             onClick={() => setViewState('register')}
              className="cursor-pointer group bg-velum-900 p-10 border border-velum-900 hover:bg-velum-800 transition-all duration-300 text-center hover:shadow-xl"
            >
              <Sparkles className="mx-auto mb-6 text-velum-50 group-hover:scale-110 transition-transform" size={40} />
@@ -95,7 +106,40 @@ export const Agenda: React.FC = () => {
             </div>
             <Button type="submit" className="w-full">Entrar a la Agenda</Button>
           </form>
-          <p className="text-xs text-center mt-4 text-velum-500">Demo: ana.garcia@gmail.com / hashed_secret_123</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (viewState === 'register') {
+    return (
+      <div className="min-h-[60vh] flex flex-col items-center justify-center px-4 animate-fade-in">
+        <div className="w-full max-w-md bg-white p-8 border border-velum-200 shadow-sm relative">
+          <button onClick={() => setViewState('intro')} className="absolute top-4 left-4 text-velum-400 hover:text-velum-900">
+             <ChevronLeft size={24} />
+          </button>
+          <h2 className="font-serif text-2xl text-center mb-6 pt-4">Crear cuenta</h2>
+          <form onSubmit={handleRegisterSubmit} className="space-y-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs uppercase tracking-widest text-velum-600 mb-2">Nombre</label>
+                <input type="text" value={firstName} onChange={e => setFirstName(e.target.value)} required className="w-full p-3 border border-velum-300 bg-velum-50 focus:border-velum-900 outline-none transition-colors" placeholder="Ana"/>
+              </div>
+              <div>
+                <label className="block text-xs uppercase tracking-widest text-velum-600 mb-2">Apellido</label>
+                <input type="text" value={lastName} onChange={e => setLastName(e.target.value)} required className="w-full p-3 border border-velum-300 bg-velum-50 focus:border-velum-900 outline-none transition-colors" placeholder="García"/>
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs uppercase tracking-widest text-velum-600 mb-2">Correo Electrónico</label>
+              <input type="email" value={email} onChange={e => setEmail(e.target.value)} required className="w-full p-3 border border-velum-300 bg-velum-50 focus:border-velum-900 outline-none transition-colors" placeholder="ana.garcia@gmail.com"/>
+            </div>
+            <div>
+              <label className="block text-xs uppercase tracking-widest text-velum-600 mb-2">Contraseña</label>
+              <input type="password" value={password} onChange={e => setPassword(e.target.value)} required className="w-full p-3 border border-velum-300 bg-velum-50 focus:border-velum-900 outline-none transition-colors" placeholder="••••••••"/>
+            </div>
+            <Button type="submit" className="w-full">Crear cuenta</Button>
+          </form>
         </div>
       </div>
     );

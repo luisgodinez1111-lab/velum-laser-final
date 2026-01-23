@@ -1,4 +1,4 @@
-import express from "express";
+import express, { raw } from "express";
 import cors from "cors";
 import helmet from "helmet";
 import cookieParser from "cookie-parser";
@@ -42,6 +42,7 @@ app.use(
   })
 );
 
+app.use("/stripe/webhook", raw({ type: "application/json" }));
 app.use(express.json({ limit: "1mb" }));
 
 app.use("/docs", swaggerUi.serve, swaggerUi.setup(openApiSpec));

@@ -20,8 +20,8 @@ export const changePlan = async (req: AuthRequest, res: Response) => {
   const session = await createCheckoutSession({
     customerId,
     priceId: payload.priceId,
-    successUrl: `${env.appUrl}/billing/success`,
-    cancelUrl: `${env.appUrl}/billing/cancel`
+    successUrl: `${env.appUrl}/#/dashboard?status=success`,
+    cancelUrl: `${env.appUrl}/#/memberships?status=cancel`
   });
   return res.json({ url: session.url });
 };

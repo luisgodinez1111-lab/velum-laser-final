@@ -30,7 +30,8 @@ export const handleWebhook = async (req: Request, res: Response) => {
         data: {
           status: "active",
           planId: invoice.lines.data[0]?.price.id,
-          currentPeriodEnd: invoice.period_end ? new Date(invoice.period_end * 1000) : undefined
+          currentPeriodEnd: invoice.period_end ? new Date(invoice.period_end * 1000) : undefined,
+          gracePeriodEndsAt: null
         }
       });
       break;
@@ -39,7 +40,10 @@ export const handleWebhook = async (req: Request, res: Response) => {
       const invoice = event.data.object as { subscription: string };
       await prisma.membership.updateMany({
         where: { stripeSubscriptionId: invoice.subscription as string },
-        data: { status: "past_due" }
+        data: {
+          status: "past_due",
+          gracePeriodEndsAt: new Date(Date.now() + env.gracePeriodDays * 24 * 60 * 60 * 1000)
+        }
       });
       break;
     }
@@ -58,7 +62,8 @@ export const handleWebhook = async (req: Request, res: Response) => {
         data: {
           status: statusMap[subscription.status] ?? "inactive",
           currentPeriodEnd: subscription.current_period_end ? new Date(subscription.current_period_end * 1000) : undefined,
-          cancelAtPeriodEnd: subscription.cancel_at_period_end
+          cancelAtPeriodEnd: subscription.cancel_at_period_end,
+          gracePeriodEndsAt: subscription.status === "active" ? null : undefined
         }
       });
       break;
