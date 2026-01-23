@@ -20,7 +20,7 @@ export interface UserSubscription {
   membershipId: number;
   selectedZones: ZoneId[];
   startDate: string;
-  status: 'active' | 'pending' | 'cancelled' | 'past_due' | 'paused';
+  status: 'active' | 'pending' | 'canceled' | 'past_due' | 'paused';
 }
 
 export enum Resolution {
@@ -31,7 +31,7 @@ export enum Resolution {
 
 // --- SECURITY & COMPLIANCE TYPES ---
 
-export type UserRole = 'admin' | 'reception' | 'operator' | 'member';
+export type UserRole = 'admin' | 'staff' | 'member';
 
 export interface AuditLogEntry {
   id: string;
@@ -55,7 +55,7 @@ export interface LegalDocument {
 }
 
 export interface Member {
-  id: number;
+  id: string;
   name: string;
   email: string;
   role: UserRole;

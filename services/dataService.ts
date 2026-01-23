@@ -1,83 +1,94 @@
-import { Member, AuditLogEntry, LegalDocument, UserRole } from "../types";
-import { DB, delay } from "./mockBackend";
+import { AuditLogEntry, LegalDocument, Member, UserRole } from "../types";
+import { apiFetch } from "./apiClient";
+import { MEMBERSHIPS } from "../constants";
 
-// --- MEMBER MANAGEMENT ---
+const toTitle = (type: string) => {
+  switch (type) {
+    case "informed_consent":
+      return "Consentimiento Informado";
+    case "privacy_notice":
+      return "Aviso de Privacidad";
+    case "medical_history":
+      return "Cuestionario Médico";
+    default:
+      return "Documento";
+  }
+};
+
+const mapDocuments = (documents: any[]): LegalDocument[] =>
+  (documents ?? []).map((doc) => ({
+    id: doc.id,
+    type: doc.type as LegalDocument["type"],
+    title: toTitle(doc.type),
+    signed: doc.status === "signed",
+    signedAt: doc.signedAt ? new Date(doc.signedAt).toLocaleDateString("es-MX") : undefined,
+    version: doc.version ?? "1.0",
+    signatureUrl: doc.signatureKey
+  }));
+
+const mapMember = (user: any): Member => {
+  const membership = user.memberships?.[0];
+  const tier = MEMBERSHIPS.find((t) => t.stripePriceId === membership?.planId);
+  const name = `${user.profile?.firstName ?? ""} ${user.profile?.lastName ?? ""}`.trim() || user.email;
+  return {
+    id: user.id,
+    name,
+    email: user.email,
+    role: user.role as UserRole,
+    phone: user.profile?.phone,
+    plan: tier?.name ?? "Plan Velum",
+    subscriptionStatus: membership?.status ?? "inactive",
+    nextBillingDate: membership?.currentPeriodEnd ? new Date(membership.currentPeriodEnd).toLocaleDateString("es-MX") : undefined,
+    clinical: {
+      consentFormSigned: user.documents?.some((doc: any) => doc.status === "signed" && doc.type === "informed_consent"),
+      documents: mapDocuments(user.documents ?? [])
+    }
+  };
+};
+
 export const memberService = {
   getAll: async (): Promise<Member[]> => {
-    await delay(600);
-    // Filter out admin users from the member list
-    return DB.users.filter(u => u.role === 'member') as Member[];
+    const users = await apiFetch<any[]>("/admin/users");
+    return users.filter((user) => user.role === "member").map(mapMember);
   },
 
-  getById: async (id: number): Promise<Member | undefined> => {
-    await delay(300);
-    return DB.users.find(u => u.id === id && u.role === 'member') as Member;
-  },
-
-  update: async (id: number, data: Partial<Member>, actor: string): Promise<Member> => {
-    await delay(500);
-    const index = DB.users.findIndex(u => u.id === id);
-    if (index === -1) throw new Error("User not found");
-    
-    DB.users[index] = { ...DB.users[index], ...data };
-    
-    // AUDIT LOG
-    DB.auditLogs.unshift({
-        id: Date.now().toString(),
-        timestamp: new Date().toLocaleString(),
-        user: actor,
-        role: 'admin', // assuming admin did this
-        action: 'Update Member Profile',
-        resource: `Member ID: ${id}`,
-        ip: '127.0.0.1',
-        status: 'success'
-    });
-
-    return DB.users[index] as Member;
-  }
-};
-
-// --- DOCUMENT & COMPLIANCE ---
-export const documentService = {
-  signDocument: async (userId: number, docId: string, signature: string): Promise<void> => {
-    await delay(1000); // Simulate S3 upload of signature image
-    
-    const user = DB.users.find(u => u.id === userId);
-    if (!user) throw new Error("User not found");
-
-    // Logic for Dashboard "Compliance Blocker"
-    if (user.clinical && user.clinical.documents) {
-        // Check clinical docs
-        const doc = user.clinical.documents.find((d: any) => d.id === docId);
-        if (doc) {
-             doc.signed = true;
-             doc.signatureUrl = signature;
-             doc.signedAt = new Date().toLocaleString();
-        } 
-        // Also check if it's the "Consent Form" boolean on the user root
-        if(docId.includes('consent') || docId === 'doc_2') {
-            user.clinical.consentFormSigned = true;
-        }
+  getById: async (id: string): Promise<Member | undefined> => {
+    const user = await apiFetch<any>("/me");
+    if (user.id !== id || user.role !== "member") {
+      return undefined;
     }
-    
-    // AUDIT LOG
-    DB.auditLogs.unshift({
-        id: Date.now().toString(),
-        timestamp: new Date().toLocaleString(),
-        user: user.email,
-        role: 'member',
-        action: 'Digital Signature',
-        resource: `Document ID: ${docId}`,
-        ip: '127.0.0.1',
-        status: 'success'
+    return mapMember(user);
+  },
+
+  updateMembershipStatus: async (userId: string, status: string): Promise<void> => {
+    await apiFetch(`/admin/users/${userId}/membership`, {
+      method: "PATCH",
+      body: JSON.stringify({ status })
     });
   }
 };
 
-// --- AUDIT LOGS ---
+export const documentService = {
+  signDocument: async (docId: string, signature: string): Promise<void> => {
+    await apiFetch(`/documents/${docId}/sign`, {
+      method: "POST",
+      body: JSON.stringify({ signature })
+    });
+  }
+};
+
 export const auditService = {
   getLogs: async (): Promise<AuditLogEntry[]> => {
-    await delay(400);
-    return [...DB.auditLogs];
+    const logs = await apiFetch<any[]>("/admin/audit-logs");
+    return logs.map((log) => ({
+      id: log.id,
+      timestamp: new Date(log.createdAt).toLocaleString("es-MX"),
+      user: log.user?.email ?? "system",
+      role: (log.user?.role ?? "admin") as UserRole,
+      action: log.action,
+      resource: log.metadata?.targetUserId ?? log.metadata?.documentId ?? "-",
+      ip: log.metadata?.ip ?? "N/A",
+      status: "success"
+    }));
   }
 };

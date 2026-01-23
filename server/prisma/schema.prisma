@@ -63,6 +63,7 @@ model Membership {
   planId               String?
   stripeSubscriptionId String?          @unique
   currentPeriodEnd     DateTime?
+  gracePeriodEndsAt    DateTime?
   cancelAtPeriodEnd    Boolean          @default(false)
   createdAt            DateTime         @default(now())
   updatedAt            DateTime         @updatedAt
@@ -78,9 +79,10 @@ model Document {
   status      DocumentStatus @default(pending)
   version     String?
   signedAt    DateTime?
-  storageKey  String         @unique
-  contentType String
-  size        Int
+  storageKey  String?        @unique
+  signatureKey String?
+  contentType String?
+  size        Int?
   createdAt   DateTime       @default(now())
   updatedAt   DateTime       @updatedAt
   user        User           @relation(fields: [userId], references: [id], onDelete: Cascade)

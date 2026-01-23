@@ -1,8 +1,10 @@
 import { z } from "zod";
 
 export const documentUploadSchema = z.object({
-  type: z.string().min(3),
-  contentType: z.string().min(3),
-  size: z.number().int().positive().max(10 * 1024 * 1024),
+  type: z.enum(["informed_consent", "privacy_notice", "medical_history", "other"]),
   version: z.string().min(1).optional()
+});
+
+export const documentSignSchema = z.object({
+  signature: z.string().min(10)
 });

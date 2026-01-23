@@ -6,9 +6,9 @@ import {
   CreditCard, X, RefreshCw, MoreHorizontal, FileText, Activity, Plus, Camera, Paperclip, ClipboardList,
   Banknote, Save, Edit2, Trash2, Mail, Upload, ShieldCheck
 } from 'lucide-react';
-import { AuditLogEntry, Member, UserRole } from '../types';
+import { AuditLogEntry, Member } from '../types';
 import { useAuth } from '../context/AuthContext';
-import { memberService, auditService, documentService } from '../services/dataService';
+import { memberService, auditService } from '../services/dataService';
 
 export const Admin: React.FC = () => {
   const { login, logout, user, isAuthenticated, isLoading: isAuthLoading } = useAuth();
@@ -31,8 +31,8 @@ export const Admin: React.FC = () => {
 
   // --- EFFECT: FETCH DATA ---
   useEffect(() => {
-    if (isAuthenticated && (user?.role === 'admin' || user?.role === 'reception')) {
-        loadData();
+    if (isAuthenticated && (user?.role === 'admin' || user?.role === 'staff')) {
+      loadData();
     }
   }, [isAuthenticated, user]);
 
@@ -63,18 +63,17 @@ export const Admin: React.FC = () => {
     }
   };
 
-  const handleUpdateMember = async (id: number, data: Partial<Member>) => {
-      try {
-          await memberService.update(id, data, user?.email || 'admin');
-          loadData(); // Refresh list
-          // Update selected member view locally to avoid flicker
-          if (selectedMember && selectedMember.id === id) {
-              setSelectedMember({ ...selectedMember, ...data });
-          }
-          alert("Cambios guardados.");
-      } catch (e) {
-          alert("Error al actualizar.");
+  const handleUpdateMember = async (id: string, status: string) => {
+    try {
+      await memberService.updateMembershipStatus(id, status);
+      loadData(); // Refresh list
+      if (selectedMember && selectedMember.id === id) {
+        setSelectedMember({ ...selectedMember, subscriptionStatus: status });
       }
+      alert("Membresía actualizada.");
+    } catch (e) {
+      alert("Error al actualizar la membresía.");
+    }
   };
 
   // Filter Logic
@@ -120,9 +119,6 @@ export const Admin: React.FC = () => {
                 <ShieldAlert size={16} />{loginError}
               </div>
             )}
-            <div className="text-xs text-center text-velum-500">
-                <p>Demo: admin@velum.com / pass: velum</p>
-            </div>
             <Button type="submit" className="w-full py-4" isLoading={isAuthLoading}>Autenticar</Button>
           </form>
         </div>
@@ -157,12 +153,12 @@ export const Admin: React.FC = () => {
                 </div>
             </div>
             <Button 
-                onClick={() => handleUpdateMember(selectedMember.id, { subscriptionStatus: 'cancelled' })} 
+                onClick={() => handleUpdateMember(selectedMember.id, 'canceled')} 
                 variant="outline" 
                 className="text-red-600 border-red-200"
-                disabled={selectedMember.subscriptionStatus === 'cancelled'}
+                disabled={selectedMember.subscriptionStatus === 'canceled'}
             >
-                Simular Cancelación (API)
+                Marcar como cancelada
             </Button>
           </div>
         </div>

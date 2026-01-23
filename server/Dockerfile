@@ -11,4 +11,7 @@ ENV NODE_ENV=production
 COPY --from=base /app/dist ./dist
 COPY --from=base /app/node_modules ./node_modules
 COPY --from=base /app/package.json ./package.json
-CMD ["node", "dist/index.js"]
+COPY --from=base /app/prisma ./prisma
+COPY --from=base /app/scripts ./scripts
+RUN chmod +x ./scripts/start.sh
+CMD ["./scripts/start.sh"]

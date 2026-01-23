@@ -5,6 +5,7 @@ import { hashPassword, signToken, verifyPassword } from "../utils/auth";
 import { env, isProduction } from "../utils/env";
 import { createEmailVerification, createPasswordReset, consumeEmailVerification, consumePasswordReset } from "../services/authService";
 import { prisma } from "../db/prisma";
+import { createAuditLog } from "../services/auditService";
 
 const setAuthCookie = (res: Response, token: string) => {
   res.cookie(env.cookieName, token, {
@@ -30,6 +31,11 @@ export const register = async (req: Request, res: Response) => {
   const verification = await createEmailVerification(user.id);
   const token = signToken({ sub: user.id, role: user.role });
   setAuthCookie(res, token);
+  await createAuditLog({
+    userId: user.id,
+    action: "auth.register",
+    metadata: { email: user.email, ip: req.ip }
+  });
   return res.status(201).json({
     user: { id: user.id, email: user.email, role: user.role },
     verificationToken: verification.token
@@ -48,6 +54,11 @@ export const login = async (req: Request, res: Response) => {
   }
   const token = signToken({ sub: user.id, role: user.role });
   setAuthCookie(res, token);
+  await createAuditLog({
+    userId: user.id,
+    action: "auth.login",
+    metadata: { email: user.email, ip: req.ip }
+  });
   return res.json({ user: { id: user.id, email: user.email, role: user.role } });
 };
 

@@ -20,6 +20,13 @@ export const createUser = async (data: {
       },
       memberships: {
         create: {}
+      },
+      documents: {
+        create: [
+          { type: "informed_consent", version: "1.0" },
+          { type: "privacy_notice", version: "1.0" },
+          { type: "medical_history", version: "1.0" }
+        ]
       }
     },
     include: { profile: true, memberships: true }
@@ -42,5 +49,5 @@ export const updateProfile = async (userId: string, data: {
 export const getUserWithRelations = (userId: string) =>
   prisma.user.findUnique({
     where: { id: userId },
-    include: { profile: true, memberships: true }
+    include: { profile: true, memberships: true, documents: true }
   });

@@ -4,8 +4,10 @@ import { MembershipTier, ZoneId } from '../types';
 import { Button } from '../components/Button';
 import { Check, Info, Star, ArrowDown, Sparkles, ShieldCheck } from 'lucide-react';
 import { createSubscriptionCheckout } from '../services/stripeService';
+import { useAuth } from '../context/AuthContext';
 
 export const Memberships: React.FC = () => {
+  const { isAuthenticated } = useAuth();
   const [selectedTier, setSelectedTier] = useState<MembershipTier | null>(null);
   const [selectedZones, setSelectedZones] = useState<ZoneId[]>([]);
   const [step, setStep] = useState<1 | 2 | 3>(1);
@@ -49,9 +51,12 @@ export const Memberships: React.FC = () => {
   const handleCheckout = async () => {
     if (!selectedTier) return;
     setIsCheckingOut(true);
-    // Aquí conectamos con el servicio de Stripe
-    // Pasamos el Tier seleccionado y un email simulado (en app real vendría del Auth context)
-    await createSubscriptionCheckout(selectedTier, "cliente@velum.com");
+    if (!isAuthenticated) {
+      alert("Inicia sesión para continuar con el pago.");
+      setIsCheckingOut(false);
+      return;
+    }
+    await createSubscriptionCheckout(selectedTier);
     setIsCheckingOut(false);
   };
 

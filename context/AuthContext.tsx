@@ -1,19 +1,13 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { UserRole } from '../types';
-import { authService } from '../services/authService';
-
-interface User {
-  id: number;
-  name: string;
-  email: string;
-  role: UserRole;
-}
+import { AuthUser, authService } from '../services/authService';
 
 interface AuthContextType {
-  user: User | null;
+  user: AuthUser | null;
   isAuthenticated: boolean;
   isLoading: boolean;
   login: (email: string, pass: string) => Promise<void>;
+  register: (payload: { email: string; password: string; firstName?: string; lastName?: string }) => Promise<void>;
   logout: () => void;
   hasRole: (roles: UserRole[]) => boolean;
 }
@@ -21,25 +15,15 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true); // Default true to check session on mount
 
   // Check for existing session on mount
   useEffect(() => {
     const initializeAuth = async () => {
-      const token = localStorage.getItem('velum_token');
-      if (token) {
-        try {
-          const userData = await authService.verifySession(token);
-          if (userData) {
-            setUser(userData);
-          } else {
-            localStorage.removeItem('velum_token'); // Invalid token
-          }
-        } catch (error) {
-          console.error("Session verification failed", error);
-          localStorage.removeItem('velum_token');
-        }
+      const userData = await authService.verifySession();
+      if (userData) {
+        setUser(userData);
       }
       setIsLoading(false);
     };
@@ -50,9 +34,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const login = async (email: string, pass: string) => {
     setIsLoading(true);
     try {
-      const response = await authService.login(email, pass);
-      setUser(response.user);
-      localStorage.setItem('velum_token', response.token); 
+      const userData = await authService.login(email, pass);
+      setUser(userData);
+    } catch (error) {
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const register = async (payload: { email: string; password: string; firstName?: string; lastName?: string }) => {
+    setIsLoading(true);
+    try {
+      const userData = await authService.register(payload);
+      setUser(userData);
     } catch (error) {
       throw error;
     } finally {
@@ -63,7 +58,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const logout = () => {
     authService.logout();
     setUser(null);
-    localStorage.removeItem('velum_token');
   };
 
   const hasRole = (allowedRoles: UserRole[]): boolean => {
@@ -72,7 +66,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider value={{ user, isAuthenticated: !!user, isLoading, login, logout, hasRole }}>
+    <AuthContext.Provider value={{ user, isAuthenticated: !!user, isLoading, login, register, logout, hasRole }}>
       {children}
     </AuthContext.Provider>
   );
