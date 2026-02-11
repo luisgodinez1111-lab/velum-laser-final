@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from '../components/Button';
-import { User, CreditCard, Calendar, ExternalLink, FileText, AlertTriangle, CheckCircle, Loader2 } from 'lucide-react';
+import { User, CreditCard, Calendar, ExternalLink, FileText, AlertTriangle, CheckCircle, Loader2, ClipboardList, Clock, XCircle } from 'lucide-react';
 import { redirectToCustomerPortal } from '../services/stripeService';
 import { SignaturePad } from '../components/SignaturePad';
 import { Member, LegalDocument } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { memberService, documentService } from '../services/dataService';
+import { intakeService, IntakeData } from '../services/intakeService';
+import { appointmentService, AppointmentData } from '../services/appointmentService';
 import { Link } from 'react-router-dom';
 
 export const Dashboard: React.FC = () => {
@@ -14,14 +16,22 @@ export const Dashboard: React.FC = () => {
   const [isLoadingData, setIsLoadingData] = useState(true);
   const [showSignatureModal, setShowSignatureModal] = useState(false);
   const [currentDocToSign, setCurrentDocToSign] = useState<LegalDocument | null>(null);
+  const [intakeData, setIntakeData] = useState<IntakeData | null>(null);
+  const [appointments, setAppointments] = useState<AppointmentData[]>([]);
 
   // --- FETCH DATA ON LOAD ---
   useEffect(() => {
     const fetchData = async () => {
         if (user && user.role === 'member') {
             try {
-                const data = await memberService.getById(user.id);
+                const [data, intake, appts] = await Promise.all([
+                    memberService.getById(user.id),
+                    intakeService.getMyIntake().catch(() => null),
+                    appointmentService.getMyAppointments().catch(() => [])
+                ]);
                 setMemberData(data || null);
+                setIntakeData(intake);
+                setAppointments(appts);
             } catch (e) {
                 console.error("Error fetching member data", e);
             } finally {
@@ -179,6 +189,127 @@ export const Dashboard: React.FC = () => {
                 ))}
             </div>
         </div>
+
+        {/* Historia Clínica (Medical Intake) Card */}
+        <div className="p-6 bg-white border border-velum-200">
+            <div className="flex items-center justify-between mb-4">
+                <h3 className="font-serif text-lg flex items-center gap-2">
+                    <ClipboardList size={20} className="text-velum-400"/> Historia Clínica
+                </h3>
+                {intakeData && (
+                    <span className={`text-[10px] font-bold uppercase px-2 py-1 ${
+                        intakeData.status === 'approved' ? 'bg-green-100 text-green-700' :
+                        intakeData.status === 'submitted' ? 'bg-blue-100 text-blue-700' :
+                        intakeData.status === 'rejected' ? 'bg-red-100 text-red-700' :
+                        'bg-yellow-100 text-yellow-700'
+                    }`}>
+                        {intakeData.status === 'draft' ? 'Borrador' :
+                         intakeData.status === 'submitted' ? 'Enviado' :
+                         intakeData.status === 'approved' ? 'Aprobado' : 'Rechazado'}
+                    </span>
+                )}
+            </div>
+            {!intakeData ? (
+                <div className="text-sm text-velum-500 mb-4">
+                    No has completado tu expediente médico. Es necesario para agendar tratamientos.
+                </div>
+            ) : intakeData.status === 'rejected' ? (
+                <div className="text-sm text-red-600 mb-4">
+                    Tu expediente fue rechazado{intakeData.reviewNotes ? `: ${intakeData.reviewNotes}` : '.'}  Por favor corrígelo y reenvía.
+                </div>
+            ) : intakeData.status === 'approved' ? (
+                <div className="text-sm text-green-700 mb-4">
+                    Tu expediente está aprobado. Puedes agendar tratamientos.
+                </div>
+            ) : (
+                <div className="text-sm text-velum-500 mb-4">
+                    {intakeData.status === 'draft' ? 'Tienes un borrador sin enviar.' : 'Tu expediente está en revisión.'}
+                </div>
+            )}
+            <Link to="/medical-intake">
+                <Button size="sm" variant="outline">
+                    {!intakeData || intakeData.status === 'rejected' ? 'Completar Expediente' :
+                     intakeData.status === 'draft' ? 'Continuar Expediente' : 'Ver Expediente'}
+                </Button>
+            </Link>
+        </div>
+
+        {/* Próximas Citas Card */}
+        {(() => {
+            const now = new Date().toISOString();
+            const upcoming = appointments.filter(a => a.status !== 'canceled' && a.scheduledAt > now);
+            const past = appointments.filter(a => a.status === 'completed' || a.status === 'no_show' || (a.status === 'canceled' && a.scheduledAt <= now) || a.scheduledAt <= now);
+            return (
+                <>
+                    <div className="p-6 bg-white border border-velum-200">
+                        <h3 className="font-serif text-lg flex items-center gap-2 mb-4">
+                            <Calendar size={20} className="text-velum-400"/> Próximas Citas
+                        </h3>
+                        {upcoming.length === 0 ? (
+                            <p className="text-sm text-velum-500">No tienes citas programadas.</p>
+                        ) : (
+                            <div className="space-y-3">
+                                {upcoming.slice(0, 5).map(appt => (
+                                    <div key={appt.id} className="flex justify-between items-center text-sm border-b border-velum-50 pb-3">
+                                        <div>
+                                            <p className="font-bold text-velum-800">
+                                                {new Date(appt.scheduledAt).toLocaleDateString('es-MX', { weekday: 'short', day: 'numeric', month: 'short' })}
+                                                {' · '}
+                                                {new Date(appt.scheduledAt).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}
+                                            </p>
+                                            <p className="text-xs text-velum-500 uppercase">
+                                                {appt.type === 'valuation' ? 'Valoración' : appt.type === 'treatment' ? 'Tratamiento' : 'Seguimiento'}
+                                                {appt.zones.length > 0 && ` · ${appt.zones.join(', ')}`}
+                                            </p>
+                                        </div>
+                                        <span className={`text-[10px] font-bold uppercase px-2 py-1 ${
+                                            appt.status === 'confirmed' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'
+                                        }`}>
+                                            {appt.status === 'confirmed' ? 'Confirmada' : 'Pendiente'}
+                                        </span>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                        <div className="mt-4">
+                            <Link to="/agenda"><Button size="sm" variant="outline">Agendar Cita</Button></Link>
+                        </div>
+                    </div>
+
+                    {/* Historial de Citas Card */}
+                    {past.length > 0 && (
+                        <div className="p-6 bg-white border border-velum-200">
+                            <h3 className="font-serif text-lg flex items-center gap-2 mb-4">
+                                <Clock size={20} className="text-velum-400"/> Historial de Citas
+                            </h3>
+                            <div className="space-y-2">
+                                {past.slice(0, 5).map(appt => (
+                                    <div key={appt.id} className="flex justify-between items-center text-sm border-b border-velum-50 pb-2">
+                                        <div>
+                                            <p className="text-velum-700">
+                                                {new Date(appt.scheduledAt).toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric' })}
+                                            </p>
+                                            <p className="text-xs text-velum-400 uppercase">
+                                                {appt.type === 'valuation' ? 'Valoración' : appt.type === 'treatment' ? 'Tratamiento' : 'Seguimiento'}
+                                            </p>
+                                        </div>
+                                        <span className={`text-[10px] font-bold uppercase ${
+                                            appt.status === 'completed' ? 'text-green-600' :
+                                            appt.status === 'canceled' ? 'text-red-500' :
+                                            appt.status === 'no_show' ? 'text-orange-500' : 'text-velum-400'
+                                        }`}>
+                                            {appt.status === 'completed' ? 'Completada' :
+                                             appt.status === 'canceled' ? 'Cancelada' :
+                                             appt.status === 'no_show' ? 'No asistió' : appt.status}
+                                        </span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                </>
+            );
+        })()}
 
       </div>
 

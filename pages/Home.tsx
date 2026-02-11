@@ -1,9 +1,42 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from '../components/Button';
-import { Sparkles, ShieldCheck, Clock, Heart, Zap, User } from 'lucide-react';
+import { Sparkles, ShieldCheck, Clock, Heart, Zap, User, CheckCircle, Phone } from 'lucide-react';
+import { leadService } from '../services/leadService';
 
 export const Home: React.FC = () => {
+  const [leadForm, setLeadForm] = useState({ firstName: '', phone: '', email: '' });
+  const [leadSubmitted, setLeadSubmitted] = useState(false);
+  const [leadError, setLeadError] = useState('');
+  const [leadLoading, setLeadLoading] = useState(false);
+
+  const handleLeadSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLeadError('');
+    setLeadLoading(true);
+    try {
+      // Extract UTM params from URL (HashRouter uses search params on the hash)
+      const params = new URLSearchParams(window.location.search || window.location.hash.split('?')[1] || '');
+      await leadService.capture({
+        firstName: leadForm.firstName,
+        phone: leadForm.phone,
+        email: leadForm.email || undefined,
+        source: 'website',
+        utmSource: params.get('utm_source') || undefined,
+        utmMedium: params.get('utm_medium') || undefined,
+        utmCampaign: params.get('utm_campaign') || undefined,
+        utmContent: params.get('utm_content') || undefined,
+        utmTerm: params.get('utm_term') || undefined,
+        referrerUrl: document.referrer || undefined
+      });
+      setLeadSubmitted(true);
+    } catch (err: any) {
+      setLeadError(err.message || 'Error al enviar. Intenta de nuevo.');
+    } finally {
+      setLeadLoading(false);
+    }
+  };
+
   return (
     <div className="flex flex-col w-full">
       {/* Hero Section */}
@@ -139,6 +172,64 @@ export const Home: React.FC = () => {
                 </div>
             </div>
          </div>
+      </section>
+
+      {/* Lead Capture Section */}
+      <section className="py-20 px-4 bg-white" id="valoracion">
+        <div className="max-w-2xl mx-auto text-center">
+          <h3 className="text-sm font-bold text-velum-500 uppercase tracking-widest mb-2">Sin compromiso</h3>
+          <h2 className="text-3xl md:text-4xl font-serif text-velum-900 italic mb-4">Agenda tu Valoración Gratuita</h2>
+          <p className="text-velum-600 font-light mb-10 max-w-lg mx-auto">
+            Déjanos tus datos y un especialista te contactará para agendar tu valoración personalizada.
+          </p>
+
+          {leadSubmitted ? (
+            <div className="bg-green-50 border border-green-200 p-8 animate-fade-in">
+              <CheckCircle className="mx-auto text-green-600 mb-4" size={40} />
+              <h3 className="font-serif text-xl text-green-800 mb-2">¡Recibido!</h3>
+              <p className="text-green-700 text-sm">Te contactaremos pronto para agendar tu valoración.</p>
+            </div>
+          ) : (
+            <form onSubmit={handleLeadSubmit} className="max-w-md mx-auto space-y-4">
+              <div>
+                <input
+                  type="text"
+                  required
+                  value={leadForm.firstName}
+                  onChange={e => setLeadForm(p => ({ ...p, firstName: e.target.value }))}
+                  placeholder="Tu nombre *"
+                  className="w-full p-4 border border-velum-300 bg-velum-50 focus:border-velum-900 outline-none transition-colors text-sm"
+                />
+              </div>
+              <div>
+                <input
+                  type="tel"
+                  required
+                  value={leadForm.phone}
+                  onChange={e => setLeadForm(p => ({ ...p, phone: e.target.value }))}
+                  placeholder="Tu teléfono *"
+                  className="w-full p-4 border border-velum-300 bg-velum-50 focus:border-velum-900 outline-none transition-colors text-sm"
+                />
+              </div>
+              <div>
+                <input
+                  type="email"
+                  value={leadForm.email}
+                  onChange={e => setLeadForm(p => ({ ...p, email: e.target.value }))}
+                  placeholder="Tu email (opcional)"
+                  className="w-full p-4 border border-velum-300 bg-velum-50 focus:border-velum-900 outline-none transition-colors text-sm"
+                />
+              </div>
+              {leadError && (
+                <p className="text-red-600 text-xs">{leadError}</p>
+              )}
+              <Button type="submit" className="w-full py-4" isLoading={leadLoading}>
+                <Phone size={16} className="mr-2"/> Solicitar Valoración
+              </Button>
+              <p className="text-[10px] text-velum-400 mt-2">Al enviar aceptas ser contactado por VELUM.</p>
+            </form>
+          )}
+        </div>
       </section>
 
       {/* CTA Banner */}

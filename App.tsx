@@ -7,6 +7,8 @@ import { Agenda } from './pages/Agenda';
 import { Dashboard } from './pages/Dashboard';
 import { AIStudio } from './pages/AIStudio';
 import { Admin } from './pages/Admin';
+import { MedicalIntake } from './pages/MedicalIntake';
+import { StaffDashboard } from './pages/StaffDashboard';
 import { AuthProvider } from './context/AuthContext';
 
 const App: React.FC = () => {
@@ -21,6 +23,8 @@ const App: React.FC = () => {
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/ai-studio" element={<AIStudio />} />
             <Route path="/admin" element={<Admin />} />
+            <Route path="/medical-intake" element={<MedicalIntake />} />
+            <Route path="/staff" element={<StaffDashboard />} />
           </Routes>
         </Layout>
       </Router>

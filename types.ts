@@ -31,7 +31,7 @@ export enum Resolution {
 
 // --- SECURITY & COMPLIANCE TYPES ---
 
-export type UserRole = 'admin' | 'staff' | 'member';
+export type UserRole = 'admin' | 'staff' | 'member' | 'system';
 
 export interface AuditLogEntry {
   id: string;
@@ -79,6 +79,77 @@ export interface Member {
     documents?: LegalDocument[];
   };
   passwordHash?: string;
+}
+
+// --- PHASE 1: MEDICAL INTAKE, APPOINTMENTS, LEADS ---
+
+export type IntakeStatus = 'draft' | 'submitted' | 'approved' | 'rejected';
+export type AppointmentStatus = 'pending' | 'confirmed' | 'in_progress' | 'completed' | 'canceled' | 'no_show';
+export type AppointmentType = 'valuation' | 'treatment' | 'follow_up';
+export type LeadStatus = 'new_lead' | 'contacted' | 'qualified' | 'converted' | 'lost';
+export type LeadSource = 'website' | 'instagram' | 'facebook' | 'referral' | 'walk_in' | 'phone' | 'whatsapp' | 'other';
+
+export interface MedicalIntakeData {
+  id: string;
+  userId: string;
+  status: IntakeStatus;
+  fitzpatrickType?: string;
+  questionnaire: Record<string, unknown>;
+  contraindications: string[];
+  contraindicationNotes?: string;
+  signatureKey?: string;
+  signedAt?: string;
+  reviewedAt?: string;
+  reviewNotes?: string;
+  reviewedBy?: { profile?: { firstName?: string; lastName?: string } };
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AppointmentData {
+  id: string;
+  userId: string;
+  staffUserId?: string;
+  type: AppointmentType;
+  status: AppointmentStatus;
+  scheduledAt: string;
+  durationMin: number;
+  zones: string[];
+  notes?: string;
+  cancelReason?: string;
+  canceledAt?: string;
+  user?: { email: string; profile?: { firstName?: string; lastName?: string } };
+  staff?: { profile?: { firstName?: string; lastName?: string } };
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ScheduleSlot {
+  time: string;
+  available: boolean;
+}
+
+export interface LeadData {
+  id: string;
+  firstName: string;
+  lastName?: string;
+  email?: string;
+  phone: string;
+  source: LeadSource;
+  status: LeadStatus;
+  notes?: string;
+  utmSource?: string;
+  utmMedium?: string;
+  utmCampaign?: string;
+  utmContent?: string;
+  utmTerm?: string;
+  referrerUrl?: string;
+  convertedUserId?: string;
+  convertedAt?: string;
+  assignedTo?: { profile?: { firstName?: string; lastName?: string } };
+  createdAt: string;
+  updatedAt: string;
 }
 
 // Window augmentation for AI Studio

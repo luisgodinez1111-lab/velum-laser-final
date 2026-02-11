@@ -10,6 +10,10 @@ import { membershipRoutes } from "./routes/membershipRoutes";
 import { documentRoutes } from "./routes/documentRoutes";
 import { adminRoutes } from "./routes/adminRoutes";
 import { stripeRoutes } from "./routes/stripeRoutes";
+import { intakeRoutes } from "./routes/intakeRoutes";
+import { appointmentRoutes } from "./routes/appointmentRoutes";
+import { scheduleRoutes } from "./routes/scheduleRoutes";
+import { leadRoutes } from "./routes/leadRoutes";
 import { env } from "./utils/env";
 import { httpLogger } from "./utils/logger";
 import { errorHandler } from "./middlewares/error";
@@ -52,6 +56,10 @@ app.use(membershipRoutes);
 app.use(documentRoutes);
 app.use(adminRoutes);
 app.use(stripeRoutes);
+app.use(intakeRoutes);
+app.use(appointmentRoutes);
+app.use(scheduleRoutes);
+app.use(leadRoutes);
 
 app.get("/health", (_req, res) => {
   res.json({ status: "ok" });

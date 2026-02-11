@@ -24,6 +24,58 @@ export const openApiSpec = {
     "/admin/memberships": { get: { summary: "Admin memberships", responses: { "200": { description: "OK" } } } },
     "/admin/documents": { get: { summary: "Admin documents", responses: { "200": { description: "OK" } } } },
     "/admin/reports": { get: { summary: "Admin reports", responses: { "200": { description: "OK" } } } },
-    "/stripe/webhook": { post: { summary: "Stripe webhook", responses: { "200": { description: "OK" } } } }
+    "/stripe/webhook": { post: { summary: "Stripe webhook", responses: { "200": { description: "OK" } } } },
+
+    // Phase 1: Medical Intake
+    "/intake": {
+      get: { summary: "Get current user's medical intake", responses: { "200": { description: "OK" } } },
+      post: { summary: "Create/update intake draft", responses: { "200": { description: "OK" } } }
+    },
+    "/intake/submit": { post: { summary: "Submit intake for review", responses: { "200": { description: "OK" } } } },
+    "/intake/sign": { post: { summary: "Sign intake with digital signature", responses: { "200": { description: "OK" } } } },
+
+    // Phase 1: Appointments
+    "/appointments": {
+      get: { summary: "Get current user's appointments", responses: { "200": { description: "OK" } } },
+      post: { summary: "Book new appointment", responses: { "201": { description: "Created" } } }
+    },
+    "/appointments/{id}/cancel": { patch: { summary: "Cancel own appointment", responses: { "200": { description: "OK" } } } },
+
+    // Phase 1: Schedule
+    "/schedule/availability": { get: { summary: "Get available time slots for a date", responses: { "200": { description: "OK" } } } },
+
+    // Phase 1: Leads (public)
+    "/leads": { post: { summary: "Capture lead from website (public)", responses: { "201": { description: "Created" } } } },
+
+    // Phase 1: Admin - Intakes
+    "/admin/intakes": { get: { summary: "List all intakes (staff/admin)", responses: { "200": { description: "OK" } } } },
+    "/admin/intakes/{id}": { get: { summary: "Get intake detail (staff/admin)", responses: { "200": { description: "OK" } } } },
+    "/admin/intakes/{id}/review": { post: { summary: "Approve or reject intake", responses: { "200": { description: "OK" } } } },
+
+    // Phase 1: Admin - Appointments
+    "/admin/appointments": { get: { summary: "List all appointments (staff/admin)", responses: { "200": { description: "OK" } } } },
+    "/admin/appointments/{id}": {
+      get: { summary: "Get appointment detail (staff/admin)", responses: { "200": { description: "OK" } } },
+      patch: { summary: "Update appointment status/staff (staff/admin)", responses: { "200": { description: "OK" } } }
+    },
+
+    // Phase 1: Admin - Leads
+    "/admin/leads": { get: { summary: "List all leads (staff/admin)", responses: { "200": { description: "OK" } } } },
+    "/admin/leads/{id}": {
+      get: { summary: "Get lead detail (staff/admin)", responses: { "200": { description: "OK" } } },
+      patch: { summary: "Update lead status/notes (staff/admin)", responses: { "200": { description: "OK" } } }
+    },
+    "/admin/leads/{id}/convert": { post: { summary: "Convert lead to user account", responses: { "200": { description: "OK" } } } },
+
+    // Phase 1: Admin - Schedule
+    "/admin/schedule": {
+      get: { summary: "Get all schedule configs (admin)", responses: { "200": { description: "OK" } } },
+      put: { summary: "Bulk update schedule configs (admin)", responses: { "200": { description: "OK" } } }
+    },
+    "/admin/schedule/blocks": {
+      get: { summary: "List blocked dates (staff/admin)", responses: { "200": { description: "OK" } } },
+      post: { summary: "Block a date (staff/admin)", responses: { "201": { description: "Created" } } }
+    },
+    "/admin/schedule/blocks/{id}": { delete: { summary: "Unblock a date (admin)", responses: { "204": { description: "No Content" } } } }
   }
 };

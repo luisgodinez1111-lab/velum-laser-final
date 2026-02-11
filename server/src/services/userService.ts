@@ -38,16 +38,31 @@ export const updateProfile = async (userId: string, data: {
   lastName?: string;
   phone?: string;
   timezone?: string;
+  dateOfBirth?: string;
+  sex?: string;
+  address?: string;
+  emergencyContactName?: string;
+  emergencyContactPhone?: string;
 }) => {
+  const profileData = {
+    ...data,
+    dateOfBirth: data.dateOfBirth ? new Date(data.dateOfBirth) : undefined
+  };
   return prisma.profile.upsert({
     where: { userId },
-    create: { userId, ...data },
-    update: data
+    create: { userId, ...profileData },
+    update: profileData
   });
 };
 
 export const getUserWithRelations = (userId: string) =>
   prisma.user.findUnique({
     where: { id: userId },
-    include: { profile: true, memberships: true, documents: true }
+    include: {
+      profile: true,
+      memberships: true,
+      documents: true,
+      medicalIntakes: { orderBy: { createdAt: "desc" }, take: 1 },
+      patientAppointments: { orderBy: { scheduledAt: "desc" }, take: 5 }
+    }
   });

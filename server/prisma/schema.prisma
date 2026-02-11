@@ -7,10 +7,13 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// ─── ENUMS ───────────────────────────────────────────────────────────
+
 enum Role {
   member
   staff
   admin
+  system
 }
 
 enum MembershipStatus {
@@ -27,6 +30,49 @@ enum DocumentStatus {
   rejected
 }
 
+enum IntakeStatus {
+  draft
+  submitted
+  approved
+  rejected
+}
+
+enum AppointmentStatus {
+  pending
+  confirmed
+  in_progress
+  completed
+  canceled
+  no_show
+}
+
+enum AppointmentType {
+  valuation
+  treatment
+  follow_up
+}
+
+enum LeadStatus {
+  new_lead
+  contacted
+  qualified
+  converted
+  lost
+}
+
+enum LeadSource {
+  website
+  instagram
+  facebook
+  referral
+  walk_in
+  phone
+  whatsapp
+  other
+}
+
+// ─── EXISTING MODELS (extended) ─────────────────────────────────────
+
 model User {
   id                  String                  @id @default(cuid())
   email               String                  @unique
@@ -42,18 +88,30 @@ model User {
   auditLogs           AuditLog[]
   emailVerifications  EmailVerificationToken[]
   passwordResets      PasswordResetToken[]
+  // Phase 1 relations
+  medicalIntakes      MedicalIntake[]
+  reviewedIntakes     MedicalIntake[]         @relation("IntakeReviewer")
+  patientAppointments Appointment[]           @relation("PatientAppointments")
+  staffAppointments   Appointment[]           @relation("StaffAppointments")
+  assignedLeads       Lead[]                  @relation("LeadAssignment")
 }
 
 model Profile {
-  id        String   @id @default(cuid())
-  userId    String   @unique
-  firstName String?
-  lastName  String?
-  phone     String?
-  timezone  String   @default("America/Chihuahua")
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id                    String    @id @default(cuid())
+  userId                String    @unique
+  firstName             String?
+  lastName              String?
+  phone                 String?
+  timezone              String    @default("America/Chihuahua")
+  // Phase 1 additions
+  dateOfBirth           DateTime?
+  sex                   String?
+  address               String?
+  emergencyContactName  String?
+  emergencyContactPhone String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model Membership {
@@ -73,19 +131,19 @@ model Membership {
 }
 
 model Document {
-  id          String         @id @default(cuid())
-  userId      String
-  type        String
-  status      DocumentStatus @default(pending)
-  version     String?
-  signedAt    DateTime?
-  storageKey  String?        @unique
+  id           String         @id @default(cuid())
+  userId       String
+  type         String
+  status       DocumentStatus @default(pending)
+  version      String?
+  signedAt     DateTime?
+  storageKey   String?        @unique
   signatureKey String?
-  contentType String?
-  size        Int?
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
-  user        User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  contentType  String?
+  size         Int?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
 }
@@ -124,9 +182,107 @@ model PasswordResetToken {
 }
 
 model WebhookEvent {
-  id             String   @id @default(cuid())
-  stripeEventId  String   @unique
-  type           String
-  processedAt    DateTime @default(now())
-  createdAt      DateTime @default(now())
+  id            String   @id @default(cuid())
+  stripeEventId String   @unique
+  type          String
+  processedAt   DateTime @default(now())
+  createdAt     DateTime @default(now())
+}
+
+// ─── PHASE 1 NEW MODELS ─────────────────────────────────────────────
+
+model MedicalIntake {
+  id                    String       @id @default(cuid())
+  userId                String
+  status                IntakeStatus @default(draft)
+  fitzpatrickType       String?
+  questionnaire         Json         @default("{}")
+  contraindications     String[]     @default([])
+  contraindicationNotes String?
+  reviewedByUserId      String?
+  reviewedAt            DateTime?
+  reviewNotes           String?
+  signatureKey          String?
+  signedAt              DateTime?
+  version               String       @default("1.0")
+  createdAt             DateTime     @default(now())
+  updatedAt             DateTime     @updatedAt
+
+  user       User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reviewedBy User? @relation("IntakeReviewer", fields: [reviewedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([status])
+}
+
+model ScheduleConfig {
+  id              String   @id @default(cuid())
+  dayOfWeek       Int      @unique // 0=Sunday .. 6=Saturday
+  startTime       String   @default("09:00")
+  endTime         String   @default("19:00")
+  slotDurationMin Int      @default(60)
+  maxSlots        Int      @default(10)
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model BlockedDate {
+  id        String   @id @default(cuid())
+  date      DateTime
+  reason    String?
+  createdAt DateTime @default(now())
+}
+
+model Appointment {
+  id           String            @id @default(cuid())
+  userId       String
+  staffUserId  String?
+  type         AppointmentType   @default(treatment)
+  status       AppointmentStatus @default(pending)
+  scheduledAt  DateTime
+  durationMin  Int               @default(60)
+  notes        String?
+  cancelReason String?
+  canceledAt   DateTime?
+  zones        String[]          @default([])
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+
+  user  User  @relation("PatientAppointments", fields: [userId], references: [id], onDelete: Cascade)
+  staff User? @relation("StaffAppointments", fields: [staffUserId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([staffUserId])
+  @@index([scheduledAt])
+  @@index([status])
+}
+
+model Lead {
+  id               String     @id @default(cuid())
+  firstName        String
+  lastName         String?
+  email            String?
+  phone            String
+  source           LeadSource @default(website)
+  status           LeadStatus @default(new_lead)
+  notes            String?
+  utmSource        String?
+  utmMedium        String?
+  utmCampaign      String?
+  utmContent       String?
+  utmTerm          String?
+  referrerUrl      String?
+  convertedUserId  String?    @unique
+  convertedAt      DateTime?
+  assignedToUserId String?
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+
+  assignedTo User? @relation("LeadAssignment", fields: [assignedToUserId], references: [id], onDelete: SetNull)
+
+  @@index([status])
+  @@index([source])
+  @@index([email])
+  @@index([phone])
 }

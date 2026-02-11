@@ -2,17 +2,20 @@ import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Menu, X, Instagram, Facebook } from 'lucide-react';
 import { VelumLogo } from './VelumLogo';
+import { useAuth } from '../context/AuthContext';
 
 export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const location = useLocation();
+  const { isAuthenticated, hasRole } = useAuth();
 
   const navLinks = [
     { name: 'Inicio', path: '/' },
     { name: 'Membresías', path: '/memberships' },
     { name: 'Agenda', path: '/agenda' },
     { name: 'Mi Cuenta', path: '/dashboard' },
-    { name: 'AI Studio', path: '/ai-studio' },
+    ...(isAuthenticated ? [{ name: 'Expediente', path: '/medical-intake' }] : []),
+    ...(isAuthenticated && hasRole(['staff', 'admin']) ? [{ name: 'Staff', path: '/staff' }] : []),
   ];
 
   const isActive = (path: string) => location.pathname === path;

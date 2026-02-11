@@ -1,14 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from '../components/Button';
 import { VelumLogo } from '../components/VelumLogo';
-import { 
+import {
   Users, Calendar, DollarSign, PieChart, Download, Search, AlertCircle, CheckCircle, Lock, ShieldAlert,
   CreditCard, X, RefreshCw, MoreHorizontal, FileText, Activity, Plus, Camera, Paperclip, ClipboardList,
-  Banknote, Save, Edit2, Trash2, Mail, Upload, ShieldCheck
+  Banknote, Save, Edit2, Trash2, Mail, Upload, ShieldCheck, UserPlus, Phone, XCircle
 } from 'lucide-react';
 import { AuditLogEntry, Member } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { memberService, auditService } from '../services/dataService';
+import { adminService, LeadData, IntakeAdminData, AppointmentAdminData } from '../services/adminService';
 
 export const Admin: React.FC = () => {
   const { login, logout, user, isAuthenticated, isLoading: isAuthLoading } = useAuth();
@@ -19,15 +20,22 @@ export const Admin: React.FC = () => {
   const [loginError, setLoginError] = useState('');
 
   // Dashboard Data State
-  const [activeTab, setActiveTab] = useState<'overview' | 'agenda' | 'members' | 'finance' | 'security'>('members');
+  const [activeTab, setActiveTab] = useState<'members' | 'leads' | 'appointments' | 'intakes' | 'security'>('members');
   const [members, setMembers] = useState<Member[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
+  const [leads, setLeads] = useState<LeadData[]>([]);
+  const [intakes, setIntakes] = useState<IntakeAdminData[]>([]);
+  const [adminAppointments, setAdminAppointments] = useState<AppointmentAdminData[]>([]);
   const [isLoadingData, setIsLoadingData] = useState(false);
 
   // Filters & Interaction
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [selectedMember, setSelectedMember] = useState<Member | null>(null);
+  const [leadStatusFilter, setLeadStatusFilter] = useState('all');
+  const [intakeStatusFilter, setIntakeStatusFilter] = useState('all');
+  const [apptStatusFilter, setApptStatusFilter] = useState('all');
+  const [reviewNotes, setReviewNotes] = useState('');
 
   // --- EFFECT: FETCH DATA ---
   useEffect(() => {
@@ -39,12 +47,18 @@ export const Admin: React.FC = () => {
   const loadData = async () => {
     setIsLoadingData(true);
     try {
-        const [membersData, logsData] = await Promise.all([
+        const [membersData, logsData, leadsData, intakesData, apptsData] = await Promise.all([
             memberService.getAll(),
-            user?.role === 'admin' ? auditService.getLogs() : Promise.resolve([])
+            user?.role === 'admin' ? auditService.getLogs() : Promise.resolve([]),
+            adminService.getLeads().catch(() => []),
+            adminService.getIntakes().catch(() => []),
+            adminService.getAppointments().catch(() => [])
         ]);
         setMembers(membersData);
         setAuditLogs(logsData);
+        setLeads(leadsData);
+        setIntakes(intakesData);
+        setAdminAppointments(apptsData);
     } catch (e) {
         console.error("Error loading admin data");
     } finally {
@@ -186,13 +200,19 @@ export const Admin: React.FC = () => {
 
       {/* Tabs */}
       <div className="flex border-b border-velum-200 mb-8 overflow-x-auto">
-        {['members', 'security'].map(tab => (
-            <button 
-                key={tab}
-                onClick={() => setActiveTab(tab as any)} 
-                className={`pb-4 px-6 text-sm uppercase tracking-widest font-bold border-b-2 transition-colors whitespace-nowrap ${activeTab === tab ? 'border-velum-900 text-velum-900' : 'border-transparent text-velum-400'}`}
+        {([
+          { key: 'members', label: 'Socios' },
+          { key: 'leads', label: 'Leads' },
+          { key: 'appointments', label: 'Citas' },
+          { key: 'intakes', label: 'Expedientes' },
+          { key: 'security', label: 'Seguridad & Logs' }
+        ] as const).map(tab => (
+            <button
+                key={tab.key}
+                onClick={() => setActiveTab(tab.key)}
+                className={`pb-4 px-6 text-sm uppercase tracking-widest font-bold border-b-2 transition-colors whitespace-nowrap ${activeTab === tab.key ? 'border-velum-900 text-velum-900' : 'border-transparent text-velum-400'}`}
             >
-                {tab === 'members' ? 'Socios' : 'Seguridad & Logs'}
+                {tab.label}
             </button>
         ))}
       </div>
@@ -221,6 +241,227 @@ export const Admin: React.FC = () => {
                           ))}
                       </tbody>
                   </table>
+                </div>
+            )}
+
+            {activeTab === 'leads' && (
+                <div className="bg-white border border-velum-200 shadow-sm animate-fade-in">
+                    <div className="p-4 border-b border-velum-200 flex flex-wrap gap-4 items-center">
+                        <Search size={20} className="text-velum-400"/>
+                        <input className="flex-1 min-w-[200px] outline-none text-sm" placeholder="Buscar leads..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+                        <select value={leadStatusFilter} onChange={e => setLeadStatusFilter(e.target.value)} className="text-xs border border-velum-200 px-2 py-1 outline-none">
+                            <option value="all">Todos</option>
+                            <option value="new_lead">Nuevo</option>
+                            <option value="contacted">Contactado</option>
+                            <option value="qualified">Calificado</option>
+                            <option value="converted">Convertido</option>
+                            <option value="lost">Perdido</option>
+                        </select>
+                    </div>
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-left border-collapse">
+                            <thead className="bg-velum-50 text-[10px] uppercase font-bold text-velum-600">
+                                <tr>
+                                    <th className="p-4">Nombre</th>
+                                    <th className="p-4">Teléfono</th>
+                                    <th className="p-4">Fuente</th>
+                                    <th className="p-4">Estado</th>
+                                    <th className="p-4">Fecha</th>
+                                    <th className="p-4">Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {leads
+                                    .filter(l => leadStatusFilter === 'all' || l.status === leadStatusFilter)
+                                    .filter(l => !searchTerm || `${l.firstName} ${l.lastName || ''} ${l.email || ''} ${l.phone}`.toLowerCase().includes(searchTerm.toLowerCase()))
+                                    .map(lead => (
+                                    <tr key={lead.id} className="border-b border-velum-100 hover:bg-velum-50">
+                                        <td className="p-4 font-bold">{lead.firstName} {lead.lastName || ''}</td>
+                                        <td className="p-4 text-sm">{lead.phone}</td>
+                                        <td className="p-4 text-xs uppercase">{lead.source}</td>
+                                        <td className="p-4">
+                                            <select
+                                                value={lead.status}
+                                                onChange={async (e) => {
+                                                    await adminService.updateLead(lead.id, { status: e.target.value });
+                                                    loadData();
+                                                }}
+                                                className="text-xs border border-velum-200 px-2 py-1 outline-none"
+                                            >
+                                                <option value="new_lead">Nuevo</option>
+                                                <option value="contacted">Contactado</option>
+                                                <option value="qualified">Calificado</option>
+                                                <option value="converted">Convertido</option>
+                                                <option value="lost">Perdido</option>
+                                            </select>
+                                        </td>
+                                        <td className="p-4 text-xs text-velum-500">{new Date(lead.createdAt).toLocaleDateString('es-MX')}</td>
+                                        <td className="p-4">
+                                            {!lead.convertedUserId && (
+                                                <Button size="sm" variant="outline" className="text-xs" onClick={async () => {
+                                                    if (confirm('¿Convertir este lead a usuario registrado?')) {
+                                                        try {
+                                                            await adminService.convertLead(lead.id);
+                                                            loadData();
+                                                        } catch (e: any) {
+                                                            alert(e.message || 'Error al convertir');
+                                                        }
+                                                    }
+                                                }}>
+                                                    <UserPlus size={12} className="mr-1"/> Convertir
+                                                </Button>
+                                            )}
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            )}
+
+            {activeTab === 'appointments' && (
+                <div className="bg-white border border-velum-200 shadow-sm animate-fade-in">
+                    <div className="p-4 border-b border-velum-200 flex flex-wrap gap-4 items-center">
+                        <Calendar size={20} className="text-velum-400"/>
+                        <select value={apptStatusFilter} onChange={e => setApptStatusFilter(e.target.value)} className="text-xs border border-velum-200 px-2 py-1 outline-none">
+                            <option value="all">Todos</option>
+                            <option value="pending">Pendiente</option>
+                            <option value="confirmed">Confirmada</option>
+                            <option value="in_progress">En curso</option>
+                            <option value="completed">Completada</option>
+                            <option value="canceled">Cancelada</option>
+                            <option value="no_show">No asistió</option>
+                        </select>
+                    </div>
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-left border-collapse">
+                            <thead className="bg-velum-50 text-[10px] uppercase font-bold text-velum-600">
+                                <tr>
+                                    <th className="p-4">Paciente</th>
+                                    <th className="p-4">Fecha/Hora</th>
+                                    <th className="p-4">Tipo</th>
+                                    <th className="p-4">Zonas</th>
+                                    <th className="p-4">Estado</th>
+                                    <th className="p-4">Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {adminAppointments
+                                    .filter(a => apptStatusFilter === 'all' || a.status === apptStatusFilter)
+                                    .map(appt => (
+                                    <tr key={appt.id} className="border-b border-velum-100 hover:bg-velum-50">
+                                        <td className="p-4 font-bold text-sm">{appt.user?.profile?.firstName || ''} {appt.user?.profile?.lastName || ''}</td>
+                                        <td className="p-4 text-sm">
+                                            {new Date(appt.scheduledAt).toLocaleDateString('es-MX', { day: 'numeric', month: 'short' })}
+                                            {' '}
+                                            {new Date(appt.scheduledAt).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}
+                                        </td>
+                                        <td className="p-4 text-xs uppercase">{appt.type === 'valuation' ? 'Valoración' : appt.type === 'treatment' ? 'Tratamiento' : 'Seguimiento'}</td>
+                                        <td className="p-4 text-xs">{appt.zones.join(', ') || '—'}</td>
+                                        <td className="p-4">
+                                            <select
+                                                value={appt.status}
+                                                onChange={async (e) => {
+                                                    await adminService.updateAppointment(appt.id, { status: e.target.value });
+                                                    loadData();
+                                                }}
+                                                className="text-xs border border-velum-200 px-2 py-1 outline-none"
+                                            >
+                                                <option value="pending">Pendiente</option>
+                                                <option value="confirmed">Confirmada</option>
+                                                <option value="in_progress">En curso</option>
+                                                <option value="completed">Completada</option>
+                                                <option value="canceled">Cancelada</option>
+                                                <option value="no_show">No asistió</option>
+                                            </select>
+                                        </td>
+                                        <td className="p-4 text-xs text-velum-500">{appt.staff?.profile?.firstName || 'Sin asignar'}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            )}
+
+            {activeTab === 'intakes' && (
+                <div className="bg-white border border-velum-200 shadow-sm animate-fade-in">
+                    <div className="p-4 border-b border-velum-200 flex flex-wrap gap-4 items-center">
+                        <ClipboardList size={20} className="text-velum-400"/>
+                        <span className="text-sm font-bold text-velum-700">Expedientes Médicos</span>
+                        <select value={intakeStatusFilter} onChange={e => setIntakeStatusFilter(e.target.value)} className="text-xs border border-velum-200 px-2 py-1 outline-none ml-auto">
+                            <option value="all">Todos</option>
+                            <option value="submitted">Pendientes</option>
+                            <option value="approved">Aprobados</option>
+                            <option value="rejected">Rechazados</option>
+                        </select>
+                    </div>
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-left border-collapse">
+                            <thead className="bg-velum-50 text-[10px] uppercase font-bold text-velum-600">
+                                <tr>
+                                    <th className="p-4">Paciente</th>
+                                    <th className="p-4">Fototipo</th>
+                                    <th className="p-4">Contraindicaciones</th>
+                                    <th className="p-4">Estado</th>
+                                    <th className="p-4">Fecha</th>
+                                    <th className="p-4">Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {intakes
+                                    .filter(i => intakeStatusFilter === 'all' || i.status === intakeStatusFilter)
+                                    .map(intake => (
+                                    <tr key={intake.id} className="border-b border-velum-100 hover:bg-velum-50">
+                                        <td className="p-4 font-bold text-sm">{intake.user?.profile?.firstName || ''} {intake.user?.profile?.lastName || ''}</td>
+                                        <td className="p-4 text-sm">{intake.fitzpatrickType || '—'}</td>
+                                        <td className="p-4 text-xs">
+                                            {intake.contraindications.length > 0 ? (
+                                                <span className="text-red-600 font-bold">{intake.contraindications.length} encontrada(s)</span>
+                                            ) : (
+                                                <span className="text-green-600">Ninguna</span>
+                                            )}
+                                        </td>
+                                        <td className="p-4">
+                                            <span className={`text-[10px] font-bold uppercase px-2 py-1 ${
+                                                intake.status === 'approved' ? 'bg-green-100 text-green-700' :
+                                                intake.status === 'submitted' ? 'bg-blue-100 text-blue-700' :
+                                                intake.status === 'rejected' ? 'bg-red-100 text-red-700' :
+                                                'bg-yellow-100 text-yellow-700'
+                                            }`}>
+                                                {intake.status === 'submitted' ? 'Pendiente' :
+                                                 intake.status === 'approved' ? 'Aprobado' :
+                                                 intake.status === 'rejected' ? 'Rechazado' : 'Borrador'}
+                                            </span>
+                                        </td>
+                                        <td className="p-4 text-xs text-velum-500">{new Date(intake.createdAt).toLocaleDateString('es-MX')}</td>
+                                        <td className="p-4">
+                                            {intake.status === 'submitted' && (
+                                                <div className="flex gap-2">
+                                                    <Button size="sm" className="text-xs bg-green-600 border-none text-white hover:bg-green-700" onClick={async () => {
+                                                        await adminService.reviewIntake(intake.id, 'approved');
+                                                        loadData();
+                                                    }}>
+                                                        <CheckCircle size={12} className="mr-1"/> Aprobar
+                                                    </Button>
+                                                    <Button size="sm" variant="outline" className="text-xs text-red-600 border-red-200" onClick={async () => {
+                                                        const notes = prompt('Motivo del rechazo:');
+                                                        if (notes !== null) {
+                                                            await adminService.reviewIntake(intake.id, 'rejected', notes || undefined);
+                                                            loadData();
+                                                        }
+                                                    }}>
+                                                        <XCircle size={12} className="mr-1"/> Rechazar
+                                                    </Button>
+                                                </div>
+                                            )}
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             )}
 
