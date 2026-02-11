@@ -4,11 +4,11 @@ import { listAuditLogs, listDocumentsAdmin, listMemberships, listUsers, reports,
 
 export const adminRoutes = Router();
 
-adminRoutes.use(requireAuth, requireRole(["staff", "admin"]));
+const adminGuard = [requireAuth, requireRole(["staff", "admin"])] as const;
 
-adminRoutes.get("/admin/users", listUsers);
-adminRoutes.get("/admin/memberships", listMemberships);
-adminRoutes.get("/admin/documents", listDocumentsAdmin);
-adminRoutes.get("/admin/reports", reports);
-adminRoutes.get("/admin/audit-logs", listAuditLogs);
-adminRoutes.patch("/admin/users/:userId/membership", updateMembershipStatus);
+adminRoutes.get("/admin/users", ...adminGuard, listUsers);
+adminRoutes.get("/admin/memberships", ...adminGuard, listMemberships);
+adminRoutes.get("/admin/documents", ...adminGuard, listDocumentsAdmin);
+adminRoutes.get("/admin/reports", ...adminGuard, reports);
+adminRoutes.get("/admin/audit-logs", ...adminGuard, listAuditLogs);
+adminRoutes.patch("/admin/users/:userId/membership", ...adminGuard, updateMembershipStatus);
