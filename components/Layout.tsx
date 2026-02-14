@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Menu, X, Instagram, Facebook } from 'lucide-react';
 import { VelumLogo } from './VelumLogo';
+import { NotificationBell } from './NotificationBell';
 import { useAuth } from '../context/AuthContext';
 
 export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -47,6 +48,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
                   {link.name}
                 </Link>
               ))}
+              {isAuthenticated && <NotificationBell />}
               <Link to="/agenda">
                  <button className="bg-velum-900 text-velum-50 px-6 py-2 text-xs uppercase tracking-widest hover:bg-velum-800 transition-colors">
                   Reservar

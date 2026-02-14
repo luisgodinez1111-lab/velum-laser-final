@@ -71,6 +71,20 @@ enum LeadSource {
   other
 }
 
+// Phase 2 enums
+enum NotificationType {
+  in_app
+  email
+  whatsapp
+}
+
+enum NotificationStatus {
+  pending
+  sent
+  failed
+  read
+}
+
 // ─── EXISTING MODELS (extended) ─────────────────────────────────────
 
 model User {
@@ -94,6 +108,10 @@ model User {
   patientAppointments Appointment[]           @relation("PatientAppointments")
   staffAppointments   Appointment[]           @relation("StaffAppointments")
   assignedLeads       Lead[]                  @relation("LeadAssignment")
+  // Phase 2 relations
+  patientSessions     SessionTreatment[]      @relation("PatientSessions")
+  staffSessions       SessionTreatment[]      @relation("StaffSessions")
+  notifications       Notification[]
 }
 
 model Profile {
@@ -249,8 +267,9 @@ model Appointment {
   createdAt    DateTime          @default(now())
   updatedAt    DateTime          @updatedAt
 
-  user  User  @relation("PatientAppointments", fields: [userId], references: [id], onDelete: Cascade)
-  staff User? @relation("StaffAppointments", fields: [staffUserId], references: [id], onDelete: SetNull)
+  user     User               @relation("PatientAppointments", fields: [userId], references: [id], onDelete: Cascade)
+  staff    User?              @relation("StaffAppointments", fields: [staffUserId], references: [id], onDelete: SetNull)
+  sessions SessionTreatment[]
 
   @@index([userId])
   @@index([staffUserId])
@@ -285,4 +304,69 @@ model Lead {
   @@index([source])
   @@index([email])
   @@index([phone])
+}
+
+// ─── PHASE 2 NEW MODELS ─────────────────────────────────────────────
+
+model SessionTreatment {
+  id               String   @id @default(cuid())
+  appointmentId    String
+  userId           String
+  staffUserId      String
+  zones            String[] @default([])
+  laserSettings    Json     @default("{}")
+  skinResponse     String?
+  fitzpatrickUsed  String?
+  energyDelivered  String?
+  notes            String?
+  beforePhotoKey   String?
+  afterPhotoKey    String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  appointment Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  user        User        @relation("PatientSessions", fields: [userId], references: [id], onDelete: Cascade)
+  staff       User        @relation("StaffSessions", fields: [staffUserId], references: [id], onDelete: Cascade)
+
+  @@index([appointmentId])
+  @@index([userId])
+  @@index([staffUserId])
+}
+
+model Notification {
+  id        String             @id @default(cuid())
+  userId    String
+  type      NotificationType   @default(in_app)
+  status    NotificationStatus @default(pending)
+  title     String
+  body      String
+  metadata  Json?
+  readAt    DateTime?
+  sentAt    DateTime?
+  createdAt DateTime           @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([userId, status])
+}
+
+model MarketingEvent {
+  id         String   @id @default(cuid())
+  eventName  String
+  eventId    String   @unique
+  userId     String?
+  leadId     String?
+  fbp        String?
+  fbc        String?
+  clientIp   String?
+  userAgent  String?
+  sourceUrl  String?
+  customData Json?
+  sentToMeta Boolean  @default(false)
+  sentAt     DateTime?
+  createdAt  DateTime @default(now())
+
+  @@index([eventName])
+  @@index([sentToMeta])
 }

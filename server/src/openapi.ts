@@ -76,6 +76,34 @@ export const openApiSpec = {
       get: { summary: "List blocked dates (staff/admin)", responses: { "200": { description: "OK" } } },
       post: { summary: "Block a date (staff/admin)", responses: { "201": { description: "Created" } } }
     },
-    "/admin/schedule/blocks/{id}": { delete: { summary: "Unblock a date (admin)", responses: { "204": { description: "No Content" } } } }
+    "/admin/schedule/blocks/{id}": { delete: { summary: "Unblock a date (admin)", responses: { "204": { description: "No Content" } } } },
+
+    // Phase 2: Sessions
+    "/me/sessions": { get: { summary: "Get current user's treatment sessions", responses: { "200": { description: "OK" } } } },
+    "/admin/sessions": {
+      get: { summary: "List all sessions (staff/admin)", responses: { "200": { description: "OK" } } },
+      post: { summary: "Create treatment session for appointment", responses: { "201": { description: "Created" } } }
+    },
+    "/admin/sessions/{id}": {
+      get: { summary: "Get session detail (staff/admin)", responses: { "200": { description: "OK" } } },
+      patch: { summary: "Update session (staff/admin)", responses: { "200": { description: "OK" } } }
+    },
+
+    // Phase 2: Notifications
+    "/me/notifications": { get: { summary: "Get current user's notifications", responses: { "200": { description: "OK" } } } },
+    "/me/notifications/unread-count": { get: { summary: "Get unread notification count", responses: { "200": { description: "OK" } } } },
+    "/me/notifications/{id}/read": { patch: { summary: "Mark notification as read", responses: { "200": { description: "OK" } } } },
+    "/me/notifications/read-all": { post: { summary: "Mark all notifications as read", responses: { "200": { description: "OK" } } } },
+
+    // Phase 2: Marketing Events
+    "/marketing/events": { post: { summary: "Track marketing event (public)", responses: { "201": { description: "Created" } } } },
+    "/admin/marketing/pending": { get: { summary: "List pending CAPI events (admin)", responses: { "200": { description: "OK" } } } },
+    "/admin/marketing/process": { post: { summary: "Process pending CAPI events (admin)", responses: { "200": { description: "OK" } } } },
+
+    // Phase 2: Analytics
+    "/admin/analytics/overview": { get: { summary: "Analytics overview (admin)", responses: { "200": { description: "OK" } } } },
+    "/admin/analytics/appointments": { get: { summary: "Appointment analytics (admin)", responses: { "200": { description: "OK" } } } },
+    "/admin/analytics/leads": { get: { summary: "Lead analytics (admin)", responses: { "200": { description: "OK" } } } },
+    "/admin/analytics/sessions": { get: { summary: "Session analytics (admin)", responses: { "200": { description: "OK" } } } }
   }
 };

@@ -2,10 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { Button } from '../components/Button';
 import { useAuth } from '../context/AuthContext';
 import { adminService, AppointmentAdminData, IntakeAdminData } from '../services/adminService';
+import { sessionService } from '../services/sessionService';
 import { Link } from 'react-router-dom';
-import { Loader2, Calendar, FileText, CheckCircle, XCircle, Clock, ChevronRight } from 'lucide-react';
+import { Loader2, Calendar, FileText, CheckCircle, XCircle, Clock, ChevronRight, Zap } from 'lucide-react';
 
-type Tab = 'appointments' | 'intakes';
+type Tab = 'appointments' | 'intakes' | 'sessions';
 
 export const StaffDashboard: React.FC = () => {
   const { user, isAuthenticated, isLoading, hasRole } = useAuth();
@@ -15,6 +16,7 @@ export const StaffDashboard: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [reviewNotes, setReviewNotes] = useState('');
   const [reviewingId, setReviewingId] = useState<string | null>(null);
+  const [sessionForm, setSessionForm] = useState<{ appointmentId: string; zones: string; laserSettings: string; skinResponse: string; fitzpatrickUsed: string; energyDelivered: string; notes: string } | null>(null);
 
   useEffect(() => {
     if (isAuthenticated && hasRole(['staff', 'admin'])) {
@@ -91,6 +93,10 @@ export const StaffDashboard: React.FC = () => {
         <button onClick={() => setTab('intakes')}
           className={`px-6 py-3 text-xs uppercase tracking-widest font-bold transition-colors ${tab === 'intakes' ? 'bg-velum-900 text-white' : 'bg-velum-100 text-velum-600 hover:bg-velum-200'}`}>
           <FileText size={14} className="inline mr-2" />Expedientes Pendientes ({intakes.length})
+        </button>
+        <button onClick={() => setTab('sessions')}
+          className={`px-6 py-3 text-xs uppercase tracking-widest font-bold transition-colors ${tab === 'sessions' ? 'bg-velum-900 text-white' : 'bg-velum-100 text-velum-600 hover:bg-velum-200'}`}>
+          <Zap size={14} className="inline mr-2" />Registrar Sesión
         </button>
       </div>
 
@@ -189,7 +195,109 @@ export const StaffDashboard: React.FC = () => {
             </div>
           ))}
         </div>
-      )}
+      ) : tab === 'sessions' ? (
+        <div className="space-y-4">
+          {/* Select a completed appointment to record session */}
+          {!sessionForm ? (
+            <div>
+              <p className="text-sm text-velum-600 mb-4">Selecciona una cita completada o en curso para registrar la sesión de tratamiento.</p>
+              {appointments.filter(a => ['completed', 'in_progress'].includes(a.status)).length === 0 ? (
+                <div className="text-center py-16 text-velum-400">
+                  <Zap size={48} className="mx-auto mb-4" />
+                  <p>No hay citas completadas hoy para registrar sesión.</p>
+                </div>
+              ) : (
+                appointments.filter(a => ['completed', 'in_progress'].includes(a.status)).map(a => (
+                  <div key={a.id} className="bg-white p-4 border border-velum-200 shadow-sm mb-2 flex justify-between items-center">
+                    <div>
+                      <span className="font-bold text-sm">{userName(a.user)}</span>
+                      <span className="text-xs text-velum-500 ml-2">{formatTime(a.scheduledAt)} — {a.type === 'valuation' ? 'Valoración' : 'Tratamiento'}</span>
+                    </div>
+                    <button
+                      onClick={() => setSessionForm({ appointmentId: a.id, zones: a.zones.join(', '), laserSettings: '', skinResponse: '', fitzpatrickUsed: '', energyDelivered: '', notes: '' })}
+                      className="text-xs px-3 py-1.5 bg-velum-900 text-white hover:bg-velum-800">
+                      <Zap size={12} className="inline mr-1" />Registrar Sesión
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+          ) : (
+            <div className="bg-white p-6 border border-velum-200 shadow-sm">
+              <h3 className="font-bold text-lg mb-4">Registro de Sesión</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs uppercase text-velum-500 mb-1">Zonas tratadas</label>
+                  <input value={sessionForm.zones} onChange={e => setSessionForm({ ...sessionForm, zones: e.target.value })}
+                    className="w-full p-2 border border-velum-300 text-sm outline-none focus:border-velum-900" placeholder="Axilas, Piernas..." />
+                </div>
+                <div>
+                  <label className="block text-xs uppercase text-velum-500 mb-1">Fototipo usado</label>
+                  <select value={sessionForm.fitzpatrickUsed} onChange={e => setSessionForm({ ...sessionForm, fitzpatrickUsed: e.target.value })}
+                    className="w-full p-2 border border-velum-300 text-sm outline-none focus:border-velum-900">
+                    <option value="">Seleccionar</option>
+                    {['I', 'II', 'III', 'IV', 'V', 'VI'].map(t => <option key={t} value={t}>Tipo {t}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs uppercase text-velum-500 mb-1">Energía entregada (J/cm²)</label>
+                  <input value={sessionForm.energyDelivered} onChange={e => setSessionForm({ ...sessionForm, energyDelivered: e.target.value })}
+                    className="w-full p-2 border border-velum-300 text-sm outline-none focus:border-velum-900" placeholder="20 J/cm²" />
+                </div>
+                <div>
+                  <label className="block text-xs uppercase text-velum-500 mb-1">Respuesta de piel</label>
+                  <select value={sessionForm.skinResponse} onChange={e => setSessionForm({ ...sessionForm, skinResponse: e.target.value })}
+                    className="w-full p-2 border border-velum-300 text-sm outline-none focus:border-velum-900">
+                    <option value="">Seleccionar</option>
+                    <option value="normal">Normal</option>
+                    <option value="mild_erythema">Eritema leve</option>
+                    <option value="moderate_erythema">Eritema moderado</option>
+                    <option value="edema">Edema</option>
+                    <option value="adverse">Reacción adversa</option>
+                  </select>
+                </div>
+                <div className="md:col-span-2">
+                  <label className="block text-xs uppercase text-velum-500 mb-1">Configuración láser (JSON)</label>
+                  <input value={sessionForm.laserSettings} onChange={e => setSessionForm({ ...sessionForm, laserSettings: e.target.value })}
+                    className="w-full p-2 border border-velum-300 text-sm outline-none focus:border-velum-900 font-mono" placeholder='{"wavelength": "808nm", "pulse": "30ms"}' />
+                </div>
+                <div className="md:col-span-2">
+                  <label className="block text-xs uppercase text-velum-500 mb-1">Notas clínicas</label>
+                  <textarea value={sessionForm.notes} onChange={e => setSessionForm({ ...sessionForm, notes: e.target.value })}
+                    className="w-full p-2 border border-velum-300 text-sm outline-none focus:border-velum-900" rows={3} placeholder="Observaciones..." />
+                </div>
+              </div>
+              <div className="flex gap-2 mt-4">
+                <button
+                  onClick={async () => {
+                    try {
+                      let laserJson = {};
+                      if (sessionForm.laserSettings) {
+                        try { laserJson = JSON.parse(sessionForm.laserSettings); } catch { laserJson = { raw: sessionForm.laserSettings }; }
+                      }
+                      await sessionService.create({
+                        appointmentId: sessionForm.appointmentId,
+                        zones: sessionForm.zones.split(',').map(z => z.trim()).filter(Boolean),
+                        laserSettings: laserJson,
+                        fitzpatrickUsed: sessionForm.fitzpatrickUsed || undefined,
+                        energyDelivered: sessionForm.energyDelivered || undefined,
+                        skinResponse: sessionForm.skinResponse || undefined,
+                        notes: sessionForm.notes || undefined
+                      });
+                      alert('Sesión registrada correctamente.');
+                      setSessionForm(null);
+                    } catch (e: any) { alert(e.message || 'Error al registrar sesión'); }
+                  }}
+                  className="px-6 py-2 bg-green-600 text-white text-xs font-bold hover:bg-green-700">
+                  <CheckCircle size={14} className="inline mr-1" />Guardar Sesión
+                </button>
+                <button onClick={() => setSessionForm(null)}
+                  className="px-4 py-2 border border-velum-300 text-xs text-velum-600 hover:bg-velum-100">Cancelar</button>
+              </div>
+            </div>
+          )}
+        </div>
+      ) : null}
     </div>
   );
 };

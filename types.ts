@@ -152,6 +152,48 @@ export interface LeadData {
   updatedAt: string;
 }
 
+// --- PHASE 2: SESSIONS, NOTIFICATIONS, MARKETING, ANALYTICS ---
+
+export type NotificationType = 'in_app' | 'email' | 'whatsapp';
+export type NotificationStatus = 'pending' | 'sent' | 'failed' | 'read';
+
+export interface SessionTreatmentData {
+  id: string;
+  appointmentId: string;
+  userId: string;
+  staffUserId: string;
+  zones: string[];
+  laserSettings: Record<string, unknown>;
+  skinResponse?: string;
+  fitzpatrickUsed?: string;
+  energyDelivered?: string;
+  notes?: string;
+  beforePhotoKey?: string;
+  afterPhotoKey?: string;
+  appointment?: { scheduledAt: string; type: string; status: string };
+  staff?: { profile?: { firstName?: string; lastName?: string } };
+  createdAt: string;
+}
+
+export interface NotificationData {
+  id: string;
+  userId: string;
+  type: NotificationType;
+  status: NotificationStatus;
+  title: string;
+  body: string;
+  readAt?: string;
+  createdAt: string;
+}
+
+export interface AnalyticsOverview {
+  totalUsers: number;
+  totalLeads: number;
+  totalAppointments: number;
+  activeMembers: number;
+  pendingIntakes: number;
+}
+
 // Window augmentation for AI Studio
 declare global {
   interface AIStudio {

@@ -14,6 +14,10 @@ import { intakeRoutes } from "./routes/intakeRoutes";
 import { appointmentRoutes } from "./routes/appointmentRoutes";
 import { scheduleRoutes } from "./routes/scheduleRoutes";
 import { leadRoutes } from "./routes/leadRoutes";
+import { sessionRoutes } from "./routes/sessionRoutes";
+import { notificationRoutes } from "./routes/notificationRoutes";
+import { marketingRoutes } from "./routes/marketingRoutes";
+import { analyticsRoutes } from "./routes/analyticsRoutes";
 import { env } from "./utils/env";
 import { httpLogger } from "./utils/logger";
 import { errorHandler } from "./middlewares/error";
@@ -60,6 +64,11 @@ app.use(intakeRoutes);
 app.use(appointmentRoutes);
 app.use(scheduleRoutes);
 app.use(leadRoutes);
+// Phase 2 routes
+app.use(sessionRoutes);
+app.use(notificationRoutes);
+app.use(marketingRoutes);
+app.use(analyticsRoutes);
 
 app.get("/health", (_req, res) => {
   res.json({ status: "ok" });

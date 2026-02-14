@@ -10,6 +10,7 @@ import { AuditLogEntry, Member } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { memberService, auditService } from '../services/dataService';
 import { adminService, LeadData, IntakeAdminData, AppointmentAdminData } from '../services/adminService';
+import { analyticsServiceFe, OverviewData, AppointmentStatsData, LeadStatsData } from '../services/analyticsService';
 
 export const Admin: React.FC = () => {
   const { login, logout, user, isAuthenticated, isLoading: isAuthLoading } = useAuth();
@@ -20,7 +21,7 @@ export const Admin: React.FC = () => {
   const [loginError, setLoginError] = useState('');
 
   // Dashboard Data State
-  const [activeTab, setActiveTab] = useState<'members' | 'leads' | 'appointments' | 'intakes' | 'security'>('members');
+  const [activeTab, setActiveTab] = useState<'members' | 'leads' | 'appointments' | 'intakes' | 'analytics' | 'security'>('members');
   const [members, setMembers] = useState<Member[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
   const [leads, setLeads] = useState<LeadData[]>([]);
@@ -36,6 +37,9 @@ export const Admin: React.FC = () => {
   const [intakeStatusFilter, setIntakeStatusFilter] = useState('all');
   const [apptStatusFilter, setApptStatusFilter] = useState('all');
   const [reviewNotes, setReviewNotes] = useState('');
+  const [overview, setOverview] = useState<OverviewData | null>(null);
+  const [apptStats, setApptStats] = useState<AppointmentStatsData | null>(null);
+  const [leadStats, setLeadStats] = useState<LeadStatsData | null>(null);
 
   // --- EFFECT: FETCH DATA ---
   useEffect(() => {
@@ -47,18 +51,24 @@ export const Admin: React.FC = () => {
   const loadData = async () => {
     setIsLoadingData(true);
     try {
-        const [membersData, logsData, leadsData, intakesData, apptsData] = await Promise.all([
+        const [membersData, logsData, leadsData, intakesData, apptsData, overviewData, apptStatsData, leadStatsData] = await Promise.all([
             memberService.getAll(),
             user?.role === 'admin' ? auditService.getLogs() : Promise.resolve([]),
             adminService.getLeads().catch(() => []),
             adminService.getIntakes().catch(() => []),
-            adminService.getAppointments().catch(() => [])
+            adminService.getAppointments().catch(() => []),
+            user?.role === 'admin' ? analyticsServiceFe.getOverview().catch(() => null) : Promise.resolve(null),
+            user?.role === 'admin' ? analyticsServiceFe.getAppointmentStats().catch(() => null) : Promise.resolve(null),
+            user?.role === 'admin' ? analyticsServiceFe.getLeadStats().catch(() => null) : Promise.resolve(null)
         ]);
         setMembers(membersData);
         setAuditLogs(logsData);
         setLeads(leadsData);
         setIntakes(intakesData);
         setAdminAppointments(apptsData);
+        setOverview(overviewData);
+        setApptStats(apptStatsData);
+        setLeadStats(leadStatsData);
     } catch (e) {
         console.error("Error loading admin data");
     } finally {
@@ -205,6 +215,7 @@ export const Admin: React.FC = () => {
           { key: 'leads', label: 'Leads' },
           { key: 'appointments', label: 'Citas' },
           { key: 'intakes', label: 'Expedientes' },
+          { key: 'analytics', label: 'Analytics' },
           { key: 'security', label: 'Seguridad & Logs' }
         ] as const).map(tab => (
             <button
@@ -462,6 +473,96 @@ export const Admin: React.FC = () => {
                             </tbody>
                         </table>
                     </div>
+                </div>
+            )}
+
+            {activeTab === 'analytics' && (
+                <div className="space-y-6 animate-fade-in">
+                    {/* Overview Cards */}
+                    {overview && (
+                        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                            {[
+                                { label: 'Usuarios', value: overview.totalUsers, color: 'text-blue-600' },
+                                { label: 'Leads', value: overview.totalLeads, color: 'text-purple-600' },
+                                { label: 'Citas', value: overview.totalAppointments, color: 'text-green-600' },
+                                { label: 'Miembros Activos', value: overview.activeMembers, color: 'text-velum-900' },
+                                { label: 'Intakes Pendientes', value: overview.pendingIntakes, color: 'text-orange-600' }
+                            ].map(card => (
+                                <div key={card.label} className="bg-white p-6 border border-velum-200 text-center">
+                                    <p className={`text-3xl font-serif ${card.color}`}>{card.value}</p>
+                                    <p className="text-[10px] uppercase tracking-widest text-velum-500 mt-1">{card.label}</p>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
+                    {/* Appointment Stats */}
+                    {apptStats && (
+                        <div className="bg-white p-6 border border-velum-200">
+                            <h3 className="font-serif text-lg mb-4">Citas (últimos 30 días)</h3>
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                                <div className="text-center p-3 bg-velum-50">
+                                    <p className="text-2xl font-bold text-velum-900">{apptStats.total}</p>
+                                    <p className="text-[10px] uppercase text-velum-500">Total</p>
+                                </div>
+                                {Object.entries(apptStats.byStatus).map(([status, count]) => (
+                                    <div key={status} className="text-center p-3 bg-velum-50">
+                                        <p className="text-2xl font-bold text-velum-900">{count}</p>
+                                        <p className="text-[10px] uppercase text-velum-500">{status}</p>
+                                    </div>
+                                ))}
+                            </div>
+                            <h4 className="text-xs uppercase font-bold text-velum-500 mb-2">Por tipo</h4>
+                            <div className="flex gap-4">
+                                {Object.entries(apptStats.byType).map(([type, count]) => (
+                                    <div key={type} className="flex items-center gap-2">
+                                        <span className="w-3 h-3 rounded-full bg-velum-400"></span>
+                                        <span className="text-xs">{type === 'valuation' ? 'Valoración' : type === 'treatment' ? 'Tratamiento' : 'Seguimiento'}: <strong>{count}</strong></span>
+                                    </div>
+                                ))}
+                            </div>
+                            {Object.keys(apptStats.byDay).length > 0 && (
+                                <div className="mt-4">
+                                    <h4 className="text-xs uppercase font-bold text-velum-500 mb-2">Por día</h4>
+                                    <div className="flex gap-1 items-end h-24">
+                                        {Object.entries(apptStats.byDay).sort().slice(-14).map(([day, count]) => {
+                                            const maxVal = Math.max(...Object.values(apptStats.byDay));
+                                            const height = maxVal > 0 ? (count / maxVal) * 100 : 0;
+                                            return (
+                                                <div key={day} className="flex-1 flex flex-col items-center">
+                                                    <div className="bg-velum-400 w-full rounded-t" style={{ height: `${height}%`, minHeight: count > 0 ? '4px' : '0' }}></div>
+                                                    <span className="text-[8px] text-velum-400 mt-1">{day.slice(5)}</span>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* Lead Stats */}
+                    {leadStats && (
+                        <div className="bg-white p-6 border border-velum-200">
+                            <h3 className="font-serif text-lg mb-4">Leads (últimos 30 días)</h3>
+                            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-4">
+                                <div className="text-center p-3 bg-velum-50">
+                                    <p className="text-2xl font-bold text-velum-900">{leadStats.total}</p>
+                                    <p className="text-[10px] uppercase text-velum-500">Total</p>
+                                </div>
+                                <div className="text-center p-3 bg-velum-50">
+                                    <p className="text-2xl font-bold text-green-600">{leadStats.conversionRate}%</p>
+                                    <p className="text-[10px] uppercase text-velum-500">Tasa de Conversión</p>
+                                </div>
+                            </div>
+                            <h4 className="text-xs uppercase font-bold text-velum-500 mb-2">Por fuente</h4>
+                            <div className="flex flex-wrap gap-3">
+                                {Object.entries(leadStats.bySource).map(([source, count]) => (
+                                    <span key={source} className="text-xs bg-velum-100 px-3 py-1">{source}: <strong>{count}</strong></span>
+                                ))}
+                            </div>
+                        </div>
+                    )}
                 </div>
             )}
 

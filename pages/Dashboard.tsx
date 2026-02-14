@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from '../components/Button';
-import { User, CreditCard, Calendar, ExternalLink, FileText, AlertTriangle, CheckCircle, Loader2, ClipboardList, Clock, XCircle } from 'lucide-react';
+import { User, CreditCard, Calendar, ExternalLink, FileText, AlertTriangle, CheckCircle, Loader2, ClipboardList, Clock, XCircle, Zap } from 'lucide-react';
 import { redirectToCustomerPortal } from '../services/stripeService';
 import { SignaturePad } from '../components/SignaturePad';
 import { Member, LegalDocument } from '../types';
@@ -8,6 +8,7 @@ import { useAuth } from '../context/AuthContext';
 import { memberService, documentService } from '../services/dataService';
 import { intakeService, IntakeData } from '../services/intakeService';
 import { appointmentService, AppointmentData } from '../services/appointmentService';
+import { sessionService, SessionData } from '../services/sessionService';
 import { Link } from 'react-router-dom';
 
 export const Dashboard: React.FC = () => {
@@ -18,20 +19,23 @@ export const Dashboard: React.FC = () => {
   const [currentDocToSign, setCurrentDocToSign] = useState<LegalDocument | null>(null);
   const [intakeData, setIntakeData] = useState<IntakeData | null>(null);
   const [appointments, setAppointments] = useState<AppointmentData[]>([]);
+  const [sessions, setSessions] = useState<SessionData[]>([]);
 
   // --- FETCH DATA ON LOAD ---
   useEffect(() => {
     const fetchData = async () => {
         if (user && user.role === 'member') {
             try {
-                const [data, intake, appts] = await Promise.all([
+                const [data, intake, appts, sessionsData] = await Promise.all([
                     memberService.getById(user.id),
                     intakeService.getMyIntake().catch(() => null),
-                    appointmentService.getMyAppointments().catch(() => [])
+                    appointmentService.getMyAppointments().catch(() => []),
+                    sessionService.getMySessions().catch(() => [])
                 ]);
                 setMemberData(data || null);
                 setIntakeData(intake);
                 setAppointments(appts);
+                setSessions(sessionsData);
             } catch (e) {
                 console.error("Error fetching member data", e);
             } finally {
@@ -310,6 +314,33 @@ export const Dashboard: React.FC = () => {
                 </>
             );
         })()}
+
+        {/* Mis Sesiones de Tratamiento Card */}
+        {sessions.length > 0 && (
+            <div className="p-6 bg-white border border-velum-200">
+                <h3 className="font-serif text-lg flex items-center gap-2 mb-4">
+                    <Zap size={20} className="text-velum-400"/> Mis Sesiones de Tratamiento
+                </h3>
+                <div className="space-y-3">
+                    {sessions.slice(0, 5).map(s => (
+                        <div key={s.id} className="flex justify-between items-start text-sm border-b border-velum-50 pb-3">
+                            <div>
+                                <p className="font-bold text-velum-800">
+                                    {s.appointment ? new Date(s.appointment.scheduledAt).toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric' }) : new Date(s.createdAt).toLocaleDateString('es-MX')}
+                                </p>
+                                {s.zones.length > 0 && <p className="text-xs text-velum-500">Zonas: {s.zones.join(', ')}</p>}
+                                {s.fitzpatrickUsed && <p className="text-xs text-velum-400">Fototipo: {s.fitzpatrickUsed}</p>}
+                                {s.energyDelivered && <p className="text-xs text-velum-400">Energía: {s.energyDelivered}</p>}
+                            </div>
+                            <div className="text-right">
+                                {s.staff?.profile && <p className="text-xs text-velum-500">{s.staff.profile.firstName} {s.staff.profile.lastName}</p>}
+                                {s.skinResponse && <p className="text-[10px] text-velum-400 mt-1">{s.skinResponse}</p>}
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </div>
+        )}
 
       </div>
 
