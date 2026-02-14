@@ -9,6 +9,9 @@ import { memberService, documentService } from '../services/dataService';
 import { intakeService, IntakeData } from '../services/intakeService';
 import { appointmentService, AppointmentData } from '../services/appointmentService';
 import { sessionService, SessionData } from '../services/sessionService';
+import { treatmentPlanService, TreatmentPlanData } from '../services/treatmentPlanService';
+import { invoiceServiceFe, InvoiceData } from '../services/invoiceService';
+import { OnboardingProgress } from '../components/OnboardingProgress';
 import { Link } from 'react-router-dom';
 
 export const Dashboard: React.FC = () => {
@@ -20,22 +23,28 @@ export const Dashboard: React.FC = () => {
   const [intakeData, setIntakeData] = useState<IntakeData | null>(null);
   const [appointments, setAppointments] = useState<AppointmentData[]>([]);
   const [sessions, setSessions] = useState<SessionData[]>([]);
+  const [plans, setPlans] = useState<TreatmentPlanData[]>([]);
+  const [invoices, setInvoices] = useState<InvoiceData[]>([]);
 
   // --- FETCH DATA ON LOAD ---
   useEffect(() => {
     const fetchData = async () => {
         if (user && user.role === 'member') {
             try {
-                const [data, intake, appts, sessionsData] = await Promise.all([
+                const [data, intake, appts, sessionsData, plansData, invoicesData] = await Promise.all([
                     memberService.getById(user.id),
                     intakeService.getMyIntake().catch(() => null),
                     appointmentService.getMyAppointments().catch(() => []),
-                    sessionService.getMySessions().catch(() => [])
+                    sessionService.getMySessions().catch(() => []),
+                    treatmentPlanService.getMyPlans().catch(() => []),
+                    invoiceServiceFe.getMyInvoices().catch(() => [])
                 ]);
                 setMemberData(data || null);
                 setIntakeData(intake);
                 setAppointments(appts);
                 setSessions(sessionsData);
+                setPlans(plansData);
+                setInvoices(invoicesData);
             } catch (e) {
                 console.error("Error fetching member data", e);
             } finally {
@@ -108,6 +117,11 @@ export const Dashboard: React.FC = () => {
   return (
     <div className="max-w-4xl mx-auto px-4 py-12 animate-fade-in relative">
       <h1 className="text-3xl font-serif text-velum-900 mb-8">Mi Cuenta Velum</h1>
+
+      {/* ONBOARDING PROGRESS */}
+      <div className="mb-8">
+        <OnboardingProgress />
+      </div>
 
       {/* COMPLIANCE ALERT BLOCKER */}
       {pendingDocs > 0 && (
@@ -335,6 +349,82 @@ export const Dashboard: React.FC = () => {
                             <div className="text-right">
                                 {s.staff?.profile && <p className="text-xs text-velum-500">{s.staff.profile.firstName} {s.staff.profile.lastName}</p>}
                                 {s.skinResponse && <p className="text-[10px] text-velum-400 mt-1">{s.skinResponse}</p>}
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </div>
+        )}
+
+        {/* Mi Plan de Tratamiento Card */}
+        {plans.length > 0 && plans.map(plan => (
+            <div key={plan.id} className="p-6 bg-white border border-velum-200">
+                <div className="flex items-center justify-between mb-4">
+                    <h3 className="font-serif text-lg flex items-center gap-2">
+                        <CreditCard size={20} className="text-velum-400"/> Plan de Tratamiento
+                    </h3>
+                    <span className={`text-[10px] font-bold uppercase px-2 py-1 ${
+                        plan.status === 'active' ? 'bg-green-100 text-green-700' :
+                        plan.status === 'completed' ? 'bg-blue-100 text-blue-700' :
+                        plan.status === 'paused' ? 'bg-yellow-100 text-yellow-700' :
+                        'bg-red-100 text-red-700'
+                    }`}>
+                        {plan.status === 'active' ? 'Activo' :
+                         plan.status === 'completed' ? 'Completado' :
+                         plan.status === 'paused' ? 'Pausado' : 'Cancelado'}
+                    </span>
+                </div>
+                <div className="space-y-3">
+                    <div>
+                        <p className="text-xs text-velum-500 uppercase tracking-widest mb-1">Progreso</p>
+                        <div className="w-full h-3 bg-velum-100 rounded-full">
+                            <div
+                                className="h-3 bg-velum-700 rounded-full transition-all"
+                                style={{ width: `${Math.round((plan.completedSessions / plan.totalSessions) * 100)}%` }}
+                            />
+                        </div>
+                        <p className="text-sm font-bold text-velum-800 mt-1">
+                            {plan.completedSessions} / {plan.totalSessions} sesiones
+                        </p>
+                    </div>
+                    {plan.zones.length > 0 && (
+                        <p className="text-xs text-velum-500">Zonas: {plan.zones.join(', ')}</p>
+                    )}
+                    {plan.expectedEndDate && (
+                        <p className="text-xs text-velum-400">
+                            Finalización estimada: {new Date(plan.expectedEndDate).toLocaleDateString('es-MX', { month: 'long', year: 'numeric' })}
+                        </p>
+                    )}
+                </div>
+            </div>
+        ))}
+
+        {/* Mis Facturas Card */}
+        {invoices.length > 0 && (
+            <div className="p-6 bg-white border border-velum-200">
+                <h3 className="font-serif text-lg flex items-center gap-2 mb-4">
+                    <FileText size={20} className="text-velum-400"/> Historial de Pagos
+                </h3>
+                <div className="space-y-2">
+                    {invoices.slice(0, 5).map(inv => (
+                        <div key={inv.id} className="flex justify-between items-center text-sm border-b border-velum-50 pb-2">
+                            <div>
+                                <p className="text-velum-700">
+                                    {new Date(inv.createdAt).toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric' })}
+                                </p>
+                                {inv.description && <p className="text-xs text-velum-400">{inv.description}</p>}
+                            </div>
+                            <div className="text-right">
+                                <p className="font-bold text-velum-800">${(inv.amount / 100).toFixed(2)} {inv.currency.toUpperCase()}</p>
+                                <span className={`text-[10px] font-bold uppercase ${
+                                    inv.status === 'paid' ? 'text-green-600' :
+                                    inv.status === 'failed' ? 'text-red-500' :
+                                    inv.status === 'refunded' ? 'text-orange-500' : 'text-yellow-600'
+                                }`}>
+                                    {inv.status === 'paid' ? 'Pagado' :
+                                     inv.status === 'failed' ? 'Fallido' :
+                                     inv.status === 'refunded' ? 'Reembolsado' : 'Pendiente'}
+                                </span>
                             </div>
                         </div>
                     ))}

@@ -11,6 +11,8 @@ import { useAuth } from '../context/AuthContext';
 import { memberService, auditService } from '../services/dataService';
 import { adminService, LeadData, IntakeAdminData, AppointmentAdminData } from '../services/adminService';
 import { analyticsServiceFe, OverviewData, AppointmentStatsData, LeadStatsData } from '../services/analyticsService';
+import { invoiceServiceFe, InvoiceData, RevenueStats } from '../services/invoiceService';
+import { treatmentPlanService, TreatmentPlanData } from '../services/treatmentPlanService';
 
 export const Admin: React.FC = () => {
   const { login, logout, user, isAuthenticated, isLoading: isAuthLoading } = useAuth();
@@ -21,7 +23,7 @@ export const Admin: React.FC = () => {
   const [loginError, setLoginError] = useState('');
 
   // Dashboard Data State
-  const [activeTab, setActiveTab] = useState<'members' | 'leads' | 'appointments' | 'intakes' | 'analytics' | 'security'>('members');
+  const [activeTab, setActiveTab] = useState<'members' | 'leads' | 'appointments' | 'intakes' | 'analytics' | 'invoices' | 'plans' | 'security'>('members');
   const [members, setMembers] = useState<Member[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
   const [leads, setLeads] = useState<LeadData[]>([]);
@@ -40,6 +42,9 @@ export const Admin: React.FC = () => {
   const [overview, setOverview] = useState<OverviewData | null>(null);
   const [apptStats, setApptStats] = useState<AppointmentStatsData | null>(null);
   const [leadStats, setLeadStats] = useState<LeadStatsData | null>(null);
+  const [revenueStats, setRevenueStats] = useState<RevenueStats | null>(null);
+  const [invoices, setInvoices] = useState<InvoiceData[]>([]);
+  const [adminPlans, setAdminPlans] = useState<TreatmentPlanData[]>([]);
 
   // --- EFFECT: FETCH DATA ---
   useEffect(() => {
@@ -59,7 +64,10 @@ export const Admin: React.FC = () => {
             adminService.getAppointments().catch(() => []),
             user?.role === 'admin' ? analyticsServiceFe.getOverview().catch(() => null) : Promise.resolve(null),
             user?.role === 'admin' ? analyticsServiceFe.getAppointmentStats().catch(() => null) : Promise.resolve(null),
-            user?.role === 'admin' ? analyticsServiceFe.getLeadStats().catch(() => null) : Promise.resolve(null)
+            user?.role === 'admin' ? analyticsServiceFe.getLeadStats().catch(() => null) : Promise.resolve(null),
+            user?.role === 'admin' ? invoiceServiceFe.getRevenueStats().catch(() => null) : Promise.resolve(null),
+            user?.role === 'admin' ? invoiceServiceFe.getAll().catch(() => []) : Promise.resolve([]),
+            treatmentPlanService.getAll().catch(() => [])
         ]);
         setMembers(membersData);
         setAuditLogs(logsData);
@@ -69,6 +77,9 @@ export const Admin: React.FC = () => {
         setOverview(overviewData);
         setApptStats(apptStatsData);
         setLeadStats(leadStatsData);
+        setRevenueStats(revenueData);
+        setInvoices(invoicesData);
+        setAdminPlans(plansData);
     } catch (e) {
         console.error("Error loading admin data");
     } finally {
@@ -216,6 +227,8 @@ export const Admin: React.FC = () => {
           { key: 'appointments', label: 'Citas' },
           { key: 'intakes', label: 'Expedientes' },
           { key: 'analytics', label: 'Analytics' },
+          { key: 'invoices', label: 'Facturación' },
+          { key: 'plans', label: 'Planes' },
           { key: 'security', label: 'Seguridad & Logs' }
         ] as const).map(tab => (
             <button
@@ -561,6 +574,124 @@ export const Admin: React.FC = () => {
                                     <span key={source} className="text-xs bg-velum-100 px-3 py-1">{source}: <strong>{count}</strong></span>
                                 ))}
                             </div>
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {activeTab === 'invoices' && (
+                <div className="space-y-6 animate-fade-in">
+                    {/* Revenue Summary */}
+                    {revenueStats && (
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div className="bg-white p-6 border border-velum-200 text-center">
+                                <p className="text-xs uppercase text-velum-500 tracking-widest">Ingresos (30d)</p>
+                                <p className="text-3xl font-serif font-bold text-velum-900">${(revenueStats.totalRevenue / 100).toLocaleString('es-MX')} MXN</p>
+                            </div>
+                            <div className="bg-white p-6 border border-velum-200 text-center">
+                                <p className="text-xs uppercase text-velum-500 tracking-widest">Facturas Pagadas</p>
+                                <p className="text-3xl font-serif font-bold text-velum-900">{revenueStats.totalInvoices}</p>
+                            </div>
+                            <div className="bg-white p-6 border border-velum-200 text-center">
+                                <p className="text-xs uppercase text-velum-500 tracking-widest">Ticket Promedio</p>
+                                <p className="text-3xl font-serif font-bold text-velum-900">${(revenueStats.averageInvoice / 100).toLocaleString('es-MX')}</p>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Invoice Table */}
+                    <div className="bg-white border border-velum-200 shadow-sm p-6">
+                        <h3 className="font-serif text-xl mb-4">Historial de Facturación</h3>
+                        <div className="overflow-x-auto border border-velum-200">
+                            <table className="w-full text-left text-sm">
+                                <thead className="bg-velum-50 text-[10px] uppercase font-bold text-velum-600">
+                                    <tr>
+                                        <th className="p-3">Fecha</th>
+                                        <th className="p-3">Paciente</th>
+                                        <th className="p-3">Monto</th>
+                                        <th className="p-3">Estado</th>
+                                        <th className="p-3">Descripción</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-velum-100">
+                                    {invoices.length === 0 ? (
+                                        <tr><td colSpan={5} className="p-8 text-center text-velum-400">Sin facturas registradas</td></tr>
+                                    ) : invoices.slice(0, 50).map(inv => (
+                                        <tr key={inv.id} className="hover:bg-velum-50 text-xs">
+                                            <td className="p-3 text-velum-500">{new Date(inv.createdAt).toLocaleDateString('es-MX')}</td>
+                                            <td className="p-3 font-bold">{inv.user?.profile ? `${inv.user.profile.firstName || ''} ${inv.user.profile.lastName || ''}`.trim() : inv.user?.email || '-'}</td>
+                                            <td className="p-3 font-bold">${(inv.amount / 100).toFixed(2)} {inv.currency.toUpperCase()}</td>
+                                            <td className="p-3">
+                                                <span className={`text-[10px] uppercase font-bold px-2 py-0.5 ${
+                                                    inv.status === 'paid' ? 'bg-green-100 text-green-700' :
+                                                    inv.status === 'failed' ? 'bg-red-100 text-red-700' :
+                                                    inv.status === 'refunded' ? 'bg-orange-100 text-orange-700' : 'bg-yellow-100 text-yellow-700'
+                                                }`}>
+                                                    {inv.status === 'paid' ? 'Pagado' : inv.status === 'failed' ? 'Fallido' : inv.status === 'refunded' ? 'Reembolsado' : 'Pendiente'}
+                                                </span>
+                                            </td>
+                                            <td className="p-3 text-velum-500">{inv.description || '-'}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {activeTab === 'plans' && (
+                <div className="space-y-4 animate-fade-in">
+                    <div className="flex justify-between items-center mb-4">
+                        <h3 className="font-serif text-xl">Planes de Tratamiento</h3>
+                        <span className="text-sm text-velum-500">{adminPlans.length} plan(es)</span>
+                    </div>
+                    {adminPlans.length === 0 ? (
+                        <div className="bg-white border border-velum-200 p-12 text-center text-velum-400">
+                            <ClipboardList size={48} className="mx-auto mb-4" />
+                            <p>No hay planes de tratamiento registrados.</p>
+                        </div>
+                    ) : (
+                        <div className="bg-white border border-velum-200 shadow-sm overflow-x-auto">
+                            <table className="w-full text-left text-sm">
+                                <thead className="bg-velum-50 text-[10px] uppercase font-bold text-velum-600">
+                                    <tr>
+                                        <th className="p-3">Paciente</th>
+                                        <th className="p-3">Zonas</th>
+                                        <th className="p-3">Progreso</th>
+                                        <th className="p-3">Estado</th>
+                                        <th className="p-3">Inicio</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-velum-100">
+                                    {adminPlans.map(plan => {
+                                        const pct = Math.round((plan.completedSessions / plan.totalSessions) * 100);
+                                        const name = plan.user?.profile ? `${plan.user.profile.firstName || ''} ${plan.user.profile.lastName || ''}`.trim() : '-';
+                                        return (
+                                            <tr key={plan.id} className="hover:bg-velum-50 text-xs">
+                                                <td className="p-3 font-bold">{name}</td>
+                                                <td className="p-3 text-velum-500">{plan.zones.join(', ')}</td>
+                                                <td className="p-3">
+                                                    <div className="flex items-center gap-2">
+                                                        <div className="w-20 h-2 bg-velum-100 rounded-full">
+                                                            <div className="h-2 bg-velum-700 rounded-full" style={{ width: `${pct}%` }} />
+                                                        </div>
+                                                        <span className="font-bold">{plan.completedSessions}/{plan.totalSessions}</span>
+                                                    </div>
+                                                </td>
+                                                <td className="p-3">
+                                                    <span className={`text-[10px] uppercase font-bold px-2 py-0.5 ${
+                                                        plan.status === 'active' ? 'bg-green-100 text-green-700' :
+                                                        plan.status === 'completed' ? 'bg-blue-100 text-blue-700' :
+                                                        plan.status === 'paused' ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'
+                                                    }`}>{plan.status}</span>
+                                                </td>
+                                                <td className="p-3 text-velum-500">{new Date(plan.startDate).toLocaleDateString('es-MX')}</td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
                         </div>
                     )}
                 </div>

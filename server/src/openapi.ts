@@ -104,6 +104,32 @@ export const openApiSpec = {
     "/admin/analytics/overview": { get: { summary: "Analytics overview (admin)", responses: { "200": { description: "OK" } } } },
     "/admin/analytics/appointments": { get: { summary: "Appointment analytics (admin)", responses: { "200": { description: "OK" } } } },
     "/admin/analytics/leads": { get: { summary: "Lead analytics (admin)", responses: { "200": { description: "OK" } } } },
-    "/admin/analytics/sessions": { get: { summary: "Session analytics (admin)", responses: { "200": { description: "OK" } } } }
+    "/admin/analytics/sessions": { get: { summary: "Session analytics (admin)", responses: { "200": { description: "OK" } } } },
+    // Phase 3 endpoints
+    "/me/treatment-plans": { get: { summary: "My treatment plans", responses: { "200": { description: "OK" } } } },
+    "/admin/treatment-plans": {
+      get: { summary: "List all treatment plans (staff/admin)", responses: { "200": { description: "OK" } } },
+      post: { summary: "Create treatment plan (staff/admin)", responses: { "201": { description: "Created" } } }
+    },
+    "/admin/treatment-plans/{id}": {
+      get: { summary: "Get treatment plan detail (staff/admin)", responses: { "200": { description: "OK" } } },
+      patch: { summary: "Update treatment plan (staff/admin)", responses: { "200": { description: "OK" } } }
+    },
+    "/admin/treatment-plans/{id}/increment": { post: { summary: "Increment plan session (staff/admin)", responses: { "200": { description: "OK" } } } },
+    "/files/upload": { post: { summary: "Upload file", responses: { "201": { description: "Created" } } } },
+    "/me/files": { get: { summary: "My uploaded files", responses: { "200": { description: "OK" } } } },
+    "/files/{id}/download": { get: { summary: "Download file", responses: { "200": { description: "OK" } } } },
+    "/files/{id}": { delete: { summary: "Delete file", responses: { "200": { description: "OK" } } } },
+    "/admin/files/{entityType}/{entityId}": { get: { summary: "Files by entity (staff/admin)", responses: { "200": { description: "OK" } } } },
+    "/me/invoices": { get: { summary: "My invoices", responses: { "200": { description: "OK" } } } },
+    "/admin/invoices": {
+      get: { summary: "List all invoices (staff/admin)", responses: { "200": { description: "OK" } } },
+      post: { summary: "Create invoice (admin)", responses: { "201": { description: "Created" } } }
+    },
+    "/admin/invoices/{id}": { get: { summary: "Get invoice detail (staff/admin)", responses: { "200": { description: "OK" } } } },
+    "/admin/analytics/revenue": { get: { summary: "Revenue analytics (admin)", responses: { "200": { description: "OK" } } } },
+    "/me/onboarding": { get: { summary: "Onboarding status", responses: { "200": { description: "OK" } } } },
+    "/admin/reminders/upcoming": { post: { summary: "Trigger appointment reminders (admin)", responses: { "200": { description: "OK" } } } },
+    "/admin/reminders/no-show": { post: { summary: "Trigger no-show follow-up (admin)", responses: { "200": { description: "OK" } } } }
   }
 };

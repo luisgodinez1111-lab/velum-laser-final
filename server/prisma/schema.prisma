@@ -71,6 +71,29 @@ enum LeadSource {
   other
 }
 
+// Phase 3 enums
+enum InvoiceStatus {
+  pending
+  paid
+  failed
+  refunded
+}
+
+enum PlanStatus {
+  active
+  completed
+  paused
+  canceled
+}
+
+enum FileCategory {
+  before_photo
+  after_photo
+  consent_doc
+  intake_doc
+  other
+}
+
 // Phase 2 enums
 enum NotificationType {
   in_app
@@ -112,6 +135,10 @@ model User {
   patientSessions     SessionTreatment[]      @relation("PatientSessions")
   staffSessions       SessionTreatment[]      @relation("StaffSessions")
   notifications       Notification[]
+  // Phase 3 relations
+  treatmentPlans      TreatmentPlan[]
+  invoices            Invoice[]
+  uploads             FileUpload[]
 }
 
 model Profile {
@@ -144,6 +171,7 @@ model Membership {
   createdAt            DateTime         @default(now())
   updatedAt            DateTime         @updatedAt
   user                 User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  treatmentPlans       TreatmentPlan[]
 
   @@index([userId])
 }
@@ -369,4 +397,71 @@ model MarketingEvent {
 
   @@index([eventName])
   @@index([sentToMeta])
+}
+
+// ─── PHASE 3 NEW MODELS ─────────────────────────────────────────────
+
+model TreatmentPlan {
+  id               String     @id @default(cuid())
+  userId           String
+  membershipId     String
+  zones            String[]   @default([])
+  totalSessions    Int        @default(10)
+  completedSessions Int       @default(0)
+  status           PlanStatus @default(active)
+  startDate        DateTime   @default(now())
+  expectedEndDate  DateTime?
+  notes            String?
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  membership Membership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([status])
+}
+
+model Invoice {
+  id                   String        @id @default(cuid())
+  userId               String
+  stripeInvoiceId      String?       @unique
+  stripePaymentIntentId String?
+  amount               Int           // cents
+  currency             String        @default("mxn")
+  status               InvoiceStatus @default(pending)
+  description          String?
+  periodStart          DateTime?
+  periodEnd            DateTime?
+  paidAt               DateTime?
+  failedAt             DateTime?
+  refundedAt           DateTime?
+  metadata             Json?
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([status])
+  @@index([stripeInvoiceId])
+}
+
+model FileUpload {
+  id          String       @id @default(cuid())
+  userId      String
+  category    FileCategory @default(other)
+  fileName    String
+  mimeType    String
+  size        Int
+  storageKey  String       @unique
+  entityType  String?      // e.g. "session_treatment", "medical_intake"
+  entityId    String?      // FK to the related entity
+  createdAt   DateTime     @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([entityType, entityId])
+  @@index([category])
 }

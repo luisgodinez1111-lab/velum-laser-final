@@ -18,6 +18,11 @@ import { sessionRoutes } from "./routes/sessionRoutes";
 import { notificationRoutes } from "./routes/notificationRoutes";
 import { marketingRoutes } from "./routes/marketingRoutes";
 import { analyticsRoutes } from "./routes/analyticsRoutes";
+import { treatmentPlanRoutes } from "./routes/treatmentPlanRoutes";
+import { fileUploadRoutes } from "./routes/fileUploadRoutes";
+import { invoiceRoutes } from "./routes/invoiceRoutes";
+import { onboardingRoutes } from "./routes/onboardingRoutes";
+import { reminderRoutes } from "./routes/reminderRoutes";
 import { env } from "./utils/env";
 import { httpLogger } from "./utils/logger";
 import { errorHandler } from "./middlewares/error";
@@ -69,6 +74,12 @@ app.use(sessionRoutes);
 app.use(notificationRoutes);
 app.use(marketingRoutes);
 app.use(analyticsRoutes);
+// Phase 3 routes
+app.use(treatmentPlanRoutes);
+app.use(fileUploadRoutes);
+app.use(invoiceRoutes);
+app.use(onboardingRoutes);
+app.use(reminderRoutes);
 
 app.get("/health", (_req, res) => {
   res.json({ status: "ok" });

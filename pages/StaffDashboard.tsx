@@ -3,10 +3,12 @@ import { Button } from '../components/Button';
 import { useAuth } from '../context/AuthContext';
 import { adminService, AppointmentAdminData, IntakeAdminData } from '../services/adminService';
 import { sessionService } from '../services/sessionService';
+import { treatmentPlanService, TreatmentPlanData } from '../services/treatmentPlanService';
+import { fileUploadServiceFe } from '../services/fileUploadService';
 import { Link } from 'react-router-dom';
-import { Loader2, Calendar, FileText, CheckCircle, XCircle, Clock, ChevronRight, Zap } from 'lucide-react';
+import { Loader2, Calendar, FileText, CheckCircle, XCircle, Clock, ChevronRight, Zap, ClipboardList, Upload } from 'lucide-react';
 
-type Tab = 'appointments' | 'intakes' | 'sessions';
+type Tab = 'appointments' | 'intakes' | 'sessions' | 'plans';
 
 export const StaffDashboard: React.FC = () => {
   const { user, isAuthenticated, isLoading, hasRole } = useAuth();
@@ -17,6 +19,8 @@ export const StaffDashboard: React.FC = () => {
   const [reviewNotes, setReviewNotes] = useState('');
   const [reviewingId, setReviewingId] = useState<string | null>(null);
   const [sessionForm, setSessionForm] = useState<{ appointmentId: string; zones: string; laserSettings: string; skinResponse: string; fitzpatrickUsed: string; energyDelivered: string; notes: string } | null>(null);
+  const [plans, setPlans] = useState<TreatmentPlanData[]>([]);
+  const [uploadingFile, setUploadingFile] = useState(false);
 
   useEffect(() => {
     if (isAuthenticated && hasRole(['staff', 'admin'])) {
@@ -28,12 +32,14 @@ export const StaffDashboard: React.FC = () => {
     setLoading(true);
     try {
       const todayStr = new Date().toISOString().split('T')[0];
-      const [appts, pendingIntakes] = await Promise.all([
+      const [appts, pendingIntakes, plansData] = await Promise.all([
         adminService.getAppointments({ date: todayStr }),
-        adminService.getIntakes('submitted')
+        adminService.getIntakes('submitted'),
+        treatmentPlanService.getAll({ status: 'active' }).catch(() => [])
       ]);
       setAppointments(appts);
       setIntakes(pendingIntakes);
+      setPlans(plansData);
     } catch (e) { console.error(e); }
     finally { setLoading(false); }
   };
@@ -97,6 +103,10 @@ export const StaffDashboard: React.FC = () => {
         <button onClick={() => setTab('sessions')}
           className={`px-6 py-3 text-xs uppercase tracking-widest font-bold transition-colors ${tab === 'sessions' ? 'bg-velum-900 text-white' : 'bg-velum-100 text-velum-600 hover:bg-velum-200'}`}>
           <Zap size={14} className="inline mr-2" />Registrar Sesión
+        </button>
+        <button onClick={() => setTab('plans')}
+          className={`px-6 py-3 text-xs uppercase tracking-widest font-bold transition-colors ${tab === 'plans' ? 'bg-velum-900 text-white' : 'bg-velum-100 text-velum-600 hover:bg-velum-200'}`}>
+          <ClipboardList size={14} className="inline mr-2" />Planes ({plans.length})
         </button>
       </div>
 
@@ -296,6 +306,54 @@ export const StaffDashboard: React.FC = () => {
               </div>
             </div>
           )}
+        </div>
+      ) : tab === 'plans' ? (
+        <div className="space-y-4">
+          {plans.length === 0 ? (
+            <div className="text-center py-16 text-velum-400">
+              <ClipboardList size={48} className="mx-auto mb-4" />
+              <p>No hay planes de tratamiento activos.</p>
+            </div>
+          ) : plans.map(plan => {
+            const pct = Math.round((plan.completedSessions / plan.totalSessions) * 100);
+            const patientName = plan.user?.profile
+              ? `${plan.user.profile.firstName || ''} ${plan.user.profile.lastName || ''}`.trim()
+              : 'Paciente';
+            return (
+              <div key={plan.id} className="bg-white p-6 border border-velum-200 shadow-sm">
+                <div className="flex justify-between items-start mb-3">
+                  <div>
+                    <p className="font-bold text-velum-900">{patientName}</p>
+                    <p className="text-xs text-velum-500">Zonas: {plan.zones.join(', ')}</p>
+                  </div>
+                  <span className={`text-[10px] uppercase font-bold px-2 py-1 ${
+                    plan.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'
+                  }`}>{plan.status}</span>
+                </div>
+                <div className="mb-3">
+                  <div className="flex justify-between text-xs mb-1">
+                    <span className="text-velum-500">Progreso</span>
+                    <span className="font-bold text-velum-800">{plan.completedSessions}/{plan.totalSessions} sesiones ({pct}%)</span>
+                  </div>
+                  <div className="w-full h-2 bg-velum-100 rounded-full">
+                    <div className="h-2 bg-velum-700 rounded-full transition-all" style={{ width: `${pct}%` }} />
+                  </div>
+                </div>
+                {plan.status === 'active' && plan.completedSessions < plan.totalSessions && (
+                  <button
+                    onClick={async () => {
+                      try {
+                        await treatmentPlanService.incrementSession(plan.id);
+                        await loadData();
+                      } catch (e: any) { alert(e.message || 'Error'); }
+                    }}
+                    className="text-xs px-3 py-1.5 bg-velum-900 text-white hover:bg-velum-800">
+                    <Zap size={12} className="inline mr-1" />Registrar Sesión Completada
+                  </button>
+                )}
+              </div>
+            );
+          })}
         </div>
       ) : null}
     </div>

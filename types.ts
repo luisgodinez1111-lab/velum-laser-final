@@ -194,6 +194,60 @@ export interface AnalyticsOverview {
   pendingIntakes: number;
 }
 
+// --- PHASE 3: TREATMENT PLANS, INVOICES, FILES, ONBOARDING ---
+
+export type PlanStatus = 'active' | 'completed' | 'paused' | 'canceled';
+export type InvoiceStatus = 'pending' | 'paid' | 'failed' | 'refunded';
+export type FileCategory = 'before_photo' | 'after_photo' | 'consent_doc' | 'intake_doc' | 'other';
+
+export interface TreatmentPlanData {
+  id: string;
+  userId: string;
+  membershipId: string;
+  zones: string[];
+  totalSessions: number;
+  completedSessions: number;
+  status: PlanStatus;
+  startDate: string;
+  expectedEndDate?: string;
+  notes?: string;
+  createdAt: string;
+}
+
+export interface InvoiceData {
+  id: string;
+  userId: string;
+  amount: number;
+  currency: string;
+  status: InvoiceStatus;
+  description?: string;
+  paidAt?: string;
+  createdAt: string;
+}
+
+export interface FileUploadData {
+  id: string;
+  userId: string;
+  category: FileCategory;
+  fileName: string;
+  mimeType: string;
+  size: number;
+  storageKey: string;
+  entityType?: string;
+  entityId?: string;
+  createdAt: string;
+}
+
+export interface OnboardingStatus {
+  profileComplete: boolean;
+  intakeSubmitted: boolean;
+  intakeApproved: boolean;
+  membershipActive: boolean;
+  hasAppointment: boolean;
+  completionPercent: number;
+  nextStep: string;
+}
+
 // Window augmentation for AI Studio
 declare global {
   interface AIStudio {
