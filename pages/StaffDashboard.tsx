@@ -148,7 +148,7 @@ export const StaffDashboard: React.FC = () => {
             </div>
           ))}
         </div>
-      ) : (
+      ) : tab === 'intakes' ? (
         <div className="space-y-4">
           {intakes.length === 0 ? (
             <div className="text-center py-16 text-velum-400">

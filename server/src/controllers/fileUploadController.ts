@@ -1,10 +1,11 @@
-import type { Request, Response } from "express";
+import type { Response } from "express";
+import type { AuthRequest } from "../middlewares/auth";
 import { fileUploadService } from "../services/fileUploadService.js";
 import { fileUploadMetaSchema } from "../validators/fileUpload.js";
 import { createAuditLog } from "../services/auditService.js";
 import { createReadStream } from "fs";
 
-export const uploadFile = async (req: Request, res: Response) => {
+export const uploadFile = async (req: AuthRequest, res: Response) => {
   const file = req.file;
   if (!file) return res.status(400).json({ message: "No se envió archivo" });
 
@@ -31,20 +32,25 @@ export const uploadFile = async (req: Request, res: Response) => {
   res.status(201).json(upload);
 };
 
-export const getMyFiles = async (req: Request, res: Response) => {
+export const getMyFiles = async (req: AuthRequest, res: Response) => {
   const files = await fileUploadService.getByUser(req.user!.id);
   res.json(files);
 };
 
-export const getEntityFiles = async (req: Request, res: Response) => {
+export const getEntityFiles = async (req: AuthRequest, res: Response) => {
   const { entityType, entityId } = req.params;
   const files = await fileUploadService.getByEntity(entityType, entityId);
   res.json(files);
 };
 
-export const downloadFile = async (req: Request, res: Response) => {
+export const downloadFile = async (req: AuthRequest, res: Response) => {
   const file = await fileUploadService.getById(req.params.id);
   if (!file) return res.status(404).json({ message: "Archivo no encontrado" });
+
+  // Only owner or staff/admin can download
+  if (file.userId !== req.user!.id && !["staff", "admin"].includes(req.user!.role)) {
+    return res.status(403).json({ message: "No autorizado" });
+  }
 
   const filePath = fileUploadService.getFilePath(file.storageKey);
   res.setHeader("Content-Type", file.mimeType);
@@ -52,7 +58,7 @@ export const downloadFile = async (req: Request, res: Response) => {
   createReadStream(filePath).pipe(res);
 };
 
-export const deleteFile = async (req: Request, res: Response) => {
+export const deleteFile = async (req: AuthRequest, res: Response) => {
   const file = await fileUploadService.getById(req.params.id);
   if (!file) return res.status(404).json({ message: "Archivo no encontrado" });
 
