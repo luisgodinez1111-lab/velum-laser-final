@@ -28,7 +28,7 @@ export const register = async (req: Request, res: Response) => {
     firstName: payload.firstName,
     lastName: payload.lastName
   });
-  const verification = await createEmailVerification(user.id);
+  await createEmailVerification(user.id);
   const token = signToken({ sub: user.id, role: user.role });
   setAuthCookie(res, token);
   await createAuditLog({
@@ -37,8 +37,7 @@ export const register = async (req: Request, res: Response) => {
     metadata: { email: user.email, ip: req.ip }
   });
   return res.status(201).json({
-    user: { id: user.id, email: user.email, role: user.role },
-    verificationToken: verification.token
+    user: { id: user.id, email: user.email, role: user.role }
   });
 };
 
@@ -73,8 +72,8 @@ export const forgotPassword = async (req: Request, res: Response) => {
   if (!user) {
     return res.status(200).json({ message: "Si el correo existe, se enviará un enlace" });
   }
-  const reset = await createPasswordReset(user.id);
-  return res.json({ resetToken: reset.token });
+  await createPasswordReset(user.id);
+  return res.json({ message: "Si el correo existe, se enviará un enlace" });
 };
 
 export const resetPassword = async (req: Request, res: Response) => {
