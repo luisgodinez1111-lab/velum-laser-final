@@ -37,7 +37,10 @@ export const createUpload = async (req: AuthRequest, res: Response) => {
   await createAuditLog({
     userId: req.user!.id,
     action: "document.upload",
-    metadata: { documentId: document.id, type: document.type, ip: req.ip }
+    resourceType: "document",
+    resourceId: document.id,
+    ip: req.ip,
+    metadata: { type: document.type }
   });
   return res.json({ document });
 };
@@ -80,7 +83,10 @@ export const signDocument = async (req: AuthRequest, res: Response) => {
   await createAuditLog({
     userId: req.user!.id,
     action: "document.signed",
-    metadata: { documentId: document.id, type: document.type, ip: req.ip }
+    resourceType: "document",
+    resourceId: document.id,
+    ip: req.ip,
+    metadata: { type: document.type }
   });
   return res.json(updated);
 };

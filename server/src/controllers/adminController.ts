@@ -6,7 +6,7 @@ import { createAuditLog } from "../services/auditService";
 
 export const listUsers = async (_req: AuthRequest, res: Response) => {
   const users = await prisma.user.findMany({
-    include: { profile: true, memberships: true, documents: true }
+    include: { profile: true, memberships: true, documents: true, medicalIntake: true }
   });
   return res.json(users);
 };
@@ -42,7 +42,11 @@ export const listAuditLogs = async (_req: AuthRequest, res: Response) => {
   const logs = await prisma.auditLog.findMany({
     orderBy: { createdAt: "desc" },
     take: 200,
-    include: { user: true }
+    include: {
+      user: true,
+      actorUser: true,
+      targetUser: true
+    }
   });
   return res.json(logs);
 };
@@ -59,8 +63,12 @@ export const updateMembershipStatus = async (req: AuthRequest, res: Response) =>
   });
   await createAuditLog({
     userId: req.user?.id,
+    targetUserId: req.params.userId,
     action: "membership.update",
-    metadata: { targetUserId: req.params.userId, status: payload.status, ip: req.ip }
+    resourceType: "membership",
+    resourceId: updated.id,
+    ip: req.ip,
+    metadata: { status: payload.status }
   });
   return res.json(updated);
 };

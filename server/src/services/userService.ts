@@ -21,6 +21,11 @@ export const createUser = async (data: {
       memberships: {
         create: {}
       },
+      medicalIntake: {
+        create: {
+          status: "draft"
+        }
+      },
       documents: {
         create: [
           { type: "informed_consent", version: "1.0" },
@@ -29,7 +34,7 @@ export const createUser = async (data: {
         ]
       }
     },
-    include: { profile: true, memberships: true }
+    include: { profile: true, memberships: true, medicalIntake: true }
   });
 };
 
@@ -49,5 +54,5 @@ export const updateProfile = async (userId: string, data: {
 export const getUserWithRelations = (userId: string) =>
   prisma.user.findUnique({
     where: { id: userId },
-    include: { profile: true, memberships: true, documents: true }
+    include: { profile: true, memberships: true, documents: true, medicalIntake: true }
   });

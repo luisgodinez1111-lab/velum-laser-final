@@ -28,6 +28,8 @@ npm run dev
 
 API docs: `http://localhost:4000/docs`
 
+Contrato OpenAPI v1 (snapshot YAML): `docs/openapi-v1.yaml`
+
 ## Docker Compose (frontend + api + postgres + nginx)
 ```bash
 cp .env.example .env
@@ -37,3 +39,4 @@ docker compose up --build
 
 ## Deploy
 Guía completa en `docs/DEPLOYMENT.md`.
+Runbook de release/rollback: `docs/RUNBOOK_RELEASE.md`.

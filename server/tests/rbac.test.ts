@@ -29,4 +29,14 @@ describe("requireRole", () => {
 
     expect(next).toHaveBeenCalled();
   });
+
+  it("allows system role for system-protected endpoints", () => {
+    const req: any = { user: { id: "1", role: "system" } };
+    const res = mockRes();
+    const next = vi.fn();
+
+    requireRole(["admin", "system"])(req, res, next);
+
+    expect(next).toHaveBeenCalled();
+  });
 });

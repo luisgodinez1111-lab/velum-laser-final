@@ -17,7 +17,12 @@ export const env = {
   uploadDir: process.env.UPLOAD_DIR ?? "/var/velum/uploads",
   uploadMaxSize: Number(process.env.UPLOAD_MAX_SIZE ?? 10 * 1024 * 1024),
   gracePeriodDays: Number(process.env.GRACE_PERIOD_DAYS ?? 5),
-  corsOrigin: process.env.CORS_ORIGIN ?? "http://localhost:5173"
+  corsOrigin: process.env.CORS_ORIGIN ?? "http://localhost:5173",
+  metaEnabled: process.env.META_ENABLED === "true",
+  metaApiVersion: process.env.META_API_VERSION ?? "v20.0",
+  metaPixelId: process.env.META_PIXEL_ID ?? "",
+  metaAccessToken: process.env.META_ACCESS_TOKEN ?? "",
+  appointmentRescheduleMinHours: Number(process.env.APPOINTMENT_RESCHEDULE_MIN_HOURS ?? 24)
 };
 
 export const isProduction = env.nodeEnv === "production";

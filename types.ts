@@ -31,7 +31,7 @@ export enum Resolution {
 
 // --- SECURITY & COMPLIANCE TYPES ---
 
-export type UserRole = 'admin' | 'staff' | 'member';
+export type UserRole = 'admin' | 'staff' | 'member' | 'system';
 
 export interface AuditLogEntry {
   id: string;

@@ -26,7 +26,7 @@ export const authService = {
       method: "POST",
       body: JSON.stringify({ email, password })
     });
-    const me = await apiFetch<any>("/me");
+    const me = await apiFetch<any>("/users/me");
     return mapUser(me);
   },
 
@@ -35,7 +35,7 @@ export const authService = {
       method: "POST",
       body: JSON.stringify(payload)
     });
-    const me = await apiFetch<any>("/me");
+    const me = await apiFetch<any>("/users/me");
     return mapUser(me);
   },
 
@@ -45,7 +45,7 @@ export const authService = {
 
   verifySession: async (): Promise<AuthUser | null> => {
     try {
-      const me = await apiFetch<any>("/me");
+      const me = await apiFetch<any>("/users/me");
       return mapUser(me);
     } catch (error) {
       return null;

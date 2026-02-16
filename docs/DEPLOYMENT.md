@@ -62,6 +62,11 @@ Editar `server/.env`:
 - `UPLOAD_DIR`
 - `UPLOAD_MAX_SIZE`
 - `GRACE_PERIOD_DAYS`
+- `META_ENABLED`
+- `META_API_VERSION`
+- `META_PIXEL_ID`
+- `META_ACCESS_TOKEN`
+- `APPOINTMENT_RESCHEDULE_MIN_HOURS`
 - `LOG_LEVEL`
 - `ADMIN_EMAIL`
 - `ADMIN_PASSWORD`
@@ -155,3 +160,6 @@ tar -xzf /var/backups/velum_uploads_2024-01-01.tgz -C /
 
 ## 8) Tests y smoke checklist
 Consulta `docs/TESTING.md`.
+
+## 9) Runbook de incidentes y rollback
+Consulta `docs/RUNBOOK_RELEASE.md`.
