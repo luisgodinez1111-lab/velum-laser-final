@@ -31,7 +31,7 @@ export const Admin: React.FC = () => {
 
   // --- EFFECT: FETCH DATA ---
   useEffect(() => {
-    if (isAuthenticated && (user?.role === 'admin' || user?.role === 'staff')) {
+    if (isAuthenticated && (user?.role === 'admin' || user?.role === 'staff' || user?.role === 'system')) {
       loadData();
     }
   }, [isAuthenticated, user]);
@@ -41,7 +41,7 @@ export const Admin: React.FC = () => {
     try {
         const [membersData, logsData] = await Promise.all([
             memberService.getAll(),
-            user?.role === 'admin' ? auditService.getLogs() : Promise.resolve([])
+            user?.role === 'admin' || user?.role === 'system' ? auditService.getLogs() : Promise.resolve([])
         ]);
         setMembers(membersData);
         setAuditLogs(logsData);

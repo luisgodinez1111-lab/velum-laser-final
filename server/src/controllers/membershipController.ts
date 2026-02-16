@@ -4,6 +4,7 @@ import { prisma } from "../db/prisma";
 import { changePlanSchema } from "../validators/membership";
 import { createCheckoutSession, createCustomerPortal, ensureCustomer } from "../services/stripeService";
 import { env } from "../utils/env";
+import { createAuditLog } from "../services/auditService";
 
 export const getMembershipStatus = async (req: AuthRequest, res: Response) => {
   const membership = await prisma.membership.findFirst({ where: { userId: req.user!.id } });
@@ -23,6 +24,15 @@ export const changePlan = async (req: AuthRequest, res: Response) => {
     successUrl: `${env.appUrl}/#/dashboard?status=success`,
     cancelUrl: `${env.appUrl}/#/memberships?status=cancel`
   });
+
+  await createAuditLog({
+    userId: req.user!.id,
+    action: "membership.change_plan.init",
+    resourceType: "membership",
+    ip: req.ip,
+    metadata: { priceId: payload.priceId }
+  });
+
   return res.json({ url: session.url });
 };
 
@@ -32,5 +42,13 @@ export const cancelMembership = async (req: AuthRequest, res: Response) => {
     return res.status(400).json({ message: "Cliente Stripe no configurado" });
   }
   const portal = await createCustomerPortal(user.stripeCustomerId);
+
+  await createAuditLog({
+    userId: req.user!.id,
+    action: "membership.cancel.portal",
+    resourceType: "membership",
+    ip: req.ip
+  });
+
   return res.json({ url: portal.url });
 };

@@ -11,6 +11,7 @@ enum Role {
   member
   staff
   admin
+  system
 }
 
 enum MembershipStatus {
@@ -27,6 +28,28 @@ enum DocumentStatus {
   rejected
 }
 
+enum IntakeStatus {
+  draft
+  submitted
+  approved
+  rejected
+}
+
+enum AppointmentStatus {
+  scheduled
+  confirmed
+  completed
+  canceled
+  no_show
+}
+
+enum PaymentStatus {
+  pending
+  paid
+  failed
+  refunded
+}
+
 model User {
   id                  String                  @id @default(cuid())
   email               String                  @unique
@@ -39,7 +62,18 @@ model User {
   profile             Profile?
   memberships         Membership[]
   documents           Document[]
-  auditLogs           AuditLog[]
+  medicalIntake       MedicalIntake?
+  appointments        Appointment[]           @relation("AppointmentMember")
+  createdAppointments Appointment[]           @relation("AppointmentCreator")
+  sessionsAsMember    SessionTreatment[]      @relation("SessionMember")
+  sessionsAsStaff     SessionTreatment[]      @relation("SessionStaff")
+  payments            Payment[]
+  leadConversions     Lead[]                  @relation("LeadConvertedUser")
+  marketingAttributions MarketingAttribution[] @relation("MarketingAttributionUser")
+  auditLogs           AuditLog[]              @relation("AuditLogLegacy")
+  auditLogsActor      AuditLog[]              @relation("AuditLogActor")
+  auditLogsTarget     AuditLog[]              @relation("AuditLogTarget")
+  approvedIntakes     MedicalIntake[]         @relation("MedicalIntakeApprover")
   emailVerifications  EmailVerificationToken[]
   passwordResets      PasswordResetToken[]
 }
@@ -68,37 +102,194 @@ model Membership {
   createdAt            DateTime         @default(now())
   updatedAt            DateTime         @updatedAt
   user                 User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  payments             Payment[]
 
   @@index([userId])
 }
 
 model Document {
-  id          String         @id @default(cuid())
-  userId      String
-  type        String
-  status      DocumentStatus @default(pending)
-  version     String?
-  signedAt    DateTime?
-  storageKey  String?        @unique
+  id           String         @id @default(cuid())
+  userId       String
+  type         String
+  status       DocumentStatus @default(pending)
+  version      String?
+  signedAt     DateTime?
+  storageKey   String?        @unique
   signatureKey String?
-  contentType String?
-  size        Int?
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
-  user        User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  contentType  String?
+  size         Int?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
 }
 
 model AuditLog {
-  id        String   @id @default(cuid())
-  userId    String?
-  action    String
-  metadata  Json?
-  createdAt DateTime @default(now())
-  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  id           String   @id @default(cuid())
+  userId       String?
+  actorUserId  String?
+  targetUserId String?
+  action       String
+  resourceType String?
+  resourceId   String?
+  result       String?
+  ip           String?
+  metadata     Json?
+  metadataJson Json?
+  createdAt    DateTime @default(now())
+  user         User?    @relation("AuditLogLegacy", fields: [userId], references: [id], onDelete: SetNull)
+  actorUser    User?    @relation("AuditLogActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+  targetUser   User?    @relation("AuditLogTarget", fields: [targetUserId], references: [id], onDelete: SetNull)
 
   @@index([userId])
+  @@index([actorUserId])
+  @@index([targetUserId])
+  @@index([resourceType])
+  @@index([createdAt])
+}
+
+model Lead {
+  id              String                @id @default(cuid())
+  name            String
+  email           String
+  phone           String
+  consent         Boolean
+  convertedUserId String?
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+  convertedUser   User?                 @relation("LeadConvertedUser", fields: [convertedUserId], references: [id], onDelete: SetNull)
+  attribution     MarketingAttribution?
+
+  @@index([email])
+  @@index([phone])
+  @@index([createdAt])
+}
+
+model MarketingAttribution {
+  id               String    @id @default(cuid())
+  leadId           String?   @unique
+  userId           String?
+  eventName        String?
+  eventId          String?   @unique
+  utmSource        String?
+  utmMedium        String?
+  utmCampaign      String?
+  utmTerm          String?
+  utmContent       String?
+  fbp              String?
+  fbc              String?
+  fbclid           String?
+  consent          Boolean?
+  metaStatus       String?
+  metaError        String?
+  requestSummary   Json?
+  responseSummary  Json?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  sentAt           DateTime?
+  lead             Lead?     @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  user             User?     @relation("MarketingAttributionUser", fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([eventName])
+  @@index([metaStatus])
+  @@index([createdAt])
+}
+
+model MedicalIntake {
+  id               String       @id @default(cuid())
+  userId           String       @unique
+  status           IntakeStatus @default(draft)
+  personalJson     Json?
+  historyJson      Json?
+  phototype        Int?
+  consentAccepted  Boolean      @default(false)
+  signatureKey     String?
+  submittedAt      DateTime?
+  approvedAt       DateTime?
+  approvedByUserId String?
+  rejectedAt       DateTime?
+  rejectionReason  String?
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+  user             User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  approvedBy       User?        @relation("MedicalIntakeApprover", fields: [approvedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([status])
+  @@index([approvedByUserId])
+}
+
+model Appointment {
+  id               String            @id @default(cuid())
+  userId           String
+  createdByUserId  String
+  startAt          DateTime
+  endAt            DateTime
+  status           AppointmentStatus @default(scheduled)
+  reason           String?
+  canceledReason   String?
+  canceledAt       DateTime?
+  rescheduledFromId String?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  user             User              @relation("AppointmentMember", fields: [userId], references: [id], onDelete: Cascade)
+  createdBy        User              @relation("AppointmentCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  rescheduledFrom  Appointment?      @relation("AppointmentReschedule", fields: [rescheduledFromId], references: [id], onDelete: SetNull)
+  reschedules      Appointment[]     @relation("AppointmentReschedule")
+  sessions         SessionTreatment[]
+
+  @@index([userId])
+  @@index([createdByUserId])
+  @@index([startAt, endAt])
+  @@index([status])
+}
+
+model SessionTreatment {
+  id                 String       @id @default(cuid())
+  appointmentId      String?
+  userId             String
+  staffUserId        String
+  laserParametersJson Json?
+  notes              String?
+  adverseEvents      String?
+  memberFeedback     String?
+  feedbackAt         DateTime?
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+  appointment        Appointment? @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
+  user               User         @relation("SessionMember", fields: [userId], references: [id], onDelete: Cascade)
+  staffUser          User         @relation("SessionStaff", fields: [staffUserId], references: [id], onDelete: Restrict)
+
+  @@index([userId])
+  @@index([staffUserId])
+  @@index([appointmentId])
+}
+
+model Payment {
+  id                   String        @id @default(cuid())
+  userId               String
+  membershipId         String?
+  stripeEventId        String?       @unique
+  stripeInvoiceId      String?       @unique
+  stripePaymentIntentId String?      @unique
+  stripeSubscriptionId String?
+  amount               Int?
+  currency             String?
+  status               PaymentStatus @default(pending)
+  paidAt               DateTime?
+  failedAt             DateTime?
+  failureCode          String?
+  failureMessage       String?
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
+  user                 User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  membership           Membership?   @relation(fields: [membershipId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([membershipId])
+  @@index([status])
+  @@index([createdAt])
 }
 
 model EmailVerificationToken {
@@ -124,9 +315,9 @@ model PasswordResetToken {
 }
 
 model WebhookEvent {
-  id             String   @id @default(cuid())
-  stripeEventId  String   @unique
-  type           String
-  processedAt    DateTime @default(now())
-  createdAt      DateTime @default(now())
+  id            String   @id @default(cuid())
+  stripeEventId String   @unique
+  type          String
+  processedAt   DateTime @default(now())
+  createdAt     DateTime @default(now())
 }

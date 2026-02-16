@@ -83,12 +83,12 @@ export const auditService = {
     return logs.map((log) => ({
       id: log.id,
       timestamp: new Date(log.createdAt).toLocaleString("es-MX"),
-      user: log.user?.email ?? "system",
-      role: (log.user?.role ?? "admin") as UserRole,
+      user: log.actorUser?.email ?? log.user?.email ?? "system",
+      role: (log.actorUser?.role ?? log.user?.role ?? "admin") as UserRole,
       action: log.action,
-      resource: log.metadata?.targetUserId ?? log.metadata?.documentId ?? "-",
-      ip: log.metadata?.ip ?? "N/A",
-      status: "success"
+      resource: log.resourceId ?? log.resourceType ?? log.metadata?.targetUserId ?? log.metadata?.documentId ?? "-",
+      ip: log.ip ?? log.metadata?.ip ?? "N/A",
+      status: (log.result ?? "success") as AuditLogEntry["status"]
     }));
   }
 };

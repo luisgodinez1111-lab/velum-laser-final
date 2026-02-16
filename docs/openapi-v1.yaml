@@ -1,0 +1,165 @@
+openapi: 3.1.0
+info:
+  title: VELUM API v1
+  version: 1.1.0
+servers:
+  - url: /api
+components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: velum_token
+  schemas:
+    Error:
+      type: object
+      properties:
+        message:
+          type: string
+    LeadCreate:
+      type: object
+      required: [name, email, phone, consent]
+      properties:
+        name: { type: string }
+        email: { type: string, format: email }
+        phone: { type: string }
+        consent: { type: boolean, enum: [true] }
+        utm_source: { type: string }
+        utm_medium: { type: string }
+        utm_campaign: { type: string }
+        utm_term: { type: string }
+        utm_content: { type: string }
+        fbp: { type: string }
+        fbc: { type: string }
+        fbclid: { type: string }
+paths:
+  /me:
+    get:
+      summary: Ruta legacy de sesión actual
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200':
+          description: OK
+  /users/me:
+    get:
+      summary: Alias de /me
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200':
+          description: OK
+  /v1/leads:
+    post:
+      summary: Crear lead
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LeadCreate'
+      responses:
+        '201':
+          description: Lead creado
+        '400':
+          description: Datos inválidos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /v1/medical-intakes/me:
+    get:
+      summary: Obtener expediente médico propio
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200':
+          description: OK
+    put:
+      summary: Guardar expediente médico propio
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200':
+          description: Actualizado
+  /v1/medical-intakes/{userId}/approve:
+    post:
+      summary: Aprobar/rechazar expediente (staff/admin/system)
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: Aprobado/rechazado }
+        '403': { description: Forbidden }
+  /v1/appointments:
+    get:
+      summary: Listar citas
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200': { description: OK }
+    post:
+      summary: Crear cita
+      security: [{ cookieAuth: [] }]
+      responses:
+        '201': { description: Creada }
+  /v1/appointments/{appointmentId}:
+    patch:
+      summary: Reprogramar o cancelar cita
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - name: appointmentId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: Actualizada }
+  /v1/sessions:
+    post:
+      summary: Registrar sesión clínica
+      security: [{ cookieAuth: [] }]
+      responses:
+        '201': { description: Sesión creada }
+  /v1/sessions/{sessionId}/feedback:
+    patch:
+      summary: Guardar feedback de sesión
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: Actualizada }
+  /v1/payments/me:
+    get:
+      summary: Historial de pagos del usuario
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200': { description: OK }
+  /v1/payments:
+    get:
+      summary: Historial de pagos operativo (staff/admin/system)
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200': { description: OK }
+  /v1/audit-logs:
+    get:
+      summary: Audit logs filtrables (admin/system)
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200': { description: OK }
+  /v1/marketing/events:
+    post:
+      summary: Registrar evento para Meta CAPI
+      responses:
+        '202': { description: Accepted }
+    get:
+      summary: Monitorear estado de envíos CAPI
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200': { description: OK }
+  /admin/marketing/events:
+    get:
+      summary: Alias admin para monitoreo de envíos CAPI
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200': { description: OK }

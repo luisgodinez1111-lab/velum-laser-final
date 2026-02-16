@@ -10,6 +10,12 @@ import { membershipRoutes } from "./routes/membershipRoutes";
 import { documentRoutes } from "./routes/documentRoutes";
 import { adminRoutes } from "./routes/adminRoutes";
 import { stripeRoutes } from "./routes/stripeRoutes";
+import { v1LeadRoutes } from "./routes/v1LeadRoutes";
+import { v1MedicalIntakeRoutes } from "./routes/v1MedicalIntakeRoutes";
+import { v1AppointmentRoutes } from "./routes/v1AppointmentRoutes";
+import { v1SessionRoutes } from "./routes/v1SessionRoutes";
+import { v1PaymentRoutes } from "./routes/v1PaymentRoutes";
+import { v1AuditRoutes } from "./routes/v1AuditRoutes";
 import { env } from "./utils/env";
 import { httpLogger } from "./utils/logger";
 import { errorHandler } from "./middlewares/error";
@@ -20,6 +26,8 @@ if (!env.jwtSecret) {
 }
 
 const app = express();
+
+app.set("trust proxy", 1);
 
 app.use(httpLogger);
 app.use(helmet());
@@ -42,6 +50,16 @@ app.use(
   })
 );
 
+app.use(
+  ["/admin", "/api/v1/audit-logs", "/api/v1/marketing/events", "/api/v1/payments"],
+  rateLimit({
+    windowMs: 10 * 60 * 1000,
+    limit: 60,
+    standardHeaders: true,
+    legacyHeaders: false
+  })
+);
+
 app.use("/stripe/webhook", raw({ type: "application/json" }));
 app.use(express.json({ limit: "1mb" }));
 
@@ -52,6 +70,12 @@ app.use(membershipRoutes);
 app.use(documentRoutes);
 app.use(adminRoutes);
 app.use(stripeRoutes);
+app.use(v1LeadRoutes);
+app.use(v1MedicalIntakeRoutes);
+app.use(v1AppointmentRoutes);
+app.use(v1SessionRoutes);
+app.use(v1PaymentRoutes);
+app.use(v1AuditRoutes);
 
 app.get("/health", (_req, res) => {
   res.json({ status: "ok" });
