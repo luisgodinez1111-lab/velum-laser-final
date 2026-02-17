@@ -12,7 +12,6 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
     { name: 'Membresías', path: '/memberships' },
     { name: 'Agenda', path: '/agenda' },
     { name: 'Mi Cuenta', path: '/dashboard' },
-    { name: 'AI Studio', path: '/ai-studio' },
   ];
 
   const isActive = (path: string) => location.pathname === path;
