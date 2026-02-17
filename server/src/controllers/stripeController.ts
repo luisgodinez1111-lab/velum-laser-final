@@ -3,6 +3,9 @@ import { stripe } from "../services/stripeService";
 import { env } from "../utils/env";
 import { prisma } from "../db/prisma";
 import { createAuditLog } from "../services/auditService";
+import { sendMetaEvent } from "../services/metaService";
+
+type PaymentStatus = "pending" | "paid" | "failed" | "refunded";
 
 const resolveMembershipContext = async (subscriptionId?: string, customerId?: string) => {
   const membership = subscriptionId
@@ -21,6 +24,26 @@ const resolveMembershipContext = async (subscriptionId?: string, customerId?: st
 
   const user = await prisma.user.findFirst({ where: { stripeCustomerId: customerId } });
   return { membershipId: undefined, userId: user?.id };
+};
+
+const resolveUserContact = async (userId?: string) => {
+  if (!userId) {
+    return { email: undefined, phone: undefined };
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    include: {
+      profile: {
+        select: { phone: true }
+      }
+    }
+  });
+
+  return {
+    email: user?.email,
+    phone: user?.profile?.phone ?? undefined
+  };
 };
 
 const recordPayment = async ({
@@ -42,20 +65,37 @@ const recordPayment = async ({
   stripeSubscriptionId?: string;
   amount?: number;
   currency?: string;
-  status: "pending" | "paid" | "failed" | "refunded";
+  status: PaymentStatus;
   failureCode?: string;
   failureMessage?: string;
   userId?: string;
   membershipId?: string;
 }) => {
-  if (!userId || !stripeInvoiceId) {
+  if (!userId) {
+    return;
+  }
+
+  const where:
+    | { stripeInvoiceId: string }
+    | { stripePaymentIntentId: string }
+    | { stripeEventId: string }
+    | null = stripeInvoiceId
+    ? { stripeInvoiceId }
+    : stripePaymentIntentId
+      ? { stripePaymentIntentId }
+      : stripeEventId
+        ? { stripeEventId }
+        : null;
+
+  if (!where) {
     return;
   }
 
   await prisma.payment.upsert({
-    where: { stripeInvoiceId },
+    where,
     update: {
       stripeEventId,
+      stripeInvoiceId,
       stripePaymentIntentId,
       stripeSubscriptionId,
       amount,
@@ -63,9 +103,9 @@ const recordPayment = async ({
       status,
       failureCode,
       failureMessage,
+      membershipId,
       paidAt: status === "paid" ? new Date() : undefined,
-      failedAt: status === "failed" ? new Date() : undefined,
-      membershipId
+      failedAt: status === "failed" ? new Date() : status === "paid" ? null : undefined
     },
     create: {
       userId,
@@ -85,10 +125,120 @@ const recordPayment = async ({
   });
 };
 
-export const handleWebhook = async (req: Request, res: Response) => {
-  const signature = req.headers["stripe-signature"] as string;
-  let event;
+const trackConversionEvent = async ({
+  eventName,
+  eventId,
+  userId,
+  amount,
+  currency,
+  stripeInvoiceId,
+  stripeSubscriptionId,
+  stripePaymentIntentId,
+  req
+}: {
+  eventName: "Purchase" | "Subscribe";
+  eventId: string;
+  userId?: string;
+  amount?: number;
+  currency?: string;
+  stripeInvoiceId?: string;
+  stripeSubscriptionId?: string;
+  stripePaymentIntentId?: string;
+  req: Request;
+}) => {
+  if (!userId) {
+    return;
+  }
 
+  const existing = await prisma.marketingAttribution.findUnique({
+    where: { eventId }
+  });
+
+  if (existing) {
+    return;
+  }
+
+  const attribution = await prisma.marketingAttribution.create({
+    data: {
+      userId,
+      eventName,
+      eventId,
+      consent: true,
+      requestSummary: {
+        source: "stripe.webhook",
+        stripeInvoiceId,
+        stripeSubscriptionId,
+        stripePaymentIntentId,
+        amount,
+        currency
+      }
+    }
+  });
+
+  const contact = await resolveUserContact(userId);
+
+  const customData: Record<string, unknown> = {};
+  if (typeof amount === "number") {
+    customData.value = Number((amount / 100).toFixed(2));
+  }
+  if (currency) {
+    customData.currency = currency.toUpperCase();
+  }
+  if (stripeInvoiceId) {
+    customData.stripe_invoice_id = stripeInvoiceId;
+  }
+  if (stripeSubscriptionId) {
+    customData.stripe_subscription_id = stripeSubscriptionId;
+  }
+
+  const userData: Record<string, unknown> = {};
+  if (contact.email) {
+    userData.em = contact.email;
+  }
+  if (contact.phone) {
+    userData.ph = contact.phone;
+  }
+
+  const metaResult = await sendMetaEvent({
+    eventName,
+    eventId,
+    clientIp: req.ip,
+    clientUserAgent: req.get("user-agent") ?? undefined,
+    userData: Object.keys(userData).length ? userData : undefined,
+    customData: Object.keys(customData).length ? customData : undefined
+  });
+
+  await prisma.marketingAttribution.update({
+    where: { id: attribution.id },
+    data: {
+      metaStatus: metaResult.status,
+      metaError: metaResult.error,
+      responseSummary: metaResult.responseSummary,
+      sentAt: metaResult.status === "sent" ? new Date() : null
+    }
+  });
+
+  await createAuditLog({
+    userId,
+    action: "marketing.event.track",
+    resourceType: "marketing_event",
+    resourceId: attribution.id,
+    ip: req.ip,
+    metadata: {
+      source: "stripe.webhook",
+      eventName,
+      eventId
+    }
+  });
+};
+
+export const handleWebhook = async (req: Request, res: Response) => {
+  const signature = req.headers["stripe-signature"] as string | undefined;
+  if (!signature) {
+    return res.status(400).json({ message: "Firma inválida" });
+  }
+
+  let event;
   try {
     event = stripe.webhooks.constructEvent(req.body, signature, env.stripeWebhookSecret);
   } catch (_err) {
@@ -105,6 +255,34 @@ export const handleWebhook = async (req: Request, res: Response) => {
   });
 
   switch (event.type) {
+    case "invoice.created": {
+      const invoice = event.data.object as {
+        id: string;
+        customer?: string;
+        subscription?: string;
+        payment_intent?: string;
+        amount_due?: number;
+        total?: number;
+        currency?: string;
+      };
+
+      const context = await resolveMembershipContext(invoice.subscription, invoice.customer);
+
+      await recordPayment({
+        stripeEventId: event.id,
+        stripeInvoiceId: invoice.id,
+        stripePaymentIntentId: invoice.payment_intent,
+        stripeSubscriptionId: invoice.subscription,
+        amount: invoice.amount_due ?? invoice.total,
+        currency: invoice.currency,
+        status: "pending",
+        userId: context.userId,
+        membershipId: context.membershipId
+      });
+
+      break;
+    }
+
     case "invoice.paid": {
       const invoice = event.data.object as {
         id: string;
@@ -144,8 +322,21 @@ export const handleWebhook = async (req: Request, res: Response) => {
         membershipId: context.membershipId
       });
 
+      await trackConversionEvent({
+        eventName: "Purchase",
+        eventId: `purchase:${invoice.id}`,
+        userId: context.userId,
+        amount: invoice.amount_paid ?? invoice.total,
+        currency: invoice.currency,
+        stripeInvoiceId: invoice.id,
+        stripeSubscriptionId: invoice.subscription,
+        stripePaymentIntentId: invoice.payment_intent,
+        req
+      });
+
       break;
     }
+
     case "invoice.payment_failed": {
       const invoice = event.data.object as {
         id: string;
@@ -183,11 +374,54 @@ export const handleWebhook = async (req: Request, res: Response) => {
         userId: context.userId,
         membershipId: context.membershipId
       });
+
       break;
     }
+
+    case "charge.refunded": {
+      const charge = event.data.object as {
+        invoice?: string;
+        payment_intent?: string;
+        amount_refunded?: number;
+        amount?: number;
+        currency?: string;
+        customer?: string;
+      };
+
+      const existingPayment = charge.invoice
+        ? await prisma.payment.findUnique({ where: { stripeInvoiceId: charge.invoice } })
+        : charge.payment_intent
+          ? await prisma.payment.findUnique({ where: { stripePaymentIntentId: charge.payment_intent } })
+          : null;
+
+      const context = await resolveMembershipContext(undefined, charge.customer);
+      const userId = existingPayment?.userId ?? context.userId;
+      const membershipId = existingPayment?.membershipId ?? context.membershipId;
+
+      await recordPayment({
+        stripeEventId: event.id,
+        stripeInvoiceId: charge.invoice ?? existingPayment?.stripeInvoiceId ?? undefined,
+        stripePaymentIntentId: charge.payment_intent ?? existingPayment?.stripePaymentIntentId ?? undefined,
+        stripeSubscriptionId: existingPayment?.stripeSubscriptionId ?? undefined,
+        amount: charge.amount_refunded ?? charge.amount,
+        currency: charge.currency,
+        status: "refunded",
+        userId: userId ?? undefined,
+        membershipId: membershipId ?? undefined
+      });
+
+      break;
+    }
+
     case "customer.subscription.updated":
     case "customer.subscription.deleted": {
-      const subscription = event.data.object as { id: string; status: string; current_period_end: number; cancel_at_period_end: boolean };
+      const subscription = event.data.object as {
+        id: string;
+        status: string;
+        current_period_end: number;
+        cancel_at_period_end: boolean;
+      };
+
       const statusMap: Record<string, "active" | "canceled" | "past_due" | "paused" | "inactive"> = {
         active: "active",
         canceled: "canceled",
@@ -195,6 +429,7 @@ export const handleWebhook = async (req: Request, res: Response) => {
         paused: "paused",
         unpaid: "inactive"
       };
+
       await prisma.membership.updateMany({
         where: { stripeSubscriptionId: subscription.id },
         data: {
@@ -204,20 +439,52 @@ export const handleWebhook = async (req: Request, res: Response) => {
           gracePeriodEndsAt: subscription.status === "active" ? null : undefined
         }
       });
+
       break;
     }
+
     case "checkout.session.completed": {
-      const session = event.data.object as { customer: string; subscription: string; metadata?: Record<string, string> };
-      const user = await prisma.user.findFirst({ where: { stripeCustomerId: session.customer as string } });
-      if (user) {
+      const session = event.data.object as {
+        customer?: string;
+        subscription?: string;
+        metadata?: Record<string, string>;
+      };
+
+      let user = session.customer
+        ? await prisma.user.findFirst({ where: { stripeCustomerId: session.customer } })
+        : null;
+
+      if (!user && session.metadata?.userId) {
+        user = await prisma.user.findUnique({ where: { id: session.metadata.userId } });
+      }
+
+      if (user && session.subscription) {
         await prisma.membership.upsert({
           where: { userId: user.id },
-          update: { stripeSubscriptionId: session.subscription as string, status: "active" },
-          create: { userId: user.id, stripeSubscriptionId: session.subscription as string, status: "active" }
+          update: {
+            stripeSubscriptionId: session.subscription,
+            status: "active",
+            gracePeriodEndsAt: null
+          },
+          create: {
+            userId: user.id,
+            stripeSubscriptionId: session.subscription,
+            status: "active"
+          }
         });
       }
+
+      await trackConversionEvent({
+        eventName: "Subscribe",
+        eventId: `subscribe:${session.subscription ?? session.customer ?? event.id}`,
+        userId: user?.id,
+        stripeSubscriptionId: session.subscription,
+        req
+      });
+
       break;
     }
+
     default:
       break;
   }

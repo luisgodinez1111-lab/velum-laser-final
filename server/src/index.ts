@@ -71,6 +71,7 @@ app.use(express.json({ limit: "1mb" }));
 
 app.use("/docs", swaggerUi.serve, swaggerUi.setup(openApiSpec));
 app.use("/auth", authRoutes);
+app.use("/stripe", stripeRoutes);
 app.use(v1LeadRoutes);
 app.use(v1MedicalIntakeRoutes);
 app.use(v1AppointmentRoutes);
@@ -81,7 +82,6 @@ app.use(userRoutes);
 app.use(membershipRoutes);
 app.use(documentRoutes);
 app.use(adminRoutes);
-app.use(stripeRoutes);
 
 app.get("/health", (_req, res) => {
   res.json({ status: "ok" });
