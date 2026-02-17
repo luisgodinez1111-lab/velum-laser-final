@@ -1,3 +1,4 @@
+import "express-async-errors";
 import express, { raw } from "express";
 import cors from "cors";
 import helmet from "helmet";
@@ -26,6 +27,11 @@ if (!env.jwtSecret) {
 }
 
 const app = express();
+app.set("json replacer", (key, value) => (key === "passwordHash" ? undefined : value));
+
+// PUBLIC_HEALTHCHECK
+app.get("/health", (_req, res) => { res.status(200).json({ ok: true, service: "api" }); });
+app.get("/api/health", (_req, res) => { res.status(200).json({ ok: true, service: "api" }); });
 
 app.set("trust proxy", 1);
 
