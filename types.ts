@@ -23,12 +23,6 @@ export interface UserSubscription {
   status: 'active' | 'pending' | 'canceled' | 'past_due' | 'paused';
 }
 
-export enum Resolution {
-  ONE_K = '1K',
-  TWO_K = '2K',
-  FOUR_K = '4K'
-}
-
 // --- SECURITY & COMPLIANCE TYPES ---
 
 export type UserRole = 'admin' | 'staff' | 'member' | 'system';
@@ -79,12 +73,4 @@ export interface Member {
     documents?: LegalDocument[];
   };
   passwordHash?: string;
-}
-
-// Window augmentation for AI Studio
-declare global {
-  interface AIStudio {
-    hasSelectedApiKey: () => Promise<boolean>;
-    openSelectKey: () => Promise<void>;
-  }
 }
