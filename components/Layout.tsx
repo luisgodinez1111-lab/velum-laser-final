@@ -10,7 +10,6 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
   const navLinks = [
     { name: 'Inicio', path: '/' },
     { name: 'Membresías', path: '/memberships' },
-    { name: 'Agenda', path: '/agenda' },
     { name: 'Mi Cuenta', path: '/dashboard' },
   ];
 
