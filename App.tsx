@@ -5,7 +5,6 @@ import { Home } from './pages/Home';
 import { Memberships } from './pages/Memberships';
 import { Agenda } from './pages/Agenda';
 import { Dashboard } from './pages/Dashboard';
-import { AIStudio } from './pages/AIStudio';
 import { Admin } from './pages/Admin';
 import { AuthProvider } from './context/AuthContext';
 
@@ -19,7 +18,6 @@ const App: React.FC = () => {
             <Route path="/memberships" element={<Memberships />} />
             <Route path="/agenda" element={<Agenda />} />
             <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/ai-studio" element={<AIStudio />} />
             <Route path="/admin" element={<Admin />} />
           </Routes>
         </Layout>
