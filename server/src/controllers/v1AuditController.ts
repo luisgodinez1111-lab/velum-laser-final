@@ -9,7 +9,11 @@ export const listAuditLogsV1 = async (req: AuthRequest, res: Response) => {
   const logs = await prisma.auditLog.findMany({
     where: {
       ...(parsed.actorUserId ? { actorUserId: parsed.actorUserId } : {}),
+      ...(parsed.targetUserId ? { targetUserId: parsed.targetUserId } : {}),
+      ...(parsed.userId ? { userId: parsed.userId } : {}),
+      ...(parsed.action ? { action: parsed.action } : {}),
       ...(parsed.resourceType ? { resourceType: parsed.resourceType } : {}),
+      ...(parsed.resourceId ? { resourceId: parsed.resourceId } : {}),
       ...(parsed.result ? { result: parsed.result } : {}),
       ...(parsed.startDate || parsed.endDate
         ? {
@@ -21,27 +25,9 @@ export const listAuditLogsV1 = async (req: AuthRequest, res: Response) => {
         : {})
     },
     include: {
-      actorUser: {
-        select: {
-          id: true,
-          email: true,
-          role: true
-        }
-      },
-      targetUser: {
-        select: {
-          id: true,
-          email: true,
-          role: true
-        }
-      },
-      user: {
-        select: {
-          id: true,
-          email: true,
-          role: true
-        }
-      }
+      actorUser: { select: { id: true, email: true, role: true } },
+      targetUser: { select: { id: true, email: true, role: true } },
+      user: { select: { id: true, email: true, role: true } }
     },
     orderBy: { createdAt: "desc" },
     take: parsed.limit ?? 200

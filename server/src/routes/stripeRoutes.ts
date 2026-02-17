@@ -3,4 +3,4 @@ import { handleWebhook } from "../controllers/stripeController";
 
 export const stripeRoutes = Router();
 
-stripeRoutes.post("/stripe/webhook", handleWebhook);
+stripeRoutes.post("/webhook", handleWebhook);
