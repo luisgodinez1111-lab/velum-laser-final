@@ -229,6 +229,7 @@ CREATE TABLE IF NOT EXISTS "MedicalIntake" (
 
 CREATE UNIQUE INDEX IF NOT EXISTS "MedicalIntake_userId_key" ON "MedicalIntake"("userId");
 CREATE INDEX IF NOT EXISTS "MedicalIntake_status_idx" ON "MedicalIntake"("status");
+ALTER TABLE "MedicalIntake" ADD COLUMN IF NOT EXISTS "approvedByUserId" TEXT;
 CREATE INDEX IF NOT EXISTS "MedicalIntake_approvedByUserId_idx" ON "MedicalIntake"("approvedByUserId");
 
 CREATE TABLE IF NOT EXISTS "Appointment" (
