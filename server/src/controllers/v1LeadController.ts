@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import crypto from "crypto";
 import { Prisma } from "@prisma/client";
 import { Response } from "express";
