@@ -27,7 +27,7 @@ if (!env.jwtSecret) {
 }
 
 const app = express();
-app.set("json replacer", (key, value) => (key === "passwordHash" ? undefined : value));
+app.set("json replacer", (key: string, value: unknown) => (key === "passwordHash" ? undefined : value));
 
 // PUBLIC_HEALTHCHECK
 app.get("/health", (_req, res) => { res.status(200).json({ ok: true, service: "api" }); });

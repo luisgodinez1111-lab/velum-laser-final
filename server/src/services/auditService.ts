@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { prisma } from "../db/prisma";
 
 type AuditResult = "success" | "failed";
@@ -21,7 +22,7 @@ export const createAuditLog = async ({
   resourceId?: string;
   result?: AuditResult;
   ip?: string;
-  metadata?: Record<string, unknown>;
+  metadata?: Prisma.InputJsonValue;
 }) => {
   const actor = actorUserId ?? userId;
 
