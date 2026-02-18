@@ -50,11 +50,19 @@ enum PaymentStatus {
   refunded
 }
 
+enum IntegrationJobStatus {
+  pending
+  processing
+  done
+  failed
+}
+
 model User {
   id                  String                  @id @default(cuid())
   email               String                  @unique
   passwordHash        String
   role                Role                    @default(member)
+  clinicId            String                  @default("default")
   stripeCustomerId    String?                 @unique
   emailVerifiedAt     DateTime?
   createdAt           DateTime                @default(now())
@@ -77,6 +85,8 @@ model User {
   emailVerifications  EmailVerificationToken[]
   passwordResets      PasswordResetToken[]
   agendaBlocksCreated AgendaBlockedSlot[]     @relation("AgendaBlockedSlotCreator")
+
+  @@index([clinicId])
 }
 
 model Profile {
@@ -223,6 +233,7 @@ model MedicalIntake {
 
 model Appointment {
   id                String            @id @default(cuid())
+  clinicId          String            @default("default")
   userId            String
   createdByUserId   String
   cabinId           String?
@@ -236,6 +247,11 @@ model Appointment {
   completedAt       DateTime?
   noShowAt          DateTime?
   autoConfirmedAt   DateTime?
+  googleEventId     String?
+  googleCalendarId  String?
+  syncStatus        String?
+  lastSyncedAt      DateTime?
+  lastPushedAt      DateTime?
   rescheduledFromId String?
   createdAt         DateTime          @default(now())
   updatedAt         DateTime          @updatedAt
@@ -247,11 +263,13 @@ model Appointment {
   sessions          SessionTreatment[]
 
   @@index([userId])
+  @@index([clinicId])
   @@index([createdByUserId])
   @@index([cabinId])
   @@index([cabinId, startAt, endAt])
   @@index([startAt, endAt])
   @@index([status])
+  @@index([googleEventId])
 }
 
 model AgendaPolicy {
@@ -391,4 +409,51 @@ model WebhookEvent {
   type          String
   processedAt   DateTime @default(now())
   createdAt     DateTime @default(now())
+}
+
+model GoogleCalendarIntegration {
+  id              String   @id @default(cuid())
+  clinicId        String
+  email           String
+  calendarId      String
+  accessTokenEnc  String
+  refreshTokenEnc String
+  scope           String?
+  tokenExpiry     DateTime?
+  isActive        Boolean  @default(true)
+  watchChannelId  String?
+  watchResourceId String?
+  watchExpiration DateTime?
+  syncToken       String?
+  lastSyncAt      DateTime?
+  eventFormatMode String   @default("complete")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  jobs            IntegrationJob[]
+
+  @@unique([clinicId])
+  @@index([isActive])
+  @@index([watchChannelId])
+}
+
+model IntegrationJob {
+  id                   String               @id @default(cuid())
+  clinicId             String
+  googleIntegrationId  String?
+  type                 String
+  payload              Json
+  status               IntegrationJobStatus @default(pending)
+  attempts             Int                  @default(0)
+  maxAttempts          Int                  @default(8)
+  runAt                DateTime             @default(now())
+  lastError            String?
+  lockedAt             DateTime?
+  finishedAt           DateTime?
+  createdAt            DateTime             @default(now())
+  updatedAt            DateTime             @updatedAt
+  googleIntegration    GoogleCalendarIntegration? @relation(fields: [googleIntegrationId], references: [id], onDelete: SetNull)
+
+  @@index([status, runAt])
+  @@index([clinicId, status, runAt])
+  @@index([googleIntegrationId, status, runAt])
 }

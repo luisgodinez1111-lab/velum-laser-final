@@ -17,8 +17,11 @@ import { v1AppointmentRoutes } from "./routes/v1AppointmentRoutes";
 import { v1SessionRoutes } from "./routes/v1SessionRoutes";
 import { v1PaymentRoutes } from "./routes/v1PaymentRoutes";
 import { v1AuditRoutes } from "./routes/v1AuditRoutes";
+import { googleCalendarIntegrationRoutes } from "./routes/googleCalendarIntegrationRoutes";
+import { googleCalendarWebhookRoutes } from "./routes/googleCalendarWebhookRoutes";
+import { startIntegrationWorker } from "./services/integrationWorker";
 import { env } from "./utils/env";
-import { httpLogger } from "./utils/logger";
+import { httpLogger, logger } from "./utils/logger";
 import { errorHandler } from "./middlewares/error";
 import { openApiSpec } from "./openapi";
 
@@ -57,7 +60,14 @@ app.use(
 );
 
 app.use(
-  ["/admin", "/api/v1/audit-logs", "/api/v1/marketing/events", "/api/v1/payments", "/api/v1/agenda/admin"],
+  [
+    "/admin",
+    "/api/v1/audit-logs",
+    "/api/v1/marketing/events",
+    "/api/v1/payments",
+    "/api/v1/agenda/admin",
+    "/api/integrations/google-calendar"
+  ],
   rateLimit({
     windowMs: 10 * 60 * 1000,
     limit: 60,
@@ -82,6 +92,8 @@ app.use(v1AppointmentRoutes);
 app.use(v1SessionRoutes);
 app.use(v1PaymentRoutes);
 app.use(v1AuditRoutes);
+app.use(googleCalendarIntegrationRoutes);
+app.use(googleCalendarWebhookRoutes);
 
 app.get("/health", (_req, res) => {
   res.json({ status: "ok" });
@@ -92,4 +104,7 @@ app.use(errorHandler);
 app.listen(env.port, () => {
   // eslint-disable-next-line no-console
   console.log(`API running on :${env.port}`);
+  void startIntegrationWorker().catch((error) => {
+    logger.error({ err: error }, "Unable to start integration worker");
+  });
 });

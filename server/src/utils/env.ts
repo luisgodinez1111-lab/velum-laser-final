@@ -22,7 +22,14 @@ export const env = {
   metaApiVersion: process.env.META_API_VERSION ?? "v20.0",
   metaPixelId: process.env.META_PIXEL_ID ?? "",
   metaAccessToken: process.env.META_ACCESS_TOKEN ?? "",
-  appointmentRescheduleMinHours: Number(process.env.APPOINTMENT_RESCHEDULE_MIN_HOURS ?? 24)
+  appointmentRescheduleMinHours: Number(process.env.APPOINTMENT_RESCHEDULE_MIN_HOURS ?? 24),
+  googleClientId: process.env.GOOGLE_CLIENT_ID ?? "",
+  googleClientSecret: process.env.GOOGLE_CLIENT_SECRET ?? "",
+  googleRedirectUri: process.env.GOOGLE_REDIRECT_URI ?? "",
+  integrationsEncKey: process.env.INTEGRATIONS_ENC_KEY ?? "",
+  baseUrl: process.env.BASE_URL ?? "http://localhost:4000",
+  defaultClinicId: process.env.DEFAULT_CLINIC_ID ?? "default",
+  googleSyncIgnoreWindowSeconds: Number(process.env.GOOGLE_SYNC_IGNORE_WINDOW_SECONDS ?? 10)
 };
 
 export const isProduction = env.nodeEnv === "production";

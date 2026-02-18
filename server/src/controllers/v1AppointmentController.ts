@@ -2,6 +2,7 @@ import { Response } from "express";
 import { prisma } from "../db/prisma";
 import { AuthRequest } from "../middlewares/auth";
 import { createAuditLog } from "../services/auditService";
+import { enqueueGoogleAppointmentSync } from "../services/googleCalendarIntegrationService";
 import {
   AgendaValidationError,
   createAgendaBlock,
@@ -14,6 +15,8 @@ import {
   updateAgendaConfig
 } from "../services/agendaService";
 import { env } from "../utils/env";
+import { getClinicIdByUserId } from "../utils/clinic";
+import { logger } from "../utils/logger";
 import { agendaBlockCreateSchema, agendaConfigUpdateSchema, agendaDateParamSchema } from "../validators/agenda";
 import { appointmentCreateSchema, appointmentUpdateSchema } from "../validators/appointments";
 
@@ -58,9 +61,15 @@ export const createAppointment = async (req: AuthRequest, res: Response) => {
 
   const isPrivileged = hasPrivilegedRole(req.user!.role);
   const targetUserId = isPrivileged ? payload.userId ?? req.user!.id : req.user!.id;
+  const actorClinicId = await getClinicIdByUserId(req.user!.id);
+  const targetClinicId = targetUserId === req.user!.id ? actorClinicId : await getClinicIdByUserId(targetUserId);
 
   if (targetUserId !== req.user!.id && !isPrivileged) {
     return res.status(403).json({ message: "No puedes crear citas para otros usuarios" });
+  }
+
+  if (targetClinicId !== actorClinicId) {
+    return res.status(403).json({ message: "No puedes agendar usuarios de otra clínica" });
   }
 
   const eligibility = await hasClinicalEligibility(targetUserId);
@@ -89,6 +98,7 @@ export const createAppointment = async (req: AuthRequest, res: Response) => {
 
   const appointment = await prisma.appointment.create({
     data: {
+      clinicId: actorClinicId,
       userId: targetUserId,
       createdByUserId: req.user!.id,
       cabinId: placement.cabinId,
@@ -124,10 +134,19 @@ export const createAppointment = async (req: AuthRequest, res: Response) => {
     }
   });
 
+  void enqueueGoogleAppointmentSync({
+    clinicId: appointment.clinicId,
+    appointmentId: appointment.id,
+    action: "create"
+  }).catch((error) => {
+    logger.error({ err: error, appointmentId: appointment.id }, "Unable to enqueue Google create sync");
+  });
+
   return res.status(201).json(appointment);
 };
 
 export const listAppointments = async (req: AuthRequest, res: Response) => {
+  const clinicId = await getClinicIdByUserId(req.user!.id);
   const isPrivileged = hasPrivilegedRole(req.user!.role);
   if (isPrivileged) {
     await syncAppointmentWorkflow();
@@ -137,7 +156,7 @@ export const listAppointments = async (req: AuthRequest, res: Response) => {
   const targetUserId = isPrivileged ? queryUserId : req.user!.id;
 
   const appointments = await prisma.appointment.findMany({
-    where: targetUserId ? { userId: targetUserId } : undefined,
+    where: targetUserId ? { clinicId, userId: targetUserId } : { clinicId },
     include: {
       user: {
         select: { id: true, email: true }
@@ -157,11 +176,16 @@ export const listAppointments = async (req: AuthRequest, res: Response) => {
 };
 
 export const updateAppointment = async (req: AuthRequest, res: Response) => {
+  const clinicId = await getClinicIdByUserId(req.user!.id);
   const appointment = await prisma.appointment.findUnique({
     where: { id: req.params.appointmentId }
   });
 
   if (!appointment) {
+    return res.status(404).json({ message: "Cita no encontrada" });
+  }
+
+  if (appointment.clinicId !== clinicId) {
     return res.status(404).json({ message: "Cita no encontrada" });
   }
 
@@ -207,6 +231,14 @@ export const updateAppointment = async (req: AuthRequest, res: Response) => {
       resourceId: appointment.id,
       ip: req.ip,
       metadata: { canceledReason: payload.canceledReason }
+    });
+
+    void enqueueGoogleAppointmentSync({
+      clinicId: appointment.clinicId,
+      appointmentId: appointment.id,
+      action: "cancel"
+    }).catch((error) => {
+      logger.error({ err: error, appointmentId: appointment.id }, "Unable to enqueue Google cancel sync");
     });
 
     return res.json(canceled);
@@ -341,6 +373,14 @@ export const updateAppointment = async (req: AuthRequest, res: Response) => {
     resourceId: appointment.id,
     ip: req.ip,
     metadata: { startAt, endAt, cabinId: placement.cabinId }
+  });
+
+  void enqueueGoogleAppointmentSync({
+    clinicId: appointment.clinicId,
+    appointmentId: appointment.id,
+    action: "update"
+  }).catch((error) => {
+    logger.error({ err: error, appointmentId: appointment.id }, "Unable to enqueue Google update sync");
   });
 
   return res.json(updated);

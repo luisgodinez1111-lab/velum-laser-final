@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from '../components/Button';
 import { VelumLogo } from '../components/VelumLogo';
+import { AgendaIntegrations } from './settings/AgendaIntegrations';
 import {
   Users,
   BarChart3,
@@ -40,6 +41,11 @@ import {
   Appointment,
   clinicalService
 } from '../services/clinicalService';
+import {
+  GoogleCalendarIntegrationStatus,
+  GoogleEventFormatMode,
+  googleCalendarIntegrationService
+} from '../services/googleCalendarIntegrationService';
 
 type AdminSection =
   | 'control'
@@ -220,20 +226,30 @@ export const Admin: React.FC = () => {
   const [isAgendaSaving, setIsAgendaSaving] = useState(false);
   const [isAgendaConfigSaving, setIsAgendaConfigSaving] = useState(false);
   const [agendaMessage, setAgendaMessage] = useState<{ type: 'ok' | 'error'; text: string } | null>(null);
+  const [googleIntegrationStatus, setGoogleIntegrationStatus] = useState<GoogleCalendarIntegrationStatus | null>(null);
+  const [isGoogleIntegrationLoading, setIsGoogleIntegrationLoading] = useState(false);
+  const [isGoogleIntegrationSaving, setIsGoogleIntegrationSaving] = useState(false);
+  const [googleIntegrationMessage, setGoogleIntegrationMessage] = useState<{ type: 'ok' | 'error'; text: string } | null>(null);
 
   const hasAccess = !!user && allowedRoles.includes(user.role);
+  const canManageGoogleIntegration = user?.role === 'admin' || user?.role === 'system';
 
   const loadData = async () => {
     setIsLoadingData(true);
+    setIsGoogleIntegrationLoading(true);
     try {
-      const [membersData, logsData, configData, dayData] = await Promise.all([
+      const [membersData, logsData, configData, dayData, integrationData] = await Promise.all([
         memberService.getAll(),
         user?.role === 'admin' || user?.role === 'system' ? auditService.getLogs() : Promise.resolve([]),
         clinicalService.getAdminAgendaConfig().catch(() => null),
-        clinicalService.getAdminAgendaDay(agendaDate).catch(() => null)
+        clinicalService.getAdminAgendaDay(agendaDate).catch(() => null),
+        user?.role === 'admin' || user?.role === 'system'
+          ? googleCalendarIntegrationService.getStatus().catch(() => null)
+          : Promise.resolve(null)
       ]);
       setMembers(membersData);
       setAuditLogs(logsData);
+      setGoogleIntegrationStatus(integrationData);
       if (configData) {
         setAgendaConfig(configData);
         setAgendaPolicyDraft({
@@ -257,6 +273,7 @@ export const Admin: React.FC = () => {
       // Keep panel usable if one endpoint fails.
     } finally {
       setIsLoadingData(false);
+      setIsGoogleIntegrationLoading(false);
     }
   };
 
@@ -265,6 +282,56 @@ export const Admin: React.FC = () => {
       loadData();
     }
   }, [isAuthenticated, hasAccess, user?.id, user?.role]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const hash = window.location.hash;
+    const queryStart = hash.indexOf('?');
+    if (queryStart < 0) return;
+
+    const params = new URLSearchParams(hash.slice(queryStart + 1));
+    const integration = params.get('integration');
+    const status = params.get('status');
+    const error = params.get('error');
+    const section = params.get('section');
+    const settings = params.get('settingsCategory');
+
+    if (section === 'configuraciones') {
+      setActiveSection('configuraciones');
+    }
+    if (settings === 'agenda' || settings === 'general') {
+      setSettingsCategory(settings);
+    }
+
+    if (integration === 'google' && status === 'success') {
+      setGoogleIntegrationMessage({ type: 'ok', text: 'Google Calendar conectado correctamente.' });
+      void loadData();
+    }
+
+    if (integration === 'google' && status === 'error') {
+      setGoogleIntegrationMessage({
+        type: 'error',
+        text: error ? `No se pudo conectar Google Calendar: ${error}` : 'No se pudo conectar Google Calendar.'
+      });
+    }
+
+    if (integration !== 'google') {
+      return;
+    }
+
+    params.delete('integration');
+    params.delete('status');
+    params.delete('error');
+
+    const cleanedHash = hash.slice(0, queryStart);
+    const remainingQuery = params.toString();
+    const nextHash = remainingQuery ? `${cleanedHash}?${remainingQuery}` : cleanedHash;
+
+    if (nextHash !== hash) {
+      window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}${nextHash}`);
+    }
+  }, []);
 
   useEffect(() => {
     if (!isAuthenticated || !hasAccess) return;
@@ -715,6 +782,69 @@ export const Admin: React.FC = () => {
     await handleAgendaAppointmentAction(appointmentId, 'cancel', 'Cita cancelada correctamente.');
   };
 
+  const handleGoogleConnect = async () => {
+    if (!canManageGoogleIntegration) return;
+    setIsGoogleIntegrationSaving(true);
+    setGoogleIntegrationMessage(null);
+    try {
+      const response = await googleCalendarIntegrationService.connect();
+      if (typeof window !== 'undefined') {
+        window.location.href = response.url;
+      }
+    } catch (error: any) {
+      setGoogleIntegrationMessage({
+        type: 'error',
+        text: error?.message ?? 'No fue posible iniciar la conexión con Google Calendar.'
+      });
+    } finally {
+      setIsGoogleIntegrationSaving(false);
+    }
+  };
+
+  const handleGoogleDisconnect = async () => {
+    if (!canManageGoogleIntegration) return;
+    setIsGoogleIntegrationSaving(true);
+    setGoogleIntegrationMessage(null);
+    try {
+      await googleCalendarIntegrationService.disconnect();
+      const status = await googleCalendarIntegrationService.getStatus();
+      setGoogleIntegrationStatus(status);
+      setGoogleIntegrationMessage({ type: 'ok', text: 'Google Calendar desconectado.' });
+    } catch (error: any) {
+      setGoogleIntegrationMessage({
+        type: 'error',
+        text: error?.message ?? 'No fue posible desconectar Google Calendar.'
+      });
+    } finally {
+      setIsGoogleIntegrationSaving(false);
+    }
+  };
+
+  const handleGoogleModeChange = async (mode: GoogleEventFormatMode) => {
+    if (!canManageGoogleIntegration) return;
+    setIsGoogleIntegrationSaving(true);
+    setGoogleIntegrationMessage(null);
+    try {
+      const response = await googleCalendarIntegrationService.updateSettings(mode);
+      setGoogleIntegrationStatus((current) => ({
+        connected: current?.connected ?? true,
+        email: current?.email ?? null,
+        calendarId: current?.calendarId ?? null,
+        eventFormatMode: response.eventFormatMode,
+        lastSyncAt: current?.lastSyncAt ?? null,
+        watchExpiration: current?.watchExpiration ?? null
+      }));
+      setGoogleIntegrationMessage({ type: 'ok', text: 'Preferencias de privacidad actualizadas.' });
+    } catch (error: any) {
+      setGoogleIntegrationMessage({
+        type: 'error',
+        text: error?.message ?? 'No fue posible actualizar el formato del evento.'
+      });
+    } finally {
+      setIsGoogleIntegrationSaving(false);
+    }
+  };
+
   const alertClass = (level: HealthFlag) => {
     switch (level) {
       case 'ok':
@@ -1147,6 +1277,17 @@ export const Admin: React.FC = () => {
 
     return (
       <div className="space-y-6">
+        <AgendaIntegrations
+          canManage={canManageGoogleIntegration}
+          status={googleIntegrationStatus}
+          isLoading={isGoogleIntegrationLoading}
+          isSaving={isGoogleIntegrationSaving}
+          message={googleIntegrationMessage}
+          onConnect={handleGoogleConnect}
+          onDisconnect={handleGoogleDisconnect}
+          onChangeMode={handleGoogleModeChange}
+        />
+
         <div className="bg-white border border-velum-200 p-5 space-y-5">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div>
