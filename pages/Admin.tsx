@@ -70,6 +70,8 @@ type AgendaPolicyDraft = {
   noShowGraceMinutes: number;
 };
 
+type SettingsCategory = 'general' | 'agenda';
+
 const weekDayLabel: Record<number, string> = {
   0: 'Domingo',
   1: 'Lunes',
@@ -191,6 +193,7 @@ export const Admin: React.FC = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [activeSection, setActiveSection] = useState<AdminSection>('control');
+  const [settingsCategory, setSettingsCategory] = useState<SettingsCategory>('agenda');
 
   const [isLoadingData, setIsLoadingData] = useState(false);
   const [members, setMembers] = useState<Member[]>([]);
@@ -1135,49 +1138,18 @@ export const Admin: React.FC = () => {
     </div>
   );
 
-  const renderAgenda = () => {
-    const activeCabins = agendaCabinsDraft
-      .filter((cabin) => cabin.isActive)
-      .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+  const renderAgendaSettingsCategory = () => {
     const selectedDateSpecialRule = agendaSpecialDateRulesDraft.find((rule) => rule.dateKey === agendaDate);
     const effectiveRule = agendaSnapshot?.effectiveRule;
 
     return (
       <div className="space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4">
-          <div className="bg-white border border-velum-200 p-5">
-            <p className="text-[10px] uppercase tracking-widest text-velum-500">Capacidad diaria</p>
-            <p className="text-3xl font-serif text-velum-900 mt-2">{agendaSummary.totalCapacity}</p>
-            <p className="text-xs text-velum-500 mt-1">{agendaSummary.totalSlots} slots configurados</p>
-          </div>
-          <div className="bg-white border border-velum-200 p-5">
-            <p className="text-[10px] uppercase tracking-widest text-velum-500">Unidades ocupadas</p>
-            <p className="text-3xl font-serif text-velum-900 mt-2">{agendaSummary.usedUnits}</p>
-            <p className="text-xs text-velum-500 mt-1">Ocupación {agendaSummary.occupancy.toFixed(1)}%</p>
-          </div>
-          <div className="bg-white border border-velum-200 p-5">
-            <p className="text-[10px] uppercase tracking-widest text-velum-500">Disponibles</p>
-            <p className="text-3xl font-serif text-velum-900 mt-2">{agendaSummary.availableUnits}</p>
-            <p className="text-xs text-velum-500 mt-1">Slots abiertos para reservar</p>
-          </div>
-          <div className="bg-white border border-velum-200 p-5">
-            <p className="text-[10px] uppercase tracking-widest text-velum-500">No-show del día</p>
-            <p className="text-3xl font-serif text-velum-900 mt-2">{agendaSummary.noShowToday}</p>
-            <p className="text-xs text-velum-500 mt-1">Completadas: {agendaSummary.completedToday}</p>
-          </div>
-          <div className="bg-white border border-velum-200 p-5">
-            <p className="text-[10px] uppercase tracking-widest text-velum-500">Citas del día</p>
-            <p className="text-3xl font-serif text-velum-900 mt-2">{agendaSummary.appointmentsToday}</p>
-            <p className="text-xs text-velum-500 mt-1">Canceladas: {agendaSummary.canceledToday}</p>
-          </div>
-        </div>
-
         <div className="bg-white border border-velum-200 p-5 space-y-5">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div>
-              <h3 className="text-lg font-serif text-velum-900">Control profesional de agenda diaria</h3>
+              <h3 className="text-lg font-serif text-velum-900">Agenda</h3>
               <p className="text-xs text-velum-500 uppercase tracking-widest mt-1">
-                Configuración persistente de cabinas, reglas operativas y flujo no-show
+                Configuración predeterminada: horario, intervalos, cabinas y reglas de apertura
               </p>
             </div>
             <Button onClick={saveAgendaConfiguration} isLoading={isAgendaConfigSaving}>
@@ -1185,9 +1157,9 @@ export const Admin: React.FC = () => {
             </Button>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-3">
             <label className="text-xs uppercase tracking-widest text-velum-600">
-              Fecha operativa
+              Fecha regla especial
               <input
                 type="date"
                 className="mt-2 w-full border border-velum-300 bg-velum-50 px-3 py-2 text-sm"
@@ -1195,49 +1167,6 @@ export const Admin: React.FC = () => {
                 onChange={(event) => setAgendaDate(event.target.value)}
               />
             </label>
-            <label className="text-xs uppercase tracking-widest text-velum-600">
-              Socio para agendar
-              <select
-                className="mt-2 w-full border border-velum-300 bg-velum-50 px-3 py-2 text-sm"
-                value={selectedAgendaMemberId}
-                onChange={(event) => setSelectedAgendaMemberId(event.target.value)}
-              >
-                <option value="">Seleccionar socio</option>
-                {members.map((member) => (
-                  <option key={member.id} value={member.id}>
-                    {member.name} · {member.email}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="text-xs uppercase tracking-widest text-velum-600">
-              Cabina objetivo
-              <select
-                className="mt-2 w-full border border-velum-300 bg-velum-50 px-3 py-2 text-sm"
-                value={selectedAgendaCabinId}
-                onChange={(event) => setSelectedAgendaCabinId(event.target.value)}
-              >
-                <option value="">Automática / Bloqueo general</option>
-                {activeCabins.map((cabin) => (
-                  <option key={cabin.id} value={cabin.id}>
-                    {cabin.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <div className="text-xs uppercase tracking-widest text-velum-600 border border-velum-200 bg-velum-50 px-3 py-2">
-              Regla aplicada
-              <p className="mt-2 text-sm normal-case text-velum-800">
-                {effectiveRule?.isOpen
-                  ? `${effectiveRule.source === 'special' ? 'Especial' : 'Semanal'} ${String(
-                      effectiveRule.startHour
-                    ).padStart(2, '0')}:00 - ${String(effectiveRule.endHour).padStart(2, '0')}:00`
-                  : 'Día cerrado'}
-              </p>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
             <label className="text-xs uppercase tracking-widest text-velum-600">
               Timezone clínica
               <input
@@ -1361,7 +1290,16 @@ export const Admin: React.FC = () => {
           </div>
 
           <div className="border border-velum-200 p-4 space-y-3">
-            <p className="text-xs uppercase tracking-widest text-velum-500">Regla especial para {agendaDate}</p>
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
+              <p className="text-xs uppercase tracking-widest text-velum-500">Regla especial para {agendaDate}</p>
+              <p className="text-xs text-velum-500">
+                {effectiveRule?.isOpen
+                  ? `${effectiveRule.source === 'special' ? 'Especial' : 'Semanal'} ${String(
+                      effectiveRule.startHour
+                    ).padStart(2, '0')}:00 - ${String(effectiveRule.endHour).padStart(2, '0')}:00`
+                  : 'Día cerrado'}
+              </p>
+            </div>
             <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
               <label className="text-xs uppercase tracking-widest text-velum-600">
                 Inicio especial
@@ -1403,6 +1341,112 @@ export const Admin: React.FC = () => {
               <Button variant="outline" onClick={clearSpecialRuleForDate}>
                 Usar regla semanal
               </Button>
+            </div>
+          </div>
+
+          {agendaMessage && (
+            <div className={`text-xs border px-3 py-2 ${agendaMessage.type === 'ok' ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-red-50 border-red-200 text-red-700'}`}>
+              {agendaMessage.text}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  const renderAgenda = () => {
+    const activeCabins = agendaCabinsDraft
+      .filter((cabin) => cabin.isActive)
+      .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+    const effectiveRule = agendaSnapshot?.effectiveRule;
+
+    return (
+      <div className="space-y-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4">
+          <div className="bg-white border border-velum-200 p-5">
+            <p className="text-[10px] uppercase tracking-widest text-velum-500">Capacidad diaria</p>
+            <p className="text-3xl font-serif text-velum-900 mt-2">{agendaSummary.totalCapacity}</p>
+            <p className="text-xs text-velum-500 mt-1">{agendaSummary.totalSlots} slots configurados</p>
+          </div>
+          <div className="bg-white border border-velum-200 p-5">
+            <p className="text-[10px] uppercase tracking-widest text-velum-500">Unidades ocupadas</p>
+            <p className="text-3xl font-serif text-velum-900 mt-2">{agendaSummary.usedUnits}</p>
+            <p className="text-xs text-velum-500 mt-1">Ocupación {agendaSummary.occupancy.toFixed(1)}%</p>
+          </div>
+          <div className="bg-white border border-velum-200 p-5">
+            <p className="text-[10px] uppercase tracking-widest text-velum-500">Disponibles</p>
+            <p className="text-3xl font-serif text-velum-900 mt-2">{agendaSummary.availableUnits}</p>
+            <p className="text-xs text-velum-500 mt-1">Slots abiertos para reservar</p>
+          </div>
+          <div className="bg-white border border-velum-200 p-5">
+            <p className="text-[10px] uppercase tracking-widest text-velum-500">No-show del día</p>
+            <p className="text-3xl font-serif text-velum-900 mt-2">{agendaSummary.noShowToday}</p>
+            <p className="text-xs text-velum-500 mt-1">Completadas: {agendaSummary.completedToday}</p>
+          </div>
+          <div className="bg-white border border-velum-200 p-5">
+            <p className="text-[10px] uppercase tracking-widest text-velum-500">Citas del día</p>
+            <p className="text-3xl font-serif text-velum-900 mt-2">{agendaSummary.appointmentsToday}</p>
+            <p className="text-xs text-velum-500 mt-1">Canceladas: {agendaSummary.canceledToday}</p>
+          </div>
+        </div>
+
+        <div className="bg-white border border-velum-200 p-5 space-y-5">
+          <div>
+            <h3 className="text-lg font-serif text-velum-900">Operación diaria de agenda</h3>
+            <p className="text-xs text-velum-500 uppercase tracking-widest mt-1">
+              Reserva directa, bloqueo por cabina y control exacto de disponibilidad
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+            <label className="text-xs uppercase tracking-widest text-velum-600">
+              Fecha operativa
+              <input
+                type="date"
+                className="mt-2 w-full border border-velum-300 bg-velum-50 px-3 py-2 text-sm"
+                value={agendaDate}
+                onChange={(event) => setAgendaDate(event.target.value)}
+              />
+            </label>
+            <label className="text-xs uppercase tracking-widest text-velum-600">
+              Socio para agendar
+              <select
+                className="mt-2 w-full border border-velum-300 bg-velum-50 px-3 py-2 text-sm"
+                value={selectedAgendaMemberId}
+                onChange={(event) => setSelectedAgendaMemberId(event.target.value)}
+              >
+                <option value="">Seleccionar socio</option>
+                {members.map((member) => (
+                  <option key={member.id} value={member.id}>
+                    {member.name} · {member.email}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="text-xs uppercase tracking-widest text-velum-600">
+              Cabina objetivo
+              <select
+                className="mt-2 w-full border border-velum-300 bg-velum-50 px-3 py-2 text-sm"
+                value={selectedAgendaCabinId}
+                onChange={(event) => setSelectedAgendaCabinId(event.target.value)}
+              >
+                <option value="">Automática / Bloqueo general</option>
+                {activeCabins.map((cabin) => (
+                  <option key={cabin.id} value={cabin.id}>
+                    {cabin.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <div className="text-xs uppercase tracking-widest text-velum-600 border border-velum-200 bg-velum-50 px-3 py-2">
+              Regla aplicada
+              <p className="mt-2 text-sm normal-case text-velum-800">
+                {effectiveRule?.isOpen
+                  ? `${effectiveRule.source === 'special' ? 'Especial' : 'Semanal'} ${String(
+                      effectiveRule.startHour
+                    ).padStart(2, '0')}:00 - ${String(effectiveRule.endHour).padStart(2, '0')}:00`
+                  : 'Día cerrado'}
+              </p>
             </div>
           </div>
 
@@ -1735,7 +1779,7 @@ export const Admin: React.FC = () => {
     </div>
   );
 
-  const renderConfiguraciones = () => (
+  const renderGeneralSettingsCategory = () => (
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
         <div className="bg-white border border-velum-200 p-5">
@@ -1772,6 +1816,29 @@ export const Admin: React.FC = () => {
           </div>
         </div>
       </div>
+    </div>
+  );
+
+  const renderConfiguraciones = () => (
+    <div className="space-y-6">
+      <div className="bg-white border border-velum-200 p-2 inline-flex items-center gap-2">
+        <Button
+          size="sm"
+          variant={settingsCategory === 'general' ? 'secondary' : 'outline'}
+          onClick={() => setSettingsCategory('general')}
+        >
+          General
+        </Button>
+        <Button
+          size="sm"
+          variant={settingsCategory === 'agenda' ? 'secondary' : 'outline'}
+          onClick={() => setSettingsCategory('agenda')}
+        >
+          Agenda
+        </Button>
+      </div>
+
+      {settingsCategory === 'agenda' ? renderAgendaSettingsCategory() : renderGeneralSettingsCategory()}
     </div>
   );
 
