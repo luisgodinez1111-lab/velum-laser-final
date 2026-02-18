@@ -1139,6 +1139,9 @@ export const Admin: React.FC = () => {
   );
 
   const renderAgendaSettingsCategory = () => {
+    const activeCabins = agendaCabinsDraft
+      .filter((cabin) => cabin.isActive)
+      .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
     const selectedDateSpecialRule = agendaSpecialDateRulesDraft.find((rule) => rule.dateKey === agendaDate);
     const effectiveRule = agendaSnapshot?.effectiveRule;
 
@@ -1157,7 +1160,7 @@ export const Admin: React.FC = () => {
             </Button>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-6 gap-3">
             <label className="text-xs uppercase tracking-widest text-velum-600">
               Fecha regla especial
               <input
@@ -1166,6 +1169,21 @@ export const Admin: React.FC = () => {
                 value={agendaDate}
                 onChange={(event) => setAgendaDate(event.target.value)}
               />
+            </label>
+            <label className="text-xs uppercase tracking-widest text-velum-600">
+              Cabina objetivo
+              <select
+                className="mt-2 w-full border border-velum-300 bg-velum-50 px-3 py-2 text-sm"
+                value={selectedAgendaCabinId}
+                onChange={(event) => setSelectedAgendaCabinId(event.target.value)}
+              >
+                <option value="">Automática / Bloqueo general</option>
+                {activeCabins.map((cabin) => (
+                  <option key={cabin.id} value={cabin.id}>
+                    {cabin.name}
+                  </option>
+                ))}
+              </select>
             </label>
             <label className="text-xs uppercase tracking-widest text-velum-600">
               Timezone clínica
@@ -1398,7 +1416,7 @@ export const Admin: React.FC = () => {
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
             <label className="text-xs uppercase tracking-widest text-velum-600">
               Fecha operativa
               <input
@@ -1419,21 +1437,6 @@ export const Admin: React.FC = () => {
                 {members.map((member) => (
                   <option key={member.id} value={member.id}>
                     {member.name} · {member.email}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="text-xs uppercase tracking-widest text-velum-600">
-              Cabina objetivo
-              <select
-                className="mt-2 w-full border border-velum-300 bg-velum-50 px-3 py-2 text-sm"
-                value={selectedAgendaCabinId}
-                onChange={(event) => setSelectedAgendaCabinId(event.target.value)}
-              >
-                <option value="">Automática / Bloqueo general</option>
-                {activeCabins.map((cabin) => (
-                  <option key={cabin.id} value={cabin.id}>
-                    {cabin.name}
                   </option>
                 ))}
               </select>
