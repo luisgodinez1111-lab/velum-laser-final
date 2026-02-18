@@ -76,6 +76,7 @@ model User {
   approvedIntakes     MedicalIntake[]         @relation("MedicalIntakeApprover")
   emailVerifications  EmailVerificationToken[]
   passwordResets      PasswordResetToken[]
+  agendaBlocksCreated AgendaBlockedSlot[]     @relation("AgendaBlockedSlotCreator")
 }
 
 model Profile {
@@ -221,28 +222,98 @@ model MedicalIntake {
 }
 
 model Appointment {
-  id               String            @id @default(cuid())
-  userId           String
-  createdByUserId  String
-  startAt          DateTime
-  endAt            DateTime
-  status           AppointmentStatus @default(scheduled)
-  reason           String?
-  canceledReason   String?
-  canceledAt       DateTime?
+  id                String            @id @default(cuid())
+  userId            String
+  createdByUserId   String
+  cabinId           String?
+  startAt           DateTime
+  endAt             DateTime
+  status            AppointmentStatus @default(scheduled)
+  reason            String?
+  canceledReason    String?
+  canceledAt        DateTime?
+  confirmedAt       DateTime?
+  completedAt       DateTime?
+  noShowAt          DateTime?
+  autoConfirmedAt   DateTime?
   rescheduledFromId String?
-  createdAt        DateTime          @default(now())
-  updatedAt        DateTime          @updatedAt
-  user             User              @relation("AppointmentMember", fields: [userId], references: [id], onDelete: Cascade)
-  createdBy        User              @relation("AppointmentCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
-  rescheduledFrom  Appointment?      @relation("AppointmentReschedule", fields: [rescheduledFromId], references: [id], onDelete: SetNull)
-  reschedules      Appointment[]     @relation("AppointmentReschedule")
-  sessions         SessionTreatment[]
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  user              User              @relation("AppointmentMember", fields: [userId], references: [id], onDelete: Cascade)
+  createdBy         User              @relation("AppointmentCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  cabin             AgendaCabin?      @relation(fields: [cabinId], references: [id], onDelete: SetNull)
+  rescheduledFrom   Appointment?      @relation("AppointmentReschedule", fields: [rescheduledFromId], references: [id], onDelete: SetNull)
+  reschedules       Appointment[]     @relation("AppointmentReschedule")
+  sessions          SessionTreatment[]
 
   @@index([userId])
   @@index([createdByUserId])
+  @@index([cabinId])
+  @@index([cabinId, startAt, endAt])
   @@index([startAt, endAt])
   @@index([status])
+}
+
+model AgendaPolicy {
+  id                 String   @id @default(cuid())
+  timezone           String   @default("America/Chihuahua")
+  slotMinutes        Int      @default(30)
+  autoConfirmHours   Int      @default(12)
+  noShowGraceMinutes Int      @default(30)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}
+
+model AgendaCabin {
+  id           String            @id @default(cuid())
+  name         String
+  isActive     Boolean           @default(true)
+  sortOrder    Int               @default(0)
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  appointments Appointment[]
+  blockedSlots AgendaBlockedSlot[]
+
+  @@index([isActive, sortOrder])
+}
+
+model AgendaWeeklyRule {
+  id        String   @id @default(cuid())
+  dayOfWeek Int      @unique
+  isOpen    Boolean  @default(true)
+  startHour Int      @default(9)
+  endHour   Int      @default(20)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model AgendaSpecialDateRule {
+  id        String   @id @default(cuid())
+  dateKey   String   @unique
+  isOpen    Boolean  @default(false)
+  startHour Int?
+  endHour   Int?
+  note      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model AgendaBlockedSlot {
+  id              String      @id @default(cuid())
+  dateKey         String
+  startMinute     Int
+  endMinute       Int
+  reason          String?
+  cabinId         String?
+  createdByUserId String?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  cabin           AgendaCabin? @relation(fields: [cabinId], references: [id], onDelete: SetNull)
+  createdBy       User?       @relation("AgendaBlockedSlotCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  @@index([dateKey])
+  @@index([dateKey, startMinute, endMinute])
+  @@index([cabinId])
 }
 
 model SessionTreatment {

@@ -35,7 +35,11 @@ export const createSessionTreatment = async (req: AuthRequest, res: Response) =>
   if (payload.appointmentId) {
     await prisma.appointment.update({
       where: { id: payload.appointmentId },
-      data: { status: "completed" }
+      data: {
+        status: "completed",
+        completedAt: new Date(),
+        noShowAt: null
+      }
     });
   }
 

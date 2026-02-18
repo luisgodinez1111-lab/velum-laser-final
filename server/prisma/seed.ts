@@ -81,6 +81,43 @@ const seed = async () => {
     firstName: "Member",
     lastName: "Velum"
   });
+
+  const policy = await prisma.agendaPolicy.findFirst();
+  if (!policy) {
+    await prisma.agendaPolicy.create({
+      data: {
+        timezone: "America/Chihuahua",
+        slotMinutes: 30,
+        autoConfirmHours: 12,
+        noShowGraceMinutes: 30
+      }
+    });
+  }
+
+  const cabinsCount = await prisma.agendaCabin.count();
+  if (cabinsCount === 0) {
+    await prisma.agendaCabin.createMany({
+      data: [
+        { name: "Cabina 1", sortOrder: 1, isActive: true },
+        { name: "Cabina 2", sortOrder: 2, isActive: true }
+      ]
+    });
+  }
+
+  const weeklyRulesCount = await prisma.agendaWeeklyRule.count();
+  if (weeklyRulesCount === 0) {
+    await prisma.agendaWeeklyRule.createMany({
+      data: [
+        { dayOfWeek: 0, isOpen: false, startHour: 9, endHour: 20 },
+        { dayOfWeek: 1, isOpen: true, startHour: 9, endHour: 20 },
+        { dayOfWeek: 2, isOpen: true, startHour: 9, endHour: 20 },
+        { dayOfWeek: 3, isOpen: true, startHour: 9, endHour: 20 },
+        { dayOfWeek: 4, isOpen: true, startHour: 9, endHour: 20 },
+        { dayOfWeek: 5, isOpen: true, startHour: 9, endHour: 20 },
+        { dayOfWeek: 6, isOpen: true, startHour: 9, endHour: 20 }
+      ]
+    });
+  }
 };
 
 seed()

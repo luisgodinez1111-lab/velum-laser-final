@@ -57,7 +57,7 @@ app.use(
 );
 
 app.use(
-  ["/admin", "/api/v1/audit-logs", "/api/v1/marketing/events", "/api/v1/payments"],
+  ["/admin", "/api/v1/audit-logs", "/api/v1/marketing/events", "/api/v1/payments", "/api/v1/agenda/admin"],
   rateLimit({
     windowMs: 10 * 60 * 1000,
     limit: 60,

@@ -2,46 +2,24 @@ import { Response } from "express";
 import { prisma } from "../db/prisma";
 import { AuthRequest } from "../middlewares/auth";
 import { createAuditLog } from "../services/auditService";
+import {
+  AgendaValidationError,
+  createAgendaBlock,
+  deleteAgendaBlock,
+  getAgendaConfig,
+  getAgendaDailyReport,
+  getAgendaDaySnapshot,
+  resolveAppointmentPlacement,
+  syncAppointmentWorkflow,
+  updateAgendaConfig
+} from "../services/agendaService";
 import { env } from "../utils/env";
+import { agendaBlockCreateSchema, agendaConfigUpdateSchema, agendaDateParamSchema } from "../validators/agenda";
 import { appointmentCreateSchema, appointmentUpdateSchema } from "../validators/appointments";
 
 const privilegedRoles = new Set(["staff", "admin", "system"]);
 
 const hasPrivilegedRole = (role: string) => privilegedRoles.has(role);
-
-const hasOverlappingAppointment = async ({
-  startAt,
-  endAt,
-  excludeAppointmentId
-}: {
-  startAt: Date;
-  endAt: Date;
-  excludeAppointmentId?: string;
-}) => {
-  const found = await prisma.appointment.findFirst({
-    where: {
-      ...(excludeAppointmentId
-        ? {
-            id: {
-              not: excludeAppointmentId
-            }
-          }
-        : {}),
-      status: {
-        in: ["scheduled", "confirmed"]
-      },
-      startAt: {
-        lt: endAt
-      },
-      endAt: {
-        gt: startAt
-      }
-    },
-    select: { id: true }
-  });
-
-  return Boolean(found);
-};
 
 const hasClinicalEligibility = async (userId: string) => {
   const [intake, membership] = await Promise.all([
@@ -59,6 +37,14 @@ const hasClinicalEligibility = async (userId: string) => {
     intakeOk: Boolean(intake && ["submitted", "approved"].includes(intake.status)),
     membershipOk: membership?.status === "active"
   };
+};
+
+const respondIfAgendaError = (error: unknown, res: Response) => {
+  if (error instanceof AgendaValidationError) {
+    res.status(error.statusCode).json({ message: error.message });
+    return true;
+  }
+  return false;
 };
 
 export const createAppointment = async (req: AuthRequest, res: Response) => {
@@ -87,32 +73,54 @@ export const createAppointment = async (req: AuthRequest, res: Response) => {
     return res.status(409).json({ message: "Se requiere membresía activa para agendar" });
   }
 
-  const overlap = await hasOverlappingAppointment({ startAt, endAt });
-  if (overlap) {
-    return res.status(409).json({ message: "El horario seleccionado ya está ocupado" });
+  let placement: Awaited<ReturnType<typeof resolveAppointmentPlacement>>;
+  try {
+    placement = await resolveAppointmentPlacement({
+      startAt,
+      endAt,
+      requestedCabinId: payload.cabinId
+    });
+  } catch (error) {
+    if (respondIfAgendaError(error, res)) {
+      return;
+    }
+    throw error;
   }
 
   const appointment = await prisma.appointment.create({
     data: {
       userId: targetUserId,
       createdByUserId: req.user!.id,
+      cabinId: placement.cabinId,
       startAt,
       endAt,
       reason: payload.reason,
       status: "scheduled"
+    },
+    include: {
+      user: {
+        select: { id: true, email: true }
+      },
+      createdBy: {
+        select: { id: true, email: true, role: true }
+      },
+      cabin: {
+        select: { id: true, name: true }
+      }
     }
   });
 
   await createAuditLog({
     userId: req.user!.id,
-    targetUserId: targetUserId,
+    targetUserId,
     action: "appointment.create",
     resourceType: "appointment",
     resourceId: appointment.id,
     ip: req.ip,
     metadata: {
       startAt: appointment.startAt,
-      endAt: appointment.endAt
+      endAt: appointment.endAt,
+      cabinId: appointment.cabinId
     }
   });
 
@@ -121,6 +129,10 @@ export const createAppointment = async (req: AuthRequest, res: Response) => {
 
 export const listAppointments = async (req: AuthRequest, res: Response) => {
   const isPrivileged = hasPrivilegedRole(req.user!.role);
+  if (isPrivileged) {
+    await syncAppointmentWorkflow();
+  }
+
   const queryUserId = typeof req.query.userId === "string" ? req.query.userId : undefined;
   const targetUserId = isPrivileged ? queryUserId : req.user!.id;
 
@@ -132,10 +144,13 @@ export const listAppointments = async (req: AuthRequest, res: Response) => {
       },
       createdBy: {
         select: { id: true, email: true, role: true }
+      },
+      cabin: {
+        select: { id: true, name: true }
       }
     },
     orderBy: { startAt: "asc" },
-    take: 500
+    take: 1000
   });
 
   return res.json(appointments);
@@ -159,7 +174,11 @@ export const updateAppointment = async (req: AuthRequest, res: Response) => {
 
   const payload = appointmentUpdateSchema.parse(req.body);
 
-  if (!isPrivileged && appointment.startAt.getTime() - Date.now() < env.appointmentRescheduleMinHours * 60 * 60 * 1000) {
+  if (["confirm", "complete", "mark_no_show"].includes(payload.action) && !isPrivileged) {
+    return res.status(403).json({ message: "Solo el personal autorizado puede ejecutar esta acción" });
+  }
+
+  if (!isPrivileged && payload.action === "reschedule" && appointment.startAt.getTime() - Date.now() < env.appointmentRescheduleMinHours * 60 * 60 * 1000) {
     return res.status(409).json({
       message: `La cita solo puede modificarse con al menos ${env.appointmentRescheduleMinHours} horas de anticipación`
     });
@@ -172,6 +191,11 @@ export const updateAppointment = async (req: AuthRequest, res: Response) => {
         status: "canceled",
         canceledAt: new Date(),
         canceledReason: payload.canceledReason
+      },
+      include: {
+        user: { select: { id: true, email: true } },
+        createdBy: { select: { id: true, email: true, role: true } },
+        cabin: { select: { id: true, name: true } }
       }
     });
 
@@ -188,6 +212,86 @@ export const updateAppointment = async (req: AuthRequest, res: Response) => {
     return res.json(canceled);
   }
 
+  if (payload.action === "confirm") {
+    const confirmed = await prisma.appointment.update({
+      where: { id: appointment.id },
+      data: {
+        status: "confirmed",
+        confirmedAt: new Date(),
+        canceledAt: null,
+        canceledReason: null
+      },
+      include: {
+        user: { select: { id: true, email: true } },
+        createdBy: { select: { id: true, email: true, role: true } },
+        cabin: { select: { id: true, name: true } }
+      }
+    });
+
+    await createAuditLog({
+      userId: req.user!.id,
+      targetUserId: appointment.userId,
+      action: "appointment.confirm",
+      resourceType: "appointment",
+      resourceId: appointment.id,
+      ip: req.ip
+    });
+
+    return res.json(confirmed);
+  }
+
+  if (payload.action === "complete") {
+    const completed = await prisma.appointment.update({
+      where: { id: appointment.id },
+      data: {
+        status: "completed",
+        completedAt: new Date()
+      },
+      include: {
+        user: { select: { id: true, email: true } },
+        createdBy: { select: { id: true, email: true, role: true } },
+        cabin: { select: { id: true, name: true } }
+      }
+    });
+
+    await createAuditLog({
+      userId: req.user!.id,
+      targetUserId: appointment.userId,
+      action: "appointment.complete",
+      resourceType: "appointment",
+      resourceId: appointment.id,
+      ip: req.ip
+    });
+
+    return res.json(completed);
+  }
+
+  if (payload.action === "mark_no_show") {
+    const noShow = await prisma.appointment.update({
+      where: { id: appointment.id },
+      data: {
+        status: "no_show",
+        noShowAt: new Date()
+      },
+      include: {
+        user: { select: { id: true, email: true } },
+        createdBy: { select: { id: true, email: true, role: true } },
+        cabin: { select: { id: true, name: true } }
+      }
+    });
+
+    await createAuditLog({
+      userId: req.user!.id,
+      targetUserId: appointment.userId,
+      action: "appointment.no_show",
+      resourceType: "appointment",
+      resourceId: appointment.id,
+      ip: req.ip
+    });
+
+    return res.json(noShow);
+  }
+
   if (!payload.startAt || !payload.endAt) {
     return res.status(400).json({ message: "Debes indicar el nuevo rango de fechas" });
   }
@@ -195,18 +299,19 @@ export const updateAppointment = async (req: AuthRequest, res: Response) => {
   const startAt = new Date(payload.startAt);
   const endAt = new Date(payload.endAt);
 
-  if (endAt <= startAt) {
-    return res.status(400).json({ message: "La fecha de fin debe ser mayor a la de inicio" });
-  }
-
-  const overlap = await hasOverlappingAppointment({
-    startAt,
-    endAt,
-    excludeAppointmentId: appointment.id
-  });
-
-  if (overlap) {
-    return res.status(409).json({ message: "El horario nuevo se cruza con otra cita" });
+  let placement: Awaited<ReturnType<typeof resolveAppointmentPlacement>>;
+  try {
+    placement = await resolveAppointmentPlacement({
+      startAt,
+      endAt,
+      requestedCabinId: payload.cabinId ?? appointment.cabinId ?? undefined,
+      excludeAppointmentId: appointment.id
+    });
+  } catch (error) {
+    if (respondIfAgendaError(error, res)) {
+      return;
+    }
+    throw error;
   }
 
   const updated = await prisma.appointment.update({
@@ -214,9 +319,17 @@ export const updateAppointment = async (req: AuthRequest, res: Response) => {
     data: {
       startAt,
       endAt,
+      cabinId: placement.cabinId,
       status: "scheduled",
       canceledAt: null,
-      canceledReason: null
+      canceledReason: null,
+      noShowAt: null,
+      completedAt: null
+    },
+    include: {
+      user: { select: { id: true, email: true } },
+      createdBy: { select: { id: true, email: true, role: true } },
+      cabin: { select: { id: true, name: true } }
     }
   });
 
@@ -227,8 +340,100 @@ export const updateAppointment = async (req: AuthRequest, res: Response) => {
     resourceType: "appointment",
     resourceId: appointment.id,
     ip: req.ip,
-    metadata: { startAt, endAt }
+    metadata: { startAt, endAt, cabinId: placement.cabinId }
   });
 
   return res.json(updated);
+};
+
+export const getAdminAgendaConfig = async (_req: AuthRequest, res: Response) => {
+  const config = await getAgendaConfig();
+  return res.json(config);
+};
+
+export const putAdminAgendaConfig = async (req: AuthRequest, res: Response) => {
+  const payload = agendaConfigUpdateSchema.parse(req.body);
+  const config = await updateAgendaConfig(payload);
+
+  await createAuditLog({
+    userId: req.user!.id,
+    targetUserId: req.user!.id,
+    action: "agenda.config.update",
+    resourceType: "agenda",
+    resourceId: config.policy.id,
+    ip: req.ip,
+    metadata: payload
+  });
+
+  return res.json(config);
+};
+
+export const getAdminAgendaDay = async (req: AuthRequest, res: Response) => {
+  const params = agendaDateParamSchema.parse(req.params);
+  const snapshot = await getAgendaDaySnapshot(params.dateKey);
+  return res.json(snapshot);
+};
+
+export const postAdminAgendaBlock = async (req: AuthRequest, res: Response) => {
+  const payload = agendaBlockCreateSchema.parse(req.body);
+
+  let block;
+  try {
+    block = await createAgendaBlock({
+      ...payload,
+      actorUserId: req.user!.id
+    });
+  } catch (error) {
+    if (respondIfAgendaError(error, res)) {
+      return;
+    }
+    throw error;
+  }
+
+  await createAuditLog({
+    userId: req.user!.id,
+    targetUserId: req.user!.id,
+    action: "agenda.block.create",
+    resourceType: "agenda_block",
+    resourceId: block.id,
+    ip: req.ip,
+    metadata: payload
+  });
+
+  return res.status(201).json(block);
+};
+
+export const deleteAdminAgendaBlock = async (req: AuthRequest, res: Response) => {
+  let block;
+  try {
+    block = await deleteAgendaBlock(req.params.blockId);
+  } catch (error) {
+    if (respondIfAgendaError(error, res)) {
+      return;
+    }
+    throw error;
+  }
+
+  await createAuditLog({
+    userId: req.user!.id,
+    targetUserId: req.user!.id,
+    action: "agenda.block.delete",
+    resourceType: "agenda_block",
+    resourceId: block.id,
+    ip: req.ip,
+    metadata: {
+      dateKey: block.dateKey,
+      startMinute: block.startMinute,
+      endMinute: block.endMinute,
+      cabinId: block.cabinId
+    }
+  });
+
+  return res.status(204).send();
+};
+
+export const getAdminAgendaReport = async (req: AuthRequest, res: Response) => {
+  const params = agendaDateParamSchema.parse(req.params);
+  const report = await getAgendaDailyReport(params.dateKey);
+  return res.json(report);
 };

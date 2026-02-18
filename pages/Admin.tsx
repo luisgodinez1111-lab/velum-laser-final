@@ -31,7 +31,15 @@ import {
 import { AuditLogEntry, Member, UserRole } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { memberService, auditService } from '../services/dataService';
-import { Appointment, clinicalService } from '../services/clinicalService';
+import {
+  AgendaCabin,
+  AgendaConfig,
+  AgendaDaySnapshot,
+  AgendaSpecialDateRule,
+  AgendaWeeklyRule,
+  Appointment,
+  clinicalService
+} from '../services/clinicalService';
 
 type AdminSection =
   | 'control'
@@ -55,33 +63,21 @@ type ControlAlert = {
   section: AdminSection;
 };
 
-type AgendaSettings = {
-  startHour: number;
-  endHour: number;
+type AgendaPolicyDraft = {
+  timezone: string;
   slotMinutes: number;
-  cabins: number;
+  autoConfirmHours: number;
+  noShowGraceMinutes: number;
 };
 
-type AgendaSlot = {
-  key: string;
-  start: Date;
-  end: Date;
-  label: string;
-  blocked: boolean;
-  booked: number;
-  capacity: number;
-  available: number;
-  appointments: Appointment[];
-};
-
-const agendaSettingsStorageKey = 'velum_admin_agenda_settings_v1';
-const agendaBlockedSlotsStorageKey = 'velum_admin_agenda_blocked_slots_v1';
-
-const defaultAgendaSettings: AgendaSettings = {
-  startHour: 9,
-  endHour: 20,
-  slotMinutes: 30,
-  cabins: 2
+const weekDayLabel: Record<number, string> = {
+  0: 'Domingo',
+  1: 'Lunes',
+  2: 'Martes',
+  3: 'Miércoles',
+  4: 'Jueves',
+  5: 'Viernes',
+  6: 'Sábado'
 };
 
 const sectionMeta: Record<AdminSection, { label: string; icon: React.ComponentType<any>; group: string }> = {
@@ -177,12 +173,6 @@ const toLocalDateKey = (date: Date) => {
   return `${year}-${month}-${day}`;
 };
 
-const toSlotKey = (dateKey: string, minutesFromStart: number) => {
-  const hours = String(Math.floor(minutesFromStart / 60)).padStart(2, '0');
-  const minutes = String(minutesFromStart % 60).padStart(2, '0');
-  return `${dateKey}-${hours}:${minutes}`;
-};
-
 const riskOfMember = (member: Member): HealthFlag => {
   const status = member.subscriptionStatus;
   const consent = !!member.clinical?.consentFormSigned;
@@ -205,17 +195,27 @@ export const Admin: React.FC = () => {
   const [isLoadingData, setIsLoadingData] = useState(false);
   const [members, setMembers] = useState<Member[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
-  const [appointments, setAppointments] = useState<Appointment[]>([]);
 
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'issue'>('all');
   const [selectedMember, setSelectedMember] = useState<Member | null>(null);
 
   const [agendaDate, setAgendaDate] = useState(() => toLocalDateKey(new Date()));
-  const [agendaSettings, setAgendaSettings] = useState<AgendaSettings>(defaultAgendaSettings);
-  const [blockedAgendaSlots, setBlockedAgendaSlots] = useState<string[]>([]);
+  const [agendaConfig, setAgendaConfig] = useState<AgendaConfig | null>(null);
+  const [agendaSnapshot, setAgendaSnapshot] = useState<AgendaDaySnapshot | null>(null);
+  const [agendaPolicyDraft, setAgendaPolicyDraft] = useState<AgendaPolicyDraft>({
+    timezone: 'America/Chihuahua',
+    slotMinutes: 30,
+    autoConfirmHours: 12,
+    noShowGraceMinutes: 30
+  });
+  const [agendaCabinsDraft, setAgendaCabinsDraft] = useState<AgendaCabin[]>([]);
+  const [agendaWeeklyRulesDraft, setAgendaWeeklyRulesDraft] = useState<AgendaWeeklyRule[]>([]);
+  const [agendaSpecialDateRulesDraft, setAgendaSpecialDateRulesDraft] = useState<AgendaSpecialDateRule[]>([]);
   const [selectedAgendaMemberId, setSelectedAgendaMemberId] = useState('');
+  const [selectedAgendaCabinId, setSelectedAgendaCabinId] = useState('');
   const [isAgendaSaving, setIsAgendaSaving] = useState(false);
+  const [isAgendaConfigSaving, setIsAgendaConfigSaving] = useState(false);
   const [agendaMessage, setAgendaMessage] = useState<{ type: 'ok' | 'error'; text: string } | null>(null);
 
   const hasAccess = !!user && allowedRoles.includes(user.role);
@@ -223,14 +223,29 @@ export const Admin: React.FC = () => {
   const loadData = async () => {
     setIsLoadingData(true);
     try {
-      const [membersData, logsData, appointmentsData] = await Promise.all([
+      const [membersData, logsData, configData, dayData] = await Promise.all([
         memberService.getAll(),
         user?.role === 'admin' || user?.role === 'system' ? auditService.getLogs() : Promise.resolve([]),
-        clinicalService.listAppointments().catch(() => [])
+        clinicalService.getAdminAgendaConfig().catch(() => null),
+        clinicalService.getAdminAgendaDay(agendaDate).catch(() => null)
       ]);
       setMembers(membersData);
       setAuditLogs(logsData);
-      setAppointments(appointmentsData);
+      if (configData) {
+        setAgendaConfig(configData);
+        setAgendaPolicyDraft({
+          timezone: configData.policy.timezone,
+          slotMinutes: configData.policy.slotMinutes,
+          autoConfirmHours: configData.policy.autoConfirmHours,
+          noShowGraceMinutes: configData.policy.noShowGraceMinutes
+        });
+        setAgendaCabinsDraft(configData.cabins);
+        setAgendaWeeklyRulesDraft(configData.weeklyRules);
+        setAgendaSpecialDateRulesDraft(configData.specialDateRules);
+      }
+      if (dayData) {
+        setAgendaSnapshot(dayData);
+      }
 
       if (!selectedAgendaMemberId && membersData.length > 0) {
         setSelectedAgendaMemberId(membersData[0].id);
@@ -243,57 +258,47 @@ export const Admin: React.FC = () => {
   };
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-
-    try {
-      const rawSettings = window.localStorage.getItem(agendaSettingsStorageKey);
-      if (rawSettings) {
-        const parsed = JSON.parse(rawSettings) as Partial<AgendaSettings>;
-        setAgendaSettings({
-          startHour: Number(parsed.startHour ?? defaultAgendaSettings.startHour),
-          endHour: Number(parsed.endHour ?? defaultAgendaSettings.endHour),
-          slotMinutes: Number(parsed.slotMinutes ?? defaultAgendaSettings.slotMinutes),
-          cabins: Number(parsed.cabins ?? defaultAgendaSettings.cabins)
-        });
-      }
-    } catch (_error) {
-      setAgendaSettings(defaultAgendaSettings);
-    }
-
-    try {
-      const rawBlocked = window.localStorage.getItem(agendaBlockedSlotsStorageKey);
-      if (rawBlocked) {
-        const parsed = JSON.parse(rawBlocked);
-        if (Array.isArray(parsed)) {
-          setBlockedAgendaSlots(parsed.filter((item): item is string => typeof item === 'string'));
-        }
-      }
-    } catch (_error) {
-      setBlockedAgendaSlots([]);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    window.localStorage.setItem(agendaSettingsStorageKey, JSON.stringify(agendaSettings));
-  }, [agendaSettings]);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    window.localStorage.setItem(agendaBlockedSlotsStorageKey, JSON.stringify(blockedAgendaSlots));
-  }, [blockedAgendaSlots]);
-
-  useEffect(() => {
     if (isAuthenticated && hasAccess) {
       loadData();
     }
   }, [isAuthenticated, hasAccess, user?.id, user?.role]);
 
   useEffect(() => {
+    if (!isAuthenticated || !hasAccess) return;
+    let cancelled = false;
+    const loadDaySnapshot = async () => {
+      try {
+        const data = await clinicalService.getAdminAgendaDay(agendaDate);
+        if (!cancelled) {
+          setAgendaSnapshot(data);
+        }
+      } catch (_error) {
+        // Keep admin panel usable even if agenda endpoint fails.
+      }
+    };
+    loadDaySnapshot();
+    return () => {
+      cancelled = true;
+    };
+  }, [agendaDate, isAuthenticated, hasAccess]);
+
+  useEffect(() => {
     if (members.length === 0) return;
     if (selectedAgendaMemberId && members.some((member) => member.id === selectedAgendaMemberId)) return;
     setSelectedAgendaMemberId(members[0].id);
   }, [members, selectedAgendaMemberId]);
+
+  useEffect(() => {
+    const activeCabins = agendaSnapshot?.cabins ?? agendaConfig?.cabins.filter((cabin) => cabin.isActive) ?? [];
+    if (activeCabins.length === 0) {
+      setSelectedAgendaCabinId('');
+      return;
+    }
+    if (selectedAgendaCabinId && activeCabins.some((cabin) => cabin.id === selectedAgendaCabinId)) {
+      return;
+    }
+    setSelectedAgendaCabinId(activeCabins[0].id);
+  }, [agendaSnapshot?.cabins, agendaConfig?.cabins, selectedAgendaCabinId]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -460,79 +465,35 @@ export const Admin: React.FC = () => {
   }, [members]);
 
   const dayAppointments = useMemo(() => {
-    return appointments
-      .filter((appointment) => toLocalDateKey(new Date(appointment.startAt)) === agendaDate)
-      .sort((a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime());
-  }, [appointments, agendaDate]);
+    return [...(agendaSnapshot?.appointments ?? [])].sort(
+      (a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime()
+    );
+  }, [agendaSnapshot?.appointments]);
 
-  const activeDayAppointments = useMemo(() => {
-    return dayAppointments.filter((appointment) => appointment.status === 'scheduled' || appointment.status === 'confirmed');
-  }, [dayAppointments]);
-
-  const agendaSlots = useMemo<AgendaSlot[]>(() => {
-    const slots: AgendaSlot[] = [];
-    const startMinutes = agendaSettings.startHour * 60;
-    const endMinutes = agendaSettings.endHour * 60;
-
-    if (agendaSettings.slotMinutes <= 0 || agendaSettings.cabins <= 0 || endMinutes <= startMinutes) {
-      return slots;
-    }
-
-    for (let minute = startMinutes; minute < endMinutes; minute += agendaSettings.slotMinutes) {
-      const slotStart = new Date(`${agendaDate}T00:00:00`);
-      slotStart.setHours(0, minute, 0, 0);
-
-      const slotEnd = new Date(slotStart.getTime() + agendaSettings.slotMinutes * 60 * 1000);
-      const slotKey = toSlotKey(agendaDate, minute);
-      const blocked = blockedAgendaSlots.includes(slotKey);
-      const appointmentsInSlot = activeDayAppointments.filter((appointment) => {
-        const appointmentStart = new Date(appointment.startAt);
-        const appointmentEnd = new Date(appointment.endAt);
-        return appointmentStart < slotEnd && appointmentEnd > slotStart;
-      });
-
-      const booked = appointmentsInSlot.length;
-      const capacity = blocked ? 0 : agendaSettings.cabins;
-
-      slots.push({
-        key: slotKey,
-        start: slotStart,
-        end: slotEnd,
-        label: `${slotStart.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })} - ${slotEnd.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}`,
-        blocked,
-        booked,
-        capacity,
-        available: Math.max(capacity - booked, 0),
-        appointments: appointmentsInSlot
-      });
-    }
-
-    return slots;
-  }, [agendaDate, agendaSettings, blockedAgendaSlots, activeDayAppointments]);
+  const agendaSlots = useMemo(() => {
+    return agendaSnapshot?.slots ?? [];
+  }, [agendaSnapshot?.slots]);
 
   const availableAgendaSlots = useMemo(() => {
     return agendaSlots.filter((slot) => !slot.blocked && slot.available > 0);
   }, [agendaSlots]);
 
   const agendaSummary = useMemo(() => {
-    const totalSlots = agendaSlots.length;
-    const blockedSlots = agendaSlots.filter((slot) => slot.blocked).length;
-    const totalCapacity = agendaSlots.reduce((acc, slot) => acc + slot.capacity, 0);
-    const usedUnits = agendaSlots.reduce((acc, slot) => acc + Math.min(slot.booked, slot.capacity), 0);
-    const availableUnits = agendaSlots.reduce((acc, slot) => acc + slot.available, 0);
-    const occupancy = totalCapacity > 0 ? (usedUnits / totalCapacity) * 100 : 0;
-
-    return {
-      totalSlots,
-      blockedSlots,
-      totalCapacity,
-      usedUnits,
-      availableUnits,
-      occupancy,
-      appointmentsToday: dayAppointments.length,
-      canceledToday: dayAppointments.filter((appointment) => appointment.status === 'canceled').length
-    };
-  }, [agendaSlots, dayAppointments]);
+    return (
+      agendaSnapshot?.summary ?? {
+        totalSlots: 0,
+        blockedSlots: 0,
+        totalCapacity: 0,
+        usedUnits: 0,
+        availableUnits: 0,
+        occupancy: 0,
+        appointmentsToday: 0,
+        canceledToday: 0,
+        noShowToday: 0,
+        completedToday: 0
+      }
+    );
+  }, [agendaSnapshot?.summary]);
 
   const resolveAppointmentMember = (appointment: Appointment) => {
     const member = memberById.get(appointment.userId);
@@ -540,28 +501,153 @@ export const Admin: React.FC = () => {
     return appointment.user?.email ?? appointment.userId;
   };
 
-  const updateAgendaSettingsField = (field: keyof AgendaSettings, value: number) => {
-    setAgendaSettings((current) => {
+  const updateAgendaPolicyField = (field: keyof AgendaPolicyDraft, value: string | number) => {
+    setAgendaPolicyDraft((current) => {
       const next = { ...current, [field]: value };
       return {
-        startHour: Math.min(Math.max(next.startHour, 0), 22),
-        endHour: Math.min(Math.max(next.endHour, 1), 23),
-        slotMinutes: [15, 20, 30, 45, 60].includes(next.slotMinutes) ? next.slotMinutes : 30,
-        cabins: Math.min(Math.max(next.cabins, 1), 12)
+        timezone: String(next.timezone),
+        slotMinutes: [10, 15, 20, 30, 45, 60, 90, 120].includes(Number(next.slotMinutes)) ? Number(next.slotMinutes) : 30,
+        autoConfirmHours: Math.min(Math.max(Number(next.autoConfirmHours), 0), 72),
+        noShowGraceMinutes: Math.min(Math.max(Number(next.noShowGraceMinutes), 5), 240)
       };
     });
   };
 
-  const toggleAgendaSlotBlock = (slotKey: string) => {
-    setBlockedAgendaSlots((current) => {
-      if (current.includes(slotKey)) {
-        return current.filter((key) => key !== slotKey);
+  const updateWeeklyRuleField = (dayOfWeek: number, changes: Partial<AgendaWeeklyRule>) => {
+    setAgendaWeeklyRulesDraft((current) =>
+      current.map((rule) => (rule.dayOfWeek === dayOfWeek ? { ...rule, ...changes } : rule))
+    );
+  };
+
+  const updateCabinDraftField = (cabinId: string, changes: Partial<AgendaCabin>) => {
+    setAgendaCabinsDraft((current) => current.map((cabin) => (cabin.id === cabinId ? { ...cabin, ...changes } : cabin)));
+  };
+
+  const addCabinDraft = () => {
+    setAgendaCabinsDraft((current) => [
+      ...current,
+      {
+        id: `draft-${Date.now()}`,
+        name: `Cabina ${current.length + 1}`,
+        isActive: true,
+        sortOrder: current.length + 1
       }
-      return [...current, slotKey];
+    ]);
+  };
+
+  const setSpecialRuleForDate = (isOpen: boolean, startHour?: number, endHour?: number) => {
+    setAgendaSpecialDateRulesDraft((current) => {
+      const next = [...current];
+      const index = next.findIndex((rule) => rule.dateKey === agendaDate);
+      const incoming: AgendaSpecialDateRule = index >= 0
+        ? { ...next[index], isOpen, startHour: startHour ?? next[index].startHour, endHour: endHour ?? next[index].endHour }
+        : {
+            id: `draft-${agendaDate}`,
+            dateKey: agendaDate,
+            isOpen,
+            startHour: startHour ?? 9,
+            endHour: endHour ?? 20,
+            note: null
+          };
+      if (index >= 0) {
+        next[index] = incoming;
+      } else {
+        next.push(incoming);
+      }
+      return next;
     });
   };
 
-  const handleAgendaCreateAppointment = async (slot: AgendaSlot) => {
+  const clearSpecialRuleForDate = () => {
+    setAgendaSpecialDateRulesDraft((current) => current.filter((rule) => rule.dateKey !== agendaDate));
+  };
+
+  const saveAgendaConfiguration = async () => {
+    setIsAgendaConfigSaving(true);
+    setAgendaMessage(null);
+    try {
+      const payload = {
+        timezone: agendaPolicyDraft.timezone,
+        slotMinutes: agendaPolicyDraft.slotMinutes,
+        autoConfirmHours: agendaPolicyDraft.autoConfirmHours,
+        noShowGraceMinutes: agendaPolicyDraft.noShowGraceMinutes,
+        cabins: agendaCabinsDraft.map((cabin, index) => ({
+          id: cabin.id.startsWith('draft-') ? undefined : cabin.id,
+          name: cabin.name,
+          isActive: cabin.isActive,
+          sortOrder: cabin.sortOrder ?? index + 1
+        })),
+        weeklyRules: agendaWeeklyRulesDraft.map((rule) => ({
+          dayOfWeek: rule.dayOfWeek,
+          isOpen: rule.isOpen,
+          startHour: rule.startHour,
+          endHour: rule.endHour
+        })),
+        specialDateRules: agendaSpecialDateRulesDraft.map((rule) => ({
+          dateKey: rule.dateKey,
+          isOpen: rule.isOpen,
+          startHour: rule.startHour ?? null,
+          endHour: rule.endHour ?? null,
+          note: rule.note ?? null
+        }))
+      };
+
+      const updatedConfig = await clinicalService.updateAdminAgendaConfig(payload);
+      setAgendaConfig(updatedConfig);
+      setAgendaPolicyDraft({
+        timezone: updatedConfig.policy.timezone,
+        slotMinutes: updatedConfig.policy.slotMinutes,
+        autoConfirmHours: updatedConfig.policy.autoConfirmHours,
+        noShowGraceMinutes: updatedConfig.policy.noShowGraceMinutes
+      });
+      setAgendaCabinsDraft(updatedConfig.cabins);
+      setAgendaWeeklyRulesDraft(updatedConfig.weeklyRules);
+      setAgendaSpecialDateRulesDraft(updatedConfig.specialDateRules);
+      const snapshot = await clinicalService.getAdminAgendaDay(agendaDate);
+      setAgendaSnapshot(snapshot);
+      setAgendaMessage({ type: 'ok', text: 'Configuración de agenda guardada.' });
+    } catch (error: any) {
+      setAgendaMessage({ type: 'error', text: error?.message ?? 'No fue posible guardar la configuración.' });
+    } finally {
+      setIsAgendaConfigSaving(false);
+    }
+  };
+
+  const toggleAgendaSlotBlock = async (slot: { startMinute: number; endMinute: number }) => {
+    const cabinId = selectedAgendaCabinId || null;
+    const block = (agendaSnapshot?.blocks ?? []).find(
+      (candidate) =>
+        candidate.dateKey === agendaDate &&
+        candidate.startMinute === slot.startMinute &&
+        candidate.endMinute === slot.endMinute &&
+        (candidate.cabinId ?? null) === cabinId
+    );
+
+    setIsAgendaSaving(true);
+    setAgendaMessage(null);
+    try {
+      if (block) {
+        await clinicalService.deleteAdminAgendaBlock(block.id);
+      } else {
+        await clinicalService.createAdminAgendaBlock({
+          dateKey: agendaDate,
+          startMinute: slot.startMinute,
+          endMinute: slot.endMinute,
+          cabinId,
+          reason: cabinId ? 'Bloqueo por cabina desde panel admin' : 'Bloqueo general desde panel admin'
+        });
+      }
+      const snapshot = await clinicalService.getAdminAgendaDay(agendaDate);
+      setAgendaSnapshot(snapshot);
+      setAgendaMessage({ type: 'ok', text: block ? 'Bloqueo removido.' : 'Bloqueo aplicado.' });
+    } catch (error: any) {
+      setAgendaMessage({ type: 'error', text: error?.message ?? 'No fue posible actualizar el bloqueo.' });
+    } finally {
+      setIsAgendaSaving(false);
+    }
+  };
+
+  const handleAgendaCreateAppointment = async (slot: { label: string; blocked: boolean; available: number; startMinute: number; endMinute: number }) => {
     if (!selectedAgendaMemberId) {
       setAgendaMessage({ type: 'error', text: 'Selecciona un socio para agendar.' });
       return;
@@ -575,16 +661,45 @@ export const Admin: React.FC = () => {
     setIsAgendaSaving(true);
     setAgendaMessage(null);
     try {
+      const slotStart = new Date(`${agendaDate}T00:00:00`);
+      slotStart.setHours(0, slot.startMinute, 0, 0);
+      const slotEnd = new Date(`${agendaDate}T00:00:00`);
+      slotEnd.setHours(0, slot.endMinute, 0, 0);
+
       await clinicalService.createAppointment({
         userId: selectedAgendaMemberId,
-        startAt: slot.start.toISOString(),
-        endAt: slot.end.toISOString(),
-        reason: 'admin.manual_schedule'
+        cabinId: selectedAgendaCabinId || undefined,
+        startAt: slotStart.toISOString(),
+        endAt: slotEnd.toISOString(),
+        reason: selectedAgendaCabinId ? 'admin.manual_schedule.cabin' : 'admin.manual_schedule'
       });
-      await loadData();
+      const snapshot = await clinicalService.getAdminAgendaDay(agendaDate);
+      setAgendaSnapshot(snapshot);
       setAgendaMessage({ type: 'ok', text: `Cita creada en ${slot.label}.` });
     } catch (error: any) {
       setAgendaMessage({ type: 'error', text: error?.message ?? 'No fue posible agendar en ese horario.' });
+    } finally {
+      setIsAgendaSaving(false);
+    }
+  };
+
+  const handleAgendaAppointmentAction = async (
+    appointmentId: string,
+    action: 'cancel' | 'confirm' | 'complete' | 'mark_no_show',
+    successMessage: string
+  ) => {
+    setIsAgendaSaving(true);
+    setAgendaMessage(null);
+    try {
+      await clinicalService.updateAppointment(appointmentId, {
+        action,
+        canceledReason: action === 'cancel' ? 'Cancelación operativa desde panel admin' : undefined
+      });
+      const snapshot = await clinicalService.getAdminAgendaDay(agendaDate);
+      setAgendaSnapshot(snapshot);
+      setAgendaMessage({ type: 'ok', text: successMessage });
+    } catch (error: any) {
+      setAgendaMessage({ type: 'error', text: error?.message ?? 'No fue posible ejecutar la acción de agenda.' });
     } finally {
       setIsAgendaSaving(false);
     }
@@ -594,21 +709,7 @@ export const Admin: React.FC = () => {
     if (typeof window !== 'undefined' && !window.confirm('¿Confirmas cancelar esta cita?')) {
       return;
     }
-
-    setIsAgendaSaving(true);
-    setAgendaMessage(null);
-    try {
-      await clinicalService.updateAppointment(appointmentId, {
-        action: 'cancel',
-        canceledReason: 'Cancelación operativa desde panel admin'
-      });
-      await loadData();
-      setAgendaMessage({ type: 'ok', text: 'Cita cancelada correctamente.' });
-    } catch (error: any) {
-      setAgendaMessage({ type: 'error', text: error?.message ?? 'No fue posible cancelar la cita.' });
-    } finally {
-      setIsAgendaSaving(false);
-    }
+    await handleAgendaAppointmentAction(appointmentId, 'cancel', 'Cita cancelada correctamente.');
   };
 
   const alertClass = (level: HealthFlag) => {
@@ -1034,253 +1135,443 @@ export const Admin: React.FC = () => {
     </div>
   );
 
-  const renderAgenda = () => (
-    <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4">
-        <div className="bg-white border border-velum-200 p-5">
-          <p className="text-[10px] uppercase tracking-widest text-velum-500">Capacidad diaria</p>
-          <p className="text-3xl font-serif text-velum-900 mt-2">{agendaSummary.totalCapacity}</p>
-          <p className="text-xs text-velum-500 mt-1">{agendaSummary.totalSlots} slots configurados</p>
-        </div>
-        <div className="bg-white border border-velum-200 p-5">
-          <p className="text-[10px] uppercase tracking-widest text-velum-500">Unidades ocupadas</p>
-          <p className="text-3xl font-serif text-velum-900 mt-2">{agendaSummary.usedUnits}</p>
-          <p className="text-xs text-velum-500 mt-1">Ocupación {agendaSummary.occupancy.toFixed(1)}%</p>
-        </div>
-        <div className="bg-white border border-velum-200 p-5">
-          <p className="text-[10px] uppercase tracking-widest text-velum-500">Disponibles</p>
-          <p className="text-3xl font-serif text-velum-900 mt-2">{agendaSummary.availableUnits}</p>
-          <p className="text-xs text-velum-500 mt-1">Slots abiertos para reservar</p>
-        </div>
-        <div className="bg-white border border-velum-200 p-5">
-          <p className="text-[10px] uppercase tracking-widest text-velum-500">Bloqueados</p>
-          <p className="text-3xl font-serif text-velum-900 mt-2">{agendaSummary.blockedSlots}</p>
-          <p className="text-xs text-velum-500 mt-1">Por mantenimiento o contingencia</p>
-        </div>
-        <div className="bg-white border border-velum-200 p-5">
-          <p className="text-[10px] uppercase tracking-widest text-velum-500">Citas del día</p>
-          <p className="text-3xl font-serif text-velum-900 mt-2">{agendaSummary.appointmentsToday}</p>
-          <p className="text-xs text-velum-500 mt-1">Canceladas: {agendaSummary.canceledToday}</p>
-        </div>
-      </div>
+  const renderAgenda = () => {
+    const activeCabins = agendaCabinsDraft
+      .filter((cabin) => cabin.isActive)
+      .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+    const selectedDateSpecialRule = agendaSpecialDateRulesDraft.find((rule) => rule.dateKey === agendaDate);
+    const effectiveRule = agendaSnapshot?.effectiveRule;
 
-      <div className="bg-white border border-velum-200 p-5 space-y-4">
-        <div>
-          <h3 className="text-lg font-serif text-velum-900">Control profesional de agenda diaria</h3>
-          <p className="text-xs text-velum-500 uppercase tracking-widest mt-1">
-            Control exacto de bloques, capacidad por cabina y citas por franja horaria
-          </p>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-6 gap-3">
-          <label className="text-xs uppercase tracking-widest text-velum-600">
-            Fecha operativa
-            <input
-              type="date"
-              className="mt-2 w-full border border-velum-300 bg-velum-50 px-3 py-2 text-sm"
-              value={agendaDate}
-              onChange={(event) => setAgendaDate(event.target.value)}
-            />
-          </label>
-          <label className="text-xs uppercase tracking-widest text-velum-600">
-            Inicio jornada
-            <input
-              type="number"
-              min={0}
-              max={22}
-              className="mt-2 w-full border border-velum-300 bg-velum-50 px-3 py-2 text-sm"
-              value={agendaSettings.startHour}
-              onChange={(event) => updateAgendaSettingsField('startHour', Number(event.target.value))}
-            />
-          </label>
-          <label className="text-xs uppercase tracking-widest text-velum-600">
-            Fin jornada
-            <input
-              type="number"
-              min={1}
-              max={23}
-              className="mt-2 w-full border border-velum-300 bg-velum-50 px-3 py-2 text-sm"
-              value={agendaSettings.endHour}
-              onChange={(event) => updateAgendaSettingsField('endHour', Number(event.target.value))}
-            />
-          </label>
-          <label className="text-xs uppercase tracking-widest text-velum-600">
-            Intervalo (min)
-            <select
-              className="mt-2 w-full border border-velum-300 bg-velum-50 px-3 py-2 text-sm"
-              value={agendaSettings.slotMinutes}
-              onChange={(event) => updateAgendaSettingsField('slotMinutes', Number(event.target.value))}
-            >
-              <option value={15}>15</option>
-              <option value={20}>20</option>
-              <option value={30}>30</option>
-              <option value={45}>45</option>
-              <option value={60}>60</option>
-            </select>
-          </label>
-          <label className="text-xs uppercase tracking-widest text-velum-600">
-            Cabinas simultáneas
-            <input
-              type="number"
-              min={1}
-              max={12}
-              className="mt-2 w-full border border-velum-300 bg-velum-50 px-3 py-2 text-sm"
-              value={agendaSettings.cabins}
-              onChange={(event) => updateAgendaSettingsField('cabins', Number(event.target.value))}
-            />
-          </label>
-          <label className="text-xs uppercase tracking-widest text-velum-600">
-            Socio para agendar
-            <select
-              className="mt-2 w-full border border-velum-300 bg-velum-50 px-3 py-2 text-sm"
-              value={selectedAgendaMemberId}
-              onChange={(event) => setSelectedAgendaMemberId(event.target.value)}
-            >
-              <option value="">Seleccionar socio</option>
-              {members.map((member) => (
-                <option key={member.id} value={member.id}>
-                  {member.name} · {member.email}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-
-        {agendaMessage && (
-          <div className={`text-xs border px-3 py-2 ${agendaMessage.type === 'ok' ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-red-50 border-red-200 text-red-700'}`}>
-            {agendaMessage.text}
+    return (
+      <div className="space-y-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4">
+          <div className="bg-white border border-velum-200 p-5">
+            <p className="text-[10px] uppercase tracking-widest text-velum-500">Capacidad diaria</p>
+            <p className="text-3xl font-serif text-velum-900 mt-2">{agendaSummary.totalCapacity}</p>
+            <p className="text-xs text-velum-500 mt-1">{agendaSummary.totalSlots} slots configurados</p>
           </div>
-        )}
-      </div>
-
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-        <div className="xl:col-span-2 bg-white border border-velum-200">
-          <div className="p-5 border-b border-velum-200">
-            <h3 className="text-lg font-serif text-velum-900">Matriz de slots diarios</h3>
-            <p className="text-xs text-velum-500 uppercase tracking-widest mt-1">
-              Reserva directa, bloqueo operativo y control de capacidad
-            </p>
+          <div className="bg-white border border-velum-200 p-5">
+            <p className="text-[10px] uppercase tracking-widest text-velum-500">Unidades ocupadas</p>
+            <p className="text-3xl font-serif text-velum-900 mt-2">{agendaSummary.usedUnits}</p>
+            <p className="text-xs text-velum-500 mt-1">Ocupación {agendaSummary.occupancy.toFixed(1)}%</p>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead className="bg-velum-50 text-[10px] uppercase font-bold text-velum-600">
-                <tr>
-                  <th className="p-3">Franja</th>
-                  <th className="p-3">Capacidad</th>
-                  <th className="p-3">Reservado</th>
-                  <th className="p-3">Disponible</th>
-                  <th className="p-3">Estado</th>
-                  <th className="p-3">Acciones</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-velum-100">
-                {agendaSlots.map((slot) => (
-                  <tr key={slot.key}>
-                    <td className="p-3 font-medium">{slot.label}</td>
-                    <td className="p-3">{slot.capacity}</td>
-                    <td className="p-3">{slot.booked}</td>
-                    <td className="p-3">{slot.available}</td>
-                    <td className="p-3">
-                      {slot.blocked ? (
-                        <span className="inline-flex px-2 py-1 text-[10px] uppercase tracking-widest border bg-zinc-200 text-zinc-700 border-zinc-300">
-                          Bloqueado
-                        </span>
-                      ) : slot.available > 0 ? (
-                        <span className="inline-flex px-2 py-1 text-[10px] uppercase tracking-widest border bg-emerald-50 text-emerald-700 border-emerald-200">
-                          Disponible
-                        </span>
-                      ) : (
-                        <span className="inline-flex px-2 py-1 text-[10px] uppercase tracking-widest border bg-red-50 text-red-700 border-red-200">
-                          Saturado
-                        </span>
-                      )}
-                    </td>
-                    <td className="p-3">
-                      <div className="flex flex-wrap gap-2">
-                        <Button size="sm" variant="outline" onClick={() => toggleAgendaSlotBlock(slot.key)}>
-                          {slot.blocked ? 'Desbloquear' : 'Bloquear'}
+          <div className="bg-white border border-velum-200 p-5">
+            <p className="text-[10px] uppercase tracking-widest text-velum-500">Disponibles</p>
+            <p className="text-3xl font-serif text-velum-900 mt-2">{agendaSummary.availableUnits}</p>
+            <p className="text-xs text-velum-500 mt-1">Slots abiertos para reservar</p>
+          </div>
+          <div className="bg-white border border-velum-200 p-5">
+            <p className="text-[10px] uppercase tracking-widest text-velum-500">No-show del día</p>
+            <p className="text-3xl font-serif text-velum-900 mt-2">{agendaSummary.noShowToday}</p>
+            <p className="text-xs text-velum-500 mt-1">Completadas: {agendaSummary.completedToday}</p>
+          </div>
+          <div className="bg-white border border-velum-200 p-5">
+            <p className="text-[10px] uppercase tracking-widest text-velum-500">Citas del día</p>
+            <p className="text-3xl font-serif text-velum-900 mt-2">{agendaSummary.appointmentsToday}</p>
+            <p className="text-xs text-velum-500 mt-1">Canceladas: {agendaSummary.canceledToday}</p>
+          </div>
+        </div>
+
+        <div className="bg-white border border-velum-200 p-5 space-y-5">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div>
+              <h3 className="text-lg font-serif text-velum-900">Control profesional de agenda diaria</h3>
+              <p className="text-xs text-velum-500 uppercase tracking-widest mt-1">
+                Configuración persistente de cabinas, reglas operativas y flujo no-show
+              </p>
+            </div>
+            <Button onClick={saveAgendaConfiguration} isLoading={isAgendaConfigSaving}>
+              Guardar configuración
+            </Button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+            <label className="text-xs uppercase tracking-widest text-velum-600">
+              Fecha operativa
+              <input
+                type="date"
+                className="mt-2 w-full border border-velum-300 bg-velum-50 px-3 py-2 text-sm"
+                value={agendaDate}
+                onChange={(event) => setAgendaDate(event.target.value)}
+              />
+            </label>
+            <label className="text-xs uppercase tracking-widest text-velum-600">
+              Socio para agendar
+              <select
+                className="mt-2 w-full border border-velum-300 bg-velum-50 px-3 py-2 text-sm"
+                value={selectedAgendaMemberId}
+                onChange={(event) => setSelectedAgendaMemberId(event.target.value)}
+              >
+                <option value="">Seleccionar socio</option>
+                {members.map((member) => (
+                  <option key={member.id} value={member.id}>
+                    {member.name} · {member.email}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="text-xs uppercase tracking-widest text-velum-600">
+              Cabina objetivo
+              <select
+                className="mt-2 w-full border border-velum-300 bg-velum-50 px-3 py-2 text-sm"
+                value={selectedAgendaCabinId}
+                onChange={(event) => setSelectedAgendaCabinId(event.target.value)}
+              >
+                <option value="">Automática / Bloqueo general</option>
+                {activeCabins.map((cabin) => (
+                  <option key={cabin.id} value={cabin.id}>
+                    {cabin.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <div className="text-xs uppercase tracking-widest text-velum-600 border border-velum-200 bg-velum-50 px-3 py-2">
+              Regla aplicada
+              <p className="mt-2 text-sm normal-case text-velum-800">
+                {effectiveRule?.isOpen
+                  ? `${effectiveRule.source === 'special' ? 'Especial' : 'Semanal'} ${String(
+                      effectiveRule.startHour
+                    ).padStart(2, '0')}:00 - ${String(effectiveRule.endHour).padStart(2, '0')}:00`
+                  : 'Día cerrado'}
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+            <label className="text-xs uppercase tracking-widest text-velum-600">
+              Timezone clínica
+              <input
+                className="mt-2 w-full border border-velum-300 bg-velum-50 px-3 py-2 text-sm"
+                value={agendaPolicyDraft.timezone}
+                onChange={(event) => updateAgendaPolicyField('timezone', event.target.value)}
+              />
+            </label>
+            <label className="text-xs uppercase tracking-widest text-velum-600">
+              Intervalo (min)
+              <select
+                className="mt-2 w-full border border-velum-300 bg-velum-50 px-3 py-2 text-sm"
+                value={agendaPolicyDraft.slotMinutes}
+                onChange={(event) => updateAgendaPolicyField('slotMinutes', Number(event.target.value))}
+              >
+                <option value={10}>10</option>
+                <option value={15}>15</option>
+                <option value={20}>20</option>
+                <option value={30}>30</option>
+                <option value={45}>45</option>
+                <option value={60}>60</option>
+                <option value={90}>90</option>
+                <option value={120}>120</option>
+              </select>
+            </label>
+            <label className="text-xs uppercase tracking-widest text-velum-600">
+              Auto-confirmación (h)
+              <input
+                type="number"
+                min={0}
+                max={72}
+                className="mt-2 w-full border border-velum-300 bg-velum-50 px-3 py-2 text-sm"
+                value={agendaPolicyDraft.autoConfirmHours}
+                onChange={(event) => updateAgendaPolicyField('autoConfirmHours', Number(event.target.value))}
+              />
+            </label>
+            <label className="text-xs uppercase tracking-widest text-velum-600">
+              Gracia no-show (min)
+              <input
+                type="number"
+                min={5}
+                max={240}
+                className="mt-2 w-full border border-velum-300 bg-velum-50 px-3 py-2 text-sm"
+                value={agendaPolicyDraft.noShowGraceMinutes}
+                onChange={(event) => updateAgendaPolicyField('noShowGraceMinutes', Number(event.target.value))}
+              />
+            </label>
+          </div>
+
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
+            <div className="border border-velum-200 p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <p className="text-xs uppercase tracking-widest text-velum-500">Cabinas</p>
+                <Button size="sm" variant="outline" onClick={addCabinDraft}>Agregar cabina</Button>
+              </div>
+              <div className="space-y-2">
+                {agendaCabinsDraft.map((cabin) => (
+                  <div key={cabin.id} className="grid grid-cols-1 md:grid-cols-4 gap-2">
+                    <input
+                      className="border border-velum-300 bg-velum-50 px-3 py-2 text-sm md:col-span-2"
+                      value={cabin.name}
+                      onChange={(event) => updateCabinDraftField(cabin.id, { name: event.target.value })}
+                    />
+                    <input
+                      type="number"
+                      className="border border-velum-300 bg-velum-50 px-3 py-2 text-sm"
+                      value={cabin.sortOrder}
+                      onChange={(event) => updateCabinDraftField(cabin.id, { sortOrder: Number(event.target.value) })}
+                    />
+                    <label className="text-xs uppercase tracking-widest text-velum-600 flex items-center gap-2 border border-velum-200 px-3 py-2">
+                      <input
+                        type="checkbox"
+                        checked={cabin.isActive}
+                        onChange={(event) => updateCabinDraftField(cabin.id, { isActive: event.target.checked })}
+                      />
+                      Activa
+                    </label>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="border border-velum-200 p-4 space-y-3">
+              <p className="text-xs uppercase tracking-widest text-velum-500">Reglas semanales (workdays)</p>
+              <div className="space-y-2">
+                {[...agendaWeeklyRulesDraft]
+                  .sort((a, b) => a.dayOfWeek - b.dayOfWeek)
+                  .map((rule) => (
+                    <div key={rule.id} className="grid grid-cols-1 md:grid-cols-5 gap-2">
+                      <p className="text-sm font-semibold md:col-span-2">{weekDayLabel[rule.dayOfWeek]}</p>
+                      <label className="text-xs uppercase tracking-widest text-velum-600 flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={rule.isOpen}
+                          onChange={(event) => updateWeeklyRuleField(rule.dayOfWeek, { isOpen: event.target.checked })}
+                        />
+                        Abierto
+                      </label>
+                      <input
+                        type="number"
+                        min={0}
+                        max={23}
+                        className="border border-velum-300 bg-velum-50 px-2 py-1 text-sm"
+                        value={rule.startHour}
+                        onChange={(event) => updateWeeklyRuleField(rule.dayOfWeek, { startHour: Number(event.target.value) })}
+                        disabled={!rule.isOpen}
+                      />
+                      <input
+                        type="number"
+                        min={1}
+                        max={24}
+                        className="border border-velum-300 bg-velum-50 px-2 py-1 text-sm"
+                        value={rule.endHour}
+                        onChange={(event) => updateWeeklyRuleField(rule.dayOfWeek, { endHour: Number(event.target.value) })}
+                        disabled={!rule.isOpen}
+                      />
+                    </div>
+                  ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="border border-velum-200 p-4 space-y-3">
+            <p className="text-xs uppercase tracking-widest text-velum-500">Regla especial para {agendaDate}</p>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
+              <label className="text-xs uppercase tracking-widest text-velum-600">
+                Inicio especial
+                <input
+                  type="number"
+                  min={0}
+                  max={23}
+                  className="mt-2 w-full border border-velum-300 bg-velum-50 px-3 py-2 text-sm"
+                  value={selectedDateSpecialRule?.startHour ?? effectiveRule?.startHour ?? 9}
+                  onChange={(event) =>
+                    setSpecialRuleForDate(
+                      selectedDateSpecialRule?.isOpen ?? true,
+                      Number(event.target.value),
+                      selectedDateSpecialRule?.endHour ?? effectiveRule?.endHour ?? 20
+                    )
+                  }
+                />
+              </label>
+              <label className="text-xs uppercase tracking-widest text-velum-600">
+                Fin especial
+                <input
+                  type="number"
+                  min={1}
+                  max={24}
+                  className="mt-2 w-full border border-velum-300 bg-velum-50 px-3 py-2 text-sm"
+                  value={selectedDateSpecialRule?.endHour ?? effectiveRule?.endHour ?? 20}
+                  onChange={(event) =>
+                    setSpecialRuleForDate(
+                      selectedDateSpecialRule?.isOpen ?? true,
+                      selectedDateSpecialRule?.startHour ?? effectiveRule?.startHour ?? 9,
+                      Number(event.target.value)
+                    )
+                  }
+                />
+              </label>
+              <Button variant="outline" onClick={() => setSpecialRuleForDate(false)}>
+                Marcar cerrado (feriado)
+              </Button>
+              <Button variant="outline" onClick={clearSpecialRuleForDate}>
+                Usar regla semanal
+              </Button>
+            </div>
+          </div>
+
+          {agendaMessage && (
+            <div className={`text-xs border px-3 py-2 ${agendaMessage.type === 'ok' ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-red-50 border-red-200 text-red-700'}`}>
+              {agendaMessage.text}
+            </div>
+          )}
+        </div>
+
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+          <div className="xl:col-span-2 bg-white border border-velum-200">
+            <div className="p-5 border-b border-velum-200">
+              <h3 className="text-lg font-serif text-velum-900">Matriz de slots diarios</h3>
+              <p className="text-xs text-velum-500 uppercase tracking-widest mt-1">
+                Reserva directa, bloqueo por cabina/general y control exacto de disponibilidad
+              </p>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead className="bg-velum-50 text-[10px] uppercase font-bold text-velum-600">
+                  <tr>
+                    <th className="p-3">Franja</th>
+                    <th className="p-3">Capacidad</th>
+                    <th className="p-3">Reservado</th>
+                    <th className="p-3">Disponible</th>
+                    <th className="p-3">Cabinas</th>
+                    <th className="p-3">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-velum-100">
+                  {agendaSlots.map((slot) => {
+                    const selectedBlock = (agendaSnapshot?.blocks ?? []).find(
+                      (block) =>
+                        block.dateKey === agendaDate &&
+                        block.startMinute === slot.startMinute &&
+                        block.endMinute === slot.endMinute &&
+                        (block.cabinId ?? '') === (selectedAgendaCabinId || '')
+                    );
+                    return (
+                      <tr key={slot.key}>
+                        <td className="p-3 font-medium">{slot.label}</td>
+                        <td className="p-3">{slot.capacity}</td>
+                        <td className="p-3">{slot.booked}</td>
+                        <td className="p-3">{slot.available}</td>
+                        <td className="p-3 text-xs text-velum-600">
+                          {slot.cabins.map((cabin) => `${cabin.cabinName}:${cabin.available}`).join(' · ')}
+                        </td>
+                        <td className="p-3">
+                          <div className="flex flex-wrap gap-2">
+                            <Button size="sm" variant="outline" onClick={() => toggleAgendaSlotBlock(slot)} disabled={isAgendaSaving}>
+                              {selectedBlock ? 'Desbloquear' : selectedAgendaCabinId ? 'Bloquear cabina' : 'Bloquear general'}
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              onClick={() => handleAgendaCreateAppointment(slot)}
+                              disabled={isAgendaSaving || slot.blocked || slot.available <= 0 || !selectedAgendaMemberId}
+                            >
+                              Reservar
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {agendaSlots.length === 0 && (
+                    <tr>
+                      <td colSpan={6} className="p-6 text-center text-sm text-velum-500">
+                        No hay slots disponibles para esta fecha o está marcada como cerrada.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div className="space-y-6">
+            <div className="bg-white border border-velum-200 p-5">
+              <h3 className="text-lg font-serif text-velum-900">Reporte diario por cabina</h3>
+              <div className="mt-3 space-y-2 text-sm">
+                {(agendaSnapshot?.report.cabins ?? []).map((item) => (
+                  <div key={item.cabinId} className="border border-velum-200 p-3">
+                    <p className="font-semibold">{item.cabinName}</p>
+                    <p className="text-xs text-velum-500">
+                      Utilización {item.utilizationPct.toFixed(1)}% · Productividad {item.productivityPct.toFixed(1)}%
+                    </p>
+                    <p className="text-xs text-velum-500">
+                      Completadas {item.completed} · No-show {item.noShow} · Canceladas {item.canceled}
+                    </p>
+                  </div>
+                ))}
+                {(agendaSnapshot?.report.cabins ?? []).length === 0 && (
+                  <p className="text-xs text-velum-500">Sin datos de productividad para la fecha seleccionada.</p>
+                )}
+              </div>
+            </div>
+
+            <div className="bg-white border border-velum-200 p-5">
+              <h3 className="text-lg font-serif text-velum-900">Próximos slots libres</h3>
+              <div className="mt-3 space-y-2 text-sm">
+                {availableAgendaSlots.slice(0, 8).map((slot) => (
+                  <div key={slot.key} className="border border-velum-200 px-3 py-2 flex items-center justify-between">
+                    <span>{slot.label}</span>
+                    <span className="text-xs text-velum-500">Disp: {slot.available}</span>
+                  </div>
+                ))}
+                {availableAgendaSlots.length === 0 && <p className="text-xs text-velum-500">No hay slots libres en esta fecha.</p>}
+              </div>
+            </div>
+
+            <div className="bg-white border border-velum-200 p-5">
+              <div className="flex items-center justify-between gap-2">
+                <h3 className="text-lg font-serif text-velum-900">Agenda del día</h3>
+                <Link to="/agenda"><Button size="sm" variant="outline">Vista cliente</Button></Link>
+              </div>
+              <div className="mt-3 space-y-2">
+                {dayAppointments.map((appointment) => (
+                  <div key={appointment.id} className="border border-velum-200 p-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-semibold text-velum-900">
+                          {new Date(appointment.startAt).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })} - {new Date(appointment.endAt).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}
+                        </p>
+                        <p className="text-xs text-velum-500">
+                          {resolveAppointmentMember(appointment)} · {appointment.cabin?.name ?? 'Sin cabina'}
+                        </p>
+                      </div>
+                      <span className={`text-[10px] uppercase tracking-widest border px-2 py-1 ${statusPill(appointment.status)}`}>
+                        {statusLabel(appointment.status)}
+                      </span>
+                    </div>
+                    {(appointment.status === 'scheduled' || appointment.status === 'confirmed') && (
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {appointment.status === 'scheduled' && (
+                          <Button size="sm" variant="outline" onClick={() => handleAgendaAppointmentAction(appointment.id, 'confirm', 'Cita confirmada.')} disabled={isAgendaSaving}>
+                            Confirmar
+                          </Button>
+                        )}
+                        <Button size="sm" variant="outline" onClick={() => handleAgendaAppointmentAction(appointment.id, 'complete', 'Cita marcada como completada.')} disabled={isAgendaSaving}>
+                          Completar
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => handleAgendaAppointmentAction(appointment.id, 'mark_no_show', 'Cita marcada como no-show.')} disabled={isAgendaSaving}>
+                          No-show
                         </Button>
                         <Button
                           size="sm"
-                          variant="secondary"
-                          onClick={() => handleAgendaCreateAppointment(slot)}
-                          disabled={isAgendaSaving || slot.blocked || slot.available <= 0 || !selectedAgendaMemberId}
+                          variant="outline"
+                          className="text-red-700 border-red-300 hover:bg-red-600 hover:text-white"
+                          onClick={() => handleAgendaCancelAppointment(appointment.id)}
+                          disabled={isAgendaSaving}
                         >
-                          Reservar
+                          Cancelar
                         </Button>
                       </div>
-                    </td>
-                  </tr>
-                ))}
-                {agendaSlots.length === 0 && (
-                  <tr>
-                    <td colSpan={6} className="p-6 text-center text-sm text-velum-500">
-                      Configuración inválida de jornada. Ajusta hora inicio/fin o capacidad.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        <div className="space-y-6">
-          <div className="bg-white border border-velum-200 p-5">
-            <h3 className="text-lg font-serif text-velum-900">Próximos slots libres</h3>
-            <div className="mt-3 space-y-2 text-sm">
-              {availableAgendaSlots.slice(0, 8).map((slot) => (
-                <div key={slot.key} className="border border-velum-200 px-3 py-2 flex items-center justify-between">
-                  <span>{slot.label}</span>
-                  <span className="text-xs text-velum-500">Disp: {slot.available}</span>
-                </div>
-              ))}
-              {availableAgendaSlots.length === 0 && <p className="text-xs text-velum-500">No hay slots libres en esta fecha.</p>}
-            </div>
-          </div>
-
-          <div className="bg-white border border-velum-200 p-5">
-            <div className="flex items-center justify-between gap-2">
-              <h3 className="text-lg font-serif text-velum-900">Agenda del día</h3>
-              <Link to="/agenda"><Button size="sm" variant="outline">Vista cliente</Button></Link>
-            </div>
-            <div className="mt-3 space-y-2">
-              {dayAppointments.map((appointment) => (
-                <div key={appointment.id} className="border border-velum-200 p-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <p className="text-sm font-semibold text-velum-900">
-                        {new Date(appointment.startAt).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })} - {new Date(appointment.endAt).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}
-                      </p>
-                      <p className="text-xs text-velum-500">{resolveAppointmentMember(appointment)}</p>
-                    </div>
-                    <span className={`text-[10px] uppercase tracking-widest border px-2 py-1 ${statusPill(appointment.status)}`}>
-                      {statusLabel(appointment.status)}
-                    </span>
+                    )}
                   </div>
-                  {(appointment.status === 'scheduled' || appointment.status === 'confirmed') && (
-                    <div className="mt-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="text-red-700 border-red-300 hover:bg-red-600 hover:text-white"
-                        onClick={() => handleAgendaCancelAppointment(appointment.id)}
-                        disabled={isAgendaSaving}
-                      >
-                        Cancelar cita
-                      </Button>
-                    </div>
-                  )}
-                </div>
-              ))}
-              {dayAppointments.length === 0 && (
-                <p className="text-sm text-velum-500">No hay citas registradas para esta fecha.</p>
-              )}
+                ))}
+                {dayAppointments.length === 0 && (
+                  <p className="text-sm text-velum-500">No hay citas registradas para esta fecha.</p>
+                )}
+              </div>
             </div>
           </div>
         </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   const renderCobranza = () => (
     <div className="bg-white border border-velum-200 shadow-sm">
