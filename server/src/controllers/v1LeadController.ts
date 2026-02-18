@@ -1,6 +1,5 @@
 import { Prisma } from "@prisma/client";
 import crypto from "crypto";
-import { Prisma } from "@prisma/client";
 import { Response } from "express";
 import { prisma } from "../db/prisma";
 import { AuthRequest } from "../middlewares/auth";
