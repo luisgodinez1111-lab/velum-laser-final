@@ -17,7 +17,26 @@ export interface Appointment {
   userId: string;
   startAt: string;
   endAt: string;
+  reason?: string;
+  canceledAt?: string | null;
+  canceledReason?: string | null;
   status: "scheduled" | "confirmed" | "completed" | "canceled" | "no_show";
+  user?: {
+    id: string;
+    email: string;
+  };
+  createdBy?: {
+    id: string;
+    email: string;
+    role: string;
+  };
+}
+
+export interface AppointmentUpdatePayload {
+  action: "reschedule" | "cancel";
+  startAt?: string;
+  endAt?: string;
+  canceledReason?: string;
 }
 
 export const clinicalService = {
@@ -32,7 +51,7 @@ export const clinicalService = {
     });
   },
 
-  createAppointment: async (payload: { startAt: string; endAt: string; reason?: string }) => {
+  createAppointment: async (payload: { startAt: string; endAt: string; reason?: string; userId?: string }) => {
     return apiFetch<Appointment>("/v1/appointments", {
       method: "POST",
       body: JSON.stringify(payload)
@@ -41,5 +60,17 @@ export const clinicalService = {
 
   listMyAppointments: async () => {
     return apiFetch<Appointment[]>("/v1/appointments");
+  },
+
+  listAppointments: async (params?: { userId?: string }) => {
+    const query = params?.userId ? `?userId=${encodeURIComponent(params.userId)}` : "";
+    return apiFetch<Appointment[]>(`/v1/appointments${query}`);
+  },
+
+  updateAppointment: async (appointmentId: string, payload: AppointmentUpdatePayload) => {
+    return apiFetch<Appointment>(`/v1/appointments/${appointmentId}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload)
+    });
   }
 };

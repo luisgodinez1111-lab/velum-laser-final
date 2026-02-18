@@ -31,6 +31,7 @@ import {
 import { AuditLogEntry, Member, UserRole } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { memberService, auditService } from '../services/dataService';
+import { Appointment, clinicalService } from '../services/clinicalService';
 
 type AdminSection =
   | 'control'
@@ -52,6 +53,35 @@ type ControlAlert = {
   title: string;
   detail: string;
   section: AdminSection;
+};
+
+type AgendaSettings = {
+  startHour: number;
+  endHour: number;
+  slotMinutes: number;
+  cabins: number;
+};
+
+type AgendaSlot = {
+  key: string;
+  start: Date;
+  end: Date;
+  label: string;
+  blocked: boolean;
+  booked: number;
+  capacity: number;
+  available: number;
+  appointments: Appointment[];
+};
+
+const agendaSettingsStorageKey = 'velum_admin_agenda_settings_v1';
+const agendaBlockedSlotsStorageKey = 'velum_admin_agenda_blocked_slots_v1';
+
+const defaultAgendaSettings: AgendaSettings = {
+  startHour: 9,
+  endHour: 20,
+  slotMinutes: 30,
+  cabins: 2
 };
 
 const sectionMeta: Record<AdminSection, { label: string; icon: React.ComponentType<any>; group: string }> = {
@@ -140,6 +170,19 @@ const parseMxDate = (value?: string) => {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 };
 
+const toLocalDateKey = (date: Date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const toSlotKey = (dateKey: string, minutesFromStart: number) => {
+  const hours = String(Math.floor(minutesFromStart / 60)).padStart(2, '0');
+  const minutes = String(minutesFromStart % 60).padStart(2, '0');
+  return `${dateKey}-${hours}:${minutes}`;
+};
+
 const riskOfMember = (member: Member): HealthFlag => {
   const status = member.subscriptionStatus;
   const consent = !!member.clinical?.consentFormSigned;
@@ -162,22 +205,36 @@ export const Admin: React.FC = () => {
   const [isLoadingData, setIsLoadingData] = useState(false);
   const [members, setMembers] = useState<Member[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
 
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'issue'>('all');
   const [selectedMember, setSelectedMember] = useState<Member | null>(null);
+
+  const [agendaDate, setAgendaDate] = useState(() => toLocalDateKey(new Date()));
+  const [agendaSettings, setAgendaSettings] = useState<AgendaSettings>(defaultAgendaSettings);
+  const [blockedAgendaSlots, setBlockedAgendaSlots] = useState<string[]>([]);
+  const [selectedAgendaMemberId, setSelectedAgendaMemberId] = useState('');
+  const [isAgendaSaving, setIsAgendaSaving] = useState(false);
+  const [agendaMessage, setAgendaMessage] = useState<{ type: 'ok' | 'error'; text: string } | null>(null);
 
   const hasAccess = !!user && allowedRoles.includes(user.role);
 
   const loadData = async () => {
     setIsLoadingData(true);
     try {
-      const [membersData, logsData] = await Promise.all([
+      const [membersData, logsData, appointmentsData] = await Promise.all([
         memberService.getAll(),
-        user?.role === 'admin' || user?.role === 'system' ? auditService.getLogs() : Promise.resolve([])
+        user?.role === 'admin' || user?.role === 'system' ? auditService.getLogs() : Promise.resolve([]),
+        clinicalService.listAppointments().catch(() => [])
       ]);
       setMembers(membersData);
       setAuditLogs(logsData);
+      setAppointments(appointmentsData);
+
+      if (!selectedAgendaMemberId && membersData.length > 0) {
+        setSelectedAgendaMemberId(membersData[0].id);
+      }
     } catch (_error) {
       // Keep panel usable if one endpoint fails.
     } finally {
@@ -186,10 +243,57 @@ export const Admin: React.FC = () => {
   };
 
   useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    try {
+      const rawSettings = window.localStorage.getItem(agendaSettingsStorageKey);
+      if (rawSettings) {
+        const parsed = JSON.parse(rawSettings) as Partial<AgendaSettings>;
+        setAgendaSettings({
+          startHour: Number(parsed.startHour ?? defaultAgendaSettings.startHour),
+          endHour: Number(parsed.endHour ?? defaultAgendaSettings.endHour),
+          slotMinutes: Number(parsed.slotMinutes ?? defaultAgendaSettings.slotMinutes),
+          cabins: Number(parsed.cabins ?? defaultAgendaSettings.cabins)
+        });
+      }
+    } catch (_error) {
+      setAgendaSettings(defaultAgendaSettings);
+    }
+
+    try {
+      const rawBlocked = window.localStorage.getItem(agendaBlockedSlotsStorageKey);
+      if (rawBlocked) {
+        const parsed = JSON.parse(rawBlocked);
+        if (Array.isArray(parsed)) {
+          setBlockedAgendaSlots(parsed.filter((item): item is string => typeof item === 'string'));
+        }
+      }
+    } catch (_error) {
+      setBlockedAgendaSlots([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem(agendaSettingsStorageKey, JSON.stringify(agendaSettings));
+  }, [agendaSettings]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem(agendaBlockedSlotsStorageKey, JSON.stringify(blockedAgendaSlots));
+  }, [blockedAgendaSlots]);
+
+  useEffect(() => {
     if (isAuthenticated && hasAccess) {
       loadData();
     }
   }, [isAuthenticated, hasAccess, user?.id, user?.role]);
+
+  useEffect(() => {
+    if (members.length === 0) return;
+    if (selectedAgendaMemberId && members.some((member) => member.id === selectedAgendaMemberId)) return;
+    setSelectedAgendaMemberId(members[0].id);
+  }, [members, selectedAgendaMemberId]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -350,6 +454,162 @@ export const Admin: React.FC = () => {
       return matchesSearch && matchesStatus;
     });
   }, [members, searchTerm, statusFilter]);
+
+  const memberById = useMemo(() => {
+    return new Map(members.map((member) => [member.id, member]));
+  }, [members]);
+
+  const dayAppointments = useMemo(() => {
+    return appointments
+      .filter((appointment) => toLocalDateKey(new Date(appointment.startAt)) === agendaDate)
+      .sort((a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime());
+  }, [appointments, agendaDate]);
+
+  const activeDayAppointments = useMemo(() => {
+    return dayAppointments.filter((appointment) => appointment.status === 'scheduled' || appointment.status === 'confirmed');
+  }, [dayAppointments]);
+
+  const agendaSlots = useMemo<AgendaSlot[]>(() => {
+    const slots: AgendaSlot[] = [];
+    const startMinutes = agendaSettings.startHour * 60;
+    const endMinutes = agendaSettings.endHour * 60;
+
+    if (agendaSettings.slotMinutes <= 0 || agendaSettings.cabins <= 0 || endMinutes <= startMinutes) {
+      return slots;
+    }
+
+    for (let minute = startMinutes; minute < endMinutes; minute += agendaSettings.slotMinutes) {
+      const slotStart = new Date(`${agendaDate}T00:00:00`);
+      slotStart.setHours(0, minute, 0, 0);
+
+      const slotEnd = new Date(slotStart.getTime() + agendaSettings.slotMinutes * 60 * 1000);
+      const slotKey = toSlotKey(agendaDate, minute);
+      const blocked = blockedAgendaSlots.includes(slotKey);
+      const appointmentsInSlot = activeDayAppointments.filter((appointment) => {
+        const appointmentStart = new Date(appointment.startAt);
+        const appointmentEnd = new Date(appointment.endAt);
+        return appointmentStart < slotEnd && appointmentEnd > slotStart;
+      });
+
+      const booked = appointmentsInSlot.length;
+      const capacity = blocked ? 0 : agendaSettings.cabins;
+
+      slots.push({
+        key: slotKey,
+        start: slotStart,
+        end: slotEnd,
+        label: `${slotStart.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })} - ${slotEnd.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}`,
+        blocked,
+        booked,
+        capacity,
+        available: Math.max(capacity - booked, 0),
+        appointments: appointmentsInSlot
+      });
+    }
+
+    return slots;
+  }, [agendaDate, agendaSettings, blockedAgendaSlots, activeDayAppointments]);
+
+  const availableAgendaSlots = useMemo(() => {
+    return agendaSlots.filter((slot) => !slot.blocked && slot.available > 0);
+  }, [agendaSlots]);
+
+  const agendaSummary = useMemo(() => {
+    const totalSlots = agendaSlots.length;
+    const blockedSlots = agendaSlots.filter((slot) => slot.blocked).length;
+    const totalCapacity = agendaSlots.reduce((acc, slot) => acc + slot.capacity, 0);
+    const usedUnits = agendaSlots.reduce((acc, slot) => acc + Math.min(slot.booked, slot.capacity), 0);
+    const availableUnits = agendaSlots.reduce((acc, slot) => acc + slot.available, 0);
+    const occupancy = totalCapacity > 0 ? (usedUnits / totalCapacity) * 100 : 0;
+
+    return {
+      totalSlots,
+      blockedSlots,
+      totalCapacity,
+      usedUnits,
+      availableUnits,
+      occupancy,
+      appointmentsToday: dayAppointments.length,
+      canceledToday: dayAppointments.filter((appointment) => appointment.status === 'canceled').length
+    };
+  }, [agendaSlots, dayAppointments]);
+
+  const resolveAppointmentMember = (appointment: Appointment) => {
+    const member = memberById.get(appointment.userId);
+    if (member) return member.name;
+    return appointment.user?.email ?? appointment.userId;
+  };
+
+  const updateAgendaSettingsField = (field: keyof AgendaSettings, value: number) => {
+    setAgendaSettings((current) => {
+      const next = { ...current, [field]: value };
+      return {
+        startHour: Math.min(Math.max(next.startHour, 0), 22),
+        endHour: Math.min(Math.max(next.endHour, 1), 23),
+        slotMinutes: [15, 20, 30, 45, 60].includes(next.slotMinutes) ? next.slotMinutes : 30,
+        cabins: Math.min(Math.max(next.cabins, 1), 12)
+      };
+    });
+  };
+
+  const toggleAgendaSlotBlock = (slotKey: string) => {
+    setBlockedAgendaSlots((current) => {
+      if (current.includes(slotKey)) {
+        return current.filter((key) => key !== slotKey);
+      }
+      return [...current, slotKey];
+    });
+  };
+
+  const handleAgendaCreateAppointment = async (slot: AgendaSlot) => {
+    if (!selectedAgendaMemberId) {
+      setAgendaMessage({ type: 'error', text: 'Selecciona un socio para agendar.' });
+      return;
+    }
+
+    if (slot.blocked || slot.available <= 0) {
+      setAgendaMessage({ type: 'error', text: 'El slot seleccionado no tiene capacidad disponible.' });
+      return;
+    }
+
+    setIsAgendaSaving(true);
+    setAgendaMessage(null);
+    try {
+      await clinicalService.createAppointment({
+        userId: selectedAgendaMemberId,
+        startAt: slot.start.toISOString(),
+        endAt: slot.end.toISOString(),
+        reason: 'admin.manual_schedule'
+      });
+      await loadData();
+      setAgendaMessage({ type: 'ok', text: `Cita creada en ${slot.label}.` });
+    } catch (error: any) {
+      setAgendaMessage({ type: 'error', text: error?.message ?? 'No fue posible agendar en ese horario.' });
+    } finally {
+      setIsAgendaSaving(false);
+    }
+  };
+
+  const handleAgendaCancelAppointment = async (appointmentId: string) => {
+    if (typeof window !== 'undefined' && !window.confirm('¿Confirmas cancelar esta cita?')) {
+      return;
+    }
+
+    setIsAgendaSaving(true);
+    setAgendaMessage(null);
+    try {
+      await clinicalService.updateAppointment(appointmentId, {
+        action: 'cancel',
+        canceledReason: 'Cancelación operativa desde panel admin'
+      });
+      await loadData();
+      setAgendaMessage({ type: 'ok', text: 'Cita cancelada correctamente.' });
+    } catch (error: any) {
+      setAgendaMessage({ type: 'error', text: error?.message ?? 'No fue posible cancelar la cita.' });
+    } finally {
+      setIsAgendaSaving(false);
+    }
+  };
 
   const alertClass = (level: HealthFlag) => {
     switch (level) {
@@ -776,32 +1036,247 @@ export const Admin: React.FC = () => {
 
   const renderAgenda = () => (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4">
         <div className="bg-white border border-velum-200 p-5">
-          <p className="text-[10px] uppercase tracking-widest text-velum-500">Carga operativa</p>
-          <p className="text-3xl font-serif text-velum-900 mt-2">{analytics.totalSocios}</p>
-          <p className="text-xs text-velum-500 mt-1">Socios bajo administración</p>
+          <p className="text-[10px] uppercase tracking-widest text-velum-500">Capacidad diaria</p>
+          <p className="text-3xl font-serif text-velum-900 mt-2">{agendaSummary.totalCapacity}</p>
+          <p className="text-xs text-velum-500 mt-1">{agendaSummary.totalSlots} slots configurados</p>
         </div>
         <div className="bg-white border border-velum-200 p-5">
-          <p className="text-[10px] uppercase tracking-widest text-velum-500">Bloqueos de agenda</p>
-          <p className="text-3xl font-serif text-velum-900 mt-2">{analytics.expedientesPendientes}</p>
-          <p className="text-xs text-velum-500 mt-1">Sin expediente completo</p>
+          <p className="text-[10px] uppercase tracking-widest text-velum-500">Unidades ocupadas</p>
+          <p className="text-3xl font-serif text-velum-900 mt-2">{agendaSummary.usedUnits}</p>
+          <p className="text-xs text-velum-500 mt-1">Ocupación {agendaSummary.occupancy.toFixed(1)}%</p>
         </div>
         <div className="bg-white border border-velum-200 p-5">
-          <p className="text-[10px] uppercase tracking-widest text-velum-500">Activaciones pendientes</p>
-          <p className="text-3xl font-serif text-velum-900 mt-2">{analytics.sociosPendientes}</p>
-          <p className="text-xs text-velum-500 mt-1">Onboarding operativo</p>
+          <p className="text-[10px] uppercase tracking-widest text-velum-500">Disponibles</p>
+          <p className="text-3xl font-serif text-velum-900 mt-2">{agendaSummary.availableUnits}</p>
+          <p className="text-xs text-velum-500 mt-1">Slots abiertos para reservar</p>
+        </div>
+        <div className="bg-white border border-velum-200 p-5">
+          <p className="text-[10px] uppercase tracking-widest text-velum-500">Bloqueados</p>
+          <p className="text-3xl font-serif text-velum-900 mt-2">{agendaSummary.blockedSlots}</p>
+          <p className="text-xs text-velum-500 mt-1">Por mantenimiento o contingencia</p>
+        </div>
+        <div className="bg-white border border-velum-200 p-5">
+          <p className="text-[10px] uppercase tracking-widest text-velum-500">Citas del día</p>
+          <p className="text-3xl font-serif text-velum-900 mt-2">{agendaSummary.appointmentsToday}</p>
+          <p className="text-xs text-velum-500 mt-1">Canceladas: {agendaSummary.canceledToday}</p>
         </div>
       </div>
 
-      <div className="bg-white border border-velum-200 p-6">
-        <h3 className="text-lg font-serif text-velum-900">Planificador operativo de cabina</h3>
-        <p className="text-sm text-velum-600 mt-2">
-          Usa la agenda para gestión detallada de slots, bloqueos, confirmaciones y reprogramaciones.
-        </p>
-        <div className="mt-5 flex flex-wrap gap-3">
-          <Link to="/agenda"><Button>Ir a agenda</Button></Link>
-          <Button variant="outline" onClick={() => setActiveSection('socios')}>Revisar socios pendientes</Button>
+      <div className="bg-white border border-velum-200 p-5 space-y-4">
+        <div>
+          <h3 className="text-lg font-serif text-velum-900">Control profesional de agenda diaria</h3>
+          <p className="text-xs text-velum-500 uppercase tracking-widest mt-1">
+            Control exacto de bloques, capacidad por cabina y citas por franja horaria
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-6 gap-3">
+          <label className="text-xs uppercase tracking-widest text-velum-600">
+            Fecha operativa
+            <input
+              type="date"
+              className="mt-2 w-full border border-velum-300 bg-velum-50 px-3 py-2 text-sm"
+              value={agendaDate}
+              onChange={(event) => setAgendaDate(event.target.value)}
+            />
+          </label>
+          <label className="text-xs uppercase tracking-widest text-velum-600">
+            Inicio jornada
+            <input
+              type="number"
+              min={0}
+              max={22}
+              className="mt-2 w-full border border-velum-300 bg-velum-50 px-3 py-2 text-sm"
+              value={agendaSettings.startHour}
+              onChange={(event) => updateAgendaSettingsField('startHour', Number(event.target.value))}
+            />
+          </label>
+          <label className="text-xs uppercase tracking-widest text-velum-600">
+            Fin jornada
+            <input
+              type="number"
+              min={1}
+              max={23}
+              className="mt-2 w-full border border-velum-300 bg-velum-50 px-3 py-2 text-sm"
+              value={agendaSettings.endHour}
+              onChange={(event) => updateAgendaSettingsField('endHour', Number(event.target.value))}
+            />
+          </label>
+          <label className="text-xs uppercase tracking-widest text-velum-600">
+            Intervalo (min)
+            <select
+              className="mt-2 w-full border border-velum-300 bg-velum-50 px-3 py-2 text-sm"
+              value={agendaSettings.slotMinutes}
+              onChange={(event) => updateAgendaSettingsField('slotMinutes', Number(event.target.value))}
+            >
+              <option value={15}>15</option>
+              <option value={20}>20</option>
+              <option value={30}>30</option>
+              <option value={45}>45</option>
+              <option value={60}>60</option>
+            </select>
+          </label>
+          <label className="text-xs uppercase tracking-widest text-velum-600">
+            Cabinas simultáneas
+            <input
+              type="number"
+              min={1}
+              max={12}
+              className="mt-2 w-full border border-velum-300 bg-velum-50 px-3 py-2 text-sm"
+              value={agendaSettings.cabins}
+              onChange={(event) => updateAgendaSettingsField('cabins', Number(event.target.value))}
+            />
+          </label>
+          <label className="text-xs uppercase tracking-widest text-velum-600">
+            Socio para agendar
+            <select
+              className="mt-2 w-full border border-velum-300 bg-velum-50 px-3 py-2 text-sm"
+              value={selectedAgendaMemberId}
+              onChange={(event) => setSelectedAgendaMemberId(event.target.value)}
+            >
+              <option value="">Seleccionar socio</option>
+              {members.map((member) => (
+                <option key={member.id} value={member.id}>
+                  {member.name} · {member.email}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+
+        {agendaMessage && (
+          <div className={`text-xs border px-3 py-2 ${agendaMessage.type === 'ok' ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-red-50 border-red-200 text-red-700'}`}>
+            {agendaMessage.text}
+          </div>
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+        <div className="xl:col-span-2 bg-white border border-velum-200">
+          <div className="p-5 border-b border-velum-200">
+            <h3 className="text-lg font-serif text-velum-900">Matriz de slots diarios</h3>
+            <p className="text-xs text-velum-500 uppercase tracking-widest mt-1">
+              Reserva directa, bloqueo operativo y control de capacidad
+            </p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead className="bg-velum-50 text-[10px] uppercase font-bold text-velum-600">
+                <tr>
+                  <th className="p-3">Franja</th>
+                  <th className="p-3">Capacidad</th>
+                  <th className="p-3">Reservado</th>
+                  <th className="p-3">Disponible</th>
+                  <th className="p-3">Estado</th>
+                  <th className="p-3">Acciones</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-velum-100">
+                {agendaSlots.map((slot) => (
+                  <tr key={slot.key}>
+                    <td className="p-3 font-medium">{slot.label}</td>
+                    <td className="p-3">{slot.capacity}</td>
+                    <td className="p-3">{slot.booked}</td>
+                    <td className="p-3">{slot.available}</td>
+                    <td className="p-3">
+                      {slot.blocked ? (
+                        <span className="inline-flex px-2 py-1 text-[10px] uppercase tracking-widest border bg-zinc-200 text-zinc-700 border-zinc-300">
+                          Bloqueado
+                        </span>
+                      ) : slot.available > 0 ? (
+                        <span className="inline-flex px-2 py-1 text-[10px] uppercase tracking-widest border bg-emerald-50 text-emerald-700 border-emerald-200">
+                          Disponible
+                        </span>
+                      ) : (
+                        <span className="inline-flex px-2 py-1 text-[10px] uppercase tracking-widest border bg-red-50 text-red-700 border-red-200">
+                          Saturado
+                        </span>
+                      )}
+                    </td>
+                    <td className="p-3">
+                      <div className="flex flex-wrap gap-2">
+                        <Button size="sm" variant="outline" onClick={() => toggleAgendaSlotBlock(slot.key)}>
+                          {slot.blocked ? 'Desbloquear' : 'Bloquear'}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={() => handleAgendaCreateAppointment(slot)}
+                          disabled={isAgendaSaving || slot.blocked || slot.available <= 0 || !selectedAgendaMemberId}
+                        >
+                          Reservar
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+                {agendaSlots.length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="p-6 text-center text-sm text-velum-500">
+                      Configuración inválida de jornada. Ajusta hora inicio/fin o capacidad.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div className="space-y-6">
+          <div className="bg-white border border-velum-200 p-5">
+            <h3 className="text-lg font-serif text-velum-900">Próximos slots libres</h3>
+            <div className="mt-3 space-y-2 text-sm">
+              {availableAgendaSlots.slice(0, 8).map((slot) => (
+                <div key={slot.key} className="border border-velum-200 px-3 py-2 flex items-center justify-between">
+                  <span>{slot.label}</span>
+                  <span className="text-xs text-velum-500">Disp: {slot.available}</span>
+                </div>
+              ))}
+              {availableAgendaSlots.length === 0 && <p className="text-xs text-velum-500">No hay slots libres en esta fecha.</p>}
+            </div>
+          </div>
+
+          <div className="bg-white border border-velum-200 p-5">
+            <div className="flex items-center justify-between gap-2">
+              <h3 className="text-lg font-serif text-velum-900">Agenda del día</h3>
+              <Link to="/agenda"><Button size="sm" variant="outline">Vista cliente</Button></Link>
+            </div>
+            <div className="mt-3 space-y-2">
+              {dayAppointments.map((appointment) => (
+                <div key={appointment.id} className="border border-velum-200 p-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold text-velum-900">
+                        {new Date(appointment.startAt).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })} - {new Date(appointment.endAt).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}
+                      </p>
+                      <p className="text-xs text-velum-500">{resolveAppointmentMember(appointment)}</p>
+                    </div>
+                    <span className={`text-[10px] uppercase tracking-widest border px-2 py-1 ${statusPill(appointment.status)}`}>
+                      {statusLabel(appointment.status)}
+                    </span>
+                  </div>
+                  {(appointment.status === 'scheduled' || appointment.status === 'confirmed') && (
+                    <div className="mt-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="text-red-700 border-red-300 hover:bg-red-600 hover:text-white"
+                        onClick={() => handleAgendaCancelAppointment(appointment.id)}
+                        disabled={isAgendaSaving}
+                      >
+                        Cancelar cita
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              ))}
+              {dayAppointments.length === 0 && (
+                <p className="text-sm text-velum-500">No hay citas registradas para esta fecha.</p>
+              )}
+            </div>
+          </div>
         </div>
       </div>
     </div>
