@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { Response } from "express";
 import { prisma } from "../db/prisma";
 import { AuthRequest } from "../middlewares/auth";
@@ -38,8 +39,8 @@ export const updateMyMedicalIntake = async (req: AuthRequest, res: Response) => 
   const updated = await prisma.medicalIntake.update({
     where: { id: current.id },
     data: {
-      personalJson: payload.personalJson ?? undefined,
-      historyJson: payload.historyJson ?? undefined,
+      personalJson: payload.personalJson as Prisma.InputJsonValue | undefined,
+      historyJson: payload.historyJson as Prisma.InputJsonValue | undefined,
       phototype: payload.phototype ?? undefined,
       consentAccepted: payload.consentAccepted ?? undefined,
       signatureKey: payload.signatureKey ?? undefined,

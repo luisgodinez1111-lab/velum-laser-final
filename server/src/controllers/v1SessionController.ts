@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { Response } from "express";
 import { prisma } from "../db/prisma";
 import { AuthRequest } from "../middlewares/auth";
@@ -26,7 +27,7 @@ export const createSessionTreatment = async (req: AuthRequest, res: Response) =>
       appointmentId: payload.appointmentId,
       userId: payload.userId,
       staffUserId: req.user!.id,
-      laserParametersJson: payload.laserParametersJson,
+      laserParametersJson: payload.laserParametersJson as Prisma.InputJsonValue | undefined,
       notes: payload.notes,
       adverseEvents: payload.adverseEvents
     }
