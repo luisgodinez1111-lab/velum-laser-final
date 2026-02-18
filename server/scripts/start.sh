@@ -8,4 +8,4 @@ if [ "${RUN_SEED}" = "true" ]; then
   npm run seed
 fi
 
-exec node dist/index.js
+exec ./node_modules/.bin/tsx src/index.ts
