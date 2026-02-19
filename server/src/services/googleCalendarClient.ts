@@ -5,15 +5,33 @@ import { prisma } from "../db/prisma";
 import { decrypt, encrypt } from "../utils/crypto";
 import { env } from "../utils/env";
 
-export const assertGoogleCalendarEnv = () => {
-  if (!env.googleClientId || !env.googleClientSecret || !env.googleRedirectUri) {
-    throw new Error("Google Calendar integration env vars are missing");
+const getGoogleOAuthRuntimeConfig = () => {
+  return {
+    clientId: process.env.GOOGLE_CLIENT_ID || env.googleClientId,
+    clientSecret: process.env.GOOGLE_CLIENT_SECRET || env.googleClientSecret,
+    redirectUri: process.env.GOOGLE_REDIRECT_URI || env.googleRedirectUri
+  };
+};
+
+const isPlaceholderValue = (value: string) => value.trim().startsWith("REEMPLAZA_");
+
+export const assertGoogleCalendarEnv = (config = getGoogleOAuthRuntimeConfig()) => {
+  const { clientId, clientSecret, redirectUri } = config;
+  if (
+    !clientId ||
+    !clientSecret ||
+    !redirectUri ||
+    isPlaceholderValue(clientId) ||
+    isPlaceholderValue(clientSecret)
+  ) {
+    throw new Error("Google Calendar integration env vars are missing or still placeholders");
   }
 };
 
 export const createGoogleOAuthClient = () => {
-  assertGoogleCalendarEnv();
-  return new google.auth.OAuth2(env.googleClientId, env.googleClientSecret, env.googleRedirectUri);
+  const config = getGoogleOAuthRuntimeConfig();
+  assertGoogleCalendarEnv(config);
+  return new google.auth.OAuth2(config.clientId, config.clientSecret, config.redirectUri);
 };
 
 export const createCalendarClientFromIntegration = (integration: GoogleCalendarIntegration) => {
