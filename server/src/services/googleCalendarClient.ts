@@ -66,9 +66,7 @@ export const persistUpdatedGoogleTokens = async (
     nextRefreshToken !== decryptedExistingRefresh ||
     (nextTokenExpiry?.getTime() ?? null) !== (integration.tokenExpiry?.getTime() ?? null);
 
-  if (!changed) {
-    return integration;
-  }
+  if (!changed) return integration;
 
   return prisma.googleCalendarIntegration.update({
     where: { id: integration.id },
@@ -85,12 +83,8 @@ export const withGoogleCalendarClient = async <T>(
   runner: (args: { oauth2Client: OAuth2Client; calendar: calendar_v3.Calendar }) => Promise<T>
 ): Promise<T> => {
   const { oauth2Client, calendar } = createCalendarClientFromIntegration(integration);
-
-  // Trigger token refresh flow when needed before using Calendar API.
   await oauth2Client.getAccessToken();
-
   const result = await runner({ oauth2Client, calendar });
   await persistUpdatedGoogleTokens(integration, oauth2Client);
-
   return result;
 };
