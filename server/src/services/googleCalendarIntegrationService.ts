@@ -21,7 +21,7 @@ type OAuthStatePayload = {
 
 type GoogleAppointmentJobAction = "create" | "update" | "cancel";
 
-const GOOGLE_CALENDAR_SCOPE = "https://www.googleapis.com/auth/calendar";
+const GOOGLE_OAUTH_SCOPES = ["https://www.googleapis.com/auth/calendar","https://www.googleapis.com/auth/userinfo.email","openid"] as const;
 const GOOGLE_WEBHOOK_PATH = "/api/webhooks/google-calendar";
 const GOOGLE_WATCH_TTL_SECONDS = 60 * 60 * 24 * 7;
 const GOOGLE_WATCH_REFRESH_THRESHOLD_MS = 1000 * 60 * 60 * 6;
@@ -408,7 +408,7 @@ export const getGoogleCalendarConnectUrl = async (args: { userId: string; clinic
   const url = oauth2Client.generateAuthUrl({
     access_type: "offline",
     prompt: "consent",
-    scope: [GOOGLE_CALENDAR_SCOPE],
+    scope: [...GOOGLE_OAUTH_SCOPES],
     include_granted_scopes: true,
     state
   });
@@ -466,8 +466,48 @@ export const handleGoogleCalendarOAuthCallback = async (args: { code: string; st
     }
 
     const oauth2Client = createGoogleOAuthClient();
-    const tokenResponse = await oauth2Client.getToken(args.code);
-    oauth2Client.setCredentials(tokenResponse.tokens);
+
+const runtimeClientId = process.env.GOOGLE_CLIENT_ID || env.googleClientId;
+const runtimeClientSecret = process.env.GOOGLE_CLIENT_SECRET || env.googleClientSecret;
+const runtimeRedirectUri = process.env.GOOGLE_REDIRECT_URI || env.googleRedirectUri;
+
+const tokenPayload = new URLSearchParams({
+  code: args.code,
+  client_id: runtimeClientId,
+  client_secret: runtimeClientSecret,
+  redirect_uri: runtimeRedirectUri,
+  grant_type: "authorization_code"
+});
+
+const tokenHttpResponse = await fetch("https://oauth2.googleapis.com/token", {
+  method: "POST",
+  headers: { "Content-Type": "application/x-www-form-urlencoded" },
+  body: tokenPayload
+});
+
+if (!tokenHttpResponse.ok) {
+  const details = await tokenHttpResponse.text().catch(() => "");
+  throw new Error(`Google token exchange failed (${tokenHttpResponse.status}): ${details.slice(0, 300)}`);
+}
+
+const tokenJson = (await tokenHttpResponse.json()) as {
+  access_token?: string;
+  refresh_token?: string;
+  scope?: string;
+  expires_in?: number;
+};
+
+const tokenResponse = {
+  tokens: {
+    access_token: tokenJson.access_token,
+    refresh_token: tokenJson.refresh_token,
+    scope: tokenJson.scope,
+    expiry_date: tokenJson.expires_in ? Date.now() + tokenJson.expires_in * 1000 : undefined
+  }
+};
+
+oauth2Client.setCredentials(tokenResponse.tokens);
+
 
     const oauth2 = google.oauth2({ auth: oauth2Client, version: "v2" });
     const profile = await oauth2.userinfo.get();
@@ -550,7 +590,9 @@ export const disconnectGoogleCalendarIntegration = async (clinicId: string) => {
 export const updateGoogleCalendarIntegrationSettings = async (clinicId: string, eventFormatMode: EventFormatMode) => {
   const integration = await getIntegrationByClinicId(clinicId);
   if (!integration) {
-    throw new Error("Google Calendar no está conectado");
+    const error = new Error("Google Calendar no está conectado") as Error & { status?: number };
+    error.status = 400;
+    throw error;
   }
 
   const updated = await prisma.googleCalendarIntegration.update({
