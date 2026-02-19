@@ -2059,17 +2059,42 @@ export const Admin: React.FC = () => {
                             {agendaCabinsDraft
                               .slice()
                               .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
-                              .map((cabin) => (
-                                <label key={cabin.id} className="flex items-center gap-2 text-sm text-velum-700">
-                                  <input
-                                    type="checkbox"
-                                    checked={allowedCabins.includes(cabin.id)}
-                                    onChange={(event) => toggleTreatmentCabinAllowed(treatment.id, cabin.id, event.target.checked)}
-                                  />
-                                  {cabin.name}
-                                  {!cabin.isActive && <span className="text-[10px] uppercase text-amber-700">(inactiva)</span>}
-                                </label>
-                              ))}
+                              .map((cabin) => {
+                                const checked = allowedCabins.includes(cabin.id);
+                                const blockedByInactive = treatment.requiresSpecificCabin && !cabin.isActive;
+                                return (
+                                  <button
+                                    key={cabin.id}
+                                    type="button"
+                                    className={`w-full flex items-center justify-between gap-2 text-sm px-2 py-1 border ${
+                                      checked
+                                        ? 'border-velum-900 bg-velum-900 text-white'
+                                        : 'border-velum-300 bg-velum-50 text-velum-700'
+                                    } ${blockedByInactive ? 'opacity-60 cursor-not-allowed' : ''}`}
+                                    onClick={() => {
+                                      if (blockedByInactive) return;
+                                      toggleTreatmentCabinAllowed(treatment.id, cabin.id, !checked);
+                                    }}
+                                    disabled={blockedByInactive}
+                                  >
+                                    <span className="flex items-center gap-2">
+                                      <span
+                                        className={`inline-flex h-4 w-4 items-center justify-center border text-[10px] ${
+                                          checked ? 'border-white' : 'border-velum-500'
+                                        }`}
+                                      >
+                                        {checked ? '✓' : ''}
+                                      </span>
+                                      {cabin.name}
+                                    </span>
+                                    {!cabin.isActive && (
+                                      <span className={`text-[10px] uppercase ${checked ? 'text-white' : 'text-amber-700'}`}>
+                                        (inactiva)
+                                      </span>
+                                    )}
+                                  </button>
+                                );
+                              })}
                           </div>
                         </div>
 
