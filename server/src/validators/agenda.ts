@@ -37,6 +37,25 @@ const specialDateRuleSchema = z
     return rule.endHour > rule.startHour;
   }, { message: "La regla por fecha requiere rango de horas válido cuando está abierta" });
 
+const treatmentSchema = z
+  .object({
+    id: z.string().min(3).optional(),
+    name: z.string().min(1).max(80),
+    code: z.string().min(2).max(80).regex(/^[a-z0-9_]+$/),
+    description: z.string().max(240).nullable().optional(),
+    durationMinutes: z.number().int().min(10).max(240),
+    cabinId: z.string().min(3).nullable().optional(),
+    requiresSpecificCabin: z.boolean().optional(),
+    isActive: z.boolean().optional(),
+    sortOrder: z.number().int().min(0).max(999).optional()
+  })
+  .refine((value) => {
+    if (!value.requiresSpecificCabin) {
+      return true;
+    }
+    return Boolean(value.cabinId);
+  }, { message: "Si el tratamiento requiere cabina específica, debes seleccionar una cabina" });
+
 export const agendaConfigUpdateSchema = z.object({
   timezone: z.string().min(3).optional(),
   slotMinutes: z.number().int().min(10).max(120).optional(),
@@ -51,9 +70,10 @@ export const agendaConfigUpdateSchema = z.object({
         sortOrder: z.number().int().min(0).max(99).optional()
       })
     )
-    .min(1)
+    .min(0)
     .max(20)
     .optional(),
+  treatments: z.array(treatmentSchema).max(50).optional(),
   weeklyRules: z.array(weeklyRuleSchema).max(7).optional(),
   specialDateRules: z.array(specialDateRuleSchema).max(365).optional()
 });

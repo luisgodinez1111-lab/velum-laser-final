@@ -42,6 +42,33 @@ const hasClinicalEligibility = async (userId: string) => {
   };
 };
 
+const resolveTreatmentForAppointment = async (args: { treatmentId?: string; reason?: string }) => {
+  if (args.treatmentId) {
+    const treatment = await prisma.agendaTreatment.findUnique({
+      where: { id: args.treatmentId },
+      select: { id: true, code: true, cabinId: true, requiresSpecificCabin: true, isActive: true }
+    });
+
+    if (!treatment || !treatment.isActive) {
+      throw new AgendaValidationError("El tratamiento indicado no existe o está inactivo", 404);
+    }
+
+    return treatment;
+  }
+
+  const code = args.reason?.trim().toLowerCase();
+  if (!code) {
+    return null;
+  }
+
+  const treatment = await prisma.agendaTreatment.findFirst({
+    where: { code, isActive: true },
+    select: { id: true, code: true, cabinId: true, requiresSpecificCabin: true, isActive: true }
+  });
+
+  return treatment ?? null;
+};
+
 const respondIfAgendaError = (error: unknown, res: Response) => {
   if (error instanceof AgendaValidationError) {
     res.status(error.statusCode).json({ message: error.message });
@@ -82,12 +109,34 @@ export const createAppointment = async (req: AuthRequest, res: Response) => {
     return res.status(409).json({ message: "Se requiere membresía activa para agendar" });
   }
 
+  let treatment = null;
+  try {
+    treatment = await resolveTreatmentForAppointment({
+      treatmentId: payload.treatmentId,
+      reason: payload.reason
+    });
+  } catch (error) {
+    if (respondIfAgendaError(error, res)) {
+      return;
+    }
+    throw error;
+  }
+
+  if (treatment?.requiresSpecificCabin && payload.cabinId && payload.cabinId !== treatment.cabinId) {
+    return res.status(409).json({ message: "El tratamiento seleccionado requiere una cabina específica" });
+  }
+
+  const requestedCabinId =
+    treatment?.cabinId && treatment.requiresSpecificCabin
+      ? treatment.cabinId
+      : payload.cabinId ?? treatment?.cabinId ?? undefined;
+
   let placement: Awaited<ReturnType<typeof resolveAppointmentPlacement>>;
   try {
     placement = await resolveAppointmentPlacement({
       startAt,
       endAt,
-      requestedCabinId: payload.cabinId
+      requestedCabinId
     });
   } catch (error) {
     if (respondIfAgendaError(error, res)) {
@@ -102,9 +151,10 @@ export const createAppointment = async (req: AuthRequest, res: Response) => {
       userId: targetUserId,
       createdByUserId: req.user!.id,
       cabinId: placement.cabinId,
+      treatmentId: treatment?.id ?? null,
       startAt,
       endAt,
-      reason: payload.reason,
+      reason: payload.reason ?? treatment?.code ?? null,
       status: "scheduled"
     },
     include: {
@@ -116,6 +166,9 @@ export const createAppointment = async (req: AuthRequest, res: Response) => {
       },
       cabin: {
         select: { id: true, name: true }
+      },
+      treatment: {
+        select: { id: true, name: true, code: true, durationMinutes: true }
       }
     }
   });
@@ -166,6 +219,9 @@ export const listAppointments = async (req: AuthRequest, res: Response) => {
       },
       cabin: {
         select: { id: true, name: true }
+      },
+      treatment: {
+        select: { id: true, name: true, code: true, durationMinutes: true }
       }
     },
     orderBy: { startAt: "asc" },
@@ -219,7 +275,8 @@ export const updateAppointment = async (req: AuthRequest, res: Response) => {
       include: {
         user: { select: { id: true, email: true } },
         createdBy: { select: { id: true, email: true, role: true } },
-        cabin: { select: { id: true, name: true } }
+        cabin: { select: { id: true, name: true } },
+        treatment: { select: { id: true, name: true, code: true, durationMinutes: true } }
       }
     });
 
@@ -256,7 +313,8 @@ export const updateAppointment = async (req: AuthRequest, res: Response) => {
       include: {
         user: { select: { id: true, email: true } },
         createdBy: { select: { id: true, email: true, role: true } },
-        cabin: { select: { id: true, name: true } }
+        cabin: { select: { id: true, name: true } },
+        treatment: { select: { id: true, name: true, code: true, durationMinutes: true } }
       }
     });
 
@@ -282,7 +340,8 @@ export const updateAppointment = async (req: AuthRequest, res: Response) => {
       include: {
         user: { select: { id: true, email: true } },
         createdBy: { select: { id: true, email: true, role: true } },
-        cabin: { select: { id: true, name: true } }
+        cabin: { select: { id: true, name: true } },
+        treatment: { select: { id: true, name: true, code: true, durationMinutes: true } }
       }
     });
 
@@ -308,7 +367,8 @@ export const updateAppointment = async (req: AuthRequest, res: Response) => {
       include: {
         user: { select: { id: true, email: true } },
         createdBy: { select: { id: true, email: true, role: true } },
-        cabin: { select: { id: true, name: true } }
+        cabin: { select: { id: true, name: true } },
+        treatment: { select: { id: true, name: true, code: true, durationMinutes: true } }
       }
     });
 
@@ -331,12 +391,38 @@ export const updateAppointment = async (req: AuthRequest, res: Response) => {
   const startAt = new Date(payload.startAt);
   const endAt = new Date(payload.endAt);
 
+  let treatment = null;
+  if (payload.treatmentId) {
+    try {
+      treatment = await resolveTreatmentForAppointment({ treatmentId: payload.treatmentId });
+    } catch (error) {
+      if (respondIfAgendaError(error, res)) {
+        return;
+      }
+      throw error;
+    }
+  } else if (appointment.treatmentId) {
+    treatment = await prisma.agendaTreatment.findUnique({
+      where: { id: appointment.treatmentId },
+      select: { id: true, code: true, cabinId: true, requiresSpecificCabin: true, isActive: true }
+    });
+  }
+
+  if (treatment?.requiresSpecificCabin && payload.cabinId && payload.cabinId !== treatment.cabinId) {
+    return res.status(409).json({ message: "El tratamiento seleccionado requiere una cabina específica" });
+  }
+
+  const requestedCabinId =
+    treatment?.cabinId && treatment.requiresSpecificCabin
+      ? treatment.cabinId
+      : payload.cabinId ?? appointment.cabinId ?? treatment?.cabinId ?? undefined;
+
   let placement: Awaited<ReturnType<typeof resolveAppointmentPlacement>>;
   try {
     placement = await resolveAppointmentPlacement({
       startAt,
       endAt,
-      requestedCabinId: payload.cabinId ?? appointment.cabinId ?? undefined,
+      requestedCabinId,
       excludeAppointmentId: appointment.id
     });
   } catch (error) {
@@ -352,6 +438,7 @@ export const updateAppointment = async (req: AuthRequest, res: Response) => {
       startAt,
       endAt,
       cabinId: placement.cabinId,
+      treatmentId: treatment?.id ?? appointment.treatmentId ?? null,
       status: "scheduled",
       canceledAt: null,
       canceledReason: null,
@@ -361,7 +448,8 @@ export const updateAppointment = async (req: AuthRequest, res: Response) => {
     include: {
       user: { select: { id: true, email: true } },
       createdBy: { select: { id: true, email: true, role: true } },
-      cabin: { select: { id: true, name: true } }
+      cabin: { select: { id: true, name: true } },
+      treatment: { select: { id: true, name: true, code: true, durationMinutes: true } }
     }
   });
 

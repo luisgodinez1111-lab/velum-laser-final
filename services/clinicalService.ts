@@ -16,6 +16,7 @@ export interface Appointment {
   id: string;
   userId: string;
   cabinId?: string | null;
+  treatmentId?: string | null;
   startAt: string;
   endAt: string;
   reason?: string;
@@ -39,11 +40,18 @@ export interface Appointment {
     id: string;
     name: string;
   };
+  treatment?: {
+    id: string;
+    name: string;
+    code: string;
+    durationMinutes: number;
+  };
 }
 
 export interface AppointmentUpdatePayload {
   action: "reschedule" | "cancel" | "confirm" | "complete" | "mark_no_show";
   cabinId?: string;
+  treatmentId?: string;
   startAt?: string;
   endAt?: string;
   canceledReason?: string;
@@ -60,6 +68,18 @@ export interface AgendaPolicy {
 export interface AgendaCabin {
   id: string;
   name: string;
+  isActive: boolean;
+  sortOrder: number;
+}
+
+export interface AgendaTreatment {
+  id: string;
+  name: string;
+  code: string;
+  description?: string | null;
+  durationMinutes: number;
+  cabinId?: string | null;
+  requiresSpecificCabin: boolean;
   isActive: boolean;
   sortOrder: number;
 }
@@ -94,6 +114,7 @@ export interface AgendaBlockedSlot {
 export interface AgendaConfig {
   policy: AgendaPolicy;
   cabins: AgendaCabin[];
+  treatments: AgendaTreatment[];
   weeklyRules: AgendaWeeklyRule[];
   specialDateRules: AgendaSpecialDateRule[];
 }
@@ -190,6 +211,17 @@ export interface AgendaConfigUpdatePayload {
     isActive?: boolean;
     sortOrder?: number;
   }>;
+  treatments?: Array<{
+    id?: string;
+    name: string;
+    code: string;
+    description?: string | null;
+    durationMinutes: number;
+    cabinId?: string | null;
+    requiresSpecificCabin?: boolean;
+    isActive?: boolean;
+    sortOrder?: number;
+  }>;
   weeklyRules?: Array<{
     dayOfWeek: number;
     isOpen: boolean;
@@ -217,7 +249,7 @@ export const clinicalService = {
     });
   },
 
-  createAppointment: async (payload: { startAt: string; endAt: string; reason?: string; userId?: string; cabinId?: string }) => {
+  createAppointment: async (payload: { startAt: string; endAt: string; reason?: string; userId?: string; cabinId?: string; treatmentId?: string }) => {
     return apiFetch<Appointment>("/v1/appointments", {
       method: "POST",
       body: JSON.stringify(payload)

@@ -237,6 +237,7 @@ model Appointment {
   userId            String
   createdByUserId   String
   cabinId           String?
+  treatmentId       String?
   startAt           DateTime
   endAt             DateTime
   status            AppointmentStatus @default(scheduled)
@@ -258,6 +259,7 @@ model Appointment {
   user              User              @relation("AppointmentMember", fields: [userId], references: [id], onDelete: Cascade)
   createdBy         User              @relation("AppointmentCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
   cabin             AgendaCabin?      @relation(fields: [cabinId], references: [id], onDelete: SetNull)
+  treatment         AgendaTreatment?  @relation(fields: [treatmentId], references: [id], onDelete: SetNull)
   rescheduledFrom   Appointment?      @relation("AppointmentReschedule", fields: [rescheduledFromId], references: [id], onDelete: SetNull)
   reschedules       Appointment[]     @relation("AppointmentReschedule")
   sessions          SessionTreatment[]
@@ -266,6 +268,7 @@ model Appointment {
   @@index([clinicId])
   @@index([createdByUserId])
   @@index([cabinId])
+  @@index([treatmentId])
   @@index([cabinId, startAt, endAt])
   @@index([startAt, endAt])
   @@index([status])
@@ -291,8 +294,28 @@ model AgendaCabin {
   updatedAt    DateTime          @updatedAt
   appointments Appointment[]
   blockedSlots AgendaBlockedSlot[]
+  treatments   AgendaTreatment[]
 
   @@index([isActive, sortOrder])
+}
+
+model AgendaTreatment {
+  id                   String        @id @default(cuid())
+  name                 String
+  code                 String        @unique
+  description          String?
+  durationMinutes      Int           @default(45)
+  cabinId              String?
+  requiresSpecificCabin Boolean      @default(false)
+  isActive             Boolean       @default(true)
+  sortOrder            Int           @default(0)
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
+  cabin                AgendaCabin?  @relation(fields: [cabinId], references: [id], onDelete: SetNull)
+  appointments         Appointment[]
+
+  @@index([isActive, sortOrder])
+  @@index([cabinId])
 }
 
 model AgendaWeeklyRule {

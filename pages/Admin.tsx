@@ -27,7 +27,8 @@ import {
   CheckCircle2,
   CircleAlert,
   Shield,
-  HandCoins
+  HandCoins,
+  Trash2
 } from 'lucide-react';
 import { AuditLogEntry, Member, UserRole } from '../types';
 import { useAuth } from '../context/AuthContext';
@@ -37,6 +38,7 @@ import {
   AgendaConfig,
   AgendaDaySnapshot,
   AgendaSpecialDateRule,
+  AgendaTreatment,
   AgendaWeeklyRule,
   Appointment,
   clinicalService
@@ -219,10 +221,12 @@ export const Admin: React.FC = () => {
     noShowGraceMinutes: 30
   });
   const [agendaCabinsDraft, setAgendaCabinsDraft] = useState<AgendaCabin[]>([]);
+  const [agendaTreatmentsDraft, setAgendaTreatmentsDraft] = useState<AgendaTreatment[]>([]);
   const [agendaWeeklyRulesDraft, setAgendaWeeklyRulesDraft] = useState<AgendaWeeklyRule[]>([]);
   const [agendaSpecialDateRulesDraft, setAgendaSpecialDateRulesDraft] = useState<AgendaSpecialDateRule[]>([]);
   const [selectedAgendaMemberId, setSelectedAgendaMemberId] = useState('');
   const [selectedAgendaCabinId, setSelectedAgendaCabinId] = useState('');
+  const [selectedAgendaTreatmentId, setSelectedAgendaTreatmentId] = useState('');
   const [isAgendaSaving, setIsAgendaSaving] = useState(false);
   const [isAgendaConfigSaving, setIsAgendaConfigSaving] = useState(false);
   const [agendaMessage, setAgendaMessage] = useState<{ type: 'ok' | 'error'; text: string } | null>(null);
@@ -259,6 +263,7 @@ export const Admin: React.FC = () => {
           noShowGraceMinutes: configData.policy.noShowGraceMinutes
         });
         setAgendaCabinsDraft(configData.cabins);
+        setAgendaTreatmentsDraft(configData.treatments ?? []);
         setAgendaWeeklyRulesDraft(configData.weeklyRules);
         setAgendaSpecialDateRulesDraft(configData.specialDateRules);
       }
@@ -369,6 +374,34 @@ export const Admin: React.FC = () => {
     }
     setSelectedAgendaCabinId(activeCabins[0].id);
   }, [agendaSnapshot?.cabins, agendaConfig?.cabins, selectedAgendaCabinId]);
+
+  useEffect(() => {
+    const activeTreatments = agendaTreatmentsDraft
+      .filter((treatment) => treatment.isActive)
+      .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+
+    if (activeTreatments.length === 0) {
+      setSelectedAgendaTreatmentId('');
+      return;
+    }
+
+    if (selectedAgendaTreatmentId && activeTreatments.some((treatment) => treatment.id === selectedAgendaTreatmentId)) {
+      return;
+    }
+
+    setSelectedAgendaTreatmentId(activeTreatments[0].id);
+  }, [agendaTreatmentsDraft, selectedAgendaTreatmentId]);
+
+  useEffect(() => {
+    const selectedTreatment = agendaTreatmentsDraft.find((treatment) => treatment.id === selectedAgendaTreatmentId);
+    if (!selectedTreatment?.requiresSpecificCabin || !selectedTreatment.cabinId) {
+      return;
+    }
+    if (selectedAgendaCabinId === selectedTreatment.cabinId) {
+      return;
+    }
+    setSelectedAgendaCabinId(selectedTreatment.cabinId);
+  }, [agendaTreatmentsDraft, selectedAgendaTreatmentId, selectedAgendaCabinId]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -593,6 +626,20 @@ export const Admin: React.FC = () => {
     setAgendaCabinsDraft((current) => current.map((cabin) => (cabin.id === cabinId ? { ...cabin, ...changes } : cabin)));
   };
 
+  const removeCabinDraft = (cabinId: string) => {
+    setAgendaCabinsDraft((current) => current.filter((cabin) => cabin.id !== cabinId));
+    setAgendaTreatmentsDraft((current) =>
+      current.map((treatment) =>
+        treatment.cabinId === cabinId
+          ? { ...treatment, cabinId: null, requiresSpecificCabin: false }
+          : treatment
+      )
+    );
+    if (selectedAgendaCabinId === cabinId) {
+      setSelectedAgendaCabinId('');
+    }
+  };
+
   const addCabinDraft = () => {
     setAgendaCabinsDraft((current) => [
       ...current,
@@ -603,6 +650,36 @@ export const Admin: React.FC = () => {
         sortOrder: current.length + 1
       }
     ]);
+  };
+
+  const updateTreatmentDraftField = (treatmentId: string, changes: Partial<AgendaTreatment>) => {
+    setAgendaTreatmentsDraft((current) =>
+      current.map((treatment) => (treatment.id === treatmentId ? { ...treatment, ...changes } : treatment))
+    );
+  };
+
+  const addTreatmentDraft = () => {
+    setAgendaTreatmentsDraft((current) => [
+      ...current,
+      {
+        id: `draft-treatment-${Date.now()}`,
+        name: `Tratamiento ${current.length + 1}`,
+        code: `treatment_${current.length + 1}`,
+        description: null,
+        durationMinutes: 45,
+        cabinId: null,
+        requiresSpecificCabin: false,
+        isActive: true,
+        sortOrder: current.length + 1
+      }
+    ]);
+  };
+
+  const removeTreatmentDraft = (treatmentId: string) => {
+    setAgendaTreatmentsDraft((current) => current.filter((treatment) => treatment.id !== treatmentId));
+    if (selectedAgendaTreatmentId === treatmentId) {
+      setSelectedAgendaTreatmentId('');
+    }
   };
 
   const setSpecialRuleForDate = (isOpen: boolean, startHour?: number, endHour?: number) => {
@@ -633,6 +710,71 @@ export const Admin: React.FC = () => {
   };
 
   const saveAgendaConfiguration = async () => {
+    if (!agendaCabinsDraft.some((cabin) => cabin.isActive)) {
+      setAgendaMessage({ type: 'error', text: 'Debes mantener al menos una cabina activa.' });
+      return;
+    }
+
+    const normalizedCodes = agendaTreatmentsDraft.map((treatment) => treatment.code.trim().toLowerCase());
+    const duplicateCode = normalizedCodes.find((code, index) => code && normalizedCodes.indexOf(code) !== index);
+    if (duplicateCode) {
+      setAgendaMessage({ type: 'error', text: `El código "${duplicateCode}" está repetido en tratamientos.` });
+      return;
+    }
+
+    const missingCode = normalizedCodes.find((code) => code.length === 0);
+    if (missingCode !== undefined) {
+      setAgendaMessage({ type: 'error', text: 'Todos los tratamientos deben tener código.' });
+      return;
+    }
+
+    const invalidCode = normalizedCodes.find((code) => code.length > 0 && !/^[a-z0-9_]+$/.test(code));
+    if (invalidCode) {
+      setAgendaMessage({ type: 'error', text: 'El código del tratamiento solo acepta letras minúsculas, números y guion bajo.' });
+      return;
+    }
+
+    const invalidTreatmentName = agendaTreatmentsDraft.find((treatment) => treatment.name.trim().length === 0);
+    if (invalidTreatmentName) {
+      setAgendaMessage({ type: 'error', text: 'Todos los tratamientos deben tener nombre.' });
+      return;
+    }
+
+    const cabinIdSet = new Set(agendaCabinsDraft.map((cabin) => cabin.id));
+    const activeCabinIdSet = new Set(agendaCabinsDraft.filter((cabin) => cabin.isActive).map((cabin) => cabin.id));
+    const treatmentWithoutCabin = agendaTreatmentsDraft.find(
+      (treatment) => treatment.requiresSpecificCabin && !treatment.cabinId
+    );
+    if (treatmentWithoutCabin) {
+      setAgendaMessage({
+        type: 'error',
+        text: `El tratamiento "${treatmentWithoutCabin.name}" requiere cabina específica, pero no tiene cabina asignada.`
+      });
+      return;
+    }
+
+    const treatmentWithInactiveCabin = agendaTreatmentsDraft.find(
+      (treatment) => treatment.requiresSpecificCabin && treatment.cabinId && !activeCabinIdSet.has(treatment.cabinId)
+    );
+    if (treatmentWithInactiveCabin) {
+      setAgendaMessage({
+        type: 'error',
+        text: `El tratamiento "${treatmentWithInactiveCabin.name}" requiere una cabina activa.`
+      });
+      return;
+    }
+
+    const treatmentWithMissingCabin = agendaTreatmentsDraft.find(
+      (treatment) => treatment.cabinId && !cabinIdSet.has(treatment.cabinId)
+    );
+    if (treatmentWithMissingCabin) {
+      setAgendaMessage({
+        type: 'error',
+        text: `El tratamiento "${treatmentWithMissingCabin.name}" apunta a una cabina que ya no existe.`
+      });
+      return;
+    }
+
     setIsAgendaConfigSaving(true);
     setAgendaMessage(null);
     try {
@@ -646,6 +788,17 @@ export const Admin: React.FC = () => {
           name: cabin.name,
           isActive: cabin.isActive,
           sortOrder: cabin.sortOrder ?? index + 1
+        })),
+        treatments: agendaTreatmentsDraft.map((treatment, index) => ({
+          id: treatment.id.startsWith('draft-treatment-') ? undefined : treatment.id,
+          name: treatment.name.trim(),
+          code: treatment.code.trim().toLowerCase(),
+          description: treatment.description ?? null,
+          durationMinutes: treatment.durationMinutes,
+          cabinId: treatment.cabinId ?? null,
+          requiresSpecificCabin: treatment.requiresSpecificCabin,
+          isActive: treatment.isActive,
+          sortOrder: treatment.sortOrder ?? index + 1
         })),
         weeklyRules: agendaWeeklyRulesDraft.map((rule) => ({
           dayOfWeek: rule.dayOfWeek,
@@ -671,6 +824,7 @@ export const Admin: React.FC = () => {
         noShowGraceMinutes: updatedConfig.policy.noShowGraceMinutes
       });
       setAgendaCabinsDraft(updatedConfig.cabins);
+      setAgendaTreatmentsDraft(updatedConfig.treatments ?? []);
       setAgendaWeeklyRulesDraft(updatedConfig.weeklyRules);
       setAgendaSpecialDateRulesDraft(updatedConfig.specialDateRules);
       const snapshot = await clinicalService.getAdminAgendaDay(agendaDate);
@@ -735,13 +889,26 @@ export const Admin: React.FC = () => {
       slotStart.setHours(0, slot.startMinute, 0, 0);
       const slotEnd = new Date(`${agendaDate}T00:00:00`);
       slotEnd.setHours(0, slot.endMinute, 0, 0);
+      const selectedTreatment = agendaTreatmentsDraft.find((treatment) => treatment.id === selectedAgendaTreatmentId);
+      const requestedCabinId = selectedTreatment?.requiresSpecificCabin
+        ? selectedTreatment.cabinId ?? undefined
+        : selectedAgendaCabinId || selectedTreatment?.cabinId || undefined;
+
+      if (selectedTreatment?.requiresSpecificCabin && !selectedTreatment.cabinId) {
+        setAgendaMessage({
+          type: 'error',
+          text: `El tratamiento "${selectedTreatment.name}" requiere cabina específica, pero no está configurada.`
+        });
+        return;
+      }
 
       await clinicalService.createAppointment({
         userId: selectedAgendaMemberId,
-        cabinId: selectedAgendaCabinId || undefined,
+        cabinId: requestedCabinId,
+        treatmentId: selectedTreatment?.id,
         startAt: slotStart.toISOString(),
         endAt: slotEnd.toISOString(),
-        reason: selectedAgendaCabinId ? 'admin.manual_schedule.cabin' : 'admin.manual_schedule'
+        reason: selectedTreatment?.code ?? (selectedAgendaCabinId ? 'admin.manual_schedule.cabin' : 'admin.manual_schedule')
       });
       const snapshot = await clinicalService.getAdminAgendaDay(agendaDate);
       setAgendaSnapshot(snapshot);
@@ -1383,7 +1550,7 @@ export const Admin: React.FC = () => {
               </div>
               <div className="space-y-2">
                 {agendaCabinsDraft.map((cabin) => (
-                  <div key={cabin.id} className="grid grid-cols-1 md:grid-cols-4 gap-2">
+                  <div key={cabin.id} className="grid grid-cols-1 md:grid-cols-5 gap-2">
                     <input
                       className="border border-velum-300 bg-velum-50 px-3 py-2 text-sm md:col-span-2"
                       value={cabin.name}
@@ -1403,6 +1570,14 @@ export const Admin: React.FC = () => {
                       />
                       Activa
                     </label>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="text-red-700 border-red-300 hover:bg-red-600 hover:text-white"
+                      onClick={() => removeCabinDraft(cabin.id)}
+                    >
+                      <Trash2 size={14} />
+                    </Button>
                   </div>
                 ))}
               </div>
@@ -1445,6 +1620,162 @@ export const Admin: React.FC = () => {
                     </div>
                   ))}
               </div>
+            </div>
+          </div>
+
+          <div className="border border-velum-200 p-4 space-y-3">
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
+              <div>
+                <p className="text-xs uppercase tracking-widest text-velum-500">Tratamientos</p>
+                <p className="text-xs text-velum-500 mt-1">
+                  Catálogo editable para agenda: duración, cabina específica y estado operativo
+                </p>
+              </div>
+              <Button size="sm" variant="outline" onClick={addTreatmentDraft}>
+                Agregar tratamiento
+              </Button>
+            </div>
+
+            <div className="space-y-3">
+              {agendaTreatmentsDraft
+                .slice()
+                .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
+                .map((treatment) => {
+                  const requiresCabinButMissing = treatment.requiresSpecificCabin && !treatment.cabinId;
+                  return (
+                    <div
+                      key={treatment.id}
+                      className={`border p-3 space-y-3 ${requiresCabinButMissing ? 'border-red-300 bg-red-50' : 'border-velum-200'}`}
+                    >
+                      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-6 gap-2">
+                        <label className="text-xs uppercase tracking-widest text-velum-600 xl:col-span-2">
+                          Nombre
+                          <input
+                            className="mt-2 w-full border border-velum-300 bg-velum-50 px-3 py-2 text-sm"
+                            value={treatment.name}
+                            onChange={(event) => updateTreatmentDraftField(treatment.id, { name: event.target.value })}
+                          />
+                        </label>
+
+                        <label className="text-xs uppercase tracking-widest text-velum-600">
+                          Código
+                          <input
+                            className="mt-2 w-full border border-velum-300 bg-velum-50 px-3 py-2 text-sm"
+                            value={treatment.code}
+                            onChange={(event) =>
+                              updateTreatmentDraftField(treatment.id, {
+                                code: event.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '_')
+                              })
+                            }
+                          />
+                        </label>
+
+                        <label className="text-xs uppercase tracking-widest text-velum-600">
+                          Duración (min)
+                          <input
+                            type="number"
+                            min={10}
+                            max={240}
+                            className="mt-2 w-full border border-velum-300 bg-velum-50 px-3 py-2 text-sm"
+                            value={treatment.durationMinutes}
+                            onChange={(event) =>
+                              updateTreatmentDraftField(treatment.id, { durationMinutes: Number(event.target.value) })
+                            }
+                          />
+                        </label>
+
+                        <label className="text-xs uppercase tracking-widest text-velum-600">
+                          Cabina
+                          <select
+                            className="mt-2 w-full border border-velum-300 bg-velum-50 px-3 py-2 text-sm"
+                            value={treatment.cabinId ?? ''}
+                            disabled={!treatment.requiresSpecificCabin}
+                            onChange={(event) =>
+                              updateTreatmentDraftField(treatment.id, { cabinId: event.target.value || null })
+                            }
+                          >
+                            <option value="">Sin cabina fija</option>
+                            {agendaCabinsDraft
+                              .slice()
+                              .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
+                              .map((cabin) => (
+                                <option key={cabin.id} value={cabin.id}>
+                                  {cabin.name}
+                                </option>
+                              ))}
+                          </select>
+                        </label>
+
+                        <label className="text-xs uppercase tracking-widest text-velum-600">
+                          Orden
+                          <input
+                            type="number"
+                            min={0}
+                            max={999}
+                            className="mt-2 w-full border border-velum-300 bg-velum-50 px-3 py-2 text-sm"
+                            value={treatment.sortOrder}
+                            onChange={(event) => updateTreatmentDraftField(treatment.id, { sortOrder: Number(event.target.value) })}
+                          />
+                        </label>
+                      </div>
+
+                      <label className="text-xs uppercase tracking-widest text-velum-600 block">
+                        Descripción clínica
+                        <textarea
+                          className="mt-2 w-full border border-velum-300 bg-velum-50 px-3 py-2 text-sm min-h-[72px]"
+                          value={treatment.description ?? ''}
+                          onChange={(event) => updateTreatmentDraftField(treatment.id, { description: event.target.value || null })}
+                        />
+                      </label>
+
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div className="flex flex-wrap items-center gap-4">
+                          <label className="text-xs uppercase tracking-widest text-velum-600 flex items-center gap-2">
+                            <input
+                              type="checkbox"
+                              checked={treatment.requiresSpecificCabin}
+                              onChange={(event) =>
+                                updateTreatmentDraftField(treatment.id, {
+                                  requiresSpecificCabin: event.target.checked,
+                                  cabinId: event.target.checked ? treatment.cabinId : null
+                                })
+                              }
+                            />
+                            Requiere cabina específica
+                          </label>
+                          <label className="text-xs uppercase tracking-widest text-velum-600 flex items-center gap-2">
+                            <input
+                              type="checkbox"
+                              checked={treatment.isActive}
+                              onChange={(event) => updateTreatmentDraftField(treatment.id, { isActive: event.target.checked })}
+                            />
+                            Activo
+                          </label>
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="text-red-700 border-red-300 hover:bg-red-600 hover:text-white"
+                          onClick={() => removeTreatmentDraft(treatment.id)}
+                        >
+                          <Trash2 size={14} />
+                        </Button>
+                      </div>
+
+                      {requiresCabinButMissing && (
+                        <p className="text-xs text-red-700">
+                          Este tratamiento exige cabina específica. Selecciona una cabina para poder guardar.
+                        </p>
+                      )}
+                    </div>
+                  );
+                })}
+
+              {agendaTreatmentsDraft.length === 0 && (
+                <p className="text-sm text-velum-500">
+                  No hay tratamientos configurados. Agrega al menos uno para operar la agenda por tratamiento.
+                </p>
+              )}
             </div>
           </div>
 
@@ -1557,7 +1888,7 @@ export const Admin: React.FC = () => {
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
             <label className="text-xs uppercase tracking-widest text-velum-600">
               Fecha operativa
               <input
@@ -1580,6 +1911,24 @@ export const Admin: React.FC = () => {
                     {member.name} · {member.email}
                   </option>
                 ))}
+              </select>
+            </label>
+            <label className="text-xs uppercase tracking-widest text-velum-600">
+              Tratamiento
+              <select
+                className="mt-2 w-full border border-velum-300 bg-velum-50 px-3 py-2 text-sm"
+                value={selectedAgendaTreatmentId}
+                onChange={(event) => setSelectedAgendaTreatmentId(event.target.value)}
+              >
+                <option value="">Sin tratamiento específico</option>
+                {agendaTreatmentsDraft
+                  .filter((treatment) => treatment.isActive)
+                  .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
+                  .map((treatment) => (
+                    <option key={treatment.id} value={treatment.id}>
+                      {treatment.name}
+                    </option>
+                  ))}
               </select>
             </label>
             <div className="text-xs uppercase tracking-widest text-velum-600 border border-velum-200 bg-velum-50 px-3 py-2">
