@@ -59,9 +59,21 @@ const dayOfWeekForDateKey = (dateKey: string, timeZone: string) => {
 
 const overlapsRange = (startA: number, endA: number, startB: number, endB: number) => startA < endB && endA > startB;
 
-const appointmentRangeForDateKey = (appointment: Appointment, dateKey: string, timeZone: string) => {
-  const start = toZonedParts(new Date(appointment.startAt), timeZone);
-  const end = toZonedParts(new Date(appointment.endAt), timeZone);
+const appointmentRangeForDateKey = (
+  appointment: Appointment & {
+    treatment?: { prepBufferMinutes?: number | null; cleanupBufferMinutes?: number | null } | null;
+  },
+  dateKey: string,
+  timeZone: string
+) => {
+  const padded = bufferedRange({
+    startAt: new Date(appointment.startAt),
+    endAt: new Date(appointment.endAt),
+    prepBufferMinutes: appointment.treatment?.prepBufferMinutes ?? 0,
+    cleanupBufferMinutes: appointment.treatment?.cleanupBufferMinutes ?? 0
+  });
+  const start = toZonedParts(padded.startAt, timeZone);
+  const end = toZonedParts(padded.endAt, timeZone);
 
   if (end.dateKey < dateKey || start.dateKey > dateKey) {
     return null;
@@ -78,11 +90,25 @@ const appointmentRangeForDateKey = (appointment: Appointment, dateKey: string, t
 
 const normalizeDateKey = (value: string) => value.trim();
 
-const defaultPolicy: Pick<AgendaPolicy, "timezone" | "slotMinutes" | "autoConfirmHours" | "noShowGraceMinutes"> = {
+const defaultPolicy: Pick<
+  AgendaPolicy,
+  | "timezone"
+  | "slotMinutes"
+  | "autoConfirmHours"
+  | "noShowGraceMinutes"
+  | "maxActiveAppointmentsPerWeek"
+  | "maxActiveAppointmentsPerMonth"
+  | "minAdvanceMinutes"
+  | "maxAdvanceDays"
+> = {
   timezone: "America/Chihuahua",
   slotMinutes: 30,
   autoConfirmHours: 12,
-  noShowGraceMinutes: 30
+  noShowGraceMinutes: 30,
+  maxActiveAppointmentsPerWeek: 4,
+  maxActiveAppointmentsPerMonth: 12,
+  minAdvanceMinutes: 120,
+  maxAdvanceDays: 60
 };
 
 const defaultWeeklyRules: Array<Pick<AgendaWeeklyRule, "dayOfWeek" | "isOpen" | "startHour" | "endHour">> = [
@@ -96,13 +122,26 @@ const defaultWeeklyRules: Array<Pick<AgendaWeeklyRule, "dayOfWeek" | "isOpen" | 
 ];
 
 const defaultTreatments: Array<
-  Pick<AgendaTreatment, "name" | "code" | "description" | "durationMinutes" | "requiresSpecificCabin" | "isActive" | "sortOrder">
+  Pick<
+    AgendaTreatment,
+    | "name"
+    | "code"
+    | "description"
+    | "durationMinutes"
+    | "prepBufferMinutes"
+    | "cleanupBufferMinutes"
+    | "requiresSpecificCabin"
+    | "isActive"
+    | "sortOrder"
+  >
 > = [
   {
     name: "Valoración",
     code: "valuation",
     description: "Primera valoración clínica",
     durationMinutes: 45,
+    prepBufferMinutes: 0,
+    cleanupBufferMinutes: 0,
     requiresSpecificCabin: false,
     isActive: true,
     sortOrder: 1
@@ -112,6 +151,8 @@ const defaultTreatments: Array<
     code: "laser_session",
     description: "Sesión regular de tratamiento láser",
     durationMinutes: 45,
+    prepBufferMinutes: 0,
+    cleanupBufferMinutes: 0,
     requiresSpecificCabin: false,
     isActive: true,
     sortOrder: 2
@@ -185,6 +226,10 @@ type AgendaConfigPayload = {
   slotMinutes?: number;
   autoConfirmHours?: number;
   noShowGraceMinutes?: number;
+  maxActiveAppointmentsPerWeek?: number;
+  maxActiveAppointmentsPerMonth?: number;
+  minAdvanceMinutes?: number;
+  maxAdvanceDays?: number;
   cabins?: Array<{ id?: string; name: string; isActive?: boolean; sortOrder?: number }>;
   treatments?: Array<{
     id?: string;
@@ -192,7 +237,10 @@ type AgendaConfigPayload = {
     code: string;
     description?: string | null;
     durationMinutes: number;
+    prepBufferMinutes?: number;
+    cleanupBufferMinutes?: number;
     cabinId?: string | null;
+    allowedCabinIds?: string[];
     requiresSpecificCabin?: boolean;
     isActive?: boolean;
     sortOrder?: number;
@@ -207,7 +255,14 @@ export const getAgendaConfig = async () => {
   const [policy, cabins, treatments, weeklyRules, specialDateRules] = await Promise.all([
     prisma.agendaPolicy.findFirstOrThrow(),
     prisma.agendaCabin.findMany({ orderBy: [{ sortOrder: "asc" }, { name: "asc" }] }),
-    prisma.agendaTreatment.findMany({ orderBy: [{ sortOrder: "asc" }, { name: "asc" }] }),
+    prisma.agendaTreatment.findMany({
+      orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+      include: {
+        cabinRules: {
+          orderBy: [{ priority: "asc" }, { createdAt: "asc" }]
+        }
+      }
+    }),
     prisma.agendaWeeklyRule.findMany({ orderBy: { dayOfWeek: "asc" } }),
     prisma.agendaSpecialDateRule.findMany({ orderBy: { dateKey: "asc" }, take: 365 })
   ]);
@@ -215,7 +270,10 @@ export const getAgendaConfig = async () => {
   return {
     policy,
     cabins,
-    treatments,
+    treatments: treatments.map(({ cabinRules, ...treatment }) => ({
+      ...treatment,
+      allowedCabinIds: cabinRules.map((rule) => rule.cabinId)
+    })),
     weeklyRules,
     specialDateRules
   };
@@ -225,15 +283,52 @@ export const updateAgendaConfig = async (payload: AgendaConfigPayload) => {
   await ensureAgendaDefaults();
 
   const policy = await prisma.agendaPolicy.findFirstOrThrow();
+  const effectiveSlotMinutes = payload.slotMinutes ?? policy.slotMinutes;
 
   await prisma.$transaction(async (tx) => {
+    const normalizeTreatmentCabinAssignments = async () => {
+      const treatments = await tx.agendaTreatment.findMany({
+        select: {
+          id: true,
+          cabinId: true,
+          requiresSpecificCabin: true,
+          cabinRules: {
+            select: { cabinId: true, priority: true },
+            orderBy: [{ priority: "asc" }, { createdAt: "asc" }]
+          }
+        }
+      });
+
+      for (const treatment of treatments) {
+        const orderedCabinIds = treatment.cabinRules.map((rule) => rule.cabinId);
+        const nextPrimaryCabinId = orderedCabinIds[0] ?? null;
+        const nextRequiresSpecific = treatment.requiresSpecificCabin && orderedCabinIds.length > 0;
+
+        if (treatment.cabinId === nextPrimaryCabinId && treatment.requiresSpecificCabin === nextRequiresSpecific) {
+          continue;
+        }
+
+        await tx.agendaTreatment.update({
+          where: { id: treatment.id },
+          data: {
+            cabinId: nextPrimaryCabinId,
+            requiresSpecificCabin: nextRequiresSpecific
+          }
+        });
+      }
+    };
+
     await tx.agendaPolicy.update({
       where: { id: policy.id },
       data: {
         timezone: payload.timezone ?? undefined,
         slotMinutes: payload.slotMinutes ?? undefined,
         autoConfirmHours: payload.autoConfirmHours ?? undefined,
-        noShowGraceMinutes: payload.noShowGraceMinutes ?? undefined
+        noShowGraceMinutes: payload.noShowGraceMinutes ?? undefined,
+        maxActiveAppointmentsPerWeek: payload.maxActiveAppointmentsPerWeek ?? undefined,
+        maxActiveAppointmentsPerMonth: payload.maxActiveAppointmentsPerMonth ?? undefined,
+        minAdvanceMinutes: payload.minAdvanceMinutes ?? undefined,
+        maxAdvanceDays: payload.maxAdvanceDays ?? undefined
       }
     });
 
@@ -271,14 +366,6 @@ export const updateAgendaConfig = async (payload: AgendaConfigPayload) => {
         .filter((id) => !keepIds.has(id));
 
       if (toDelete.length > 0) {
-        await tx.agendaTreatment.updateMany({
-          where: { cabinId: { in: toDelete } },
-          data: {
-            cabinId: null,
-            requiresSpecificCabin: false
-          }
-        });
-
         await tx.appointment.updateMany({
           where: { cabinId: { in: toDelete } },
           data: { cabinId: null }
@@ -292,6 +379,8 @@ export const updateAgendaConfig = async (payload: AgendaConfigPayload) => {
         await tx.agendaCabin.deleteMany({
           where: { id: { in: toDelete } }
         });
+
+        await normalizeTreatmentCabinAssignments();
       }
     }
 
@@ -304,49 +393,83 @@ export const updateAgendaConfig = async (payload: AgendaConfigPayload) => {
 
       for (const [index, treatment] of payload.treatments.entries()) {
         const code = treatment.code.trim().toLowerCase();
+        const normalizedAllowedCabinIds = Array.from(
+          new Set((treatment.allowedCabinIds ?? []).map((value) => value.trim()).filter(Boolean))
+        );
+        if (treatment.cabinId && !normalizedAllowedCabinIds.includes(treatment.cabinId)) {
+          normalizedAllowedCabinIds.unshift(treatment.cabinId);
+        }
 
         if (usedCodes.has(code)) {
           throw new AgendaValidationError("Los tratamientos no pueden repetir el mismo código", 400);
         }
         usedCodes.add(code);
 
-        if (treatment.cabinId && !cabinById.has(treatment.cabinId)) {
-          throw new AgendaValidationError("El tratamiento referencia una cabina que no existe", 400);
-        }
-
-        if (treatment.requiresSpecificCabin && !treatment.cabinId) {
+        if (treatment.requiresSpecificCabin && normalizedAllowedCabinIds.length === 0) {
           throw new AgendaValidationError("Si el tratamiento requiere cabina específica, debes seleccionar una cabina", 400);
         }
 
-        if (treatment.requiresSpecificCabin && treatment.cabinId && !cabinById.get(treatment.cabinId)?.isActive) {
+        for (const cabinId of normalizedAllowedCabinIds) {
+          if (!cabinById.has(cabinId)) {
+            throw new AgendaValidationError("El tratamiento referencia una cabina que no existe", 400);
+          }
+          if (treatment.requiresSpecificCabin && !cabinById.get(cabinId)?.isActive) {
+            throw new AgendaValidationError(
+              "La cabina específica del tratamiento debe estar activa para poder guardar la configuración",
+              400
+            );
+          }
+        }
+
+        if (treatment.durationMinutes % effectiveSlotMinutes !== 0) {
           throw new AgendaValidationError(
-            "La cabina específica del tratamiento debe estar activa para poder guardar la configuración",
+            `La duración del tratamiento debe ser múltiplo del intervalo (${effectiveSlotMinutes} min)`,
             400
           );
         }
 
         const data = {
-          name: treatment.name,
+          name: treatment.name.trim(),
           code,
           description: treatment.description ?? null,
           durationMinutes: treatment.durationMinutes,
-          cabinId: treatment.cabinId ?? null,
+          prepBufferMinutes: treatment.prepBufferMinutes ?? 0,
+          cleanupBufferMinutes: treatment.cleanupBufferMinutes ?? 0,
+          cabinId: normalizedAllowedCabinIds[0] ?? null,
           requiresSpecificCabin: treatment.requiresSpecificCabin ?? false,
           isActive: treatment.isActive ?? true,
           sortOrder: treatment.sortOrder ?? index + 1
         };
 
+        let persistedTreatmentId: string;
         if (treatment.id) {
-          keepIds.add(treatment.id);
           await tx.agendaTreatment.update({
             where: { id: treatment.id },
             data
           });
-          continue;
+          persistedTreatmentId = treatment.id;
+        } else {
+          const created = await tx.agendaTreatment.create({ data });
+          persistedTreatmentId = created.id;
         }
 
-        const created = await tx.agendaTreatment.create({ data });
-        keepIds.add(created.id);
+        keepIds.add(persistedTreatmentId);
+
+        await tx.agendaTreatmentCabinRule.deleteMany({
+          where: { treatmentId: persistedTreatmentId }
+        });
+
+        if (normalizedAllowedCabinIds.length > 0) {
+          const now = new Date();
+          await tx.agendaTreatmentCabinRule.createMany({
+            data: normalizedAllowedCabinIds.map((cabinId, cabinIndex) => ({
+              treatmentId: persistedTreatmentId,
+              cabinId,
+              priority: cabinIndex + 1,
+              updatedAt: now
+            }))
+          });
+        }
       }
 
       const toDelete = existing
@@ -377,6 +500,8 @@ export const updateAgendaConfig = async (payload: AgendaConfigPayload) => {
           });
         }
       }
+
+      await normalizeTreatmentCabinAssignments();
     }
 
     if (payload.weeklyRules) {
@@ -507,18 +632,47 @@ const isBlockOverlapping = ({
   });
 };
 
+function bufferedRange({
+  startAt,
+  endAt,
+  prepBufferMinutes = 0,
+  cleanupBufferMinutes = 0
+}: {
+  startAt: Date;
+  endAt: Date;
+  prepBufferMinutes?: number;
+  cleanupBufferMinutes?: number;
+}) {
+  return {
+    startAt: new Date(startAt.getTime() - prepBufferMinutes * 60 * 1000),
+    endAt: new Date(endAt.getTime() + cleanupBufferMinutes * 60 * 1000)
+  };
+}
+
 const hasCabinConflict = async ({
   startAt,
   endAt,
   cabinId,
-  excludeAppointmentId
+  excludeAppointmentId,
+  incomingPrepBufferMinutes,
+  incomingCleanupBufferMinutes
 }: {
   startAt: Date;
   endAt: Date;
   cabinId: string;
   excludeAppointmentId?: string;
+  incomingPrepBufferMinutes?: number;
+  incomingCleanupBufferMinutes?: number;
 }) => {
-  const found = await prisma.appointment.findFirst({
+  const incomingBuffered = bufferedRange({
+    startAt,
+    endAt,
+    prepBufferMinutes: incomingPrepBufferMinutes ?? 0,
+    cleanupBufferMinutes: incomingCleanupBufferMinutes ?? 0
+  });
+  const aroundWindowMs = 240 * 60 * 1000;
+
+  const appointments = await prisma.appointment.findMany({
     where: {
       ...(excludeAppointmentId
         ? {
@@ -531,17 +685,41 @@ const hasCabinConflict = async ({
         in: comparableStatuses
       },
       startAt: {
-        lt: endAt
+        lt: new Date(incomingBuffered.endAt.getTime() + aroundWindowMs)
       },
       endAt: {
-        gt: startAt
+        gt: new Date(incomingBuffered.startAt.getTime() - aroundWindowMs)
       },
       OR: [{ cabinId }, { cabinId: null }]
     },
-    select: { id: true }
+    select: {
+      id: true,
+      startAt: true,
+      endAt: true,
+      treatment: {
+        select: {
+          prepBufferMinutes: true,
+          cleanupBufferMinutes: true
+        }
+      }
+    }
   });
 
-  return Boolean(found);
+  return appointments.some((appointment) => {
+    const existingBuffered = bufferedRange({
+      startAt: appointment.startAt,
+      endAt: appointment.endAt,
+      prepBufferMinutes: appointment.treatment?.prepBufferMinutes ?? 0,
+      cleanupBufferMinutes: appointment.treatment?.cleanupBufferMinutes ?? 0
+    });
+
+    return overlapsRange(
+      existingBuffered.startAt.getTime(),
+      existingBuffered.endAt.getTime(),
+      incomingBuffered.startAt.getTime(),
+      incomingBuffered.endAt.getTime()
+    );
+  });
 };
 
 export class AgendaValidationError extends Error {
@@ -556,22 +734,45 @@ export class AgendaValidationError extends Error {
 export const resolveAppointmentPlacement = async ({
   startAt,
   endAt,
+  requestedCabinIds,
   requestedCabinId,
-  excludeAppointmentId
+  excludeAppointmentId,
+  prepBufferMinutes,
+  cleanupBufferMinutes
 }: {
   startAt: Date;
   endAt: Date;
+  requestedCabinIds?: string[];
   requestedCabinId?: string;
   excludeAppointmentId?: string;
+  prepBufferMinutes?: number;
+  cleanupBufferMinutes?: number;
 }) => {
   const config = await getAgendaConfig();
   const { policy } = config;
+  const now = new Date();
 
   const start = toZonedParts(startAt, policy.timezone);
   const end = toZonedParts(endAt, policy.timezone);
 
   if (endAt <= startAt) {
     throw new AgendaValidationError("La fecha de fin debe ser mayor a la de inicio", 400);
+  }
+
+  const minAdvanceBoundary = new Date(now.getTime() + policy.minAdvanceMinutes * 60 * 1000);
+  if (startAt < minAdvanceBoundary) {
+    throw new AgendaValidationError(
+      `La cita debe reservarse con al menos ${policy.minAdvanceMinutes} minutos de anticipación`,
+      409
+    );
+  }
+
+  const maxAdvanceBoundary = new Date(now.getTime() + policy.maxAdvanceDays * 24 * 60 * 60 * 1000);
+  if (startAt > maxAdvanceBoundary) {
+    throw new AgendaValidationError(
+      `La cita no puede reservarse con más de ${policy.maxAdvanceDays} días de anticipación`,
+      409
+    );
   }
 
   if (start.dateKey !== end.dateKey) {
@@ -610,9 +811,23 @@ export const resolveAppointmentPlacement = async ({
     where: { dateKey: start.dateKey }
   });
 
-  const candidateCabins = requestedCabinId
-    ? cabins.filter((cabin) => cabin.id === requestedCabinId)
-    : cabins;
+  const priorityCabinIds = Array.from(
+    new Set(
+      (requestedCabinIds ?? [])
+        .map((value) => value.trim())
+        .filter(Boolean)
+    )
+  );
+  if (requestedCabinId && !priorityCabinIds.includes(requestedCabinId)) {
+    priorityCabinIds.unshift(requestedCabinId);
+  }
+
+  const candidateCabins =
+    priorityCabinIds.length > 0
+      ? cabins
+          .filter((cabin) => priorityCabinIds.includes(cabin.id))
+          .sort((a, b) => priorityCabinIds.indexOf(a.id) - priorityCabinIds.indexOf(b.id))
+      : cabins;
 
   if (candidateCabins.length === 0) {
     throw new AgendaValidationError("La cabina seleccionada no está disponible");
@@ -635,7 +850,9 @@ export const resolveAppointmentPlacement = async ({
       startAt,
       endAt,
       cabinId: cabin.id,
-      excludeAppointmentId
+      excludeAppointmentId,
+      incomingPrepBufferMinutes: prepBufferMinutes ?? 0,
+      incomingCleanupBufferMinutes: cleanupBufferMinutes ?? 0
     });
 
     if (!overlap) {
@@ -928,7 +1145,14 @@ export const getAgendaDaySnapshot = async (dateKeyRaw: string) => {
           select: { id: true, name: true }
         },
         treatment: {
-          select: { id: true, name: true, code: true, durationMinutes: true }
+          select: {
+            id: true,
+            name: true,
+            code: true,
+            durationMinutes: true,
+            prepBufferMinutes: true,
+            cleanupBufferMinutes: true
+          }
         }
       }
     })

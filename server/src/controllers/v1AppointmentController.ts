@@ -42,18 +42,43 @@ const hasClinicalEligibility = async (userId: string) => {
   };
 };
 
+type ResolvedAgendaTreatment = {
+  id: string;
+  code: string;
+  durationMinutes: number;
+  prepBufferMinutes: number;
+  cleanupBufferMinutes: number;
+  cabinId: string | null;
+  requiresSpecificCabin: boolean;
+  isActive: boolean;
+  cabinRules: Array<{ cabinId: string; priority: number }>;
+};
+
 const resolveTreatmentForAppointment = async (args: { treatmentId?: string; reason?: string }) => {
   if (args.treatmentId) {
     const treatment = await prisma.agendaTreatment.findUnique({
       where: { id: args.treatmentId },
-      select: { id: true, code: true, cabinId: true, requiresSpecificCabin: true, isActive: true }
+      select: {
+        id: true,
+        code: true,
+        durationMinutes: true,
+        prepBufferMinutes: true,
+        cleanupBufferMinutes: true,
+        cabinId: true,
+        requiresSpecificCabin: true,
+        isActive: true,
+        cabinRules: {
+          select: { cabinId: true, priority: true },
+          orderBy: [{ priority: "asc" }, { createdAt: "asc" }]
+        }
+      }
     });
 
     if (!treatment || !treatment.isActive) {
       throw new AgendaValidationError("El tratamiento indicado no existe o está inactivo", 404);
     }
 
-    return treatment;
+    return treatment as ResolvedAgendaTreatment;
   }
 
   const code = args.reason?.trim().toLowerCase();
@@ -63,10 +88,136 @@ const resolveTreatmentForAppointment = async (args: { treatmentId?: string; reas
 
   const treatment = await prisma.agendaTreatment.findFirst({
     where: { code, isActive: true },
-    select: { id: true, code: true, cabinId: true, requiresSpecificCabin: true, isActive: true }
+    select: {
+      id: true,
+      code: true,
+      durationMinutes: true,
+      prepBufferMinutes: true,
+      cleanupBufferMinutes: true,
+      cabinId: true,
+      requiresSpecificCabin: true,
+      isActive: true,
+      cabinRules: {
+        select: { cabinId: true, priority: true },
+        orderBy: [{ priority: "asc" }, { createdAt: "asc" }]
+      }
+    }
   });
 
-  return treatment ?? null;
+  return (treatment as ResolvedAgendaTreatment | null) ?? null;
+};
+
+const preferredCabinIdsForTreatment = (treatment: ResolvedAgendaTreatment | null) => {
+  if (!treatment) {
+    return [];
+  }
+  const ordered = treatment.cabinRules
+    .slice()
+    .sort((a, b) => a.priority - b.priority)
+    .map((rule) => rule.cabinId);
+  if (treatment.cabinId && !ordered.includes(treatment.cabinId)) {
+    ordered.unshift(treatment.cabinId);
+  }
+  return Array.from(new Set(ordered));
+};
+
+const deriveAppointmentEndAt = ({
+  startAt,
+  payloadEndAt,
+  treatment
+}: {
+  startAt: Date;
+  payloadEndAt?: string;
+  treatment: ResolvedAgendaTreatment | null;
+}) => {
+  if (treatment) {
+    return new Date(startAt.getTime() + treatment.durationMinutes * 60 * 1000);
+  }
+  if (!payloadEndAt) {
+    return null;
+  }
+  return new Date(payloadEndAt);
+};
+
+const zonedDateParts = (date: Date, timeZone: string) => {
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  });
+  const parts = formatter.formatToParts(date);
+  const byType = (type: string) => Number(parts.find((part) => part.type === type)?.value ?? "0");
+  return {
+    year: byType("year"),
+    month: byType("month"),
+    day: byType("day")
+  };
+};
+
+const isoWeekKey = ({ year, month, day }: { year: number; month: number; day: number }) => {
+  const utcDate = new Date(Date.UTC(year, month - 1, day));
+  const dayNum = (utcDate.getUTCDay() + 6) % 7;
+  utcDate.setUTCDate(utcDate.getUTCDate() - dayNum + 3);
+  const firstThursday = new Date(Date.UTC(utcDate.getUTCFullYear(), 0, 4));
+  const firstDayNum = (firstThursday.getUTCDay() + 6) % 7;
+  firstThursday.setUTCDate(firstThursday.getUTCDate() - firstDayNum + 3);
+  const week = 1 + Math.round((utcDate.getTime() - firstThursday.getTime()) / (7 * 24 * 60 * 60 * 1000));
+  return `${utcDate.getUTCFullYear()}-W${String(week).padStart(2, "0")}`;
+};
+
+const enforceActiveAppointmentLimits = async ({
+  clinicId,
+  userId,
+  candidateStartAt,
+  excludeAppointmentId
+}: {
+  clinicId: string;
+  userId: string;
+  candidateStartAt: Date;
+  excludeAppointmentId?: string;
+}) => {
+  const { policy } = await getAgendaConfig();
+  const upcomingAppointments = await prisma.appointment.findMany({
+    where: {
+      clinicId,
+      userId,
+      status: { in: ["scheduled", "confirmed"] },
+      startAt: { gte: new Date() },
+      ...(excludeAppointmentId ? { id: { not: excludeAppointmentId } } : {})
+    },
+    select: { startAt: true },
+    take: 1000
+  });
+
+  const candidateParts = zonedDateParts(candidateStartAt, policy.timezone);
+  const candidateWeekKey = isoWeekKey(candidateParts);
+  const candidateMonthKey = `${candidateParts.year}-${String(candidateParts.month).padStart(2, "0")}`;
+
+  let countWeek = 0;
+  let countMonth = 0;
+  for (const appointment of upcomingAppointments) {
+    const parts = zonedDateParts(appointment.startAt, policy.timezone);
+    if (isoWeekKey(parts) === candidateWeekKey) {
+      countWeek += 1;
+    }
+    if (`${parts.year}-${String(parts.month).padStart(2, "0")}` === candidateMonthKey) {
+      countMonth += 1;
+    }
+  }
+
+  if (countWeek >= policy.maxActiveAppointmentsPerWeek) {
+    throw new AgendaValidationError(
+      `Límite semanal alcanzado: máximo ${policy.maxActiveAppointmentsPerWeek} citas activas por socio`,
+      409
+    );
+  }
+  if (countMonth >= policy.maxActiveAppointmentsPerMonth) {
+    throw new AgendaValidationError(
+      `Límite mensual alcanzado: máximo ${policy.maxActiveAppointmentsPerMonth} citas activas por socio`,
+      409
+    );
+  }
 };
 
 const respondIfAgendaError = (error: unknown, res: Response) => {
@@ -80,11 +231,6 @@ const respondIfAgendaError = (error: unknown, res: Response) => {
 export const createAppointment = async (req: AuthRequest, res: Response) => {
   const payload = appointmentCreateSchema.parse(req.body);
   const startAt = new Date(payload.startAt);
-  const endAt = new Date(payload.endAt);
-
-  if (endAt <= startAt) {
-    return res.status(400).json({ message: "La fecha de fin debe ser mayor a la de inicio" });
-  }
 
   const isPrivileged = hasPrivilegedRole(req.user!.role);
   const targetUserId = isPrivileged ? payload.userId ?? req.user!.id : req.user!.id;
@@ -109,7 +255,7 @@ export const createAppointment = async (req: AuthRequest, res: Response) => {
     return res.status(409).json({ message: "Se requiere membresía activa para agendar" });
   }
 
-  let treatment = null;
+  let treatment: ResolvedAgendaTreatment | null = null;
   try {
     treatment = await resolveTreatmentForAppointment({
       treatmentId: payload.treatmentId,
@@ -122,21 +268,57 @@ export const createAppointment = async (req: AuthRequest, res: Response) => {
     throw error;
   }
 
-  if (treatment?.requiresSpecificCabin && payload.cabinId && payload.cabinId !== treatment.cabinId) {
-    return res.status(409).json({ message: "El tratamiento seleccionado requiere una cabina específica" });
+  const endAt = deriveAppointmentEndAt({ startAt, payloadEndAt: payload.endAt, treatment });
+  if (!endAt) {
+    return res.status(400).json({ message: "Debes indicar la fecha de fin cuando no hay tratamiento seleccionado" });
+  }
+  if (Number.isNaN(startAt.getTime()) || Number.isNaN(endAt.getTime())) {
+    return res.status(400).json({ message: "Las fechas proporcionadas no son válidas" });
+  }
+  if (endAt <= startAt) {
+    return res.status(400).json({ message: "La fecha de fin debe ser mayor a la de inicio" });
   }
 
-  const requestedCabinId =
-    treatment?.cabinId && treatment.requiresSpecificCabin
-      ? treatment.cabinId
-      : payload.cabinId ?? treatment?.cabinId ?? undefined;
+  const treatmentCabinPriority = preferredCabinIdsForTreatment(treatment);
+  if (treatment?.requiresSpecificCabin && treatmentCabinPriority.length === 0) {
+    return res.status(409).json({ message: "El tratamiento requiere cabina específica pero no está configurado" });
+  }
+  if (treatment?.requiresSpecificCabin && payload.cabinId && !treatmentCabinPriority.includes(payload.cabinId)) {
+    return res.status(409).json({ message: "El tratamiento seleccionado no puede operar en esa cabina" });
+  }
+
+  const requestedCabinIds =
+    treatment?.requiresSpecificCabin
+      ? payload.cabinId
+        ? [payload.cabinId, ...treatmentCabinPriority.filter((cabinId) => cabinId !== payload.cabinId)]
+        : treatmentCabinPriority
+      : payload.cabinId
+        ? [payload.cabinId]
+        : treatmentCabinPriority.length > 0
+          ? treatmentCabinPriority
+          : undefined;
+
+  try {
+    await enforceActiveAppointmentLimits({
+      clinicId: actorClinicId,
+      userId: targetUserId,
+      candidateStartAt: startAt
+    });
+  } catch (error) {
+    if (respondIfAgendaError(error, res)) {
+      return;
+    }
+    throw error;
+  }
 
   let placement: Awaited<ReturnType<typeof resolveAppointmentPlacement>>;
   try {
     placement = await resolveAppointmentPlacement({
       startAt,
       endAt,
-      requestedCabinId
+      requestedCabinIds,
+      prepBufferMinutes: treatment?.prepBufferMinutes ?? 0,
+      cleanupBufferMinutes: treatment?.cleanupBufferMinutes ?? 0
     });
   } catch (error) {
     if (respondIfAgendaError(error, res)) {
@@ -168,7 +350,14 @@ export const createAppointment = async (req: AuthRequest, res: Response) => {
         select: { id: true, name: true }
       },
       treatment: {
-        select: { id: true, name: true, code: true, durationMinutes: true }
+        select: {
+          id: true,
+          name: true,
+          code: true,
+          durationMinutes: true,
+          prepBufferMinutes: true,
+          cleanupBufferMinutes: true
+        }
       }
     }
   });
@@ -221,7 +410,14 @@ export const listAppointments = async (req: AuthRequest, res: Response) => {
         select: { id: true, name: true }
       },
       treatment: {
-        select: { id: true, name: true, code: true, durationMinutes: true }
+        select: {
+          id: true,
+          name: true,
+          code: true,
+          durationMinutes: true,
+          prepBufferMinutes: true,
+          cleanupBufferMinutes: true
+        }
       }
     },
     orderBy: { startAt: "asc" },
@@ -276,7 +472,7 @@ export const updateAppointment = async (req: AuthRequest, res: Response) => {
         user: { select: { id: true, email: true } },
         createdBy: { select: { id: true, email: true, role: true } },
         cabin: { select: { id: true, name: true } },
-        treatment: { select: { id: true, name: true, code: true, durationMinutes: true } }
+        treatment: { select: { id: true, name: true, code: true, durationMinutes: true, prepBufferMinutes: true, cleanupBufferMinutes: true } }
       }
     });
 
@@ -314,7 +510,7 @@ export const updateAppointment = async (req: AuthRequest, res: Response) => {
         user: { select: { id: true, email: true } },
         createdBy: { select: { id: true, email: true, role: true } },
         cabin: { select: { id: true, name: true } },
-        treatment: { select: { id: true, name: true, code: true, durationMinutes: true } }
+        treatment: { select: { id: true, name: true, code: true, durationMinutes: true, prepBufferMinutes: true, cleanupBufferMinutes: true } }
       }
     });
 
@@ -341,7 +537,7 @@ export const updateAppointment = async (req: AuthRequest, res: Response) => {
         user: { select: { id: true, email: true } },
         createdBy: { select: { id: true, email: true, role: true } },
         cabin: { select: { id: true, name: true } },
-        treatment: { select: { id: true, name: true, code: true, durationMinutes: true } }
+        treatment: { select: { id: true, name: true, code: true, durationMinutes: true, prepBufferMinutes: true, cleanupBufferMinutes: true } }
       }
     });
 
@@ -368,7 +564,7 @@ export const updateAppointment = async (req: AuthRequest, res: Response) => {
         user: { select: { id: true, email: true } },
         createdBy: { select: { id: true, email: true, role: true } },
         cabin: { select: { id: true, name: true } },
-        treatment: { select: { id: true, name: true, code: true, durationMinutes: true } }
+        treatment: { select: { id: true, name: true, code: true, durationMinutes: true, prepBufferMinutes: true, cleanupBufferMinutes: true } }
       }
     });
 
@@ -384,14 +580,13 @@ export const updateAppointment = async (req: AuthRequest, res: Response) => {
     return res.json(noShow);
   }
 
-  if (!payload.startAt || !payload.endAt) {
-    return res.status(400).json({ message: "Debes indicar el nuevo rango de fechas" });
+  if (!payload.startAt) {
+    return res.status(400).json({ message: "Debes indicar la fecha de inicio para reprogramar" });
   }
 
   const startAt = new Date(payload.startAt);
-  const endAt = new Date(payload.endAt);
 
-  let treatment = null;
+  let treatment: ResolvedAgendaTreatment | null = null;
   if (payload.treatmentId) {
     try {
       treatment = await resolveTreatmentForAppointment({ treatmentId: payload.treatmentId });
@@ -402,28 +597,85 @@ export const updateAppointment = async (req: AuthRequest, res: Response) => {
       throw error;
     }
   } else if (appointment.treatmentId) {
-    treatment = await prisma.agendaTreatment.findUnique({
+    const persistedTreatment = await prisma.agendaTreatment.findUnique({
       where: { id: appointment.treatmentId },
-      select: { id: true, code: true, cabinId: true, requiresSpecificCabin: true, isActive: true }
+      select: {
+        id: true,
+        code: true,
+        durationMinutes: true,
+        prepBufferMinutes: true,
+        cleanupBufferMinutes: true,
+        cabinId: true,
+        requiresSpecificCabin: true,
+        isActive: true,
+        cabinRules: {
+          select: { cabinId: true, priority: true },
+          orderBy: [{ priority: "asc" }, { createdAt: "asc" }]
+        }
+      }
     });
+    treatment = (persistedTreatment as ResolvedAgendaTreatment | null) ?? null;
   }
 
-  if (treatment?.requiresSpecificCabin && payload.cabinId && payload.cabinId !== treatment.cabinId) {
-    return res.status(409).json({ message: "El tratamiento seleccionado requiere una cabina específica" });
+  const endAt = deriveAppointmentEndAt({
+    startAt,
+    payloadEndAt: payload.endAt,
+    treatment
+  });
+  if (!endAt) {
+    return res.status(400).json({ message: "Debes indicar la fecha de fin cuando no hay tratamiento seleccionado" });
+  }
+  if (Number.isNaN(startAt.getTime()) || Number.isNaN(endAt.getTime())) {
+    return res.status(400).json({ message: "Las fechas proporcionadas no son válidas" });
+  }
+  if (endAt <= startAt) {
+    return res.status(400).json({ message: "La fecha de fin debe ser mayor a la de inicio" });
   }
 
-  const requestedCabinId =
-    treatment?.cabinId && treatment.requiresSpecificCabin
-      ? treatment.cabinId
-      : payload.cabinId ?? appointment.cabinId ?? treatment?.cabinId ?? undefined;
+  const treatmentCabinPriority = preferredCabinIdsForTreatment(treatment);
+  if (treatment?.requiresSpecificCabin && treatmentCabinPriority.length === 0) {
+    return res.status(409).json({ message: "El tratamiento requiere cabina específica pero no está configurado" });
+  }
+  if (treatment?.requiresSpecificCabin && payload.cabinId && !treatmentCabinPriority.includes(payload.cabinId)) {
+    return res.status(409).json({ message: "El tratamiento seleccionado no puede operar en esa cabina" });
+  }
+
+  const requestedCabinIds =
+    treatment?.requiresSpecificCabin
+      ? payload.cabinId
+        ? [payload.cabinId, ...treatmentCabinPriority.filter((cabinId) => cabinId !== payload.cabinId)]
+        : treatmentCabinPriority
+      : payload.cabinId
+        ? [payload.cabinId]
+        : treatmentCabinPriority.length > 0
+          ? treatmentCabinPriority
+          : appointment.cabinId
+            ? [appointment.cabinId]
+            : undefined;
+
+  try {
+    await enforceActiveAppointmentLimits({
+      clinicId: appointment.clinicId,
+      userId: appointment.userId,
+      candidateStartAt: startAt,
+      excludeAppointmentId: appointment.id
+    });
+  } catch (error) {
+    if (respondIfAgendaError(error, res)) {
+      return;
+    }
+    throw error;
+  }
 
   let placement: Awaited<ReturnType<typeof resolveAppointmentPlacement>>;
   try {
     placement = await resolveAppointmentPlacement({
       startAt,
       endAt,
-      requestedCabinId,
-      excludeAppointmentId: appointment.id
+      requestedCabinIds,
+      excludeAppointmentId: appointment.id,
+      prepBufferMinutes: treatment?.prepBufferMinutes ?? 0,
+      cleanupBufferMinutes: treatment?.cleanupBufferMinutes ?? 0
     });
   } catch (error) {
     if (respondIfAgendaError(error, res)) {
@@ -449,7 +701,7 @@ export const updateAppointment = async (req: AuthRequest, res: Response) => {
       user: { select: { id: true, email: true } },
       createdBy: { select: { id: true, email: true, role: true } },
       cabin: { select: { id: true, name: true } },
-      treatment: { select: { id: true, name: true, code: true, durationMinutes: true } }
+      treatment: { select: { id: true, name: true, code: true, durationMinutes: true, prepBufferMinutes: true, cleanupBufferMinutes: true } }
     }
   });
 

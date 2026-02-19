@@ -5,7 +5,7 @@ export const appointmentCreateSchema = z.object({
   cabinId: z.string().min(3).optional(),
   treatmentId: z.string().min(3).optional(),
   startAt: z.string().datetime(),
-  endAt: z.string().datetime(),
+  endAt: z.string().datetime().optional(),
   reason: z.string().min(1).optional()
 });
 

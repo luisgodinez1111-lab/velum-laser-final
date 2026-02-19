@@ -45,6 +45,8 @@ export interface Appointment {
     name: string;
     code: string;
     durationMinutes: number;
+    prepBufferMinutes?: number;
+    cleanupBufferMinutes?: number;
   };
 }
 
@@ -63,6 +65,10 @@ export interface AgendaPolicy {
   slotMinutes: number;
   autoConfirmHours: number;
   noShowGraceMinutes: number;
+  maxActiveAppointmentsPerWeek: number;
+  maxActiveAppointmentsPerMonth: number;
+  minAdvanceMinutes: number;
+  maxAdvanceDays: number;
 }
 
 export interface AgendaCabin {
@@ -78,7 +84,10 @@ export interface AgendaTreatment {
   code: string;
   description?: string | null;
   durationMinutes: number;
+  prepBufferMinutes: number;
+  cleanupBufferMinutes: number;
   cabinId?: string | null;
+  allowedCabinIds?: string[];
   requiresSpecificCabin: boolean;
   isActive: boolean;
   sortOrder: number;
@@ -205,6 +214,10 @@ export interface AgendaConfigUpdatePayload {
   slotMinutes?: number;
   autoConfirmHours?: number;
   noShowGraceMinutes?: number;
+  maxActiveAppointmentsPerWeek?: number;
+  maxActiveAppointmentsPerMonth?: number;
+  minAdvanceMinutes?: number;
+  maxAdvanceDays?: number;
   cabins?: Array<{
     id?: string;
     name: string;
@@ -217,7 +230,10 @@ export interface AgendaConfigUpdatePayload {
     code: string;
     description?: string | null;
     durationMinutes: number;
+    prepBufferMinutes?: number;
+    cleanupBufferMinutes?: number;
     cabinId?: string | null;
+    allowedCabinIds?: string[];
     requiresSpecificCabin?: boolean;
     isActive?: boolean;
     sortOrder?: number;
