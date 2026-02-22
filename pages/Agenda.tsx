@@ -1,8 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Button } from "../components/Button";
-import { ChevronLeft, ChevronRight, Lock, User, Sparkles } from "lucide-react";
+import { ChevronLeft, ChevronRight, Lock, User, Sparkles, Shield, FileText, Stethoscope, CircleCheck } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
-import { Link } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { clinicalService, MedicalIntake } from "../services/clinicalService";
 
 type ViewState = "intro" | "login" | "register" | "intake" | "calendar";
@@ -30,8 +30,40 @@ const emptyIntakeDraft: IntakeDraft = {
   consentAccepted: false
 };
 
+const shellWrapperClass = "w-full max-w-5xl mx-auto px-4 py-8 sm:py-10 animate-fade-in";
+const glassCardClass =
+  "rounded-[28px] border border-velum-200/80 bg-white/95 shadow-[0_24px_80px_rgba(84,69,56,0.12)] backdrop-blur-sm";
+const fieldClass =
+  "w-full rounded-2xl border border-velum-300 bg-white px-4 py-3 text-sm text-velum-900 placeholder:text-velum-400 outline-none transition focus:border-velum-700 focus:ring-2 focus:ring-velum-200";
+const labelClass = "mb-2 block text-[11px] font-bold uppercase tracking-[0.14em] text-velum-600";
+
+const intakeStepMeta = [
+  {
+    title: "Datos personales",
+    subtitle: "Identificación básica y datos de contacto",
+    icon: User
+  },
+  {
+    title: "Historial médico",
+    subtitle: "Antecedentes clínicos para parámetros seguros",
+    icon: Stethoscope
+  },
+  {
+    title: "Fototipo",
+    subtitle: "Clasificación dermatológica inicial",
+    icon: Sparkles
+  },
+  {
+    title: "Consentimiento",
+    subtitle: "Validación legal y autorización de tratamiento",
+    icon: FileText
+  }
+] as const;
+
 export const Agenda: React.FC = () => {
   const { login, register, isAuthenticated, user } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
 
   const [viewState, setViewState] = useState<ViewState>("intro");
   const [appointmentType] = useState<AppointmentType>("standard");
@@ -54,6 +86,14 @@ export const Agenda: React.FC = () => {
 
   const days = Array.from({ length: 30 }, (_, i) => i + 1);
   const times = ["09:00", "10:00", "11:00", "12:00", "13:00", "15:00", "16:00", "17:00", "18:00", "19:00"];
+
+  const setGuestViewState = (target: "intro" | "login" | "register") => {
+    setViewState(target);
+    if (isAuthenticated) return;
+
+    const search = target === "intro" ? "" : `?mode=${target}`;
+    navigate({ pathname: "/agenda", search }, { replace: true });
+  };
 
   const refreshIntake = async () => {
     if (!isAuthenticated) {
@@ -86,6 +126,18 @@ export const Agenda: React.FC = () => {
       refreshIntake();
     }
   }, [isAuthenticated]);
+
+  useEffect(() => {
+    if (isAuthenticated) return;
+
+    const params = new URLSearchParams(location.search);
+    const mode = params.get("mode");
+    if (mode === "login" || mode === "register") {
+      setViewState(mode);
+      return;
+    }
+    setViewState("intro");
+  }, [location.search, isAuthenticated]);
 
   const calendarMonth = useMemo(() => {
     const now = new Date();
@@ -194,293 +246,539 @@ export const Agenda: React.FC = () => {
 
   if (!isAuthenticated && viewState === "intro") {
     return (
-      <div className="min-h-[70vh] flex flex-col items-center justify-center px-4 max-w-4xl mx-auto animate-fade-in">
-        <div className="text-center mb-12">
-          <Lock className="mx-auto mb-6 text-velum-400" size={48} />
-          <h1 className="text-4xl font-serif text-velum-900 italic mb-4">Agenda Exclusiva</h1>
-          <p className="text-velum-600 font-light max-w-md mx-auto">
-            Accede a nuestro calendario para gestionar tus sesiones.
-            Si es tu primera vez, regístrate para completar expediente clínico.
-          </p>
-        </div>
+      <div className={shellWrapperClass}>
+        <section className={`${glassCardClass} relative overflow-hidden p-7 sm:p-10`}>
+          <div className="pointer-events-none absolute -right-20 -top-24 h-64 w-64 rounded-full bg-velum-200/70 blur-3xl" />
+          <div className="pointer-events-none absolute -left-12 bottom-0 h-44 w-44 rounded-full bg-velum-100 blur-2xl" />
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 w-full max-w-2xl">
-          <div
-            onClick={() => setViewState("login")}
-            className="cursor-pointer group bg-white p-10 border border-velum-200 hover:border-velum-900 transition-all duration-300 text-center hover:shadow-xl"
-          >
-            <User className="mx-auto mb-6 text-velum-800 group-hover:scale-110 transition-transform" size={40} />
-            <h3 className="font-serif text-2xl mb-2 text-velum-900">Soy Socio</h3>
-            <p className="text-xs text-velum-500 uppercase tracking-widest mt-2">Iniciar Sesión</p>
-          </div>
+          <header className="relative mb-8 text-center">
+            <Lock className="mx-auto mb-4 text-velum-500" size={36} />
+            <div className="mx-auto mb-3 inline-flex items-center gap-2 rounded-full border border-velum-200 bg-white/80 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-velum-500">
+              <Shield size={12} />
+              Sesión privada protegida
+            </div>
+            <h1 className="mt-2 font-serif text-4xl italic text-velum-900 sm:text-5xl">Acceso de pacientes</h1>
+            <p className="mx-auto mt-3 max-w-xl text-sm font-light leading-relaxed text-velum-700 sm:text-base">
+              Utiliza el mismo flujo premium para iniciar sesión, registrarte por primera vez y completar tu expediente médico.
+            </p>
+          </header>
 
-          <div
-            onClick={() => setViewState("register")}
-            className="cursor-pointer group bg-velum-900 p-10 border border-velum-900 hover:bg-velum-800 transition-all duration-300 text-center hover:shadow-xl"
-          >
-            <Sparkles className="mx-auto mb-6 text-velum-50 group-hover:scale-110 transition-transform" size={40} />
-            <h3 className="font-serif text-2xl mb-2 text-velum-50">Primera Vez</h3>
-            <p className="text-xs text-velum-300 uppercase tracking-widest mt-2">Registro de Valoración</p>
+          <div className="relative grid grid-cols-1 gap-4 md:grid-cols-2">
+            <button
+              type="button"
+              onClick={() => setGuestViewState("login")}
+              className="group rounded-3xl border border-velum-200 bg-white p-6 text-left shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:border-velum-700 hover:shadow-xl"
+            >
+              <User className="mb-4 text-velum-700 transition-transform duration-300 group-hover:scale-105" size={30} />
+              <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-velum-500">Socio activo</p>
+              <h3 className="mt-1 font-serif text-2xl text-velum-900">Iniciar sesión</h3>
+              <p className="mt-2 text-sm text-velum-600">Accede a tu expediente y agenda en segundos.</p>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setGuestViewState("register")}
+              className="group rounded-3xl border border-velum-900 bg-velum-900 p-6 text-left shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:bg-velum-800 hover:shadow-xl"
+            >
+              <Sparkles className="mb-4 text-velum-100 transition-transform duration-300 group-hover:scale-105" size={30} />
+              <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-velum-300">Primera visita</p>
+              <h3 className="mt-1 font-serif text-2xl text-velum-50">Crear cuenta</h3>
+              <p className="mt-2 text-sm text-velum-200">Regístrate y comienza tu proceso clínico guiado.</p>
+            </button>
           </div>
-        </div>
+        </section>
       </div>
     );
   }
 
   if (!isAuthenticated && viewState === "login") {
     return (
-      <div className="min-h-[60vh] flex flex-col items-center justify-center px-4 animate-fade-in">
-        <div className="w-full max-w-md bg-white p-8 border border-velum-200 shadow-sm relative">
-          <button onClick={() => setViewState("intro")} className="absolute top-4 left-4 text-velum-400 hover:text-velum-900">
-            <ChevronLeft size={24} />
-          </button>
-          <h2 className="font-serif text-2xl text-center mb-6 pt-4">Bienvenido de nuevo</h2>
-          <form onSubmit={handleLoginSubmit} className="space-y-6">
-            <div>
-              <label className="block text-xs uppercase tracking-widest text-velum-600 mb-2">Correo Electrónico</label>
-              <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required className="w-full p-3 border border-velum-300 bg-velum-50 focus:border-velum-900 outline-none transition-colors" placeholder="ana.garcia@gmail.com" />
+      <div className={shellWrapperClass}>
+        <section className={`${glassCardClass} mx-auto w-full max-w-5xl overflow-hidden`}>
+          <div className="grid lg:grid-cols-[0.9fr_1.1fr]">
+            <aside className="relative border-b border-velum-200 bg-gradient-to-br from-velum-100 to-white p-7 sm:p-9 lg:border-b-0 lg:border-r">
+              <div className="pointer-events-none absolute -right-16 bottom-0 h-40 w-40 rounded-full bg-velum-200/70 blur-2xl" />
+              <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-velum-500">Acceso seguro</p>
+              <h2 className="mt-2 font-serif text-3xl italic text-velum-900">Bienvenido de nuevo</h2>
+              <p className="mt-3 text-sm text-velum-700">Tu historial clínico y agenda se cargan automáticamente al iniciar sesión.</p>
+
+              <div className="mt-7 space-y-3 text-sm text-velum-700">
+                <div className="flex items-center gap-3 rounded-2xl border border-velum-200 bg-white/80 px-3 py-2">
+                  <Shield size={16} className="text-velum-600" />
+                  Protección de sesión y datos clínicos
+                </div>
+                <div className="flex items-center gap-3 rounded-2xl border border-velum-200 bg-white/80 px-3 py-2">
+                  <CircleCheck size={16} className="text-velum-600" />
+                  Flujo continuo hacia expediente y agenda
+                </div>
+              </div>
+            </aside>
+
+            <div className="p-7 sm:p-10">
+              <header className="mb-8 flex items-start justify-between gap-4">
+                <button
+                  type="button"
+                  onClick={() => setGuestViewState("intro")}
+                  className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-velum-200 text-velum-500 transition hover:border-velum-500 hover:text-velum-900"
+                >
+                  <ChevronLeft size={20} />
+                </button>
+
+                <div className="text-right">
+                  <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-velum-500">Ingreso</p>
+                  <p className="mt-1 text-xs text-velum-500">Verificación de credenciales</p>
+                </div>
+              </header>
+
+              <form onSubmit={handleLoginSubmit} className="space-y-5">
+                <div>
+                  <label className={labelClass}>Correo electrónico</label>
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                    className={fieldClass}
+                    placeholder="ana.garcia@gmail.com"
+                  />
+                </div>
+                <div>
+                  <label className={labelClass}>Contraseña</label>
+                  <input
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    className={fieldClass}
+                    placeholder="••••••••"
+                  />
+                </div>
+                <Button type="submit" className="w-full rounded-2xl">
+                  Entrar a la agenda
+                </Button>
+              </form>
+
+              {appointmentMessage && (
+                <p className="mt-4 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{appointmentMessage}</p>
+              )}
             </div>
-            <div>
-              <label className="block text-xs uppercase tracking-widest text-velum-600 mb-2">Contraseña</label>
-              <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required className="w-full p-3 border border-velum-300 bg-velum-50 focus:border-velum-900 outline-none transition-colors" placeholder="hashed_secret_123" />
-            </div>
-            <Button type="submit" className="w-full">Entrar a la Agenda</Button>
-          </form>
-          {appointmentMessage && <p className="text-xs text-red-600 mt-4">{appointmentMessage}</p>}
-        </div>
+          </div>
+        </section>
       </div>
     );
   }
 
   if (!isAuthenticated && viewState === "register") {
     return (
-      <div className="min-h-[60vh] flex flex-col items-center justify-center px-4 animate-fade-in">
-        <div className="w-full max-w-md bg-white p-8 border border-velum-200 shadow-sm relative">
-          <button onClick={() => setViewState("intro")} className="absolute top-4 left-4 text-velum-400 hover:text-velum-900">
-            <ChevronLeft size={24} />
-          </button>
-          <h2 className="font-serif text-2xl text-center mb-6 pt-4">Crear cuenta</h2>
-          <form onSubmit={handleRegisterSubmit} className="space-y-6">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs uppercase tracking-widest text-velum-600 mb-2">Nombre</label>
-                <input type="text" value={firstName} onChange={(e) => setFirstName(e.target.value)} required className="w-full p-3 border border-velum-300 bg-velum-50 focus:border-velum-900 outline-none transition-colors" placeholder="Ana" />
+      <div className={shellWrapperClass}>
+        <section className={`${glassCardClass} mx-auto w-full max-w-5xl overflow-hidden`}>
+          <div className="grid lg:grid-cols-[0.9fr_1.1fr]">
+            <aside className="relative border-b border-velum-200 bg-gradient-to-br from-velum-100 to-white p-7 sm:p-9 lg:border-b-0 lg:border-r">
+              <div className="pointer-events-none absolute -left-10 top-0 h-40 w-40 rounded-full bg-velum-200/60 blur-3xl" />
+              <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-velum-500">Registro inicial</p>
+              <h2 className="mt-2 font-serif text-3xl italic text-velum-900">Crear cuenta clínica</h2>
+              <p className="mt-3 text-sm text-velum-700">Después del registro continuarás directo a tu expediente médico.</p>
+
+              <div className="mt-7 space-y-3 text-sm text-velum-700">
+                <div className="flex items-center gap-3 rounded-2xl border border-velum-200 bg-white/80 px-3 py-2">
+                  <CircleCheck size={16} className="text-velum-600" />
+                  Alta en menos de 1 minuto
+                </div>
+                <div className="flex items-center gap-3 rounded-2xl border border-velum-200 bg-white/80 px-3 py-2">
+                  <FileText size={16} className="text-velum-600" />
+                  Perfil conectado con expediente y consentimiento
+                </div>
               </div>
-              <div>
-                <label className="block text-xs uppercase tracking-widest text-velum-600 mb-2">Apellido</label>
-                <input type="text" value={lastName} onChange={(e) => setLastName(e.target.value)} required className="w-full p-3 border border-velum-300 bg-velum-50 focus:border-velum-900 outline-none transition-colors" placeholder="García" />
-              </div>
+            </aside>
+
+            <div className="p-7 sm:p-10">
+              <header className="mb-8 flex items-start justify-between gap-4">
+                <button
+                  type="button"
+                  onClick={() => setGuestViewState("intro")}
+                  className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-velum-200 text-velum-500 transition hover:border-velum-500 hover:text-velum-900"
+                >
+                  <ChevronLeft size={20} />
+                </button>
+
+                <div className="text-right">
+                  <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-velum-500">Cuenta nueva</p>
+                  <p className="mt-1 text-xs text-velum-500">Acceso de paciente</p>
+                </div>
+              </header>
+
+              <form onSubmit={handleRegisterSubmit} className="space-y-5">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div>
+                    <label className={labelClass}>Nombre</label>
+                    <input
+                      type="text"
+                      value={firstName}
+                      onChange={(e) => setFirstName(e.target.value)}
+                      required
+                      className={fieldClass}
+                      placeholder="Ana"
+                    />
+                  </div>
+                  <div>
+                    <label className={labelClass}>Apellido</label>
+                    <input
+                      type="text"
+                      value={lastName}
+                      onChange={(e) => setLastName(e.target.value)}
+                      required
+                      className={fieldClass}
+                      placeholder="García"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className={labelClass}>Correo electrónico</label>
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                    className={fieldClass}
+                    placeholder="ana.garcia@gmail.com"
+                  />
+                </div>
+                <div>
+                  <label className={labelClass}>Contraseña</label>
+                  <input
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    className={fieldClass}
+                    placeholder="••••••••"
+                  />
+                </div>
+                <Button type="submit" className="w-full rounded-2xl">
+                  Crear cuenta
+                </Button>
+              </form>
+
+              {appointmentMessage && (
+                <p className="mt-4 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{appointmentMessage}</p>
+              )}
             </div>
-            <div>
-              <label className="block text-xs uppercase tracking-widest text-velum-600 mb-2">Correo Electrónico</label>
-              <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required className="w-full p-3 border border-velum-300 bg-velum-50 focus:border-velum-900 outline-none transition-colors" placeholder="ana.garcia@gmail.com" />
-            </div>
-            <div>
-              <label className="block text-xs uppercase tracking-widest text-velum-600 mb-2">Contraseña</label>
-              <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required className="w-full p-3 border border-velum-300 bg-velum-50 focus:border-velum-900 outline-none transition-colors" placeholder="••••••••" />
-            </div>
-            <Button type="submit" className="w-full">Crear cuenta</Button>
-          </form>
-          {appointmentMessage && <p className="text-xs text-red-600 mt-4">{appointmentMessage}</p>}
-        </div>
+          </div>
+        </section>
       </div>
     );
   }
 
   if (viewState === "intake") {
+    const progress = (intakeStep / 4) * 100;
+    const activeMeta = intakeStepMeta[intakeStep - 1];
+
     return (
-      <div className="max-w-3xl mx-auto px-4 py-8 animate-fade-in">
-        <h1 className="text-3xl font-serif italic text-velum-900 mb-2">Expediente Médico</h1>
-        <p className="text-sm text-velum-600 mb-8">Paso {intakeStep} de 4. Debes completar y enviar para habilitar agenda.</p>
+      <div className={shellWrapperClass}>
+        <section className={`${glassCardClass} p-4 sm:p-6 lg:p-8`}>
+          <div className="grid gap-6 lg:grid-cols-[260px_minmax(0,1fr)]">
+            <aside className="rounded-3xl border border-velum-200 bg-velum-50/70 p-4 sm:p-5 lg:sticky lg:top-24 lg:self-start">
+              <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-velum-500">Proceso clínico</p>
+              <h2 className="mt-1 font-serif text-2xl text-velum-900">Expediente médico</h2>
+              <p className="mt-2 text-xs text-velum-600">Paso {intakeStep} de 4</p>
 
-        <div className="bg-white border border-velum-200 shadow-sm p-6 space-y-6">
-          {intakeStep === 1 && (
-            <>
-              <h3 className="font-serif text-xl">Datos personales</h3>
-              <input
-                className="w-full p-3 border border-velum-300"
-                placeholder="Nombre completo"
-                value={intakeDraft.personalJson.fullName ?? ""}
-                onChange={(e) => setIntakeDraft((prev) => ({ ...prev, personalJson: { ...prev.personalJson, fullName: e.target.value } }))}
-              />
-              <input
-                className="w-full p-3 border border-velum-300"
-                placeholder="Teléfono"
-                value={intakeDraft.personalJson.phone ?? ""}
-                onChange={(e) => setIntakeDraft((prev) => ({ ...prev, personalJson: { ...prev.personalJson, phone: e.target.value } }))}
-              />
-              <input
-                className="w-full p-3 border border-velum-300"
-                type="date"
-                value={intakeDraft.personalJson.birthDate ?? ""}
-                onChange={(e) => setIntakeDraft((prev) => ({ ...prev, personalJson: { ...prev.personalJson, birthDate: e.target.value } }))}
-              />
-            </>
-          )}
-
-          {intakeStep === 2 && (
-            <>
-              <h3 className="font-serif text-xl">Historial clínico</h3>
-              <textarea
-                className="w-full p-3 border border-velum-300"
-                placeholder="Alergias"
-                value={intakeDraft.historyJson.allergies ?? ""}
-                onChange={(e) => setIntakeDraft((prev) => ({ ...prev, historyJson: { ...prev.historyJson, allergies: e.target.value } }))}
-              />
-              <textarea
-                className="w-full p-3 border border-velum-300"
-                placeholder="Medicamentos actuales"
-                value={intakeDraft.historyJson.medications ?? ""}
-                onChange={(e) => setIntakeDraft((prev) => ({ ...prev, historyJson: { ...prev.historyJson, medications: e.target.value } }))}
-              />
-              <textarea
-                className="w-full p-3 border border-velum-300"
-                placeholder="Condiciones de piel"
-                value={intakeDraft.historyJson.skinConditions ?? ""}
-                onChange={(e) => setIntakeDraft((prev) => ({ ...prev, historyJson: { ...prev.historyJson, skinConditions: e.target.value } }))}
-              />
-            </>
-          )}
-
-          {intakeStep === 3 && (
-            <>
-              <h3 className="font-serif text-xl">Fototipo (Fitzpatrick)</h3>
-              <div className="grid grid-cols-3 gap-3">
-                {[1, 2, 3, 4, 5, 6].map((value) => (
-                  <button
-                    key={value}
-                    onClick={() => setIntakeDraft((prev) => ({ ...prev, phototype: value }))}
-                    className={`py-3 border ${intakeDraft.phototype === value ? "border-velum-900 bg-velum-900 text-white" : "border-velum-300"}`}
-                  >
-                    Tipo {value}
-                  </button>
-                ))}
+              <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-white">
+                <div className="h-full rounded-full bg-velum-900 transition-all duration-500" style={{ width: `${progress}%` }} />
               </div>
-            </>
-          )}
 
-          {intakeStep === 4 && (
-            <>
-              <h3 className="font-serif text-xl">Consentimiento</h3>
-              <label className="flex items-center gap-3 text-sm">
-                <input
-                  type="checkbox"
-                  checked={intakeDraft.consentAccepted}
-                  onChange={(e) => setIntakeDraft((prev) => ({ ...prev, consentAccepted: e.target.checked }))}
-                />
-                Declaro que la información es correcta y autorizo tratamiento.
-              </label>
-              <input
-                className="w-full p-3 border border-velum-300"
-                placeholder="Nombre para firma"
-                value={intakeDraft.signatureKey ?? ""}
-                onChange={(e) => setIntakeDraft((prev) => ({ ...prev, signatureKey: e.target.value }))}
-              />
-            </>
-          )}
+              <div className="mt-4 space-y-2">
+                {intakeStepMeta.map((step, idx) => {
+                  const current = intakeStep === idx + 1;
+                  const completed = intakeStep > idx + 1;
+                  const Icon = step.icon;
+                  return (
+                    <div
+                      key={step.title}
+                      className={`rounded-2xl border px-3 py-2 transition ${
+                        current
+                          ? "border-velum-900 bg-velum-900 text-velum-50"
+                          : completed
+                            ? "border-velum-300 bg-white text-velum-700"
+                            : "border-velum-200 bg-white text-velum-500"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider">
+                        <Icon size={14} />
+                        <span>{idx + 1}. {step.title}</span>
+                      </div>
+                      <p className={`mt-1 text-[11px] ${current ? "text-velum-200" : "text-velum-500"}`}>{step.subtitle}</p>
+                    </div>
+                  );
+                })}
+              </div>
+            </aside>
 
-          {intakeError && <p className="text-xs text-red-600">{intakeError}</p>}
+            <div>
+              <header className="mb-6 rounded-3xl border border-velum-200 bg-white p-5 sm:p-6">
+                <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-velum-500">Paso activo</p>
+                <h1 className="mt-1 font-serif text-3xl italic text-velum-900">{activeMeta.title}</h1>
+                <p className="mt-2 text-sm text-velum-600">{activeMeta.subtitle}</p>
+              </header>
 
-          <div className="flex justify-between items-center pt-4 border-t border-velum-100">
-            <Button variant="outline" onClick={() => setIntakeStep((prev) => Math.max(prev - 1, 1))} disabled={intakeStep === 1 || isSavingIntake}>
-              Atrás
-            </Button>
+              <div className="rounded-3xl border border-velum-200 bg-velum-50/70 p-5 sm:p-6">
+                {intakeStep === 1 && (
+                  <div className="space-y-4">
+                    <h3 className="font-serif text-2xl text-velum-900">Datos personales</h3>
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                      <div className="sm:col-span-2">
+                        <label className={labelClass}>Nombre completo</label>
+                        <input
+                          className={fieldClass}
+                          placeholder="Nombre completo"
+                          value={intakeDraft.personalJson.fullName ?? ""}
+                          onChange={(e) =>
+                            setIntakeDraft((prev) => ({ ...prev, personalJson: { ...prev.personalJson, fullName: e.target.value } }))
+                          }
+                        />
+                      </div>
+                      <div>
+                        <label className={labelClass}>Teléfono</label>
+                        <input
+                          className={fieldClass}
+                          placeholder="55 1234 5678"
+                          value={intakeDraft.personalJson.phone ?? ""}
+                          onChange={(e) =>
+                            setIntakeDraft((prev) => ({ ...prev, personalJson: { ...prev.personalJson, phone: e.target.value } }))
+                          }
+                        />
+                      </div>
+                      <div>
+                        <label className={labelClass}>Fecha de nacimiento</label>
+                        <input
+                          className={fieldClass}
+                          type="date"
+                          value={intakeDraft.personalJson.birthDate ?? ""}
+                          onChange={(e) =>
+                            setIntakeDraft((prev) => ({ ...prev, personalJson: { ...prev.personalJson, birthDate: e.target.value } }))
+                          }
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
 
-            {intakeStep < 4 ? (
-              <Button onClick={handleNextIntakeStep} isLoading={isSavingIntake}>
-                Guardar y continuar
-              </Button>
-            ) : (
-              <Button onClick={handleSubmitIntake} isLoading={isSavingIntake}>
-                Enviar expediente
-              </Button>
-            )}
+                {intakeStep === 2 && (
+                  <div className="space-y-4">
+                    <h3 className="font-serif text-2xl text-velum-900">Historial médico</h3>
+                    <p className="text-sm text-velum-600">
+                      Esta información es confidencial y se usa para ajustar parámetros seguros de tratamiento.
+                    </p>
+                    <div className="space-y-3">
+                      <div>
+                        <label className={labelClass}>Alergias</label>
+                        <textarea
+                          className={fieldClass}
+                          rows={3}
+                          placeholder="Medicamentos, alimentos o contacto"
+                          value={intakeDraft.historyJson.allergies ?? ""}
+                          onChange={(e) =>
+                            setIntakeDraft((prev) => ({ ...prev, historyJson: { ...prev.historyJson, allergies: e.target.value } }))
+                          }
+                        />
+                      </div>
+                      <div>
+                        <label className={labelClass}>Medicamentos actuales</label>
+                        <textarea
+                          className={fieldClass}
+                          rows={3}
+                          placeholder="Nombre y dosis"
+                          value={intakeDraft.historyJson.medications ?? ""}
+                          onChange={(e) =>
+                            setIntakeDraft((prev) => ({ ...prev, historyJson: { ...prev.historyJson, medications: e.target.value } }))
+                          }
+                        />
+                      </div>
+                      <div>
+                        <label className={labelClass}>Condiciones de piel</label>
+                        <textarea
+                          className={fieldClass}
+                          rows={3}
+                          placeholder="Acné, dermatitis, sensibilidad, etc."
+                          value={intakeDraft.historyJson.skinConditions ?? ""}
+                          onChange={(e) =>
+                            setIntakeDraft((prev) => ({ ...prev, historyJson: { ...prev.historyJson, skinConditions: e.target.value } }))
+                          }
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {intakeStep === 3 && (
+                  <div className="space-y-4">
+                    <h3 className="font-serif text-2xl text-velum-900">Fototipo (Fitzpatrick)</h3>
+                    <p className="text-sm text-velum-600">Selecciona el fototipo identificado durante valoración clínica.</p>
+                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                      {[1, 2, 3, 4, 5, 6].map((value) => (
+                        <button
+                          key={value}
+                          type="button"
+                          onClick={() => setIntakeDraft((prev) => ({ ...prev, phototype: value }))}
+                          className={`rounded-2xl border px-4 py-3 text-sm font-semibold transition ${
+                            intakeDraft.phototype === value
+                              ? "border-velum-900 bg-velum-900 text-white shadow-md"
+                              : "border-velum-300 bg-white text-velum-700 hover:border-velum-500"
+                          }`}
+                        >
+                          Tipo {value}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {intakeStep === 4 && (
+                  <div className="space-y-4">
+                    <h3 className="font-serif text-2xl text-velum-900">Consentimiento informado</h3>
+                    <div className="rounded-2xl border border-velum-200 bg-white p-4">
+                      <label className="flex items-start gap-3 text-sm text-velum-700">
+                        <input
+                          type="checkbox"
+                          checked={intakeDraft.consentAccepted}
+                          onChange={(e) => setIntakeDraft((prev) => ({ ...prev, consentAccepted: e.target.checked }))}
+                          className="mt-1 h-4 w-4 accent-velum-900"
+                        />
+                        <span>Declaro que la información es correcta y autorizo el tratamiento según valoración clínica.</span>
+                      </label>
+                    </div>
+                    <div>
+                      <label className={labelClass}>Nombre para firma</label>
+                      <input
+                        className={fieldClass}
+                        placeholder="Nombre completo"
+                        value={intakeDraft.signatureKey ?? ""}
+                        onChange={(e) => setIntakeDraft((prev) => ({ ...prev, signatureKey: e.target.value }))}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {intakeError && (
+                <p className="mt-4 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{intakeError}</p>
+              )}
+
+              <div className="mt-6 flex flex-col-reverse items-stretch justify-between gap-3 border-t border-velum-200 pt-5 sm:flex-row sm:items-center">
+                <Button
+                  variant="outline"
+                  className="rounded-2xl"
+                  onClick={() => setIntakeStep((prev) => Math.max(prev - 1, 1))}
+                  disabled={intakeStep === 1 || isSavingIntake}
+                >
+                  Atrás
+                </Button>
+
+                {intakeStep < 4 ? (
+                  <Button className="rounded-2xl" onClick={handleNextIntakeStep} isLoading={isSavingIntake}>
+                    Guardar y continuar
+                  </Button>
+                ) : (
+                  <Button className="rounded-2xl" onClick={handleSubmitIntake} isLoading={isSavingIntake}>
+                    Enviar expediente
+                  </Button>
+                )}
+              </div>
+
+              {intake?.status && <p className="mt-4 text-xs text-velum-500">Estado actual: {intake.status}</p>}
+            </div>
           </div>
-        </div>
-
-        {intake?.status && <p className="text-xs text-velum-500 mt-4">Estado actual: {intake.status}</p>}
+        </section>
       </div>
     );
   }
 
   return (
-    <div className="max-w-5xl mx-auto px-4 py-8 animate-fade-in">
-      <div className="flex justify-between items-end mb-10 border-b border-velum-100 pb-4">
-        <div>
-          <h1 className="text-3xl font-serif italic text-velum-900 mb-2">
-            Agenda {appointmentType === "valuation" ? "de Valoración" : "Personal"}
-          </h1>
-          <p className="text-velum-600 font-light text-sm">
-            Hola, {user?.name}. Gestiona tus próximas sesiones.
-          </p>
-        </div>
-        <Link to="/dashboard" className="text-xs text-velum-900 font-bold underline mr-4">Ir a Mi Cuenta</Link>
-      </div>
+    <div className={shellWrapperClass}>
+      <section className={`${glassCardClass} p-6 sm:p-8`}>
+        <header className="mb-6 flex flex-col justify-between gap-4 border-b border-velum-200 pb-5 sm:flex-row sm:items-end">
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-velum-500">Agenda activa</p>
+            <h1 className="mt-1 text-3xl font-serif italic text-velum-900">
+              Agenda {appointmentType === "valuation" ? "de Valoración" : "Personal"}
+            </h1>
+            <p className="mt-2 text-sm font-light text-velum-600">Hola, {user?.name}. Selecciona fecha y horario para tu siguiente sesión.</p>
+          </div>
+          <Link to="/dashboard" className="text-xs font-bold uppercase tracking-widest text-velum-700 underline">
+            Ir a Mi Cuenta
+          </Link>
+        </header>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
-        <div className="bg-white p-6 border border-velum-200 shadow-sm">
-          <div className="flex justify-between items-center mb-6">
-            <h3 className="font-serif text-lg capitalize">{calendarMonth}</h3>
-            <div className="flex gap-2">
-              <button className="p-1 opacity-40 cursor-not-allowed"><ChevronLeft size={20} /></button>
-              <button className="p-1 opacity-40 cursor-not-allowed"><ChevronRight size={20} /></button>
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <div className="rounded-3xl border border-velum-200 bg-white p-6">
+            <div className="mb-6 flex items-center justify-between">
+              <h3 className="font-serif text-lg capitalize">{calendarMonth}</h3>
+              <div className="flex gap-2">
+                <button className="cursor-not-allowed rounded-full border border-velum-200 p-1.5 opacity-40">
+                  <ChevronLeft size={18} />
+                </button>
+                <button className="cursor-not-allowed rounded-full border border-velum-200 p-1.5 opacity-40">
+                  <ChevronRight size={18} />
+                </button>
+              </div>
             </div>
-          </div>
-          <div className="grid grid-cols-7 gap-2 text-center text-sm mb-2 text-velum-400 font-bold uppercase text-[10px]">
-            <div>D</div><div>L</div><div>M</div><div>M</div><div>J</div><div>V</div><div>S</div>
-          </div>
-          <div className="grid grid-cols-7 gap-2">
-            {days.map((d) => (
-              <button
-                key={d}
-                onClick={() => setSelectedDay(d)}
-                className={`
-                  aspect-square flex items-center justify-center text-sm transition-colors duration-200
-                  ${selectedDay === d
-                    ? "bg-velum-900 text-white shadow-md"
-                    : "hover:bg-velum-100 text-velum-800"}
-                `}
-              >
-                {d}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="flex flex-col h-full">
-          <h3 className="font-serif text-lg mb-6">Horarios Disponibles {selectedDay ? `para +${selectedDay - 1} días` : ""}</h3>
-
-          {!selectedDay ? (
-            <div className="flex-1 flex items-center justify-center border border-dashed border-velum-300 bg-velum-50 text-velum-400 text-sm p-8 text-center">
-              <p>Selecciona un día en el calendario para ver la disponibilidad.</p>
+            <div className="mb-2 grid grid-cols-7 gap-2 text-center text-[10px] font-bold uppercase text-velum-400">
+              <div>D</div><div>L</div><div>M</div><div>M</div><div>J</div><div>V</div><div>S</div>
             </div>
-          ) : (
-            <div className="grid grid-cols-3 gap-3 mb-8">
-              {times.map((t) => (
+            <div className="grid grid-cols-7 gap-2">
+              {days.map((d) => (
                 <button
-                  key={t}
-                  onClick={() => setSelectedTime(t)}
+                  key={d}
+                  onClick={() => setSelectedDay(d)}
                   className={`
-                    py-2 border text-sm transition-all duration-200
-                    ${selectedTime === t
-                      ? "border-velum-900 bg-velum-900 text-white shadow-md transform scale-105"
-                      : "border-velum-200 text-velum-800 hover:border-velum-400 hover:bg-velum-50"}
+                    aspect-square rounded-xl text-sm transition-colors duration-200
+                    ${selectedDay === d
+                      ? "bg-velum-900 text-white shadow-md"
+                      : "text-velum-800 hover:bg-velum-100"}
                   `}
                 >
-                  {t}
+                  {d}
                 </button>
               ))}
             </div>
-          )}
+          </div>
 
-          <div className="mt-auto pt-6 border-t border-velum-100">
-            <Button className="w-full" disabled={!selectedDay || !selectedTime || isScheduling} isLoading={isScheduling} onClick={handleSchedule}>
-              Confirmar Cita
-            </Button>
-            {appointmentMessage && <p className="text-xs mt-3 text-velum-700">{appointmentMessage}</p>}
+          <div className="flex h-full flex-col rounded-3xl border border-velum-200 bg-white p-6">
+            <h3 className="mb-5 font-serif text-lg">
+              Horarios disponibles {selectedDay ? `para +${selectedDay - 1} días` : ""}
+            </h3>
+
+            {!selectedDay ? (
+              <div className="flex flex-1 items-center justify-center rounded-2xl border border-dashed border-velum-300 bg-velum-50 p-8 text-center text-sm text-velum-400">
+                <p>Selecciona un día en el calendario para ver la disponibilidad.</p>
+              </div>
+            ) : (
+              <div className="mb-8 grid grid-cols-3 gap-3">
+                {times.map((t) => (
+                  <button
+                    key={t}
+                    onClick={() => setSelectedTime(t)}
+                    className={`
+                      rounded-xl border py-2 text-sm transition-all duration-200
+                      ${selectedTime === t
+                        ? "scale-105 border-velum-900 bg-velum-900 text-white shadow-md"
+                        : "border-velum-200 text-velum-800 hover:border-velum-400 hover:bg-velum-50"}
+                    `}
+                  >
+                    {t}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            <div className="mt-auto border-t border-velum-100 pt-6">
+              <Button className="w-full rounded-2xl" disabled={!selectedDay || !selectedTime || isScheduling} isLoading={isScheduling} onClick={handleSchedule}>
+                Confirmar cita
+              </Button>
+              {appointmentMessage && <p className="mt-3 text-xs text-velum-700">{appointmentMessage}</p>}
+            </div>
           </div>
         </div>
-      </div>
+      </section>
     </div>
   );
 };
