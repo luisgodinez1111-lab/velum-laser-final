@@ -109,13 +109,22 @@ export const Agenda: React.FC = () => {
   const [otpMessage, setOtpMessage] = useState<string | null>(null);
   const [otpSuccess, setOtpSuccess] = useState(false);
 
-  const [selectedDay, setSelectedDay] = useState<number | null>(null);
-  const [selectedTime, setSelectedTime] = useState<string | null>(null);
   const [appointmentMessage, setAppointmentMessage] = useState<string | null>(null);
   const [isScheduling, setIsScheduling] = useState(false);
 
-  const days = Array.from({ length: 30 }, (_, i) => i + 1);
-  const times = ["09:00", "10:00", "11:00", "12:00", "13:00", "15:00", "16:00", "17:00", "18:00", "19:00"];
+  // ── Real calendar state ────────────────────────────────────────────────
+  type PublicSlot = { label: string; startMinute: number; endMinute: number; available: boolean };
+  const [calendarBase, setCalendarBase] = useState<Date>(() => {
+    const d = new Date();
+    d.setDate(1);
+    return d;
+  });
+  const [agendaPolicy, setAgendaPolicy] = useState<{ minAdvanceMinutes: number; maxAdvanceDays: number } | null>(null);
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [daySlots, setDaySlots] = useState<PublicSlot[]>([]);
+  const [isLoadingSlots, setIsLoadingSlots] = useState(false);
+  const [selectedSlot, setSelectedSlot] = useState<PublicSlot | null>(null);
+  const [slotsError, setSlotsError] = useState<string | null>(null);
 
   const setGuestViewState = (target: "intro" | "login" | "register") => {
     setViewState(target);
@@ -123,6 +132,14 @@ export const Agenda: React.FC = () => {
 
     const search = target === "intro" ? "" : `?mode=${target}`;
     navigate({ pathname: "/agenda", search }, { replace: true });
+  };
+
+  // ── Helpers: date key (YYYY-MM-DD local) ─────────────────────────────
+  const toDateKey = (d: Date) => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
   };
 
   const refreshIntake = async () => {
@@ -157,6 +174,35 @@ export const Agenda: React.FC = () => {
     }
   }, [isAuthenticated]);
 
+  // Fetch agenda policy once when calendar view becomes active
+  useEffect(() => {
+    if (!isAuthenticated || agendaPolicy) return;
+    clinicalService.getPublicAgendaPolicy()
+      .then((p) => setAgendaPolicy(p))
+      .catch(() => setAgendaPolicy({ minAdvanceMinutes: 120, maxAdvanceDays: 60 }));
+  }, [isAuthenticated]);
+
+  const handleSelectDate = async (dateKey: string) => {
+    setSelectedDate(dateKey);
+    setSelectedSlot(null);
+    setDaySlots([]);
+    setSlotsError(null);
+    setIsLoadingSlots(true);
+    try {
+      const result = await clinicalService.getPublicAgendaSlots(dateKey);
+      if (!result.isOpen || result.slots.length === 0) {
+        setSlotsError("No hay disponibilidad para este día.");
+        setDaySlots([]);
+      } else {
+        setDaySlots(result.slots);
+      }
+    } catch {
+      setSlotsError("No se pudo cargar la disponibilidad. Intenta de nuevo.");
+    } finally {
+      setIsLoadingSlots(false);
+    }
+  };
+
   useEffect(() => {
     if (isAuthenticated) return;
 
@@ -169,10 +215,27 @@ export const Agenda: React.FC = () => {
     setViewState("intro");
   }, [location.search, isAuthenticated]);
 
-  const calendarMonth = useMemo(() => {
+  // Calendar helpers
+  const calendarMonthLabel = calendarBase.toLocaleDateString("es-MX", { month: "long", year: "numeric" });
+  const calendarDays = useMemo(() => {
+    const year = calendarBase.getFullYear();
+    const month = calendarBase.getMonth();
+    const firstDow = new Date(year, month, 1).getDay(); // 0=Sun
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
     const now = new Date();
-    return now.toLocaleDateString("es-MX", { month: "long", year: "numeric" });
-  }, []);
+    const minMs = agendaPolicy ? agendaPolicy.minAdvanceMinutes * 60 * 1000 : 120 * 60 * 1000;
+    const maxDays = agendaPolicy ? agendaPolicy.maxAdvanceDays : 60;
+    const earliest = new Date(now.getTime() + minMs);
+    const latest = new Date(now.getTime() + maxDays * 24 * 60 * 60 * 1000);
+    const cells: Array<{ date: Date | null; dateKey: string | null; selectable: boolean }> = [];
+    for (let i = 0; i < firstDow; i++) cells.push({ date: null, dateKey: null, selectable: false });
+    for (let d = 1; d <= daysInMonth; d++) {
+      const date = new Date(year, month, d);
+      const selectable = date >= earliest && date <= latest;
+      cells.push({ date, dateKey: toDateKey(date), selectable });
+    }
+    return cells;
+  }, [calendarBase, agendaPolicy]);
 
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -333,21 +396,16 @@ export const Agenda: React.FC = () => {
   };
 
   const handleSchedule = async () => {
-    if (!selectedDay || !selectedTime) {
-      return;
-    }
+    if (!selectedDate || !selectedSlot) return;
 
     setIsScheduling(true);
     setAppointmentMessage(null);
 
     try {
-      const [hours, minutes] = selectedTime.split(":").map(Number);
-      const startAt = new Date();
-      startAt.setHours(0, 0, 0, 0);
-      startAt.setDate(startAt.getDate() + (selectedDay - 1));
-      startAt.setHours(hours, minutes, 0, 0);
-
-      const endAt = new Date(startAt.getTime() + 45 * 60 * 1000);
+      // Build startAt from dateKey + startMinute
+      const [year, month, day] = selectedDate.split("-").map(Number);
+      const startAt = new Date(year, month - 1, day, 0, selectedSlot.startMinute, 0, 0);
+      const endAt = new Date(year, month - 1, day, 0, selectedSlot.endMinute, 0, 0);
 
       await clinicalService.createAppointment({
         startAt: startAt.toISOString(),
@@ -355,9 +413,10 @@ export const Agenda: React.FC = () => {
         reason: appointmentType === "valuation" ? "valuation" : "laser_session"
       });
 
-      toast.success("Cita agendada correctamente.");
-      setSelectedDay(null);
-      setSelectedTime(null);
+      toast.success("¡Cita agendada! Te esperamos el " + startAt.toLocaleDateString("es-MX", { weekday: "long", day: "numeric", month: "long" }) + " a las " + selectedSlot.label + ".");
+      setSelectedDate(null);
+      setSelectedSlot(null);
+      setDaySlots([]);
     } catch (error: any) {
       toast.error(error?.message ?? "No se pudo agendar la cita.");
     } finally {
@@ -1111,72 +1170,139 @@ export const Agenda: React.FC = () => {
         </header>
 
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          {/* ── Calendario real ─────────────────────────────── */}
           <div className="rounded-3xl border border-velum-200 bg-white p-6">
-            <div className="mb-6 flex items-center justify-between">
-              <h3 className="font-serif text-lg capitalize">{calendarMonth}</h3>
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="font-serif text-lg capitalize">{calendarMonthLabel}</h3>
               <div className="flex gap-2">
-                <button className="cursor-not-allowed rounded-full border border-velum-200 p-1.5 opacity-40">
+                <button
+                  onClick={() => {
+                    const d = new Date(calendarBase);
+                    d.setMonth(d.getMonth() - 1);
+                    d.setDate(1);
+                    setCalendarBase(d);
+                    setSelectedDate(null);
+                    setDaySlots([]);
+                    setSelectedSlot(null);
+                  }}
+                  className="rounded-full border border-velum-200 p-1.5 text-velum-600 hover:border-velum-500 hover:text-velum-900 transition"
+                  aria-label="Mes anterior"
+                >
                   <ChevronLeft size={18} />
                 </button>
-                <button className="cursor-not-allowed rounded-full border border-velum-200 p-1.5 opacity-40">
+                <button
+                  onClick={() => {
+                    const d = new Date(calendarBase);
+                    d.setMonth(d.getMonth() + 1);
+                    d.setDate(1);
+                    setCalendarBase(d);
+                    setSelectedDate(null);
+                    setDaySlots([]);
+                    setSelectedSlot(null);
+                  }}
+                  className="rounded-full border border-velum-200 p-1.5 text-velum-600 hover:border-velum-500 hover:text-velum-900 transition"
+                  aria-label="Mes siguiente"
+                >
                   <ChevronRight size={18} />
                 </button>
               </div>
             </div>
-            <div className="mb-2 grid grid-cols-7 gap-2 text-center text-[10px] font-bold uppercase text-velum-400">
-              <div>D</div><div>L</div><div>M</div><div>M</div><div>J</div><div>V</div><div>S</div>
+            <div className="mb-2 grid grid-cols-7 gap-1 text-center text-[10px] font-bold uppercase text-velum-400">
+              {["D","L","M","M","J","V","S"].map((d, i) => <div key={i}>{d}</div>)}
             </div>
-            <div className="grid grid-cols-7 gap-2">
-              {days.map((d) => (
-                <button
-                  key={d}
-                  onClick={() => setSelectedDay(d)}
-                  className={`
-                    aspect-square rounded-xl text-sm transition-colors duration-200
-                    ${selectedDay === d
-                      ? "bg-velum-900 text-white shadow-md"
-                      : "text-velum-800 hover:bg-velum-100"}
-                  `}
-                >
-                  {d}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="flex h-full flex-col rounded-3xl border border-velum-200 bg-white p-6">
-            <h3 className="mb-5 font-serif text-lg">
-              Horarios disponibles {selectedDay ? `para +${selectedDay - 1} días` : ""}
-            </h3>
-
-            {!selectedDay ? (
-              <div className="flex flex-1 items-center justify-center rounded-2xl border border-dashed border-velum-300 bg-velum-50 p-8 text-center text-sm text-velum-400">
-                <p>Selecciona un día en el calendario para ver la disponibilidad.</p>
-              </div>
-            ) : (
-              <div className="mb-8 grid grid-cols-3 gap-3">
-                {times.map((t) => (
+            <div className="grid grid-cols-7 gap-1">
+              {calendarDays.map((cell, i) => {
+                if (!cell.date || !cell.dateKey) {
+                  return <div key={i} />;
+                }
+                const isSelected = selectedDate === cell.dateKey;
+                return (
                   <button
-                    key={t}
-                    onClick={() => setSelectedTime(t)}
+                    key={cell.dateKey}
+                    disabled={!cell.selectable}
+                    onClick={() => handleSelectDate(cell.dateKey!)}
                     className={`
-                      rounded-xl border py-2 text-sm transition-all duration-200
-                      ${selectedTime === t
-                        ? "scale-105 border-velum-900 bg-velum-900 text-white shadow-md"
-                        : "border-velum-200 text-velum-800 hover:border-velum-400 hover:bg-velum-50"}
+                      aspect-square rounded-xl text-sm font-medium transition-colors duration-200
+                      ${!cell.selectable
+                        ? "cursor-not-allowed text-velum-300"
+                        : isSelected
+                          ? "bg-velum-900 text-white shadow-md"
+                          : "text-velum-800 hover:bg-velum-100"}
                     `}
                   >
-                    {t}
+                    {cell.date.getDate()}
+                  </button>
+                );
+              })}
+            </div>
+            <p className="mt-3 text-[11px] text-velum-400">
+              Solo se muestran fechas disponibles para reservar.
+            </p>
+          </div>
+
+          {/* ── Horarios del día seleccionado ───────────────── */}
+          <div className="flex h-full flex-col rounded-3xl border border-velum-200 bg-white p-6">
+            <h3 className="mb-4 font-serif text-lg">
+              {selectedDate
+                ? `Horarios — ${new Date(selectedDate + "T00:00:00").toLocaleDateString("es-MX", { weekday: "long", day: "numeric", month: "long" })}`
+                : "Horarios disponibles"}
+            </h3>
+
+            {!selectedDate && (
+              <div className="flex flex-1 items-center justify-center rounded-2xl border border-dashed border-velum-300 bg-velum-50 p-8 text-center text-sm text-velum-400">
+                <p>Selecciona un día en el calendario para ver los horarios disponibles.</p>
+              </div>
+            )}
+
+            {selectedDate && isLoadingSlots && (
+              <div className="flex flex-1 items-center justify-center rounded-2xl border border-dashed border-velum-200 bg-velum-50 p-8">
+                <div className="h-6 w-6 animate-spin rounded-full border-2 border-velum-300 border-t-velum-900" />
+              </div>
+            )}
+
+            {selectedDate && !isLoadingSlots && slotsError && (
+              <div className="flex flex-1 items-center justify-center rounded-2xl border border-dashed border-velum-300 bg-velum-50 p-8 text-center text-sm text-velum-500">
+                <p>{slotsError}</p>
+              </div>
+            )}
+
+            {selectedDate && !isLoadingSlots && !slotsError && daySlots.length > 0 && (
+              <div className="mb-4 grid grid-cols-3 gap-2">
+                {daySlots.map((slot) => (
+                  <button
+                    key={slot.label}
+                    disabled={!slot.available}
+                    onClick={() => setSelectedSlot(slot)}
+                    className={`
+                      rounded-xl border py-2.5 text-sm font-medium transition-all duration-200
+                      ${!slot.available
+                        ? "cursor-not-allowed border-velum-100 bg-velum-50 text-velum-300 line-through"
+                        : selectedSlot?.label === slot.label
+                          ? "scale-105 border-velum-900 bg-velum-900 text-white shadow-md"
+                          : "border-velum-200 text-velum-800 hover:border-velum-400 hover:bg-velum-50"}
+                    `}
+                  >
+                    {slot.label}
                   </button>
                 ))}
               </div>
             )}
 
-            <div className="mt-auto border-t border-velum-100 pt-6">
-              <Button className="w-full rounded-2xl" disabled={!selectedDay || !selectedTime || isScheduling} isLoading={isScheduling} onClick={handleSchedule}>
+            <div className="mt-auto border-t border-velum-100 pt-5">
+              {selectedSlot && (
+                <p className="mb-3 text-xs text-velum-600 text-center">
+                  Seleccionado: <strong>{selectedSlot.label}</strong>
+                  {selectedDate && ` — ${new Date(selectedDate + "T00:00:00").toLocaleDateString("es-MX", { day: "numeric", month: "short" })}`}
+                </p>
+              )}
+              <Button
+                className="w-full rounded-2xl"
+                disabled={!selectedDate || !selectedSlot || isScheduling}
+                isLoading={isScheduling}
+                onClick={handleSchedule}
+              >
                 Confirmar cita
               </Button>
-              {appointmentMessage && <p className="mt-3 text-xs text-velum-700">{appointmentMessage}</p>}
             </div>
           </div>
         </div>

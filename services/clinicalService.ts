@@ -10,6 +10,7 @@ export interface MedicalIntake {
   historyJson?: Record<string, unknown>;
   phototype?: number;
   consentAccepted: boolean;
+  signatureKey?: string | null;
 }
 
 export interface Appointment {
@@ -356,6 +357,19 @@ export const clinicalService = {
       method: "POST",
       body: JSON.stringify(payload)
     });
+  },
+
+  // ── Member-accessible agenda endpoints ────────────────────────────────
+  getPublicAgendaPolicy: async (): Promise<{ minAdvanceMinutes: number; maxAdvanceDays: number; slotMinutes: number; timezone: string }> => {
+    return apiFetch("/v1/agenda/public/policy");
+  },
+
+  getPublicAgendaSlots: async (dateKey: string): Promise<{
+    dateKey: string;
+    isOpen: boolean;
+    slots: Array<{ label: string; startMinute: number; endMinute: number; available: boolean }>;
+  }> => {
+    return apiFetch(`/v1/agenda/public/slots/${encodeURIComponent(dateKey)}`);
   },
 
   getMySessions: async (): Promise<SessionTreatment[]> => {

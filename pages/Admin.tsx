@@ -39,6 +39,7 @@ import { useAuth } from '../context/AuthContext';
 import { memberService, auditService } from '../services/dataService';
 import { SessionTreatment, SessionCreatePayload } from '../services/clinicalService';
 import { AdminUsersPermissions } from "./AdminUsersPermissions";
+import { AdminWhatsAppSettings } from "./AdminWhatsAppSettings";
 import { useToast } from "../context/ToastContext";
 import {
   AgendaCabin,
@@ -3239,14 +3240,15 @@ const renderConfiguracionesV2 = () => {
           </Link>
         </div>
       ) : settingsCategory === "whatsapp_business" ? (
-        <div className="bg-white border border-velum-200 p-6 space-y-4">
-          <h3 className="text-lg font-serif text-velum-900">WhatsApp Business (OTP)</h3>
-          <p className="text-sm text-velum-600">
-            Configuración del sistema de validación OTP vía Meta WhatsApp.
-          </p>
-          <Link to="/admin/whatsapp">
-            <Button variant="outline">Abrir configuración OTP</Button>
-          </Link>
+        <div className="space-y-2">
+          <div className="bg-velum-50 border border-velum-200 rounded-2xl px-5 py-3">
+            <p className="text-xs text-velum-500 uppercase tracking-widest">WhatsApp Business — Integración Meta Cloud API</p>
+            <p className="text-xs text-velum-400 mt-1">
+              Configura el canal OTP vía WhatsApp para cambios de contraseña e identificación de usuarios.
+              Requiere aprobación de Meta Business y un template activo.
+            </p>
+          </div>
+          <AdminWhatsAppSettings embedded />
         </div>
       ) : (
         renderGeneralSettingsCategory()

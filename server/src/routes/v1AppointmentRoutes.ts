@@ -5,6 +5,8 @@ import {
   getAdminAgendaConfig,
   getAdminAgendaDay,
   getAdminAgendaReport,
+  getMemberAgendaPolicy,
+  getMemberAvailableSlots,
   listAppointments,
   postAdminAgendaBlock,
   putAdminAgendaConfig,
@@ -17,6 +19,10 @@ export const v1AppointmentRoutes = Router();
 v1AppointmentRoutes.get("/api/v1/appointments", requireAuth, listAppointments);
 v1AppointmentRoutes.post("/api/v1/appointments", requireAuth, createAppointment);
 v1AppointmentRoutes.patch("/api/v1/appointments/:appointmentId", requireAuth, updateAppointment);
+
+// Member-accessible endpoints
+v1AppointmentRoutes.get("/api/v1/agenda/public/policy", requireAuth, getMemberAgendaPolicy);
+v1AppointmentRoutes.get("/api/v1/agenda/public/slots/:dateKey", requireAuth, getMemberAvailableSlots);
 
 v1AppointmentRoutes.get("/api/v1/agenda/admin/config", requireAuth, requireRole(["staff", "admin", "system"]), getAdminAgendaConfig);
 v1AppointmentRoutes.put("/api/v1/agenda/admin/config", requireAuth, requireRole(["staff", "admin", "system"]), putAdminAgendaConfig);

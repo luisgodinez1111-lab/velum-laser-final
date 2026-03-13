@@ -229,7 +229,116 @@ const respondIfAgendaError = (error: unknown, res: Response) => {
 };
 
 export const createAppointment = async (req: AuthRequest, res: Response) => {
-  const payload = appointmentCreateSchema.parse(req.body);
+  // phase1 onboarding gate
+  if ((req as any)?.user?.role === "member") {
+    const memberId = (req as any).user.id as string;
+
+    const tableExists = async (tableName: string) => {
+      const rows = await prisma.$queryRawUnsafe<Array<{ exists: boolean }>>(
+        `SELECT to_regclass($1) IS NOT NULL AS "exists"`,
+        tableName
+      );
+      return Boolean(rows?.[0]?.exists);
+    };
+
+    const hasClinicalTable = await tableExists('"ClinicalHistory"');
+    const hasP2Table = await tableExists('"P2Assessment"');
+    const hasContractTable = await tableExists('"VelumContractSignature"');
+
+    let clinicalCompleted = false;
+    let p2Completed = false;
+    let contractSigned = false;
+
+    if (hasClinicalTable) {
+      const rows = await prisma.$queryRawUnsafe<Array<{ ok: boolean }>>(
+        `SELECT EXISTS(
+           SELECT 1 FROM "ClinicalHistory"
+           WHERE "userId" = $1 AND "completedAt" IS NOT NULL
+         ) AS "ok"`,
+        memberId
+      );
+      clinicalCompleted = Boolean(rows?.[0]?.ok);
+    }
+
+    if (hasP2Table) {
+      const rows = await prisma.$queryRawUnsafe<Array<{ ok: boolean }>>(
+        `SELECT EXISTS(
+           SELECT 1 FROM "P2Assessment"
+           WHERE "userId" = $1 AND "completedAt" IS NOT NULL
+         ) AS "ok"`,
+        memberId
+      );
+      p2Completed = Boolean(rows?.[0]?.ok);
+    }
+
+    if (hasContractTable) {
+      const rows = await prisma.$queryRawUnsafe<Array<{ ok: boolean }>>(
+        `SELECT EXISTS(
+           SELECT 1 FROM "VelumContractSignature"
+           WHERE "userId" = $1 AND "signedAt" IS NOT NULL
+         ) AS "ok"`,
+        memberId
+      );
+      contractSigned = Boolean(rows?.[0]?.ok);
+    }
+
+    const onboardingCompleted = clinicalCompleted && p2Completed && contractSigned;
+
+    if (!onboardingCompleted) {
+      return res.status(403).json({
+        message: "Completa tu expediente clinico y documentos antes de agendar evaluacion.",
+        code: "ONBOARDING_INCOMPLETE"
+      });
+    }
+  }
+
+  const payload: any = appointmentCreateSchema.parse(req.body);
+
+  // phase1.2 evaluation snapshot
+  const rawBody: any = req.body ?? {};
+  const evaluationZones = Array.isArray(rawBody.evaluationZones)
+    ? rawBody.evaluationZones.map((z: unknown) => String(z).trim()).filter(Boolean)
+    : [];
+  const evaluationMembership = String(rawBody.evaluationMembership ?? "").trim();
+  const evaluationCostNum = Number(rawBody.evaluationCost);
+  const evaluationCurrency = String(rawBody.evaluationCurrency ?? "MXN").trim().toUpperCase();
+
+  const marker = String(
+    payload?.type ?? payload?.appointmentType ?? payload?.serviceType ?? payload?.reason ?? ""
+  ).toLowerCase();
+  const isEvaluation = marker.includes("evalu");
+
+  if (isEvaluation) {
+    const validEval =
+      evaluationZones.length > 0 &&
+      Boolean(evaluationMembership) &&
+      Number.isFinite(evaluationCostNum) &&
+      evaluationCostNum > 0;
+
+    if (!validEval) {
+      return res.status(400).json({
+        message: "Para cita de evaluacion debes indicar zonas, membresia y costo.",
+        code: "EVALUATION_DATA_REQUIRED"
+      });
+    }
+  }
+
+  const hasSnapshot =
+    evaluationZones.length > 0 ||
+    Boolean(evaluationMembership) ||
+    (Number.isFinite(evaluationCostNum) && evaluationCostNum > 0);
+
+  if (hasSnapshot) {
+    const snapshot = {
+      zones: evaluationZones,
+      membership: evaluationMembership || null,
+      cost: Number.isFinite(evaluationCostNum) ? evaluationCostNum : null,
+      currency: evaluationCurrency || "MXN",
+      capturedAt: new Date().toISOString()
+    };
+    const line = `[EVAL_SNAPSHOT] ${JSON.stringify(snapshot)}`;
+    payload.notes = [payload?.notes, line].filter(Boolean).join("\n");
+  }
   const startAt = new Date(payload.startAt);
 
   const isPrivileged = hasPrivilegedRole(req.user!.role);
@@ -251,7 +360,7 @@ export const createAppointment = async (req: AuthRequest, res: Response) => {
     return res.status(409).json({ message: "El expediente debe estar submitted o approved para agendar" });
   }
 
-  if (!eligibility.membershipOk) {
+  if (!eligibility.membershipOk && !isEvaluation) {
     return res.status(409).json({ message: "Se requiere membresía activa para agendar" });
   }
 
@@ -816,4 +925,36 @@ export const getAdminAgendaReport = async (req: AuthRequest, res: Response) => {
   const params = agendaDateParamSchema.parse(req.params);
   const report = await getAgendaDailyReport(params.dateKey);
   return res.json(report);
+};
+
+// ── Member-accessible endpoints (any authenticated user) ────────────────────
+
+export const getMemberAgendaPolicy = async (_req: AuthRequest, res: Response) => {
+  const config = await getAgendaConfig();
+  return res.json({
+    minAdvanceMinutes: config.policy.minAdvanceMinutes,
+    maxAdvanceDays: config.policy.maxAdvanceDays,
+    slotMinutes: config.policy.slotMinutes,
+    timezone: config.policy.timezone
+  });
+};
+
+export const getMemberAvailableSlots = async (req: AuthRequest, res: Response) => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(req.params.dateKey)) {
+    return res.status(400).json({ message: "Formato de fecha inválido. Use YYYY-MM-DD" });
+  }
+  const params = agendaDateParamSchema.parse(req.params);
+  const snapshot = await getAgendaDaySnapshot(params.dateKey);
+
+  const isOpen = snapshot.effectiveRule.isOpen;
+  const slots = isOpen
+    ? snapshot.slots.map((s) => ({
+        label: s.label,
+        startMinute: s.startMinute,
+        endMinute: s.endMinute,
+        available: !s.blocked && s.available > 0
+      }))
+    : [];
+
+  return res.json({ dateKey: params.dateKey, isOpen, slots });
 };
