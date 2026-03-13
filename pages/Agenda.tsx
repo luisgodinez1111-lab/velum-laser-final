@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Button } from "../components/Button";
+import { PasswordInput } from "../components/PasswordInput";
 import { ChevronLeft, ChevronRight, Lock, User, Sparkles, Shield, FileText, Stethoscope, CircleCheck, KeyRound, Mail } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { Link, useLocation, useNavigate } from "react-router-dom";
@@ -547,8 +548,7 @@ export const Agenda: React.FC = () => {
                       ¿Olvidaste tu contraseña?
                     </button>
                   </div>
-                  <input
-                    type="password"
+                  <PasswordInput
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     required
@@ -663,8 +663,7 @@ export const Agenda: React.FC = () => {
                 </div>
 
                   <label className={labelClass}>Contraseña</label>
-                  <input
-                    type="password"
+                  <PasswordInput
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     required
@@ -686,8 +685,7 @@ export const Agenda: React.FC = () => {
                 </div>
                                 <div>
                   <label className={labelClass}>Confirmar contrasena</label>
-                  <input
-                    type="password"
+                  <PasswordInput
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     required
@@ -819,8 +817,7 @@ export const Agenda: React.FC = () => {
               </div>
               <div>
                 <label className={labelClass}>Nueva contraseña</label>
-                <input
-                  type="password"
+                <PasswordInput
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
                   required
@@ -840,8 +837,7 @@ export const Agenda: React.FC = () => {
               </div>
               <div>
                 <label className={labelClass}>Confirmar nueva contraseña</label>
-                <input
-                  type="password"
+                <PasswordInput
                   value={confirmNewPassword}
                   onChange={(e) => setConfirmNewPassword(e.target.value)}
                   required

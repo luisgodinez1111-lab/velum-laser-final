@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from '../components/Button';
+import { PasswordInput } from '../components/PasswordInput';
 import { VelumLogo } from '../components/VelumLogo';
 import { AgendaIntegrations } from './settings/AgendaIntegrations';
 import {
@@ -3286,8 +3287,7 @@ const renderSection = () => {
             </div>
             <div>
               <label className="block text-xs uppercase tracking-widest text-velum-600 mb-2 font-bold">Clave de Seguridad</label>
-              <input
-                type="password"
+              <PasswordInput
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="w-full p-3 border border-velum-300 bg-velum-50 focus:border-velum-900 outline-none transition-colors text-sm"
