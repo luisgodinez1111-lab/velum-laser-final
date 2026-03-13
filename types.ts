@@ -62,6 +62,7 @@ export interface Member {
   lastPaymentDate?: string;
   paymentMethod?: { type: string; last4: string; expiry: string };
   history?: any[];
+  intakeStatus?: "draft" | "submitted" | "approved" | "rejected";
   clinical?: {
     fitzpatrickType?: string;
     allergies?: string;

@@ -39,6 +39,7 @@ const mapMember = (user: any): Member => {
     plan: tier?.name ?? "Plan Velum",
     subscriptionStatus: membership?.status ?? "inactive",
     nextBillingDate: membership?.currentPeriodEnd ? new Date(membership.currentPeriodEnd).toLocaleDateString("es-MX") : undefined,
+    intakeStatus: user.medicalIntake?.status ?? "draft",
     clinical: {
       consentFormSigned: user.documents?.some((doc: any) => doc.status === "signed" && doc.type === "informed_consent"),
       documents: mapDocuments(user.documents ?? [])

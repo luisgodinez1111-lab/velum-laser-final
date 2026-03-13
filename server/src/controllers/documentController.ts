@@ -5,6 +5,14 @@ import { documentSignSchema, documentUploadSchema } from "../validators/document
 import { generateStorageKey, getFilePath, saveFile } from "../services/storageService";
 import { prisma } from "../db/prisma";
 import { createAuditLog } from "../services/auditService";
+import { sendDocumentSignedEmail } from "../services/emailService";
+
+const docTypeLabel: Record<string, string> = {
+  consent: "Consentimiento informado",
+  contract: "Contrato de membresía",
+  medical_history: "Historial médico",
+  other: "Documento"
+};
 
 const allowedTypes = ["application/pdf", "image/png", "image/jpeg"];
 
@@ -88,5 +96,21 @@ export const signDocument = async (req: AuthRequest, res: Response) => {
     ip: req.ip,
     metadata: { type: document.type }
   });
+
+  // Notificación de firma al usuario
+  const userRecord = await prisma.user.findUnique({
+    where: { id: req.user!.id },
+    select: { email: true, profile: { select: { firstName: true, lastName: true } } }
+  });
+  if (userRecord) {
+    const name = [userRecord.profile?.firstName, userRecord.profile?.lastName].filter(Boolean).join(" ") || userRecord.email;
+    const signedAt = new Date().toLocaleString("es-MX", { dateStyle: "long", timeStyle: "short" });
+    sendDocumentSignedEmail(userRecord.email, {
+      name,
+      documentType: docTypeLabel[document.type] ?? document.type,
+      signedAt
+    }).catch(() => {});
+  }
+
   return res.json(updated);
 };

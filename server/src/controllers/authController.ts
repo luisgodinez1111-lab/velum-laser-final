@@ -6,6 +6,7 @@ import { env, isProduction } from "../utils/env";
 import { createEmailVerification, createPasswordReset, consumeEmailVerification, consumePasswordReset } from "../services/authService";
 import { prisma } from "../db/prisma";
 import { createAuditLog } from "../services/auditService";
+import { sendPasswordResetEmail, sendEmailVerificationEmail } from "../services/emailService";
 
 const setAuthCookie = (res: Response, token: string) => {
   res.cookie(env.cookieName, token, {
@@ -46,7 +47,14 @@ export const register = async (req: Request, res: Response) => {
     });
   }
 
+  // Enviar OTP de verificación de correo
   const verification = await createEmailVerification(user.id);
+  sendEmailVerificationEmail(user.email, verification.otp).catch(() => {
+    if (!isProduction) {
+      console.log(`[auth] VERIFY OTP para ${user.email}: ${verification.otp}`);
+    }
+  });
+
   const token = signToken({ sub: user.id, role: user.role });
   setAuthCookie(res, token);
   await createAuditLog({
@@ -59,7 +67,7 @@ export const register = async (req: Request, res: Response) => {
   });
   return res.status(201).json({
     user: { id: user.id, email: user.email, role: user.role },
-    verificationToken: verification.token
+    requiresEmailVerification: true
   });
 };
 
@@ -94,31 +102,72 @@ export const logout = async (_req: Request, res: Response) => {
 export const forgotPassword = async (req: Request, res: Response) => {
   const payload = forgotSchema.parse(req.body);
   const user = await getUserByEmail(payload.email);
+  // Respuesta genérica: no revelar si el email existe
   if (!user) {
-    return res.status(200).json({ message: "Si el correo existe, se enviará un enlace" });
+    return res.status(200).json({ message: "Si el correo existe, recibirás un código en tu bandeja" });
   }
+
   const reset = await createPasswordReset(user.id);
-  return res.json({ resetToken: reset.token });
+  sendPasswordResetEmail(user.email, reset.otp).catch(() => {
+    if (!isProduction) {
+      console.log(`[auth] RESET OTP para ${user.email}: ${reset.otp}`);
+    }
+  });
+
+  return res.json({ message: "Si el correo existe, recibirás un código en tu bandeja" });
 };
 
 export const resetPassword = async (req: Request, res: Response) => {
   const payload = resetSchema.parse(req.body);
-  const reset = await consumePasswordReset(payload.token);
-  if (!reset) {
-    return res.status(400).json({ message: "Token inválido" });
+
+  const user = await getUserByEmail(payload.email);
+  if (!user) {
+    return res.status(400).json({ message: "Código inválido o expirado" });
   }
+
+  const reset = await consumePasswordReset(user.id, payload.otp);
+  if (!reset) {
+    return res.status(400).json({ message: "Código inválido o expirado" });
+  }
+
   await prisma.user.update({
     where: { id: reset.userId },
     data: { passwordHash: await hashPassword(payload.password) }
   });
-  return res.json({ message: "Contraseña actualizada" });
+
+  await createAuditLog({
+    userId: user.id,
+    action: "auth.password_reset",
+    resourceType: "user",
+    resourceId: user.id,
+    ip: req.ip,
+    metadata: { email: user.email }
+  });
+
+  return res.json({ message: "Contraseña actualizada correctamente" });
 };
 
 export const verifyEmail = async (req: Request, res: Response) => {
   const payload = verifyEmailSchema.parse(req.body);
-  const verification = await consumeEmailVerification(payload.token);
-  if (!verification) {
-    return res.status(400).json({ message: "Token inválido" });
+
+  const user = await getUserByEmail(payload.email);
+  if (!user) {
+    return res.status(400).json({ message: "Código inválido o expirado" });
   }
-  return res.json({ message: "Correo verificado" });
+
+  const verification = await consumeEmailVerification(user.id, payload.otp);
+  if (!verification) {
+    return res.status(400).json({ message: "Código inválido o expirado" });
+  }
+
+  await createAuditLog({
+    userId: user.id,
+    action: "auth.email_verified",
+    resourceType: "user",
+    resourceId: user.id,
+    ip: req.ip,
+    metadata: { email: user.email }
+  });
+
+  return res.json({ message: "Correo verificado correctamente" });
 };

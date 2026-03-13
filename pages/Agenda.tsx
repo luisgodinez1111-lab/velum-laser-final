@@ -1,11 +1,13 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Button } from "../components/Button";
-import { ChevronLeft, ChevronRight, Lock, User, Sparkles, Shield, FileText, Stethoscope, CircleCheck } from "lucide-react";
+import { ChevronLeft, ChevronRight, Lock, User, Sparkles, Shield, FileText, Stethoscope, CircleCheck, KeyRound, Mail } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { clinicalService, MedicalIntake } from "../services/clinicalService";
+import { authService } from "../services/authService";
+import { useToast } from "../context/ToastContext";
 
-type ViewState = "intro" | "login" | "register" | "intake" | "calendar";
+type ViewState = "intro" | "login" | "register" | "intake" | "calendar" | "forgot" | "forgot-otp" | "email-verify";
 type AppointmentType = "standard" | "valuation";
 
 type IntakeDraft = {
@@ -62,6 +64,7 @@ const intakeStepMeta = [
 
 export const Agenda: React.FC = () => {
   const { login, register, isAuthenticated, user } = useAuth();
+  const toast = useToast();
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -70,6 +73,24 @@ export const Agenda: React.FC = () => {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [phone, setPhone] = useState("");
+
+  const getPasswordChecks = (value: string) => ({
+    length: value.length >= 8,
+    upper: /[A-Z]/.test(value),
+    lower: /[a-z]/.test(value),
+    number: /[0-9]/.test(value),
+    special: /[^A-Za-z0-9]/.test(value)
+  });
+
+  const registerPasswordChecks = getPasswordChecks(password);
+  const registerPasswordScore = Object.values(registerPasswordChecks).filter(Boolean).length;
+  const registerPasswordStrength =
+    registerPasswordScore <= 2 ? "Debil" : registerPasswordScore <= 4 ? "Media" : "Fuerte";
+  const registerPasswordStrengthClass =
+    registerPasswordScore <= 2 ? "text-red-600" : registerPasswordScore <= 4 ? "text-amber-600" : "text-green-700";
+
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
 
@@ -78,6 +99,15 @@ export const Agenda: React.FC = () => {
   const [intakeDraft, setIntakeDraft] = useState<IntakeDraft>(emptyIntakeDraft);
   const [intakeError, setIntakeError] = useState<string | null>(null);
   const [isSavingIntake, setIsSavingIntake] = useState(false);
+
+  // OTP flows
+  const [otpCode, setOtpCode] = useState("");
+  const [otpEmail, setOtpEmail] = useState(""); // email usado en flujo olvidé contraseña
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmNewPassword, setConfirmNewPassword] = useState("");
+  const [isOtpLoading, setIsOtpLoading] = useState(false);
+  const [otpMessage, setOtpMessage] = useState<string | null>(null);
+  const [otpSuccess, setOtpSuccess] = useState(false);
 
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
@@ -151,18 +181,117 @@ export const Agenda: React.FC = () => {
       await login(email, password);
       await refreshIntake();
     } catch {
-      setAppointmentMessage("Credenciales incorrectas.");
+      toast.error("Credenciales incorrectas. Verifica tu correo y contraseña.");
     }
   };
 
   const handleRegisterSubmit = async (e: React.FormEvent) => {
+  const __registerFullName = String((registerForm as any)?.fullName ?? (registerForm as any)?.name ?? "").trim();
+  const __registerEmail = String((registerForm as any)?.email ?? "").trim();
+  const __registerPhone = String((registerForm as any)?.phone ?? (registerForm as any)?.mobile ?? (registerForm as any)?.cellphone ?? "").trim();
+
+  if (!__registerFullName || !__registerEmail || !__registerPhone) {
+    alert("Para crear tu cuenta ingresa nombre completo, correo electronico y numero celular.");
+    return;
+  }
+
     e.preventDefault();
+
+    const passwordChecks = getPasswordChecks(password);
+    if (!Object.values(passwordChecks).every(Boolean)) {
+      setAppointmentMessage("La contrasena debe incluir minimo 8 caracteres, una mayuscula, una minuscula, un numero y un simbolo.");
+      return;
+    }
+    if (!phone.trim()) {
+      setAppointmentMessage("Ingresa tu numero celular para continuar.");
+      return;
+    }
     setAppointmentMessage(null);
     try {
-      await register({ email, password, firstName, lastName });
-      await refreshIntake();
+            if (password !== confirmPassword) {
+        setAppointmentMessage("La confirmacion de contrasena no coincide.");
+        return;
+      }
+
+await register({ email, password, firstName, lastName, phone });
+      toast.success("¡Cuenta creada! Confirma tu correo para continuar.");
+      // Ir al paso de verificación de correo
+      setViewState("email-verify");
     } catch {
-      setAppointmentMessage("No se pudo completar el registro.");
+      toast.error("No se pudo completar el registro. Intenta de nuevo.");
+    }
+  };
+
+  // ── Olvidé mi contraseña: solicitar OTP ─────────────────────────────
+  const handleForgotSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsOtpLoading(true);
+    setOtpMessage(null);
+    try {
+      await authService.forgotPassword(otpEmail);
+      setOtpMessage("Si el correo existe, recibirás un código de 6 dígitos en tu bandeja.");
+      setOtpSuccess(false);
+      setViewState("forgot-otp");
+    } catch {
+      setOtpMessage("No se pudo enviar el código. Intenta de nuevo.");
+    } finally {
+      setIsOtpLoading(false);
+    }
+  };
+
+  // ── Olvidé mi contraseña: verificar OTP + nueva contraseña ───────────
+  const handleResetPasswordSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (newPassword !== confirmNewPassword) {
+      setOtpMessage("Las contraseñas no coinciden.");
+      return;
+    }
+    const passwordChecks = getPasswordChecks(newPassword);
+    if (!Object.values(passwordChecks).every(Boolean)) {
+      setOtpMessage("La contraseña debe incluir mínimo 8 caracteres, una mayúscula, una minúscula, un número y un símbolo.");
+      return;
+    }
+    setIsOtpLoading(true);
+    setOtpMessage(null);
+    try {
+      await authService.resetPassword(otpEmail, otpCode, newPassword);
+      setOtpSuccess(true);
+      setOtpMessage("¡Contraseña actualizada! Ya puedes iniciar sesión.");
+      setTimeout(() => {
+        setOtpCode("");
+        setOtpEmail("");
+        setNewPassword("");
+        setConfirmNewPassword("");
+        setOtpMessage(null);
+        setOtpSuccess(false);
+        setViewState("login");
+      }, 2500);
+    } catch {
+      setOtpMessage("Código incorrecto o expirado. Verifica e intenta de nuevo.");
+    } finally {
+      setIsOtpLoading(false);
+    }
+  };
+
+  // ── Verificar correo después del registro ────────────────────────────
+  const handleEmailVerifySubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsOtpLoading(true);
+    setOtpMessage(null);
+    try {
+      await authService.verifyEmail(email, otpCode);
+      setOtpSuccess(true);
+      setOtpMessage("¡Correo verificado! Continuando con tu expediente...");
+      setTimeout(async () => {
+        setOtpCode("");
+        setOtpMessage(null);
+        setOtpSuccess(false);
+        await refreshIntake();
+      }, 1800);
+    } catch {
+      setOtpMessage("Código incorrecto o expirado. Verifica e intenta de nuevo.");
+    } finally {
+      setIsOtpLoading(false);
     }
   };
 
@@ -234,17 +363,25 @@ export const Agenda: React.FC = () => {
         reason: appointmentType === "valuation" ? "valuation" : "laser_session"
       });
 
-      setAppointmentMessage("Cita agendada correctamente.");
+      toast.success("Cita agendada correctamente.");
       setSelectedDay(null);
       setSelectedTime(null);
     } catch (error: any) {
-      setAppointmentMessage(error?.message ?? "No se pudo agendar la cita.");
+      toast.error(error?.message ?? "No se pudo agendar la cita.");
     } finally {
       setIsScheduling(false);
     }
   };
 
-  if (!isAuthenticated && viewState === "intro") {
+    const __guestMode = typeof window !== "undefined"
+    ? new URLSearchParams((window.location.hash.split("?")[1] ?? "")).get("mode")
+    : null;
+  const __effectiveViewState: "intro" | "login" | "register" =
+    !isAuthenticated && (__guestMode === "login" || __guestMode === "register" || __guestMode === "intro")
+      ? (__guestMode as "intro" | "login" | "register")
+      : viewState;
+
+  if (!isAuthenticated && __effectiveViewState === "intro") {
     return (
       <div className={shellWrapperClass}>
         <section className={`${glassCardClass} relative overflow-hidden p-7 sm:p-10`}>
@@ -291,7 +428,7 @@ export const Agenda: React.FC = () => {
     );
   }
 
-  if (!isAuthenticated && viewState === "login") {
+  if (!isAuthenticated && __effectiveViewState === "login") {
     return (
       <div className={shellWrapperClass}>
         <section className={`${glassCardClass} mx-auto w-full max-w-5xl overflow-hidden`}>
@@ -343,7 +480,22 @@ export const Agenda: React.FC = () => {
                   />
                 </div>
                 <div>
-                  <label className={labelClass}>Contraseña</label>
+                  <div className="mb-2 flex items-center justify-between">
+                    <label className={labelClass} style={{ margin: 0 }}>Contraseña</label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setOtpEmail(email);
+                        setOtpCode("");
+                        setOtpMessage(null);
+                        setOtpSuccess(false);
+                        setViewState("forgot");
+                      }}
+                      className="text-[11px] font-semibold text-velum-600 underline underline-offset-2 hover:text-velum-900 transition"
+                    >
+                      ¿Olvidaste tu contraseña?
+                    </button>
+                  </div>
                   <input
                     type="password"
                     value={password}
@@ -368,7 +520,7 @@ export const Agenda: React.FC = () => {
     );
   }
 
-  if (!isAuthenticated && viewState === "register") {
+  if (!isAuthenticated && __effectiveViewState === "register") {
     return (
       <div className={shellWrapperClass}>
         <section className={`${glassCardClass} mx-auto w-full max-w-5xl overflow-hidden`}>
@@ -444,6 +596,21 @@ export const Agenda: React.FC = () => {
                   />
                 </div>
                 <div>
+                  
+                <div>
+                  <label className={labelClass}>Numero celular</label>
+                  <input
+                    type="tel"
+                    inputMode="tel"
+                    autoComplete="tel"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    required
+                    className={fieldClass}
+                    placeholder="+52 55 1234 5678"
+                  />
+                </div>
+
                   <label className={labelClass}>Contraseña</label>
                   <input
                     type="password"
@@ -453,8 +620,32 @@ export const Agenda: React.FC = () => {
                     className={fieldClass}
                     placeholder="••••••••"
                   />
+                  <div className="mt-3 rounded-2xl border border-velum-200 bg-velum-50/40 px-3 py-2">
+                    <p className={`text-xs font-semibold ${registerPasswordStrengthClass}`}>Seguridad de contrasena: {registerPasswordStrength}</p>
+                    <p className="mt-1 text-[11px] text-velum-600">Requisitos minimos de seguridad:</p>
+                    <div className="mt-2 grid grid-cols-1 gap-1 text-[11px] sm:grid-cols-2">
+                      <span className={registerPasswordChecks.length ? "text-green-700" : "text-velum-500"}>{registerPasswordChecks.length ? "✓" : "•"} 8+ caracteres</span>
+                      <span className={registerPasswordChecks.upper ? "text-green-700" : "text-velum-500"}>{registerPasswordChecks.upper ? "✓" : "•"} 1 mayuscula</span>
+                      <span className={registerPasswordChecks.lower ? "text-green-700" : "text-velum-500"}>{registerPasswordChecks.lower ? "✓" : "•"} 1 minuscula</span>
+                      <span className={registerPasswordChecks.number ? "text-green-700" : "text-velum-500"}>{registerPasswordChecks.number ? "✓" : "•"} 1 numero</span>
+                      <span className={registerPasswordChecks.special ? "text-green-700" : "text-velum-500"}>{registerPasswordChecks.special ? "✓" : "•"} 1 simbolo</span>
+                    </div>
+                  </div>
+
                 </div>
-                <Button type="submit" className="w-full rounded-2xl">
+                                <div>
+                  <label className={labelClass}>Confirmar contrasena</label>
+                  <input
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    required
+                    className={fieldClass}
+                    placeholder="••••••••"
+                  />
+                </div>
+
+<Button type="submit" className="w-full rounded-2xl">
                   Crear cuenta
                 </Button>
               </form>
@@ -463,6 +654,225 @@ export const Agenda: React.FC = () => {
                 <p className="mt-4 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{appointmentMessage}</p>
               )}
             </div>
+          </div>
+        </section>
+      </div>
+    );
+  }
+
+  // ── Olvidé mi contraseña: ingresar correo ─────────────────────────
+  if (!isAuthenticated && viewState === "forgot") {
+    return (
+      <div className={shellWrapperClass}>
+        <section className={`${glassCardClass} mx-auto w-full max-w-lg overflow-hidden`}>
+          <div className="p-7 sm:p-10">
+            <header className="mb-8 flex items-start justify-between gap-4">
+              <button
+                type="button"
+                onClick={() => { setOtpMessage(null); setViewState("login"); }}
+                className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-velum-200 text-velum-500 transition hover:border-velum-500 hover:text-velum-900"
+              >
+                <ChevronLeft size={20} />
+              </button>
+              <div className="text-right">
+                <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-velum-500">Recuperar acceso</p>
+                <p className="mt-1 text-xs text-velum-500">Te enviaremos un código de 6 dígitos</p>
+              </div>
+            </header>
+
+            <div className="mb-7 flex flex-col items-center gap-3 text-center">
+              <div className="flex h-14 w-14 items-center justify-center rounded-full border border-velum-200 bg-velum-50">
+                <KeyRound size={24} className="text-velum-700" />
+              </div>
+              <h2 className="font-serif text-2xl italic text-velum-900">Restablecer contraseña</h2>
+              <p className="text-sm text-velum-600">Ingresa tu correo y te enviaremos un código para crear una nueva contraseña.</p>
+            </div>
+
+            <form onSubmit={handleForgotSubmit} className="space-y-5">
+              <div>
+                <label className={labelClass}>Correo electrónico</label>
+                <input
+                  type="email"
+                  value={otpEmail}
+                  onChange={(e) => setOtpEmail(e.target.value)}
+                  required
+                  className={fieldClass}
+                  placeholder="ana.garcia@gmail.com"
+                  autoFocus
+                />
+              </div>
+              <Button type="submit" className="w-full rounded-2xl" disabled={isOtpLoading}>
+                {isOtpLoading ? "Enviando..." : "Enviar código"}
+              </Button>
+            </form>
+
+            {otpMessage && (
+              <p className={`mt-4 rounded-xl border px-3 py-2 text-xs ${otpSuccess ? "border-green-200 bg-green-50 text-green-700" : "border-amber-200 bg-amber-50 text-amber-800"}`}>
+                {otpMessage}
+              </p>
+            )}
+          </div>
+        </section>
+      </div>
+    );
+  }
+
+  // ── Olvidé mi contraseña: ingresar código OTP + nueva contraseña ───
+  if (!isAuthenticated && viewState === "forgot-otp") {
+    const newPasswordChecks = getPasswordChecks(newPassword);
+    const newPasswordScore = Object.values(newPasswordChecks).filter(Boolean).length;
+    const newPasswordStrength = newPasswordScore <= 2 ? "Débil" : newPasswordScore <= 4 ? "Media" : "Fuerte";
+    const newPasswordStrengthClass = newPasswordScore <= 2 ? "text-red-600" : newPasswordScore <= 4 ? "text-amber-600" : "text-green-700";
+
+    return (
+      <div className={shellWrapperClass}>
+        <section className={`${glassCardClass} mx-auto w-full max-w-lg overflow-hidden`}>
+          <div className="p-7 sm:p-10">
+            <header className="mb-8 flex items-start justify-between gap-4">
+              <button
+                type="button"
+                onClick={() => { setOtpMessage(null); setViewState("forgot"); }}
+                className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-velum-200 text-velum-500 transition hover:border-velum-500 hover:text-velum-900"
+              >
+                <ChevronLeft size={20} />
+              </button>
+              <div className="text-right">
+                <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-velum-500">Verificación</p>
+                <p className="mt-1 text-xs text-velum-500">{otpEmail}</p>
+              </div>
+            </header>
+
+            <div className="mb-7 flex flex-col items-center gap-3 text-center">
+              <div className="flex h-14 w-14 items-center justify-center rounded-full border border-velum-200 bg-velum-50">
+                <Mail size={24} className="text-velum-700" />
+              </div>
+              <h2 className="font-serif text-2xl italic text-velum-900">Ingresa el código</h2>
+              <p className="text-sm text-velum-600">Revisa tu bandeja de entrada y escribe el código de 6 dígitos.</p>
+            </div>
+
+            <form onSubmit={handleResetPasswordSubmit} className="space-y-5">
+              <div>
+                <label className={labelClass}>Código de verificación</label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  pattern="\d{6}"
+                  maxLength={6}
+                  value={otpCode}
+                  onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                  required
+                  className={`${fieldClass} text-center text-2xl font-bold tracking-[0.32em]`}
+                  placeholder="• • • • • •"
+                  autoFocus
+                />
+              </div>
+              <div>
+                <label className={labelClass}>Nueva contraseña</label>
+                <input
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  required
+                  className={fieldClass}
+                  placeholder="••••••••"
+                />
+                <div className="mt-2 rounded-2xl border border-velum-200 bg-velum-50/40 px-3 py-2">
+                  <p className={`text-xs font-semibold ${newPasswordStrengthClass}`}>Seguridad: {newPasswordStrength}</p>
+                  <div className="mt-1 grid grid-cols-2 gap-1 text-[11px]">
+                    <span className={newPasswordChecks.length ? "text-green-700" : "text-velum-500"}>{newPasswordChecks.length ? "✓" : "•"} 8+ caracteres</span>
+                    <span className={newPasswordChecks.upper ? "text-green-700" : "text-velum-500"}>{newPasswordChecks.upper ? "✓" : "•"} Mayúscula</span>
+                    <span className={newPasswordChecks.lower ? "text-green-700" : "text-velum-500"}>{newPasswordChecks.lower ? "✓" : "•"} Minúscula</span>
+                    <span className={newPasswordChecks.number ? "text-green-700" : "text-velum-500"}>{newPasswordChecks.number ? "✓" : "•"} Número</span>
+                    <span className={newPasswordChecks.special ? "text-green-700" : "text-velum-500"}>{newPasswordChecks.special ? "✓" : "•"} Símbolo</span>
+                  </div>
+                </div>
+              </div>
+              <div>
+                <label className={labelClass}>Confirmar nueva contraseña</label>
+                <input
+                  type="password"
+                  value={confirmNewPassword}
+                  onChange={(e) => setConfirmNewPassword(e.target.value)}
+                  required
+                  className={fieldClass}
+                  placeholder="••••••••"
+                />
+              </div>
+              <Button type="submit" className="w-full rounded-2xl" disabled={isOtpLoading || otpSuccess}>
+                {isOtpLoading ? "Verificando..." : "Actualizar contraseña"}
+              </Button>
+            </form>
+
+            {otpMessage && (
+              <p className={`mt-4 rounded-xl border px-3 py-2 text-xs ${otpSuccess ? "border-green-200 bg-green-50 text-green-700" : "border-red-200 bg-red-50 text-red-700"}`}>
+                {otpMessage}
+              </p>
+            )}
+
+            <button
+              type="button"
+              onClick={() => { setOtpCode(""); setOtpMessage(null); setViewState("forgot"); }}
+              className="mt-4 w-full text-center text-xs text-velum-500 underline underline-offset-2 hover:text-velum-900 transition"
+            >
+              Reenviar código
+            </button>
+          </div>
+        </section>
+      </div>
+    );
+  }
+
+  // ── Verificación de correo post-registro ────────────────────────────
+  if (isAuthenticated && viewState === "email-verify") {
+    return (
+      <div className={shellWrapperClass}>
+        <section className={`${glassCardClass} mx-auto w-full max-w-lg overflow-hidden`}>
+          <div className="p-7 sm:p-10">
+            <div className="mb-7 flex flex-col items-center gap-3 text-center">
+              <div className="flex h-14 w-14 items-center justify-center rounded-full border border-velum-200 bg-velum-50">
+                <Mail size={24} className="text-velum-700" />
+              </div>
+              <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-velum-500">Activación de cuenta</p>
+              <h2 className="font-serif text-2xl italic text-velum-900">Confirma tu correo</h2>
+              <p className="text-sm text-velum-600 max-w-sm">
+                Te enviamos un código de 6 dígitos a <strong>{email}</strong>. Ingrésalo para continuar con tu expediente.
+              </p>
+            </div>
+
+            <form onSubmit={handleEmailVerifySubmit} className="space-y-5">
+              <div>
+                <label className={labelClass}>Código de verificación</label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  pattern="\d{6}"
+                  maxLength={6}
+                  value={otpCode}
+                  onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                  required
+                  className={`${fieldClass} text-center text-2xl font-bold tracking-[0.32em]`}
+                  placeholder="• • • • • •"
+                  autoFocus
+                />
+              </div>
+              <Button type="submit" className="w-full rounded-2xl" disabled={isOtpLoading || otpSuccess}>
+                {isOtpLoading ? "Verificando..." : "Confirmar correo"}
+              </Button>
+            </form>
+
+            {otpMessage && (
+              <p className={`mt-4 rounded-xl border px-3 py-2 text-xs ${otpSuccess ? "border-green-200 bg-green-50 text-green-700" : "border-red-200 bg-red-50 text-red-700"}`}>
+                {otpMessage}
+              </p>
+            )}
+
+            <button
+              type="button"
+              onClick={() => { setOtpCode(""); setOtpMessage(null); refreshIntake(); }}
+              className="mt-4 w-full text-center text-xs text-velum-500 underline underline-offset-2 hover:text-velum-900 transition"
+            >
+              Omitir por ahora y continuar
+            </button>
           </div>
         </section>
       </div>

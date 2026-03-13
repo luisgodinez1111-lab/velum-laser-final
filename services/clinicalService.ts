@@ -253,6 +253,31 @@ export interface AgendaConfigUpdatePayload {
   }>;
 }
 
+export interface SessionTreatment {
+  id: string;
+  appointmentId?: string | null;
+  userId: string;
+  staffUserId: string;
+  laserParametersJson?: Record<string, unknown> | null;
+  notes?: string | null;
+  adverseEvents?: string | null;
+  memberFeedback?: string | null;
+  feedbackAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  appointment?: Appointment | null;
+  staffUser?: { id: string; email: string };
+  user?: { id: string; email: string };
+}
+
+export interface SessionCreatePayload {
+  appointmentId?: string;
+  userId: string;
+  laserParametersJson?: Record<string, unknown>;
+  notes?: string;
+  adverseEvents?: string;
+}
+
 export const clinicalService = {
   getMyMedicalIntake: async (): Promise<MedicalIntake> => {
     return apiFetch<MedicalIntake>("/v1/medical-intakes/me");
@@ -323,6 +348,28 @@ export const clinicalService = {
   deleteAdminAgendaBlock: async (blockId: string) => {
     return apiFetch<void>(`/v1/agenda/admin/blocks/${encodeURIComponent(blockId)}`, {
       method: "DELETE"
+    });
+  },
+
+  createSession: async (payload: SessionCreatePayload): Promise<SessionTreatment> => {
+    return apiFetch<SessionTreatment>("/v1/sessions", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+  },
+
+  getMySessions: async (): Promise<SessionTreatment[]> => {
+    return apiFetch<SessionTreatment[]>("/v1/sessions/me");
+  },
+
+  getMemberSessions: async (userId: string): Promise<SessionTreatment[]> => {
+    return apiFetch<SessionTreatment[]>(`/v1/sessions/me?userId=${encodeURIComponent(userId)}`);
+  },
+
+  approveMedicalIntake: async (userId: string, approved: boolean, rejectionReason?: string): Promise<MedicalIntake> => {
+    return apiFetch<MedicalIntake>(`/v1/medical-intakes/${userId}/approve`, {
+      method: "POST",
+      body: JSON.stringify({ approved, ...(rejectionReason ? { rejectionReason } : {}) })
     });
   }
 };

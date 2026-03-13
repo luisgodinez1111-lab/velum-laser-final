@@ -47,8 +47,31 @@ export const authService = {
     try {
       const me = await apiFetch<any>("/users/me");
       return mapUser(me);
-    } catch (error) {
+    } catch {
       return null;
     }
+  },
+
+  // ── Recuperación de contraseña con OTP ──────────────────────────────
+  forgotPassword: async (email: string): Promise<void> => {
+    await apiFetch("/auth/forgot-password", {
+      method: "POST",
+      body: JSON.stringify({ email })
+    });
+  },
+
+  resetPassword: async (email: string, otp: string, password: string): Promise<void> => {
+    await apiFetch("/auth/reset-password", {
+      method: "POST",
+      body: JSON.stringify({ email, otp, password })
+    });
+  },
+
+  // ── Verificación de correo con OTP ──────────────────────────────────
+  verifyEmail: async (email: string, otp: string): Promise<void> => {
+    await apiFetch("/auth/verify-email", {
+      method: "POST",
+      body: JSON.stringify({ email, otp })
+    });
   }
 };

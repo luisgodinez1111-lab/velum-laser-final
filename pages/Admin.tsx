@@ -28,11 +28,18 @@ import {
   CircleAlert,
   Shield,
   HandCoins,
-  Trash2
+  Trash2,
+  Zap,
+  ClipboardList,
+  CheckCheck,
+  XCircle
 } from 'lucide-react';
 import { AuditLogEntry, Member, UserRole } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { memberService, auditService } from '../services/dataService';
+import { SessionTreatment, SessionCreatePayload } from '../services/clinicalService';
+import { AdminUsersPermissions } from "./AdminUsersPermissions";
+import { useToast } from "../context/ToastContext";
 import {
   AgendaCabin,
   AgendaConfig,
@@ -112,7 +119,7 @@ const sectionMeta: Record<AdminSection, { label: string; icon: React.ComponentTy
 const sectionGroups: Array<{ title: string; items: AdminSection[] }> = [
   { title: 'Dirección', items: ['control', 'socios', 'kpis'] },
   { title: 'Operación', items: ['finanzas', 'expedientes', 'agenda', 'cobranza'] },
-  { title: 'Gobierno', items: ['riesgos', 'cumplimiento', 'configuraciones'] }
+  { title: 'Gobierno', items: ['configuraciones'] }
 ];
 
 const allowedRoles: UserRole[] = ['admin', 'staff', 'system'];
@@ -211,6 +218,7 @@ const riskOfMember = (member: Member): HealthFlag => {
 
 export const Admin: React.FC = () => {
   const { login, logout, user, isAuthenticated, isLoading: isAuthLoading } = useAuth();
+  const toast = useToast();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -228,6 +236,22 @@ export const Admin: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'issue'>('all');
   const [selectedMember, setSelectedMember] = useState<Member | null>(null);
+
+  // Session registration
+  const [sessionModalMember, setSessionModalMember] = useState<Member | null>(null);
+  const [sessionForm, setSessionForm] = useState({ appointmentId: '', zona: '', fluencia: '', frecuencia: '', spot: '', passes: '', notes: '', adverseEvents: '' });
+  const [isSessionSaving, setIsSessionSaving] = useState(false);
+
+  // Drawer history (shared between modal and drawer)
+  const [memberSessions, setMemberSessions] = useState<SessionTreatment[]>([]);
+  const [isLoadingSessions, setIsLoadingSessions] = useState(false);
+  const [memberAppointments, setMemberAppointments] = useState<Appointment[]>([]);
+  const [isLoadingMemberHistory, setIsLoadingMemberHistory] = useState(false);
+
+  // Intake approval
+  const [isApprovingIntake, setIsApprovingIntake] = useState<string | null>(null);
+  const [intakeToReject, setIntakeToReject] = useState<string | null>(null);
+  const [intakeRejectReason, setIntakeRejectReason] = useState('');
 
   const [agendaDate, setAgendaDate] = useState(() => toLocalDateKey(new Date()));
   const [agendaConfig, setAgendaConfig] = useState<AgendaConfig | null>(null);
@@ -461,6 +485,90 @@ export const Admin: React.FC = () => {
       }
     } catch (_error) {
       alert('No fue posible actualizar el estatus de la membresía.');
+    }
+  };
+
+  const loadMemberHistory = async (member: Member) => {
+    setIsLoadingMemberHistory(true);
+    try {
+      const [sessions, appointments] = await Promise.all([
+        clinicalService.getMemberSessions(member.id),
+        clinicalService.listAppointments({ userId: member.id })
+      ]);
+      setMemberSessions(sessions);
+      setMemberAppointments(appointments);
+    } catch {
+      setMemberSessions([]);
+      setMemberAppointments([]);
+    } finally {
+      setIsLoadingMemberHistory(false);
+    }
+  };
+
+  const handleOpenMemberDrawer = (member: Member) => {
+    setSelectedMember(member);
+    void loadMemberHistory(member);
+  };
+
+  const openSessionModal = async (member: Member) => {
+    setSessionModalMember(member);
+    setSessionForm({ appointmentId: '', zona: '', fluencia: '', frecuencia: '', spot: '', passes: '', notes: '', adverseEvents: '' });
+    setIsLoadingSessions(true);
+    try {
+      const appointments = await clinicalService.listAppointments({ userId: member.id });
+      setMemberAppointments(appointments.filter((a) => a.status === 'confirmed' || a.status === 'scheduled'));
+    } catch {
+      setMemberAppointments([]);
+    } finally {
+      setIsLoadingSessions(false);
+    }
+  };
+
+  const handleSubmitSession = async () => {
+    if (!sessionModalMember || !user) return;
+    setIsSessionSaving(true);
+    try {
+      const laserParametersJson: Record<string, unknown> = {};
+      if (sessionForm.zona) laserParametersJson.zona = sessionForm.zona;
+      if (sessionForm.fluencia) laserParametersJson.fluencia = `${sessionForm.fluencia} J/cm²`;
+      if (sessionForm.frecuencia) laserParametersJson.frecuencia = `${sessionForm.frecuencia} Hz`;
+      if (sessionForm.spot) laserParametersJson.spot = `${sessionForm.spot} mm`;
+      if (sessionForm.passes) laserParametersJson.passes = sessionForm.passes;
+      const payload: SessionCreatePayload = {
+        userId: sessionModalMember.id,
+        ...(sessionForm.appointmentId ? { appointmentId: sessionForm.appointmentId } : {}),
+        ...(Object.keys(laserParametersJson).length > 0 ? { laserParametersJson } : {}),
+        ...(sessionForm.notes ? { notes: sessionForm.notes } : {}),
+        ...(sessionForm.adverseEvents ? { adverseEvents: sessionForm.adverseEvents } : {})
+      };
+      await clinicalService.createSession(payload);
+      toast.success("Sesión registrada correctamente.");
+      setSessionForm({ appointmentId: '', zona: '', fluencia: '', frecuencia: '', spot: '', passes: '', notes: '', adverseEvents: '' });
+      setSessionModalMember(null);
+      await loadData();
+    } catch (err: any) {
+      toast.error(err?.message ?? "No se pudo registrar la sesión.");
+    } finally {
+      setIsSessionSaving(false);
+    }
+  };
+
+  const handleApproveIntake = async (userId: string, approved: boolean) => {
+    if (!approved && !intakeRejectReason.trim()) return;
+    setIsApprovingIntake(userId);
+    try {
+      await clinicalService.approveMedicalIntake(userId, approved, approved ? undefined : intakeRejectReason.trim());
+      setIntakeToReject(null);
+      setIntakeRejectReason('');
+      await loadData();
+      if (selectedMember?.id === userId) {
+        setSelectedMember((prev) => prev ? { ...prev, intakeStatus: approved ? 'approved' : 'rejected' } : prev);
+      }
+      toast.success(approved ? "Expediente aprobado." : "Expediente rechazado.");
+    } catch (err: any) {
+      toast.error(err?.message ?? "No se pudo actualizar el expediente.");
+    } finally {
+      setIsApprovingIntake(null);
     }
   };
 
@@ -1242,6 +1350,94 @@ export const Admin: React.FC = () => {
     }
   };
 
+  const intakeStatusLabel = (status?: string) => {
+    switch (status) {
+      case 'approved': return { label: 'Aprobado', cls: 'text-emerald-700 bg-emerald-50 border-emerald-200' };
+      case 'submitted': return { label: 'Pendiente revisión', cls: 'text-amber-700 bg-amber-50 border-amber-200' };
+      case 'rejected': return { label: 'Rechazado', cls: 'text-red-700 bg-red-50 border-red-200' };
+      default: return { label: 'Borrador', cls: 'text-zinc-600 bg-zinc-50 border-zinc-200' };
+    }
+  };
+
+  const renderSessionModal = () => {
+    if (!sessionModalMember) return null;
+    return (
+      <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+        <div className="bg-white w-full max-w-lg shadow-2xl border border-velum-200 overflow-y-auto max-h-[90vh]">
+          <div className="p-5 border-b border-velum-200 flex justify-between items-center sticky top-0 bg-white z-10">
+            <div>
+              <p className="text-[10px] uppercase tracking-widest text-velum-500">Registro clínico</p>
+              <h3 className="font-serif text-lg text-velum-900">{sessionModalMember.name}</h3>
+            </div>
+            <button onClick={() => setSessionModalMember(null)} className="text-velum-400 hover:text-velum-900"><X size={20} /></button>
+          </div>
+          <div className="p-5 space-y-4">
+            {memberAppointments.length > 0 && (
+              <div>
+                <label className="block text-xs uppercase tracking-widest text-velum-500 mb-1">Cita asociada (opcional)</label>
+                <select
+                  value={sessionForm.appointmentId}
+                  onChange={(e) => setSessionForm((f) => ({ ...f, appointmentId: e.target.value }))}
+                  className="w-full border border-velum-300 rounded px-3 py-2 text-sm"
+                >
+                  <option value="">Sin cita específica</option>
+                  {memberAppointments.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {new Date(a.startAt).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })} — {a.treatment?.name ?? 'Sin tratamiento'}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            <div>
+              <p className="text-xs uppercase tracking-widest text-velum-500 mb-2 font-semibold">Parámetros láser</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-velum-500 mb-1">Zona tratada</label>
+                  <input value={sessionForm.zona} onChange={(e) => setSessionForm((f) => ({ ...f, zona: e.target.value }))} placeholder="Ej. Zona I — Identidad" className="w-full border border-velum-300 rounded px-3 py-2 text-sm" />
+                </div>
+                <div>
+                  <label className="block text-xs text-velum-500 mb-1">Fluencia (J/cm²)</label>
+                  <input value={sessionForm.fluencia} onChange={(e) => setSessionForm((f) => ({ ...f, fluencia: e.target.value }))} placeholder="Ej. 14" className="w-full border border-velum-300 rounded px-3 py-2 text-sm" type="number" min="0" step="0.1" />
+                </div>
+                <div>
+                  <label className="block text-xs text-velum-500 mb-1">Frecuencia (Hz)</label>
+                  <input value={sessionForm.frecuencia} onChange={(e) => setSessionForm((f) => ({ ...f, frecuencia: e.target.value }))} placeholder="Ej. 2" className="w-full border border-velum-300 rounded px-3 py-2 text-sm" type="number" min="0" step="0.5" />
+                </div>
+                <div>
+                  <label className="block text-xs text-velum-500 mb-1">Spot (mm)</label>
+                  <input value={sessionForm.spot} onChange={(e) => setSessionForm((f) => ({ ...f, spot: e.target.value }))} placeholder="Ej. 12" className="w-full border border-velum-300 rounded px-3 py-2 text-sm" type="number" min="0" />
+                </div>
+                <div className="col-span-2">
+                  <label className="block text-xs text-velum-500 mb-1">Pasadas</label>
+                  <input value={sessionForm.passes} onChange={(e) => setSessionForm((f) => ({ ...f, passes: e.target.value }))} placeholder="Ej. 3" className="w-full border border-velum-300 rounded px-3 py-2 text-sm" type="number" min="1" />
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs uppercase tracking-widest text-velum-500 mb-1">Notas clínicas</label>
+              <textarea value={sessionForm.notes} onChange={(e) => setSessionForm((f) => ({ ...f, notes: e.target.value }))} rows={3} placeholder="Observaciones, tolerancia del cliente, respuesta al tratamiento..." className="w-full border border-velum-300 rounded px-3 py-2 text-sm resize-none" />
+            </div>
+
+            <div>
+              <label className="block text-xs uppercase tracking-widest text-velum-500 mb-1">Eventos adversos</label>
+              <textarea value={sessionForm.adverseEvents} onChange={(e) => setSessionForm((f) => ({ ...f, adverseEvents: e.target.value }))} rows={2} placeholder="Eritema, edema, hiperpigmentación... (dejar vacío si no aplica)" className="w-full border border-velum-300 rounded px-3 py-2 text-sm resize-none" />
+            </div>
+
+            <div className="flex gap-3 pt-1">
+              <Button onClick={handleSubmitSession} isLoading={isSessionSaving} className="flex-1">
+                <Zap size={14} className="mr-2" /> Registrar sesión
+              </Button>
+              <Button variant="outline" onClick={() => setSessionModalMember(null)}>Cancelar</Button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   const alertClass = (level: HealthFlag) => {
     switch (level) {
       case 'ok':
@@ -1316,12 +1512,137 @@ export const Admin: React.FC = () => {
               </div>
             </div>
 
-            <div className="border border-velum-200 p-4">
-              <h4 className="text-xs uppercase tracking-widest text-velum-500">Control clínico</h4>
-              <p className="text-sm text-velum-700 mt-2">
-                Documentos cargados: {selectedMember.clinical?.documents?.length ?? 0}. Alergias registradas:{' '}
-                {selectedMember.clinical?.allergies ? 'Sí' : 'No'}.
+            <div>
+              <h3 className="text-xs uppercase tracking-widest text-velum-500 mb-3">Sesión clínica</h3>
+              <Button
+                size="sm"
+                onClick={() => { setSelectedMember(null); openSessionModal(selectedMember); }}
+                className="gap-2"
+              >
+                <Zap size={14} /> Registrar nueva sesión
+              </Button>
+            </div>
+
+            <div className="border border-velum-200 p-4 space-y-3">
+              <h4 className="text-xs uppercase tracking-widest text-velum-500">Expediente clínico</h4>
+              <div className="flex items-center gap-3">
+                <span className="text-xs text-velum-600">Evaluación inicial:</span>
+                {(() => {
+                  const { label, cls } = intakeStatusLabel(selectedMember.intakeStatus);
+                  return <span className={`text-xs px-2 py-0.5 border rounded-full font-semibold ${cls}`}>{label}</span>;
+                })()}
+              </div>
+              <p className="text-sm text-velum-700">
+                Documentos: {selectedMember.clinical?.documents?.length ?? 0} cargados.
+                Consentimiento: {selectedMember.clinical?.consentFormSigned ? 'Firmado' : 'Pendiente'}.
               </p>
+
+              {selectedMember.intakeStatus === 'submitted' && (
+                <div className="space-y-2 pt-1">
+                  <p className="text-xs text-amber-700 font-semibold">El cliente envió su evaluación. Requiere revisión.</p>
+                  {intakeToReject === selectedMember.id ? (
+                    <div className="space-y-2">
+                      <textarea
+                        rows={2}
+                        value={intakeRejectReason}
+                        onChange={(e) => setIntakeRejectReason(e.target.value)}
+                        placeholder="Motivo de rechazo (obligatorio)..."
+                        className="w-full border border-velum-300 rounded px-3 py-2 text-sm resize-none"
+                      />
+                      <div className="flex gap-2">
+                        <Button size="sm" variant="outline" className="text-red-700 border-red-300" isLoading={isApprovingIntake === selectedMember.id} onClick={() => handleApproveIntake(selectedMember.id, false)}>
+                          Confirmar rechazo
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => { setIntakeToReject(null); setIntakeRejectReason(''); }}>Cancelar</Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex gap-2">
+                      <Button size="sm" className="gap-1" isLoading={isApprovingIntake === selectedMember.id} onClick={() => handleApproveIntake(selectedMember.id, true)}>
+                        <CheckCheck size={13} /> Aprobar
+                      </Button>
+                      <Button size="sm" variant="outline" className="text-red-700 border-red-300 gap-1" onClick={() => setIntakeToReject(selectedMember.id)}>
+                        <XCircle size={13} /> Rechazar
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {selectedMember.intakeStatus === 'approved' && (
+                <p className="text-xs text-emerald-700">Expediente aprobado. El cliente puede ser atendido.</p>
+              )}
+            </div>
+
+            {/* Citas del socio */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs uppercase tracking-widest text-velum-500">Citas</h3>
+                {isLoadingMemberHistory && <RefreshCw size={12} className="animate-spin text-velum-400" />}
+              </div>
+              {!isLoadingMemberHistory && memberAppointments.length === 0 && (
+                <p className="text-xs text-velum-500">Sin citas registradas.</p>
+              )}
+              {memberAppointments
+                .sort((a, b) => new Date(b.startAt).getTime() - new Date(a.startAt).getTime())
+                .slice(0, 5)
+                .map((appt) => {
+                  const start = new Date(appt.startAt);
+                  const apptStatusMap: Record<string, string> = { scheduled: 'Agendada', confirmed: 'Confirmada', completed: 'Completada', canceled: 'Cancelada', no_show: 'No asistió' };
+                  const apptColorMap: Record<string, string> = { scheduled: 'bg-blue-50 text-blue-700 border-blue-200', confirmed: 'bg-emerald-50 text-emerald-700 border-emerald-200', completed: 'bg-zinc-100 text-zinc-600 border-zinc-200', canceled: 'bg-red-50 text-red-600 border-red-200', no_show: 'bg-orange-50 text-orange-700 border-orange-200' };
+                  return (
+                    <div key={appt.id} className="flex items-center justify-between border border-velum-100 p-3 text-sm">
+                      <div>
+                        <p className="font-semibold text-velum-900">
+                          {start.toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })} · {start.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}
+                        </p>
+                        {appt.treatment && <p className="text-xs text-velum-500 mt-0.5">{appt.treatment.name}</p>}
+                      </div>
+                      <span className={`text-xs px-2 py-0.5 border rounded-full font-semibold shrink-0 ${apptColorMap[appt.status] ?? 'bg-zinc-100 text-zinc-600 border-zinc-200'}`}>
+                        {apptStatusMap[appt.status] ?? appt.status}
+                      </span>
+                    </div>
+                  );
+                })}
+              {memberAppointments.length > 5 && (
+                <p className="text-xs text-velum-500">+{memberAppointments.length - 5} citas anteriores</p>
+              )}
+            </div>
+
+            {/* Sesiones clínicas del socio */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs uppercase tracking-widest text-velum-500">Sesiones registradas</h3>
+                <span className="text-xs text-velum-500">{memberSessions.length} sesión(es)</span>
+              </div>
+              {!isLoadingMemberHistory && memberSessions.length === 0 && (
+                <p className="text-xs text-velum-500">Sin sesiones registradas aún.</p>
+              )}
+              {memberSessions.slice(0, 5).map((session) => {
+                const params = session.laserParametersJson as Record<string, unknown> | null;
+                const dateStr = new Date(session.createdAt).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' });
+                return (
+                  <div key={session.id} className="border border-velum-100 p-3 space-y-1">
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs text-velum-500">{dateStr}</p>
+                      {session.adverseEvents && (
+                        <span className="text-xs px-2 py-0.5 border border-amber-200 bg-amber-50 text-amber-700 rounded-full">Evento adverso</span>
+                      )}
+                    </div>
+                    {params?.zona && <p className="text-sm font-semibold text-velum-900">{String(params.zona)}</p>}
+                    <div className="flex flex-wrap gap-3 text-xs text-velum-600">
+                      {params?.fluencia && <span>Fluencia: {String(params.fluencia)}</span>}
+                      {params?.frecuencia && <span>Frecuencia: {String(params.frecuencia)}</span>}
+                      {params?.spot && <span>Spot: {String(params.spot)}</span>}
+                      {params?.passes && <span>Pasadas: {String(params.passes)}</span>}
+                    </div>
+                    {session.notes && <p className="text-xs text-velum-600 italic">"{session.notes}"</p>}
+                  </div>
+                );
+              })}
+              {memberSessions.length > 5 && (
+                <p className="text-xs text-velum-500">+{memberSessions.length - 5} sesiones anteriores</p>
+              )}
             </div>
           </div>
         </div>
@@ -1477,7 +1798,7 @@ export const Admin: React.FC = () => {
                     {risk === 'critical' ? 'Crítico' : risk === 'warning' ? 'Atención' : 'OK'}
                   </td>
                   <td className="p-4">
-                    <Button size="sm" variant="outline" onClick={() => setSelectedMember(member)}>
+                    <Button size="sm" variant="outline" onClick={() => handleOpenMemberDrawer(member)}>
                       Ver detalle
                     </Button>
                   </td>
@@ -1616,54 +1937,116 @@ export const Admin: React.FC = () => {
     </div>
   );
 
-  const renderExpedientes = () => (
-    <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-        <div className="bg-white border border-velum-200 p-5">
-          <p className="text-[10px] uppercase tracking-widest text-velum-500">Expedientes firmados</p>
-          <p className="text-3xl font-serif text-velum-900 mt-2">{analytics.expedientesFirmados}</p>
+  const renderExpedientes = () => {
+    const pendingIntakes = members.filter((m) => m.intakeStatus === 'submitted');
+    return (
+      <div className="space-y-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+          <div className="bg-white border border-velum-200 p-5">
+            <p className="text-[10px] uppercase tracking-widest text-velum-500">Expedientes firmados</p>
+            <p className="text-3xl font-serif text-velum-900 mt-2">{analytics.expedientesFirmados}</p>
+          </div>
+          <div className="bg-white border border-velum-200 p-5">
+            <p className="text-[10px] uppercase tracking-widest text-velum-500">Pendientes firma</p>
+            <p className="text-3xl font-serif text-velum-900 mt-2">{analytics.expedientesPendientes}</p>
+          </div>
+          <div className="bg-white border border-velum-200 p-5">
+            <p className="text-[10px] uppercase tracking-widest text-velum-500">Evaluaciones por revisar</p>
+            <p className={`text-3xl font-serif mt-2 ${pendingIntakes.length > 0 ? 'text-amber-700' : 'text-velum-900'}`}>{pendingIntakes.length}</p>
+          </div>
+          <div className="bg-white border border-velum-200 p-5">
+            <p className="text-[10px] uppercase tracking-widest text-velum-500">Alto riesgo clínico</p>
+            <p className="text-3xl font-serif text-velum-900 mt-2">{analytics.highRiskMembers.length}</p>
+          </div>
         </div>
-        <div className="bg-white border border-velum-200 p-5">
-          <p className="text-[10px] uppercase tracking-widest text-velum-500">Pendientes</p>
-          <p className="text-3xl font-serif text-velum-900 mt-2">{analytics.expedientesPendientes}</p>
-        </div>
-        <div className="bg-white border border-velum-200 p-5">
-          <p className="text-[10px] uppercase tracking-widest text-velum-500">Alto riesgo clínico</p>
-          <p className="text-3xl font-serif text-velum-900 mt-2">{analytics.highRiskMembers.length}</p>
-        </div>
-      </div>
 
-      <div className="bg-white border border-velum-200 shadow-sm overflow-x-auto">
-        <table className="w-full text-left text-sm">
-          <thead className="bg-velum-50 text-[10px] uppercase font-bold text-velum-600">
-            <tr>
-              <th className="p-4">Socio</th>
-              <th className="p-4">Consentimiento</th>
-              <th className="p-4">Documentos</th>
-              <th className="p-4">Observación clínica</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-velum-100">
-            {members.map((member) => (
-              <tr key={member.id}>
-                <td className="p-4">
-                  <p className="font-semibold">{member.name}</p>
-                  <p className="text-xs text-velum-500">{member.email}</p>
-                </td>
-                <td className="p-4 text-xs uppercase tracking-widest">
-                  {member.clinical?.consentFormSigned ? 'Firmado' : 'Pendiente'}
-                </td>
-                <td className="p-4">{member.clinical?.documents?.length ?? 0}</td>
-                <td className="p-4 text-xs text-velum-600">
-                  {member.clinical?.allergies || member.clinical?.medications ? 'Requiere revisión médica' : 'Sin alertas registradas'}
-                </td>
+        {pendingIntakes.length > 0 && (
+          <div className="bg-amber-50 border border-amber-200 p-4 space-y-3">
+            <p className="text-xs uppercase tracking-widest text-amber-700 font-semibold flex items-center gap-2">
+              <ClipboardList size={14} /> Evaluaciones médicas pendientes de revisión ({pendingIntakes.length})
+            </p>
+            <div className="space-y-2">
+              {pendingIntakes.map((member) => (
+                <div key={member.id} className="bg-white border border-amber-200 p-3 flex items-center justify-between gap-4">
+                  <div>
+                    <p className="font-semibold text-sm text-velum-900">{member.name}</p>
+                    <p className="text-xs text-velum-500">{member.email}</p>
+                  </div>
+                  {intakeToReject === member.id ? (
+                    <div className="flex gap-2 items-center flex-1 max-w-sm">
+                      <input
+                        value={intakeRejectReason}
+                        onChange={(e) => setIntakeRejectReason(e.target.value)}
+                        placeholder="Motivo de rechazo..."
+                        className="flex-1 border border-velum-300 rounded px-2 py-1 text-xs"
+                      />
+                      <Button size="sm" variant="outline" className="text-red-700 border-red-300 text-xs" isLoading={isApprovingIntake === member.id} onClick={() => handleApproveIntake(member.id, false)}>
+                        Confirmar
+                      </Button>
+                      <button className="text-xs text-velum-500 underline" onClick={() => { setIntakeToReject(null); setIntakeRejectReason(''); }}>Cancelar</button>
+                    </div>
+                  ) : (
+                    <div className="flex gap-2 shrink-0">
+                      <Button size="sm" className="gap-1 text-xs" isLoading={isApprovingIntake === member.id} onClick={() => handleApproveIntake(member.id, true)}>
+                        <CheckCheck size={12} /> Aprobar
+                      </Button>
+                      <Button size="sm" variant="outline" className="text-red-700 border-red-300 gap-1 text-xs" onClick={() => setIntakeToReject(member.id)}>
+                        <XCircle size={12} /> Rechazar
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="bg-white border border-velum-200 shadow-sm overflow-x-auto">
+          <table className="w-full text-left text-sm">
+            <thead className="bg-velum-50 text-[10px] uppercase font-bold text-velum-600">
+              <tr>
+                <th className="p-4">Socio</th>
+                <th className="p-4">Evaluación inicial</th>
+                <th className="p-4">Consentimiento</th>
+                <th className="p-4">Documentos</th>
+                <th className="p-4">Acciones</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody className="divide-y divide-velum-100">
+              {members.map((member) => {
+                const { label, cls } = intakeStatusLabel(member.intakeStatus);
+                return (
+                  <tr key={member.id}>
+                    <td className="p-4">
+                      <p className="font-semibold">{member.name}</p>
+                      <p className="text-xs text-velum-500">{member.email}</p>
+                    </td>
+                    <td className="p-4">
+                      <span className={`text-xs px-2 py-0.5 border rounded-full font-semibold ${cls}`}>{label}</span>
+                    </td>
+                    <td className="p-4 text-xs uppercase tracking-widest">
+                      {member.clinical?.consentFormSigned ? 'Firmado' : 'Pendiente'}
+                    </td>
+                    <td className="p-4">{member.clinical?.documents?.length ?? 0}</td>
+                    <td className="p-4">
+                      <div className="flex gap-2">
+                        <Button size="sm" variant="outline" onClick={() => { handleOpenMemberDrawer(member); setActiveSection('socios'); }}>
+                          Ver detalle
+                        </Button>
+                        <Button size="sm" variant="outline" className="gap-1" onClick={() => openSessionModal(member)}>
+                          <Zap size={12} /> Sesión
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   const renderAgendaSettingsCategory = () => {
     const activeCabins = agendaCabinsDraft
@@ -2587,7 +2970,7 @@ export const Admin: React.FC = () => {
                       <Button size="sm" variant="secondary" onClick={() => handleUpdateMember(member.id, 'active')}>
                         Regularizar
                       </Button>
-                      <Button size="sm" variant="outline" onClick={() => setSelectedMember(member)}>
+                      <Button size="sm" variant="outline" onClick={() => handleOpenMemberDrawer(member)}>
                         Abrir
                       </Button>
                     </div>
@@ -2633,7 +3016,7 @@ export const Admin: React.FC = () => {
                 Estado: {statusLabel(member.subscriptionStatus)} · Consentimiento: {member.clinical?.consentFormSigned ? 'Firmado' : 'Pendiente'}
               </p>
               <div className="mt-3 flex gap-2">
-                <Button size="sm" variant="outline" className="border-red-300 text-red-700 hover:bg-red-700 hover:text-white" onClick={() => setSelectedMember(member)}>
+                <Button size="sm" variant="outline" className="border-red-300 text-red-700 hover:bg-red-700 hover:text-white" onClick={() => handleOpenMemberDrawer(member)}>
                   Tomar acción
                 </Button>
               </div>
@@ -2768,11 +3151,111 @@ export const Admin: React.FC = () => {
         </Button>
       </div>
 
-      {settingsCategory === 'agenda' ? renderAgendaSettingsCategory() : renderGeneralSettingsCategory()}
+      <>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <Button size="sm" variant={settingsCategory === 'control' ? 'secondary' : 'outline'} onClick={() => setSettingsCategory('control' as any)}>Torre</Button>
+          <Button size="sm" variant={settingsCategory === 'socios' ? 'secondary' : 'outline'} onClick={() => setSettingsCategory('socios' as any)}>Usuarios</Button>
+          <Button size="sm" variant={settingsCategory === 'kpis' ? 'secondary' : 'outline'} onClick={() => setSettingsCategory('kpis' as any)}>KPIs</Button>
+          <Button size="sm" variant={settingsCategory === 'finanzas' ? 'secondary' : 'outline'} onClick={() => setSettingsCategory('finanzas' as any)}>Finanzas</Button>
+          <Button size="sm" variant={settingsCategory === 'expedientes' ? 'secondary' : 'outline'} onClick={() => setSettingsCategory('expedientes' as any)}>Expedientes</Button>
+          <Button size="sm" variant={settingsCategory === 'cobranza' ? 'secondary' : 'outline'} onClick={() => setSettingsCategory('cobranza' as any)}>Cobranza</Button>
+          <Button size="sm" variant={settingsCategory === 'riesgos' ? 'secondary' : 'outline'} onClick={() => setSettingsCategory('riesgos' as any)}>Riesgos</Button>
+          <Button size="sm" variant={settingsCategory === 'cumplimiento' ? 'secondary' : 'outline'} onClick={() => setSettingsCategory('cumplimiento' as any)}>Permisos</Button>
+        </div>
+        {settingsCategory === 'agenda'
+          ? renderAgendaSettingsCategory()
+          : settingsCategory === 'control' ? renderControl() :
+            settingsCategory === 'socios' ? renderSocios() :
+            settingsCategory === 'kpis' ? renderKpis() :
+            settingsCategory === 'finanzas' ? renderFinanzas() :
+            settingsCategory === 'expedientes' ? renderExpedientes() :
+            settingsCategory === 'cobranza' ? renderCobranza() :
+            settingsCategory === 'riesgos' ? renderRiesgos() :
+            settingsCategory === 'cumplimiento' ? renderCumplimiento()
+            : renderGeneralSettingsCategory()}
+      </>
     </div>
   );
 
-  const renderSection = () => {
+  
+const renderConfiguracionesV2 = () => {
+  const configTabs = [
+    { key: "general", label: "General" },
+    { key: "usuarios_permisos", label: "Usuarios y permisos" },
+    { key: "logs", label: "Logs" },
+    { key: "cumplimiento", label: "Cumplimiento" },
+    { key: "riesgos", label: "Riesgos" },
+    { key: "agenda", label: "Agenda" },
+    { key: "meta", label: "Meta" },
+    { key: "stripe", label: "Stripe" },
+    { key: "whatsapp_business", label: "WhatsApp Business" },
+  ] as const;
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-white border border-velum-200 p-2 inline-flex flex-wrap items-center gap-2">
+        {configTabs.map((tab) => (
+          <Button
+            key={tab.key}
+            size="sm"
+            variant={settingsCategory === tab.key ? "secondary" : "outline"}
+            onClick={() => setSettingsCategory(tab.key as any)}
+          >
+            {tab.label}
+          </Button>
+        ))}
+      </div>
+
+      {settingsCategory === "agenda" ? (
+        renderAgendaSettingsCategory()
+      ) : settingsCategory === "usuarios_permisos" ? (
+        <AdminUsersPermissions embedded />
+      ) : settingsCategory === "logs" ? (
+        renderCumplimiento()
+      ) : settingsCategory === "cumplimiento" ? (
+        renderCumplimiento()
+      ) : settingsCategory === "riesgos" ? (
+        renderRiesgos()
+      ) : settingsCategory === "meta" ? (
+        <div className="bg-white border border-velum-200 p-6 space-y-3">
+          <h3 className="text-lg font-serif text-velum-900">Meta</h3>
+          <p className="text-sm text-velum-600">
+            Configuración de credenciales y parámetros para campañas de marketing.
+          </p>
+          <p className="text-xs text-velum-500">
+            Si quieres, aquí conectamos endpoints reales en el siguiente paso.
+          </p>
+        </div>
+      ) : settingsCategory === "stripe" ? (
+        <div className="bg-white border border-velum-200 p-6 space-y-3">
+          <h3 className="text-lg font-serif text-velum-900">Stripe</h3>
+          <p className="text-sm text-velum-600">
+            Configura y guarda STRIPE_SECRET_KEY, STRIPE_PUBLISHABLE_KEY y STRIPE_WEBHOOK_SECRET.
+          </p>
+          <Link to="/admin/stripe">
+            <button className="rounded-xl border border-velum-300 px-4 py-2 text-sm text-velum-700 hover:border-velum-600">
+              Abrir configuración Stripe
+            </button>
+          </Link>
+        </div>
+      ) : settingsCategory === "whatsapp_business" ? (
+        <div className="bg-white border border-velum-200 p-6 space-y-4">
+          <h3 className="text-lg font-serif text-velum-900">WhatsApp Business (OTP)</h3>
+          <p className="text-sm text-velum-600">
+            Configuración del sistema de validación OTP vía Meta WhatsApp.
+          </p>
+          <Link to="/admin/whatsapp">
+            <Button variant="outline">Abrir configuración OTP</Button>
+          </Link>
+        </div>
+      ) : (
+        renderGeneralSettingsCategory()
+      )}
+    </div>
+  );
+};
+
+const renderSection = () => {
     switch (activeSection) {
       case 'control':
         return renderControl();
@@ -2792,8 +3275,7 @@ export const Admin: React.FC = () => {
         return renderRiesgos();
       case 'cumplimiento':
         return renderCumplimiento();
-      case 'configuraciones':
-        return renderConfiguraciones();
+      case 'configuraciones': return renderConfiguracionesV2();
       default:
         return renderControl();
     }
@@ -2863,6 +3345,7 @@ export const Admin: React.FC = () => {
   return (
     <div className="min-h-screen bg-velum-50 text-velum-900 relative">
       {selectedMember && renderMemberDrawer()}
+      {sessionModalMember && renderSessionModal()}
 
       <div className="flex min-h-screen">
         <aside className={`fixed md:static top-0 left-0 z-40 h-screen w-72 ${isSidebarCollapsed ? 'md:w-24' : 'md:w-72'} bg-velum-900 text-velum-100 border-r border-velum-800 transform transition-all duration-300 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
