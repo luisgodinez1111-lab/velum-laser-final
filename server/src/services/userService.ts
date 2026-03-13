@@ -7,34 +7,38 @@ export const createUser = async (data: {
   passwordHash: string;
   firstName?: string;
   lastName?: string;
+  phone?: string;
 }) => {
-  return prisma.user.create({
-    data: {
-      email: data.email,
-      passwordHash: data.passwordHash,
-      profile: {
-        create: {
-          firstName: data.firstName,
-          lastName: data.lastName
+  return prisma.$transaction(async (tx) => {
+    return tx.user.create({
+      data: {
+        email: data.email,
+        passwordHash: data.passwordHash,
+        profile: {
+          create: {
+            firstName: data.firstName,
+            lastName: data.lastName,
+            ...(data.phone ? { phone: data.phone } : {})
+          }
+        },
+        memberships: {
+          create: {}
+        },
+        medicalIntake: {
+          create: {
+            status: "draft"
+          }
+        },
+        documents: {
+          create: [
+            { type: "informed_consent", version: "1.0" },
+            { type: "privacy_notice", version: "1.0" },
+            { type: "medical_history", version: "1.0" }
+          ]
         }
       },
-      memberships: {
-        create: {}
-      },
-      medicalIntake: {
-        create: {
-          status: "draft"
-        }
-      },
-      documents: {
-        create: [
-          { type: "informed_consent", version: "1.0" },
-          { type: "privacy_notice", version: "1.0" },
-          { type: "medical_history", version: "1.0" }
-        ]
-      }
-    },
-    include: { profile: true, memberships: true, medicalIntake: true }
+      include: { profile: true, memberships: true, medicalIntake: true }
+    });
   });
 };
 

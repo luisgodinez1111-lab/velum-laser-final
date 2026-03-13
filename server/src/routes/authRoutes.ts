@@ -6,6 +6,6 @@ export const authRoutes = Router();
 authRoutes.post("/register", register);
 authRoutes.post("/login", login);
 authRoutes.post("/logout", logout);
-authRoutes.post("/forgot", forgotPassword);
-authRoutes.post("/reset", resetPassword);
+authRoutes.post("/forgot-password", forgotPassword);
+authRoutes.post("/reset-password", resetPassword);
 authRoutes.post("/verify-email", verifyEmail);

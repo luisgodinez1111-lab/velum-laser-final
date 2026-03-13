@@ -1,13 +1,17 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { MEMBERSHIPS, ZONES } from '../constants';
 import { MembershipTier, ZoneId } from '../types';
 import { Button } from '../components/Button';
 import { Check, Info, Star, ArrowDown, Sparkles, ShieldCheck } from 'lucide-react';
 import { createSubscriptionCheckout } from '../services/stripeService';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 
 export const Memberships: React.FC = () => {
   const { isAuthenticated } = useAuth();
+  const navigate = useNavigate();
+  const toast = useToast();
   const [selectedTier, setSelectedTier] = useState<MembershipTier | null>(null);
   const [selectedZones, setSelectedZones] = useState<ZoneId[]>([]);
   const [step, setStep] = useState<1 | 2 | 3>(1);
@@ -50,14 +54,19 @@ export const Memberships: React.FC = () => {
 
   const handleCheckout = async () => {
     if (!selectedTier) return;
-    setIsCheckingOut(true);
     if (!isAuthenticated) {
-      alert("Inicia sesión para continuar con el pago.");
-      setIsCheckingOut(false);
+      toast.info("Inicia sesión para continuar con el pago.");
+      navigate('/login');
       return;
     }
-    await createSubscriptionCheckout(selectedTier);
-    setIsCheckingOut(false);
+    setIsCheckingOut(true);
+    try {
+      await createSubscriptionCheckout(selectedTier);
+    } catch (err: any) {
+      toast.error(err?.message ?? "No se pudo iniciar el pago. Intenta de nuevo.");
+    } finally {
+      setIsCheckingOut(false);
+    }
   };
 
   return (

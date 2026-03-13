@@ -186,39 +186,31 @@ export const Agenda: React.FC = () => {
   };
 
   const handleRegisterSubmit = async (e: React.FormEvent) => {
-  const __registerFullName = String((registerForm as any)?.fullName ?? (registerForm as any)?.name ?? "").trim();
-  const __registerEmail = String((registerForm as any)?.email ?? "").trim();
-  const __registerPhone = String((registerForm as any)?.phone ?? (registerForm as any)?.mobile ?? (registerForm as any)?.cellphone ?? "").trim();
-
-  if (!__registerFullName || !__registerEmail || !__registerPhone) {
-    alert("Para crear tu cuenta ingresa nombre completo, correo electronico y numero celular.");
-    return;
-  }
-
     e.preventDefault();
 
-    const passwordChecks = getPasswordChecks(password);
-    if (!Object.values(passwordChecks).every(Boolean)) {
-      setAppointmentMessage("La contrasena debe incluir minimo 8 caracteres, una mayuscula, una minuscula, un numero y un simbolo.");
+    if (!firstName.trim() || !lastName.trim()) {
+      toast.warning("Ingresa tu nombre y apellido para continuar.");
       return;
     }
     if (!phone.trim()) {
-      setAppointmentMessage("Ingresa tu numero celular para continuar.");
+      toast.warning("Ingresa tu número celular para continuar.");
       return;
     }
-    setAppointmentMessage(null);
-    try {
-            if (password !== confirmPassword) {
-        setAppointmentMessage("La confirmacion de contrasena no coincide.");
-        return;
-      }
+    if (!Object.values(getPasswordChecks(password)).every(Boolean)) {
+      toast.warning("La contraseña no cumple los requisitos de seguridad.");
+      return;
+    }
+    if (password !== confirmPassword) {
+      toast.warning("La confirmación de contraseña no coincide.");
+      return;
+    }
 
-await register({ email, password, firstName, lastName, phone });
+    try {
+      await register({ email, password, firstName: firstName.trim(), lastName: lastName.trim(), phone: phone.trim() });
       toast.success("¡Cuenta creada! Confirma tu correo para continuar.");
-      // Ir al paso de verificación de correo
       setViewState("email-verify");
-    } catch {
-      toast.error("No se pudo completar el registro. Intenta de nuevo.");
+    } catch (err: any) {
+      toast.error(err?.message ?? "No se pudo completar el registro. Intenta de nuevo.");
     }
   };
 

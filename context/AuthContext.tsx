@@ -7,7 +7,7 @@ interface AuthContextType {
   isAuthenticated: boolean;
   isLoading: boolean;
   login: (email: string, pass: string) => Promise<void>;
-  register: (payload: { email: string; password: string; firstName?: string; lastName?: string }) => Promise<void>;
+  register: (payload: { email: string; password: string; firstName?: string; lastName?: string; phone?: string }) => Promise<void>;
   logout: () => void;
   hasRole: (roles: UserRole[]) => boolean;
 }
@@ -43,7 +43,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const register = async (payload: { email: string; password: string; firstName?: string; lastName?: string }) => {
+  const register = async (payload: { email: string; password: string; firstName?: string; lastName?: string; phone?: string }) => {
     setIsLoading(true);
     try {
       const userData = await authService.register(payload);

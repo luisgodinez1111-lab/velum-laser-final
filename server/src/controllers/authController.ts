@@ -27,7 +27,8 @@ export const register = async (req: Request, res: Response) => {
     email: payload.email,
     passwordHash: await hashPassword(payload.password),
     firstName: payload.firstName,
-    lastName: payload.lastName
+    lastName: payload.lastName,
+    phone: payload.phone
   });
 
   const latestLead = await prisma.lead.findFirst({

@@ -30,7 +30,7 @@ export const authService = {
     return mapUser(me);
   },
 
-  register: async (payload: { email: string; password: string; firstName?: string; lastName?: string }) => {
+  register: async (payload: { email: string; password: string; firstName?: string; lastName?: string; phone?: string }) => {
     await apiFetch("/auth/register", {
       method: "POST",
       body: JSON.stringify(payload)
