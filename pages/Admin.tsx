@@ -1367,649 +1367,581 @@ export const Admin: React.FC = () => {
     }
   };
 
+  // ─── Helper UI ────────────────────────────────────────────────────────────
+
   const intakeStatusLabel = (status?: string) => {
     switch (status) {
       case 'approved': return { label: 'Aprobado', cls: 'text-emerald-700 bg-emerald-50 border-emerald-200' };
       case 'submitted': return { label: 'Pendiente revisión', cls: 'text-amber-700 bg-amber-50 border-amber-200' };
       case 'rejected': return { label: 'Rechazado', cls: 'text-red-700 bg-red-50 border-red-200' };
-      default: return { label: 'Borrador', cls: 'text-zinc-600 bg-zinc-50 border-zinc-200' };
+      default: return { label: 'Borrador', cls: 'text-zinc-500 bg-zinc-50 border-zinc-200' };
     }
   };
+
+  const apptStatusLabel = (status?: string) => {
+    switch (status) {
+      case 'scheduled': return { label: 'Agendada', cls: 'bg-blue-50 text-blue-700 border-blue-200' };
+      case 'confirmed': return { label: 'Confirmada', cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' };
+      case 'completed': return { label: 'Completada', cls: 'bg-velum-100 text-velum-700 border-velum-200' };
+      case 'canceled': return { label: 'Cancelada', cls: 'bg-zinc-100 text-zinc-500 border-zinc-200' };
+      case 'no_show': return { label: 'No show', cls: 'bg-red-50 text-red-600 border-red-200' };
+      default: return { label: status ?? '—', cls: 'bg-zinc-100 text-zinc-500 border-zinc-200' };
+    }
+  };
+
+  const Pill: React.FC<{ label: string; cls: string }> = ({ label, cls }) => (
+    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${cls}`}>{label}</span>
+  );
+
+  const KpiCard: React.FC<{ icon: React.ReactNode; label: string; value: string | number; sub?: string; accent?: string }> = ({ icon, label, value, sub, accent = 'text-velum-900' }) => (
+    <div className="bg-white rounded-2xl border border-velum-100 p-5 flex flex-col gap-3">
+      <div className="flex items-center justify-between">
+        <span className="text-[10px] font-bold uppercase tracking-widest text-velum-500">{label}</span>
+        <span className="text-velum-400">{icon}</span>
+      </div>
+      <p className={`text-3xl font-serif font-bold leading-none ${accent}`}>{value}</p>
+      {sub && <p className="text-xs text-velum-400">{sub}</p>}
+    </div>
+  );
+
+  // ─── Session Modal ────────────────────────────────────────────────────────
 
   const renderSessionModal = () => {
     if (!sessionModalMember) return null;
     return (
-      <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-        <div className="bg-white w-full max-w-lg shadow-2xl border border-velum-200 overflow-y-auto max-h-[90vh]">
-          <div className="p-5 border-b border-velum-200 flex justify-between items-center sticky top-0 bg-white z-10">
+      <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+        <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl border border-velum-100 overflow-hidden flex flex-col max-h-[90vh]">
+          <div className="px-6 py-5 border-b border-velum-100 flex items-center justify-between">
             <div>
-              <p className="text-[10px] uppercase tracking-widest text-velum-500">Registro clínico</p>
-              <h3 className="font-serif text-lg text-velum-900">{sessionModalMember.name}</h3>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-velum-500">Registro clínico</p>
+              <h3 className="font-serif text-lg text-velum-900 mt-0.5">{sessionModalMember.name}</h3>
             </div>
-            <button onClick={() => setSessionModalMember(null)} className="text-velum-400 hover:text-velum-900"><X size={20} /></button>
+            <button onClick={() => setSessionModalMember(null)} className="text-velum-400 hover:text-velum-900 p-1 rounded-xl hover:bg-velum-50 transition"><X size={20} /></button>
           </div>
-          <div className="p-5 space-y-4">
+          <div className="p-6 space-y-5 overflow-y-auto">
             {memberAppointments.length > 0 && (
               <div>
-                <label className="block text-xs uppercase tracking-widest text-velum-500 mb-1">Cita asociada (opcional)</label>
-                <select
-                  value={sessionForm.appointmentId}
-                  onChange={(e) => setSessionForm((f) => ({ ...f, appointmentId: e.target.value }))}
-                  className="w-full border border-velum-300 rounded px-3 py-2 text-sm"
-                >
+                <label className="block text-xs font-bold uppercase tracking-widest text-velum-500 mb-2">Cita asociada</label>
+                <select value={sessionForm.appointmentId} onChange={(e) => setSessionForm((f) => ({ ...f, appointmentId: e.target.value }))}
+                  className="w-full rounded-xl border border-velum-200 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-velum-900/20 focus:border-velum-900 transition bg-white">
                   <option value="">Sin cita específica</option>
                   {memberAppointments.map((a) => (
                     <option key={a.id} value={a.id}>
-                      {new Date(a.startAt).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })} — {a.treatment?.name ?? 'Sin tratamiento'}
+                      {new Date(a.startAt).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })} — {a.treatment?.name ?? 'Sin tratamiento'}
                     </option>
                   ))}
                 </select>
               </div>
             )}
-
             <div>
-              <p className="text-xs uppercase tracking-widest text-velum-500 mb-2 font-semibold">Parámetros láser</p>
+              <p className="text-xs font-bold uppercase tracking-widest text-velum-500 mb-3">Parámetros láser</p>
               <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs text-velum-500 mb-1">Zona tratada</label>
-                  <input value={sessionForm.zona} onChange={(e) => setSessionForm((f) => ({ ...f, zona: e.target.value }))} placeholder="Ej. Zona I — Identidad" className="w-full border border-velum-300 rounded px-3 py-2 text-sm" />
-                </div>
-                <div>
-                  <label className="block text-xs text-velum-500 mb-1">Fluencia (J/cm²)</label>
-                  <input value={sessionForm.fluencia} onChange={(e) => setSessionForm((f) => ({ ...f, fluencia: e.target.value }))} placeholder="Ej. 14" className="w-full border border-velum-300 rounded px-3 py-2 text-sm" type="number" min="0" step="0.1" />
-                </div>
-                <div>
-                  <label className="block text-xs text-velum-500 mb-1">Frecuencia (Hz)</label>
-                  <input value={sessionForm.frecuencia} onChange={(e) => setSessionForm((f) => ({ ...f, frecuencia: e.target.value }))} placeholder="Ej. 2" className="w-full border border-velum-300 rounded px-3 py-2 text-sm" type="number" min="0" step="0.5" />
-                </div>
-                <div>
-                  <label className="block text-xs text-velum-500 mb-1">Spot (mm)</label>
-                  <input value={sessionForm.spot} onChange={(e) => setSessionForm((f) => ({ ...f, spot: e.target.value }))} placeholder="Ej. 12" className="w-full border border-velum-300 rounded px-3 py-2 text-sm" type="number" min="0" />
-                </div>
+                {([['zona', 'Zona tratada', 'Ej. Zona I', 'text'], ['fluencia', 'Fluencia (J/cm²)', 'Ej. 14', 'number'], ['frecuencia', 'Frecuencia (Hz)', 'Ej. 2', 'number'], ['spot', 'Spot (mm)', 'Ej. 12', 'number']] as const).map(([field, label, placeholder, type]) => (
+                  <div key={field}>
+                    <label className="block text-xs text-velum-500 mb-1">{label}</label>
+                    <input value={sessionForm[field]} onChange={(e) => setSessionForm((f) => ({ ...f, [field]: e.target.value }))}
+                      placeholder={placeholder} type={type} min="0" step={field === 'fluencia' ? '0.1' : field === 'frecuencia' ? '0.5' : '1'}
+                      className="w-full rounded-xl border border-velum-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-velum-900/20 focus:border-velum-900 transition" />
+                  </div>
+                ))}
                 <div className="col-span-2">
                   <label className="block text-xs text-velum-500 mb-1">Pasadas</label>
-                  <input value={sessionForm.passes} onChange={(e) => setSessionForm((f) => ({ ...f, passes: e.target.value }))} placeholder="Ej. 3" className="w-full border border-velum-300 rounded px-3 py-2 text-sm" type="number" min="1" />
+                  <input value={sessionForm.passes} onChange={(e) => setSessionForm((f) => ({ ...f, passes: e.target.value }))}
+                    placeholder="Ej. 3" type="number" min="1"
+                    className="w-full rounded-xl border border-velum-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-velum-900/20 focus:border-velum-900 transition" />
                 </div>
               </div>
             </div>
-
             <div>
-              <label className="block text-xs uppercase tracking-widest text-velum-500 mb-1">Notas clínicas</label>
-              <textarea value={sessionForm.notes} onChange={(e) => setSessionForm((f) => ({ ...f, notes: e.target.value }))} rows={3} placeholder="Observaciones, tolerancia del cliente, respuesta al tratamiento..." className="w-full border border-velum-300 rounded px-3 py-2 text-sm resize-none" />
+              <label className="block text-xs font-bold uppercase tracking-widest text-velum-500 mb-2">Notas clínicas</label>
+              <textarea value={sessionForm.notes} onChange={(e) => setSessionForm((f) => ({ ...f, notes: e.target.value }))}
+                rows={3} placeholder="Observaciones, tolerancia del cliente, respuesta al tratamiento..."
+                className="w-full rounded-xl border border-velum-200 px-3 py-2.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-velum-900/20 focus:border-velum-900 transition" />
             </div>
-
             <div>
-              <label className="block text-xs uppercase tracking-widest text-velum-500 mb-1">Eventos adversos</label>
-              <textarea value={sessionForm.adverseEvents} onChange={(e) => setSessionForm((f) => ({ ...f, adverseEvents: e.target.value }))} rows={2} placeholder="Eritema, edema, hiperpigmentación... (dejar vacío si no aplica)" className="w-full border border-velum-300 rounded px-3 py-2 text-sm resize-none" />
+              <label className="block text-xs font-bold uppercase tracking-widest text-velum-500 mb-2">Eventos adversos</label>
+              <textarea value={sessionForm.adverseEvents} onChange={(e) => setSessionForm((f) => ({ ...f, adverseEvents: e.target.value }))}
+                rows={2} placeholder="Eritema, edema... (dejar vacío si no aplica)"
+                className={`w-full rounded-xl border px-3 py-2.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-velum-900/20 transition ${sessionForm.adverseEvents ? 'border-amber-300 bg-amber-50/40' : 'border-velum-200 focus:border-velum-900'}`} />
             </div>
-
-            <div className="flex gap-3 pt-1">
-              <Button onClick={handleSubmitSession} isLoading={isSessionSaving} className="flex-1">
-                <Zap size={14} className="mr-2" /> Registrar sesión
-              </Button>
-              <Button variant="outline" onClick={() => setSessionModalMember(null)}>Cancelar</Button>
-            </div>
+          </div>
+          <div className="px-6 py-4 border-t border-velum-100 flex gap-3 bg-velum-50/50">
+            <button onClick={handleSubmitSession} disabled={isSessionSaving}
+              className="flex-1 bg-velum-900 text-white rounded-xl py-2.5 text-sm font-medium hover:bg-velum-800 transition disabled:opacity-50 flex items-center justify-center gap-2">
+              <Zap size={14} />{isSessionSaving ? 'Registrando...' : 'Registrar sesión'}
+            </button>
+            <button onClick={() => setSessionModalMember(null)} className="px-4 py-2.5 rounded-xl border border-velum-200 text-sm text-velum-700 hover:bg-velum-100 transition">Cancelar</button>
           </div>
         </div>
       </div>
     );
   };
 
-  const alertClass = (level: HealthFlag) => {
-    switch (level) {
-      case 'ok':
-        return 'border-emerald-200 bg-emerald-50 text-emerald-800';
-      case 'warning':
-        return 'border-amber-200 bg-amber-50 text-amber-800';
-      case 'critical':
-        return 'border-red-200 bg-red-50 text-red-800';
-      default:
-        return 'border-zinc-200 bg-zinc-50 text-zinc-800';
-    }
-  };
+  // ─── Member Drawer ────────────────────────────────────────────────────────
 
   const renderMemberDrawer = () => {
     if (!selectedMember) return null;
-
-    const memberRisk = riskOfMember(selectedMember);
-
+    const intake = intakeStatusLabel(selectedMember.intakeStatus);
+    const mem = selectedMember;
     return (
-      <div className="fixed inset-0 z-50 flex justify-end bg-black/30 backdrop-blur-sm">
-        <button className="flex-1" onClick={() => setSelectedMember(null)} aria-label="Cerrar detalle" />
-        <div className="w-full max-w-2xl bg-white h-full shadow-2xl border-l border-velum-200 overflow-y-auto">
-          <div className="p-6 border-b border-velum-200 flex justify-between items-center sticky top-0 bg-white">
+      <>
+        <div className="fixed inset-0 bg-black/20 backdrop-blur-sm z-40" onClick={() => setSelectedMember(null)} />
+        <div className="fixed right-0 top-0 h-full w-full max-w-md bg-white shadow-2xl z-50 flex flex-col overflow-hidden">
+          {/* Header */}
+          <div className="px-6 py-5 border-b border-velum-100 flex items-start justify-between">
             <div>
-              <h2 className="text-2xl font-serif text-velum-900">{selectedMember.name}</h2>
-              <p className="text-sm text-velum-500">{selectedMember.email}</p>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-velum-400">Perfil del socio</p>
+              <h2 className="font-serif text-xl text-velum-900 mt-1">{mem.name}</h2>
+              <p className="text-xs text-velum-500 mt-0.5">{mem.email}</p>
             </div>
-            <button onClick={() => setSelectedMember(null)} className="text-velum-400 hover:text-velum-900" aria-label="Cerrar">
-              <X size={22} />
-            </button>
+            <button onClick={() => setSelectedMember(null)} className="p-2 rounded-xl hover:bg-velum-50 text-velum-400 hover:text-velum-700 transition"><X size={18} /></button>
           </div>
-
-          <div className="p-6 space-y-6">
-            <div className="grid grid-cols-2 gap-4 text-sm">
-              <div className="p-4 border border-velum-200">
-                <p className="text-xs uppercase text-velum-500">Plan</p>
-                <p className="font-bold mt-1">{selectedMember.plan ?? 'Sin plan'}</p>
+          {/* Stats */}
+          <div className="grid grid-cols-2 gap-3 p-4 border-b border-velum-100">
+            {[
+              { label: 'Plan', value: mem.plan ?? 'N/A' },
+              { label: 'Estado', value: <Pill label={statusLabel(mem.subscriptionStatus)} cls={statusPill(mem.subscriptionStatus)} /> },
+              { label: 'Monto', value: mem.amount ? formatMoney(mem.amount) : 'N/A' },
+              { label: 'Expediente', value: <Pill label={intake.label} cls={intake.cls} /> }
+            ].map(({ label, value }) => (
+              <div key={label} className="bg-velum-50 rounded-xl p-3">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-velum-400 mb-1">{label}</p>
+                <div className="text-sm font-medium text-velum-900">{value}</div>
               </div>
-              <div className="p-4 border border-velum-200">
-                <p className="text-xs uppercase text-velum-500">Estado</p>
-                <p className="font-bold mt-1">{statusLabel(selectedMember.subscriptionStatus)}</p>
-              </div>
-              <div className="p-4 border border-velum-200">
-                <p className="text-xs uppercase text-velum-500">Consentimiento</p>
-                <p className="font-bold mt-1">{selectedMember.clinical?.consentFormSigned ? 'Firmado' : 'Pendiente'}</p>
-              </div>
-              <div className="p-4 border border-velum-200">
-                <p className="text-xs uppercase text-velum-500">Nivel de riesgo</p>
-                <p className="font-bold mt-1">
-                  {memberRisk === 'critical' ? 'Crítico' : memberRisk === 'warning' ? 'Atención' : 'Controlado'}
-                </p>
-              </div>
+            ))}
+          </div>
+          {/* Scrollable body */}
+          <div className="flex-1 overflow-y-auto">
+            {/* Acciones */}
+            <div className="p-4 border-b border-velum-100 space-y-2">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-velum-400 mb-3">Acciones</p>
+              <button onClick={() => { openSessionModal(mem); setSelectedMember(null); }}
+                className="w-full flex items-center gap-2 px-4 py-2.5 bg-velum-900 text-white rounded-xl text-sm font-medium hover:bg-velum-800 transition">
+                <Zap size={14} />Registrar sesión
+              </button>
+              {mem.subscriptionStatus !== 'active' && (
+                <button onClick={() => handleUpdateMember(mem.id, 'active')}
+                  className="w-full flex items-center gap-2 px-4 py-2.5 bg-emerald-600 text-white rounded-xl text-sm font-medium hover:bg-emerald-700 transition">
+                  <CheckCircle2 size={14} />Activar cuenta
+                </button>
+              )}
+              {mem.subscriptionStatus === 'active' && (
+                <button onClick={() => handleUpdateMember(mem.id, 'past_due')}
+                  className="w-full flex items-center gap-2 px-4 py-2.5 border border-amber-300 text-amber-700 bg-amber-50 rounded-xl text-sm font-medium hover:bg-amber-100 transition">
+                  <CircleAlert size={14} />Marcar pago vencido
+                </button>
+              )}
+              {mem.subscriptionStatus !== 'canceled' && (
+                <button onClick={() => handleUpdateMember(mem.id, 'canceled')}
+                  className="w-full flex items-center gap-2 px-4 py-2.5 border border-red-200 text-red-600 bg-red-50 rounded-xl text-sm font-medium hover:bg-red-100 transition">
+                  <XCircle size={14} />Cancelar membresía
+                </button>
+              )}
             </div>
-
-            <div>
-              <h3 className="text-xs uppercase tracking-widest text-velum-500 mb-3">Acciones operativas</h3>
-              <div className="flex flex-wrap gap-3">
-                <Button variant="secondary" size="sm" onClick={() => handleUpdateMember(selectedMember.id, 'active')}>
-                  Activar cuenta
-                </Button>
-                <Button variant="outline" size="sm" onClick={() => handleUpdateMember(selectedMember.id, 'past_due')}>
-                  Marcar pago vencido
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="text-red-700 border-red-300 hover:bg-red-600 hover:text-white"
-                  onClick={() => handleUpdateMember(selectedMember.id, 'canceled')}
-                >
-                  Cancelar membresía
-                </Button>
+            {/* Intake approval */}
+            {(selectedMember.intakeStatus === 'submitted' || intakeToReject === mem.id) && (
+              <div className="p-4 border-b border-velum-100">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-velum-400 mb-3">Revisión de expediente</p>
+                {intakeToReject === mem.id ? (
+                  <div className="space-y-3">
+                    <textarea value={intakeRejectReason} onChange={(e) => setIntakeRejectReason(e.target.value)}
+                      placeholder="Motivo del rechazo (requerido)" rows={3}
+                      className="w-full rounded-xl border border-red-200 bg-red-50/30 px-3 py-2.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-red-300 transition" />
+                    <div className="flex gap-2">
+                      <button onClick={() => handleApproveIntake(mem.id, false)} disabled={!intakeRejectReason.trim() || isApprovingIntake === mem.id}
+                        className="flex-1 bg-red-600 text-white rounded-xl py-2 text-sm font-medium hover:bg-red-700 transition disabled:opacity-50">
+                        {isApprovingIntake === mem.id ? 'Procesando...' : 'Confirmar rechazo'}
+                      </button>
+                      <button onClick={() => { setIntakeToReject(null); setIntakeRejectReason(''); }}
+                        className="px-3 py-2 rounded-xl border border-velum-200 text-sm text-velum-600 hover:bg-velum-50 transition">Cancelar</button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex gap-2">
+                    <button onClick={() => handleApproveIntake(mem.id, true)} disabled={isApprovingIntake === mem.id}
+                      className="flex-1 bg-emerald-600 text-white rounded-xl py-2.5 text-sm font-medium hover:bg-emerald-700 transition disabled:opacity-50">
+                      {isApprovingIntake === mem.id ? 'Procesando...' : 'Aprobar'}
+                    </button>
+                    <button onClick={() => setIntakeToReject(mem.id)}
+                      className="flex-1 border border-red-200 text-red-600 bg-red-50 rounded-xl py-2.5 text-sm font-medium hover:bg-red-100 transition">Rechazar</button>
+                  </div>
+                )}
               </div>
+            )}
+            {/* Citas */}
+            <div className="p-4 border-b border-velum-100">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-velum-400 mb-3">Citas recientes</p>
+              {isLoadingMemberHistory ? (
+                <div className="space-y-2">{[1,2,3].map(i => <div key={i} className="h-10 bg-velum-100 rounded-xl animate-pulse" />)}</div>
+              ) : memberAppointments.length === 0 ? (
+                <p className="text-xs text-velum-400 text-center py-4">Sin citas registradas</p>
+              ) : (
+                <div className="space-y-2">
+                  {memberAppointments.slice(0, 5).map((a) => {
+                    const s = apptStatusLabel(a.status);
+                    return (
+                      <div key={a.id} className="flex items-center justify-between p-2.5 rounded-xl bg-velum-50">
+                        <div>
+                          <p className="text-xs font-medium text-velum-900">{new Date(a.startAt).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
+                          <p className="text-[11px] text-velum-500">{a.treatment?.name ?? 'Sin tratamiento'}</p>
+                        </div>
+                        <Pill label={s.label} cls={s.cls} />
+                      </div>
+                    );
+                  })}
+                  {memberAppointments.length > 5 && <p className="text-[11px] text-velum-400 text-center">+{memberAppointments.length - 5} más</p>}
+                </div>
+              )}
             </div>
-
-            <div>
-              <h3 className="text-xs uppercase tracking-widest text-velum-500 mb-3">Sesión clínica</h3>
-              <Button
-                size="sm"
-                onClick={() => { setSelectedMember(null); openSessionModal(selectedMember); }}
-                className="gap-2"
-              >
-                <Zap size={14} /> Registrar nueva sesión
-              </Button>
+            {/* Sesiones */}
+            <div className="p-4">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-velum-400 mb-3">Sesiones clínicas</p>
+              {isLoadingMemberHistory ? (
+                <div className="space-y-2">{[1,2].map(i => <div key={i} className="h-12 bg-velum-100 rounded-xl animate-pulse" />)}</div>
+              ) : memberSessions.length === 0 ? (
+                <p className="text-xs text-velum-400 text-center py-4">Sin sesiones registradas</p>
+              ) : (
+                <div className="space-y-2">
+                  {memberSessions.slice(0, 5).map((s) => {
+                    const params = s.laserParametersJson as Record<string, string> | null;
+                    return (
+                      <div key={s.id} className="p-3 rounded-xl bg-velum-50 space-y-1">
+                        <div className="flex items-center justify-between">
+                          <p className="text-xs font-medium text-velum-900">{new Date(s.createdAt).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
+                          {s.adverseEvents && <span className="text-[10px] px-2 py-0.5 bg-amber-100 text-amber-700 rounded-full border border-amber-200">Evento adverso</span>}
+                        </div>
+                        {params && (
+                          <p className="text-[11px] text-velum-500">
+                            {[params.zona, params.fluencia, params.frecuencia, params.spot].filter(Boolean).join(' · ')}
+                          </p>
+                        )}
+                        {s.notes && <p className="text-[11px] text-velum-500 line-clamp-1">{s.notes}</p>}
+                      </div>
+                    );
+                  })}
+                  {memberSessions.length > 5 && <p className="text-[11px] text-velum-400 text-center">+{memberSessions.length - 5} más</p>}
+                </div>
+              )}
             </div>
+          </div>
+        </div>
+      </>
+    );
+  };
 
-            <div className="border border-velum-200 p-4 space-y-3">
-              <h4 className="text-xs uppercase tracking-widest text-velum-500">Expediente clínico</h4>
-              <div className="flex items-center gap-3">
-                <span className="text-xs text-velum-600">Evaluación inicial:</span>
-                {(() => {
-                  const { label, cls } = intakeStatusLabel(selectedMember.intakeStatus);
-                  return <span className={`text-xs px-2 py-0.5 border rounded-full font-semibold ${cls}`}>{label}</span>;
-                })()}
+  // ─── Section: Torre de Control ────────────────────────────────────────────
+
+  const renderControl = () => (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-serif text-velum-900">Torre de Control</h1>
+        <p className="text-sm text-velum-500 mt-1">Visión ejecutiva en tiempo real</p>
+      </div>
+      {/* KPIs row 1 */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <KpiCard icon={<Users size={18} />} label="Socios activos" value={analytics.sociosActivos} sub={`de ${analytics.totalSocios} totales`} />
+        <KpiCard icon={<Wallet size={18} />} label="MRR estimado" value={formatMoney(analytics.mrr)} sub={`ARPU ${formatMoney(analytics.arpu)}`} accent="text-emerald-700" />
+        <KpiCard icon={<FolderOpen size={18} />} label="Expedientes pendientes" value={analytics.expedientesPendientes} sub="sin firmar o validar" accent={analytics.expedientesPendientes > 0 ? 'text-amber-600' : 'text-velum-900'} />
+        <KpiCard icon={<AlertTriangle size={18} />} label="Riesgo de churn" value={`${analytics.churnRisk.toFixed(0)}%`} sub={`${analytics.sociosConRiesgo} socios con incidencia`} accent={analytics.churnRisk > 20 ? 'text-red-600' : 'text-velum-900'} />
+      </div>
+      {/* KPIs row 2 */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <KpiCard icon={<CalendarDays size={18} />} label="Citas hoy" value={agendaSummary.appointmentsToday} sub={`${agendaSummary.completedToday} completadas`} />
+        <KpiCard icon={<FileText size={18} />} label="Sin consentimiento" value={analytics.totalSocios - analytics.expedientesFirmados} sub="pendientes de firma" accent={(analytics.totalSocios - analytics.expedientesFirmados) > 0 ? 'text-amber-600' : 'text-velum-900'} />
+        <KpiCard icon={<Shield size={18} />} label="Eventos fallidos" value={analytics.failedAudits} sub="en bitácora de auditoría" accent={analytics.failedAudits > 0 ? 'text-red-600' : 'text-velum-900'} />
+        <KpiCard icon={<HandCoins size={18} />} label="En cobranza" value={analytics.collectionQueue.length} sub="cuentas por regularizar" accent={analytics.collectionQueue.length > 0 ? 'text-amber-600' : 'text-velum-900'} />
+      </div>
+      {/* Alertas */}
+      <div>
+        <h2 className="text-xs font-bold uppercase tracking-widest text-velum-500 mb-3">Alertas del sistema</h2>
+        <div className="space-y-3">
+          {controlAlerts.map((alert) => (
+            <div key={alert.id} className={`flex items-start gap-4 p-4 rounded-2xl border ${alert.level === 'ok' ? 'bg-emerald-50 border-emerald-200' : alert.level === 'warning' ? 'bg-amber-50 border-amber-200' : 'bg-red-50 border-red-200'}`}>
+              <div className={`mt-0.5 shrink-0 ${alert.level === 'ok' ? 'text-emerald-600' : alert.level === 'warning' ? 'text-amber-600' : 'text-red-600'}`}>
+                {alert.level === 'ok' ? <CheckCircle2 size={18} /> : alert.level === 'warning' ? <CircleAlert size={18} /> : <AlertTriangle size={18} />}
               </div>
-              <p className="text-sm text-velum-700">
-                Documentos: {selectedMember.clinical?.documents?.length ?? 0} cargados.
-                Consentimiento: {selectedMember.clinical?.consentFormSigned ? 'Firmado' : 'Pendiente'}.
-              </p>
+              <div className="flex-1 min-w-0">
+                <p className={`text-sm font-semibold ${alert.level === 'ok' ? 'text-emerald-900' : alert.level === 'warning' ? 'text-amber-900' : 'text-red-900'}`}>{alert.title}</p>
+                <p className={`text-xs mt-0.5 ${alert.level === 'ok' ? 'text-emerald-700' : alert.level === 'warning' ? 'text-amber-700' : 'text-red-700'}`}>{alert.detail}</p>
+              </div>
+              {alert.section !== 'control' && (
+                <button onClick={() => setActiveSection(alert.section)}
+                  className={`shrink-0 text-xs font-medium px-3 py-1.5 rounded-xl transition ${alert.level === 'ok' ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200' : alert.level === 'warning' ? 'bg-amber-100 text-amber-700 hover:bg-amber-200' : 'bg-red-100 text-red-700 hover:bg-red-200'}`}>
+                  Ver <ArrowRight size={12} className="inline ml-1" />
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+      {/* Audit recent */}
+      <div>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-xs font-bold uppercase tracking-widest text-velum-500">Actividad reciente</h2>
+          <button onClick={() => setActiveSection('cumplimiento')} className="text-xs text-velum-500 hover:text-velum-900 transition">Ver todo →</button>
+        </div>
+        <div className="bg-white rounded-2xl border border-velum-100 overflow-hidden">
+          {auditLogs.length === 0 ? (
+            <div className="p-8 text-center text-xs text-velum-400">Sin registros de auditoría</div>
+          ) : (
+            <table className="w-full text-xs">
+              <tbody>
+                {auditLogs.slice(0, 8).map((log, i) => (
+                  <tr key={log.id ?? i} className={`${i < auditLogs.slice(0, 8).length - 1 ? 'border-b border-velum-50' : ''}`}>
+                    <td className="px-4 py-3 text-velum-400 whitespace-nowrap">{new Date(log.timestamp).toLocaleString('es-MX', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</td>
+                    <td className="px-4 py-3 text-velum-700 font-medium max-w-[160px] truncate">{log.user ?? '—'}</td>
+                    <td className="px-4 py-3 text-velum-500 font-mono">{log.action}</td>
+                    <td className="px-4 py-3"><span className={`inline-block w-2 h-2 rounded-full ${log.status === 'success' ? 'bg-emerald-500' : 'bg-red-500'}`} /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+    </div>
+  );
 
-              {selectedMember.intakeStatus === 'submitted' && (
-                <div className="space-y-2 pt-1">
-                  <p className="text-xs text-amber-700 font-semibold">El cliente envió su evaluación. Requiere revisión.</p>
-                  {intakeToReject === selectedMember.id ? (
+  // ─── Section: Socios ──────────────────────────────────────────────────────
+
+  const renderSocios = () => (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-serif text-velum-900">Socios</h1>
+          <p className="text-sm text-velum-500 mt-1">{members.length} miembros registrados</p>
+        </div>
+      </div>
+      {/* Search + filters */}
+      <div className="flex flex-col sm:flex-row gap-3">
+        <div className="relative flex-1">
+          <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-velum-400" />
+          <input value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Buscar por nombre o correo..."
+            className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-velum-200 text-sm focus:outline-none focus:ring-2 focus:ring-velum-900/20 focus:border-velum-900 transition bg-white" />
+        </div>
+        <div className="flex gap-2 flex-wrap">
+          {(['all', 'active', 'issue'] as const).map((f) => (
+            <button key={f} onClick={() => setStatusFilter(f)}
+              className={`px-3 py-2 rounded-xl text-xs font-medium transition ${statusFilter === f ? 'bg-velum-900 text-white' : 'bg-white border border-velum-200 text-velum-600 hover:bg-velum-50'}`}>
+              {f === 'all' ? 'Todos' : f === 'active' ? 'Activos' : 'Con incidencia'}
+            </button>
+          ))}
+        </div>
+      </div>
+      {/* Table */}
+      <div className="bg-white rounded-2xl border border-velum-100 overflow-hidden">
+        {filteredMembers.length === 0 ? (
+          <div className="py-16 text-center">
+            <Users size={32} className="mx-auto text-velum-200 mb-3" />
+            <p className="text-sm text-velum-400">No hay socios que coincidan con tu búsqueda</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-velum-100 bg-velum-50/50">
+                  {['Nombre', 'Plan', 'Estado', 'Expediente', 'Riesgo', ''].map((h) => (
+                    <th key={h} className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-widest text-velum-400">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {filteredMembers.map((m, i) => {
+                  const risk = riskOfMember(m);
+                  const intake = intakeStatusLabel(m.intakeStatus);
+                  return (
+                    <tr key={m.id} className={`border-b border-velum-50 hover:bg-velum-50/60 transition cursor-pointer ${i === filteredMembers.length - 1 ? 'border-b-0' : ''}`}
+                      onClick={() => handleOpenMemberDrawer(m)}>
+                      <td className="px-4 py-3">
+                        <p className="font-medium text-velum-900">{m.name}</p>
+                        <p className="text-xs text-velum-400">{m.email}</p>
+                      </td>
+                      <td className="px-4 py-3 text-velum-600">{m.plan ?? '—'}</td>
+                      <td className="px-4 py-3"><Pill label={statusLabel(m.subscriptionStatus)} cls={statusPill(m.subscriptionStatus)} /></td>
+                      <td className="px-4 py-3"><Pill label={intake.label} cls={intake.cls} /></td>
+                      <td className="px-4 py-3">
+                        <span className={`inline-flex items-center gap-1.5 text-xs font-medium ${risk === 'ok' ? 'text-emerald-600' : risk === 'warning' ? 'text-amber-600' : 'text-red-600'}`}>
+                          <span className={`w-2 h-2 rounded-full ${risk === 'ok' ? 'bg-emerald-500' : risk === 'warning' ? 'bg-amber-400' : 'bg-red-500'}`} />
+                          {risk === 'ok' ? 'Normal' : risk === 'warning' ? 'Atención' : 'Crítico'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <button className="text-velum-400 hover:text-velum-900 transition p-1 rounded-lg hover:bg-velum-100"><ArrowRight size={16} /></button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  // ─── Section: KPIs ────────────────────────────────────────────────────────
+
+  const renderKPIs = () => (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-serif text-velum-900">KPIs</h1>
+        <p className="text-sm text-velum-500 mt-1">Indicadores clave de desempeño</p>
+      </div>
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+        <KpiCard icon={<Users size={18} />} label="Socios activos" value={analytics.sociosActivos} sub={`${analytics.sociosPendientes} pendientes de activación`} />
+        <KpiCard icon={<Wallet size={18} />} label="MRR" value={formatMoney(analytics.mrr)} sub="Ingreso recurrente mensual" accent="text-emerald-700" />
+        <KpiCard icon={<Target size={18} />} label="ARPU" value={formatMoney(analytics.arpu)} sub="Ingreso promedio por usuario" />
+        <KpiCard icon={<AlertTriangle size={18} />} label="Riesgo de churn" value={`${analytics.churnRisk.toFixed(1)}%`} sub={`${analytics.sociosConRiesgo} socios en riesgo`} accent={analytics.churnRisk > 20 ? 'text-red-600' : 'text-velum-900'} />
+        <KpiCard icon={<FileText size={18} />} label="Expedientes firmados" value={analytics.expedientesFirmados} sub={`de ${analytics.totalSocios} socios`} />
+        <KpiCard icon={<Clock3 size={18} />} label="Renovaciones próximas" value={analytics.renewalsIn7Days} sub="en los próximos 7 días" />
+      </div>
+      {/* Plan breakdown */}
+      <div>
+        <h2 className="text-xs font-bold uppercase tracking-widest text-velum-500 mb-3">Distribución por plan</h2>
+        <div className="bg-white rounded-2xl border border-velum-100 overflow-hidden">
+          {planBreakdown.length === 0 ? (
+            <div className="py-12 text-center text-xs text-velum-400">Sin datos de planes</div>
+          ) : (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-velum-100 bg-velum-50/50">
+                  {['Plan', 'Socios', 'Ingreso total', '% del MRR'].map((h) => (
+                    <th key={h} className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-widest text-velum-400">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {planBreakdown.map((p, i) => (
+                  <tr key={p.plan} className={i < planBreakdown.length - 1 ? 'border-b border-velum-50' : ''}>
+                    <td className="px-4 py-3 font-medium text-velum-900">{p.plan}</td>
+                    <td className="px-4 py-3 text-velum-600">{p.members}</td>
+                    <td className="px-4 py-3 text-velum-600">{formatMoney(p.revenue)}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1 h-1.5 bg-velum-100 rounded-full overflow-hidden max-w-[80px]">
+                          <div className="h-full bg-velum-900 rounded-full" style={{ width: `${analytics.mrr > 0 ? (p.revenue / analytics.mrr) * 100 : 0}%` }} />
+                        </div>
+                        <span className="text-xs text-velum-500">{analytics.mrr > 0 ? ((p.revenue / analytics.mrr) * 100).toFixed(0) : 0}%</span>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+
+  // ─── Section: Finanzas ────────────────────────────────────────────────────
+
+  const renderFinanzas = () => {
+    const topMembers = [...members].sort((a, b) => (b.amount ?? 0) - (a.amount ?? 0)).slice(0, 20);
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-serif text-velum-900">Finanzas</h1>
+          <p className="text-sm text-velum-500 mt-1">Radar de ingresos y facturación</p>
+        </div>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <KpiCard icon={<Wallet size={18} />} label="MRR total" value={formatMoney(analytics.mrr)} accent="text-emerald-700" />
+          <KpiCard icon={<Target size={18} />} label="ARPU" value={formatMoney(analytics.arpu)} />
+          <KpiCard icon={<Users size={18} />} label="Socios activos" value={analytics.sociosActivos} />
+          <KpiCard icon={<AlertTriangle size={18} />} label="En cobranza" value={analytics.collectionQueue.length} accent={analytics.collectionQueue.length > 0 ? 'text-red-600' : 'text-velum-900'} />
+        </div>
+        <div>
+          <h2 className="text-xs font-bold uppercase tracking-widest text-velum-500 mb-3">Top socios por monto</h2>
+          <div className="bg-white rounded-2xl border border-velum-100 overflow-hidden">
+            {topMembers.length === 0 ? (
+              <div className="py-12 text-center text-xs text-velum-400">Sin datos</div>
+            ) : (
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-velum-100 bg-velum-50/50">
+                    {['#', 'Socio', 'Plan', 'Monto', 'Estado'].map((h) => (
+                      <th key={h} className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-widest text-velum-400">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {topMembers.map((m, i) => (
+                    <tr key={m.id} className={`hover:bg-velum-50 transition cursor-pointer ${i < topMembers.length - 1 ? 'border-b border-velum-50' : ''}`}
+                      onClick={() => handleOpenMemberDrawer(m)}>
+                      <td className="px-4 py-3 text-velum-400 text-xs">{i + 1}</td>
+                      <td className="px-4 py-3">
+                        <p className="font-medium text-velum-900">{m.name}</p>
+                        <p className="text-xs text-velum-400">{m.email}</p>
+                      </td>
+                      <td className="px-4 py-3 text-velum-600">{m.plan ?? '—'}</td>
+                      <td className="px-4 py-3 font-medium text-velum-900">{m.amount ? formatMoney(m.amount) : '—'}</td>
+                      <td className="px-4 py-3"><Pill label={statusLabel(m.subscriptionStatus)} cls={statusPill(m.subscriptionStatus)} /></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // ─── Section: Expedientes ─────────────────────────────────────────────────
+
+  const renderExpedientes = () => {
+    const pendingApproval = members.filter((m) => m.intakeStatus === 'submitted');
+    const expStats = [
+      { label: 'Aprobados', value: members.filter((m) => m.intakeStatus === 'approved').length, cls: 'text-emerald-700' },
+      { label: 'Pendientes revisión', value: pendingApproval.length, cls: 'text-amber-600' },
+      { label: 'Rechazados', value: members.filter((m) => m.intakeStatus === 'rejected').length, cls: 'text-red-600' },
+      { label: 'Sin expediente', value: members.filter((m) => !m.intakeStatus || m.intakeStatus === 'draft').length, cls: 'text-velum-600' }
+    ];
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-serif text-velum-900">Expedientes clínicos</h1>
+          <p className="text-sm text-velum-500 mt-1">Gestión de fichas médicas y consentimientos</p>
+        </div>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          {expStats.map(({ label, value, cls }) => (
+            <div key={label} className="bg-white rounded-2xl border border-velum-100 p-5">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-velum-400 mb-2">{label}</p>
+              <p className={`text-3xl font-serif font-bold ${cls}`}>{value}</p>
+            </div>
+          ))}
+        </div>
+        {/* Pending queue */}
+        {pendingApproval.length > 0 && (
+          <div>
+            <h2 className="text-xs font-bold uppercase tracking-widest text-velum-500 mb-3">Cola de aprobación</h2>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {pendingApproval.map((m) => (
+                <div key={m.id} className="bg-white rounded-2xl border border-amber-200 bg-amber-50/30 p-4 space-y-3">
+                  <div>
+                    <p className="font-medium text-velum-900 text-sm">{m.name}</p>
+                    <p className="text-xs text-velum-500">{m.email}</p>
+                  </div>
+                  {intakeToReject === m.id ? (
                     <div className="space-y-2">
-                      <textarea
-                        rows={2}
-                        value={intakeRejectReason}
-                        onChange={(e) => setIntakeRejectReason(e.target.value)}
-                        placeholder="Motivo de rechazo (obligatorio)..."
-                        className="w-full border border-velum-300 rounded px-3 py-2 text-sm resize-none"
-                      />
+                      <textarea value={intakeRejectReason} onChange={(e) => setIntakeRejectReason(e.target.value)}
+                        placeholder="Motivo del rechazo (requerido)" rows={2}
+                        className="w-full rounded-xl border border-red-200 bg-red-50/30 px-3 py-2 text-xs resize-none focus:outline-none focus:ring-2 focus:ring-red-300 transition" />
                       <div className="flex gap-2">
-                        <Button size="sm" variant="outline" className="text-red-700 border-red-300" isLoading={isApprovingIntake === selectedMember.id} onClick={() => handleApproveIntake(selectedMember.id, false)}>
-                          Confirmar rechazo
-                        </Button>
-                        <Button size="sm" variant="outline" onClick={() => { setIntakeToReject(null); setIntakeRejectReason(''); }}>Cancelar</Button>
+                        <button onClick={() => handleApproveIntake(m.id, false)} disabled={!intakeRejectReason.trim() || isApprovingIntake === m.id}
+                          className="flex-1 bg-red-600 text-white rounded-xl py-1.5 text-xs font-medium hover:bg-red-700 transition disabled:opacity-50">Confirmar</button>
+                        <button onClick={() => { setIntakeToReject(null); setIntakeRejectReason(''); }}
+                          className="px-3 py-1.5 rounded-xl border border-velum-200 text-xs text-velum-600 hover:bg-velum-50 transition">Cancelar</button>
                       </div>
                     </div>
                   ) : (
                     <div className="flex gap-2">
-                      <Button size="sm" className="gap-1" isLoading={isApprovingIntake === selectedMember.id} onClick={() => handleApproveIntake(selectedMember.id, true)}>
-                        <CheckCheck size={13} /> Aprobar
-                      </Button>
-                      <Button size="sm" variant="outline" className="text-red-700 border-red-300 gap-1" onClick={() => setIntakeToReject(selectedMember.id)}>
-                        <XCircle size={13} /> Rechazar
-                      </Button>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {selectedMember.intakeStatus === 'approved' && (
-                <p className="text-xs text-emerald-700">Expediente aprobado. El cliente puede ser atendido.</p>
-              )}
-            </div>
-
-            {/* Citas del socio */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <h3 className="text-xs uppercase tracking-widest text-velum-500">Citas</h3>
-                {isLoadingMemberHistory && <RefreshCw size={12} className="animate-spin text-velum-400" />}
-              </div>
-              {!isLoadingMemberHistory && memberAppointments.length === 0 && (
-                <p className="text-xs text-velum-500">Sin citas registradas.</p>
-              )}
-              {memberAppointments
-                .sort((a, b) => new Date(b.startAt).getTime() - new Date(a.startAt).getTime())
-                .slice(0, 5)
-                .map((appt) => {
-                  const start = new Date(appt.startAt);
-                  const apptStatusMap: Record<string, string> = { scheduled: 'Agendada', confirmed: 'Confirmada', completed: 'Completada', canceled: 'Cancelada', no_show: 'No asistió' };
-                  const apptColorMap: Record<string, string> = { scheduled: 'bg-blue-50 text-blue-700 border-blue-200', confirmed: 'bg-emerald-50 text-emerald-700 border-emerald-200', completed: 'bg-zinc-100 text-zinc-600 border-zinc-200', canceled: 'bg-red-50 text-red-600 border-red-200', no_show: 'bg-orange-50 text-orange-700 border-orange-200' };
-                  return (
-                    <div key={appt.id} className="flex items-center justify-between border border-velum-100 p-3 text-sm">
-                      <div>
-                        <p className="font-semibold text-velum-900">
-                          {start.toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })} · {start.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}
-                        </p>
-                        {appt.treatment && <p className="text-xs text-velum-500 mt-0.5">{appt.treatment.name}</p>}
-                      </div>
-                      <span className={`text-xs px-2 py-0.5 border rounded-full font-semibold shrink-0 ${apptColorMap[appt.status] ?? 'bg-zinc-100 text-zinc-600 border-zinc-200'}`}>
-                        {apptStatusMap[appt.status] ?? appt.status}
-                      </span>
-                    </div>
-                  );
-                })}
-              {memberAppointments.length > 5 && (
-                <p className="text-xs text-velum-500">+{memberAppointments.length - 5} citas anteriores</p>
-              )}
-            </div>
-
-            {/* Sesiones clínicas del socio */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <h3 className="text-xs uppercase tracking-widest text-velum-500">Sesiones registradas</h3>
-                <span className="text-xs text-velum-500">{memberSessions.length} sesión(es)</span>
-              </div>
-              {!isLoadingMemberHistory && memberSessions.length === 0 && (
-                <p className="text-xs text-velum-500">Sin sesiones registradas aún.</p>
-              )}
-              {memberSessions.slice(0, 5).map((session) => {
-                const params = session.laserParametersJson as Record<string, unknown> | null;
-                const dateStr = new Date(session.createdAt).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' });
-                return (
-                  <div key={session.id} className="border border-velum-100 p-3 space-y-1">
-                    <div className="flex items-center justify-between">
-                      <p className="text-xs text-velum-500">{dateStr}</p>
-                      {session.adverseEvents && (
-                        <span className="text-xs px-2 py-0.5 border border-amber-200 bg-amber-50 text-amber-700 rounded-full">Evento adverso</span>
-                      )}
-                    </div>
-                    {params?.zona && <p className="text-sm font-semibold text-velum-900">{String(params.zona)}</p>}
-                    <div className="flex flex-wrap gap-3 text-xs text-velum-600">
-                      {params?.fluencia && <span>Fluencia: {String(params.fluencia)}</span>}
-                      {params?.frecuencia && <span>Frecuencia: {String(params.frecuencia)}</span>}
-                      {params?.spot && <span>Spot: {String(params.spot)}</span>}
-                      {params?.passes && <span>Pasadas: {String(params.passes)}</span>}
-                    </div>
-                    {session.notes && <p className="text-xs text-velum-600 italic">"{session.notes}"</p>}
-                  </div>
-                );
-              })}
-              {memberSessions.length > 5 && (
-                <p className="text-xs text-velum-500">+{memberSessions.length - 5} sesiones anteriores</p>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  const renderControl = () => (
-    <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-        <div className="bg-white border border-velum-200 p-5">
-          <p className="text-[10px] uppercase tracking-widest text-velum-500">Socios totales</p>
-          <p className="text-3xl font-serif text-velum-900 mt-2">{analytics.totalSocios}</p>
-          <p className="text-xs text-velum-500 mt-1">Activos: {analytics.sociosActivos}</p>
-        </div>
-        <div className="bg-white border border-velum-200 p-5">
-          <p className="text-[10px] uppercase tracking-widest text-velum-500">MRR actual</p>
-          <p className="text-3xl font-serif text-velum-900 mt-2">{formatMoney(analytics.mrr)}</p>
-          <p className="text-xs text-velum-500 mt-1">ARPU: {formatMoney(analytics.arpu)}</p>
-        </div>
-        <div className="bg-white border border-velum-200 p-5">
-          <p className="text-[10px] uppercase tracking-widest text-velum-500">Riesgo operativo</p>
-          <p className="text-3xl font-serif text-velum-900 mt-2">{analytics.churnRisk.toFixed(1)}%</p>
-          <p className="text-xs text-velum-500 mt-1">Cuentas con incidencia: {analytics.sociosConRiesgo}</p>
-        </div>
-        <div className="bg-white border border-velum-200 p-5">
-          <p className="text-[10px] uppercase tracking-widest text-velum-500">Eventos sensibles</p>
-          <p className="text-3xl font-serif text-velum-900 mt-2">{analytics.sensitiveEvents}</p>
-          <p className="text-xs text-velum-500 mt-1">Fallidos: {analytics.failedAudits}</p>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-        <div className="bg-white border border-velum-200 p-5 space-y-4">
-          <div className="flex items-center gap-2">
-            <AlertTriangle size={16} className="text-velum-700" />
-            <h3 className="font-serif text-xl text-velum-900">Centro de alertas críticas</h3>
-          </div>
-          <div className="space-y-3">
-            {controlAlerts.map((alert) => (
-              <button
-                key={alert.id}
-                onClick={() => setActiveSection(alert.section)}
-                className={`w-full text-left border p-4 transition-colors hover:border-velum-500 ${alertClass(alert.level)}`}
-              >
-                <div className="flex items-center justify-between gap-3">
-                  <p className="text-sm font-semibold">{alert.title}</p>
-                  <ArrowRight size={14} />
-                </div>
-                <p className="text-xs mt-1 opacity-90">{alert.detail}</p>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="bg-white border border-velum-200 p-5 space-y-4">
-          <div className="flex items-center gap-2">
-            <Target size={16} className="text-velum-700" />
-            <h3 className="font-serif text-xl text-velum-900">Playbook de dirección</h3>
-          </div>
-
-          <div className="space-y-3 text-sm">
-            <div className="border border-velum-200 p-3">
-              <p className="font-semibold text-velum-900">1) Estabilidad diaria</p>
-              <p className="text-xs text-velum-600 mt-1">Validar salud de agenda + expedientes pendientes + alertas de cobranza.</p>
-            </div>
-            <div className="border border-velum-200 p-3">
-              <p className="font-semibold text-velum-900">2) Riesgo y cumplimiento</p>
-              <p className="text-xs text-velum-600 mt-1">Revisar cambios sensibles de roles y eventos fallidos de seguridad.</p>
-            </div>
-            <div className="border border-velum-200 p-3">
-              <p className="font-semibold text-velum-900">3) Rentabilidad</p>
-              <p className="text-xs text-velum-600 mt-1">Controlar MRR, ARPU, renovaciones próximas y acciones de recuperación.</p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="bg-white border border-velum-200 p-5">
-        <h3 className="font-serif text-xl text-velum-900 mb-4">Últimos eventos de auditoría</h3>
-        <div className="space-y-2">
-          {auditLogs.slice(0, 8).map((log) => (
-            <div key={log.id} className="border border-velum-200 p-3 flex flex-col md:flex-row md:items-center md:justify-between gap-2 text-sm">
-              <div>
-                <p className="font-semibold text-velum-900">{log.action} · {log.resource}</p>
-                <p className="text-xs text-velum-500">{log.timestamp} · {log.user} ({log.role})</p>
-              </div>
-              <span className={`text-[10px] uppercase tracking-widest px-2 py-1 border ${log.status === 'failed' ? 'bg-red-50 border-red-200 text-red-700' : 'bg-emerald-50 border-emerald-200 text-emerald-700'}`}>
-                {log.status}
-              </span>
-            </div>
-          ))}
-          {auditLogs.length === 0 && <p className="text-sm text-velum-500">Sin eventos por mostrar.</p>}
-        </div>
-      </div>
-    </div>
-  );
-
-  const renderSocios = () => (
-    <div className="bg-white border border-velum-200 shadow-sm">
-      <div className="p-4 border-b border-velum-200 flex flex-col md:flex-row gap-3 md:items-center md:justify-between">
-        <div className="flex items-center gap-2 w-full md:max-w-lg">
-          <Search size={16} className="text-velum-400" />
-          <input
-            className="w-full outline-none text-sm bg-transparent"
-            placeholder="Buscar socio por nombre o email..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-        </div>
-        <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value as 'all' | 'active' | 'issue')}
-          className="border border-velum-300 bg-velum-50 text-xs uppercase tracking-widest px-3 py-2"
-        >
-          <option value="all">Todos</option>
-          <option value="active">Activos</option>
-          <option value="issue">Con incidencia</option>
-        </select>
-      </div>
-
-      <div className="overflow-x-auto">
-        <table className="w-full text-left border-collapse">
-          <thead className="bg-velum-50 text-[10px] uppercase font-bold text-velum-600">
-            <tr>
-              <th className="p-4">Socio</th>
-              <th className="p-4">Plan</th>
-              <th className="p-4">Estado</th>
-              <th className="p-4">Expediente</th>
-              <th className="p-4">Riesgo</th>
-              <th className="p-4">Acción</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredMembers.map((member) => {
-              const risk = riskOfMember(member);
-              return (
-                <tr key={member.id} className="border-b border-velum-100 hover:bg-velum-50">
-                  <td className="p-4">
-                    <p className="font-bold text-sm">{member.name}</p>
-                    <p className="text-xs text-velum-500">{member.email}</p>
-                  </td>
-                  <td className="p-4 text-sm">{member.plan ?? 'Plan Velum'}</td>
-                  <td className="p-4">
-                    <span className={`inline-flex text-[10px] uppercase tracking-widest border px-2 py-1 ${statusPill(member.subscriptionStatus)}`}>
-                      {statusLabel(member.subscriptionStatus)}
-                    </span>
-                  </td>
-                  <td className="p-4 text-xs uppercase tracking-widest">
-                    {member.clinical?.consentFormSigned ? 'Completo' : 'Pendiente'}
-                  </td>
-                  <td className="p-4 text-xs uppercase tracking-widest">
-                    {risk === 'critical' ? 'Crítico' : risk === 'warning' ? 'Atención' : 'OK'}
-                  </td>
-                  <td className="p-4">
-                    <Button size="sm" variant="outline" onClick={() => handleOpenMemberDrawer(member)}>
-                      Ver detalle
-                    </Button>
-                  </td>
-                </tr>
-              );
-            })}
-            {filteredMembers.length === 0 && (
-              <tr>
-                <td colSpan={6} className="p-6 text-sm text-velum-500 text-center">
-                  No hay socios con los filtros seleccionados.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-
-  const renderKpis = () => (
-    <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-        <div className="bg-white border border-velum-200 p-5">
-          <p className="text-[10px] uppercase tracking-widest text-velum-500">Socios activos</p>
-          <p className="text-3xl font-serif text-velum-900 mt-2">{analytics.sociosActivos}</p>
-        </div>
-        <div className="bg-white border border-velum-200 p-5">
-          <p className="text-[10px] uppercase tracking-widest text-velum-500">Pendientes de activación</p>
-          <p className="text-3xl font-serif text-velum-900 mt-2">{analytics.sociosPendientes}</p>
-        </div>
-        <div className="bg-white border border-velum-200 p-5">
-          <p className="text-[10px] uppercase tracking-widest text-velum-500">Renovaciones en 7 días</p>
-          <p className="text-3xl font-serif text-velum-900 mt-2">{analytics.renewalsIn7Days}</p>
-        </div>
-        <div className="bg-white border border-velum-200 p-5">
-          <p className="text-[10px] uppercase tracking-widest text-velum-500">Riesgo (churn)</p>
-          <p className="text-3xl font-serif text-velum-900 mt-2">{analytics.churnRisk.toFixed(1)}%</p>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-        <div className="bg-white border border-velum-200 p-5">
-          <h3 className="font-serif text-xl text-velum-900 mb-4">Distribución por plan</h3>
-          <div className="space-y-3">
-            {planBreakdown.map((plan) => (
-              <div key={plan.plan} className="border border-velum-200 p-3">
-                <div className="flex items-center justify-between text-sm">
-                  <p className="font-semibold text-velum-900">{plan.plan}</p>
-                  <p className="text-velum-700">{formatMoney(plan.revenue)}</p>
-                </div>
-                <p className="text-xs text-velum-500 mt-1">{plan.members} socios</p>
-              </div>
-            ))}
-            {planBreakdown.length === 0 && <p className="text-sm text-velum-500">Sin datos de planes.</p>}
-          </div>
-        </div>
-
-        <div className="bg-white border border-velum-200 p-5">
-          <h3 className="font-serif text-xl text-velum-900 mb-4">Salud operativa</h3>
-          <div className="space-y-3 text-sm">
-            <div className="flex items-center justify-between border border-velum-200 p-3">
-              <span className="flex items-center gap-2"><CheckCircle2 size={14} /> Expedientes firmados</span>
-              <strong>{analytics.expedientesFirmados}</strong>
-            </div>
-            <div className="flex items-center justify-between border border-velum-200 p-3">
-              <span className="flex items-center gap-2"><CircleAlert size={14} /> Expedientes pendientes</span>
-              <strong>{analytics.expedientesPendientes}</strong>
-            </div>
-            <div className="flex items-center justify-between border border-velum-200 p-3">
-              <span className="flex items-center gap-2"><Clock3 size={14} /> Cuentas por recuperación</span>
-              <strong>{analytics.collectionQueue.length}</strong>
-            </div>
-            <div className="flex items-center justify-between border border-velum-200 p-3">
-              <span className="flex items-center gap-2"><Shield size={14} /> Eventos sensibles</span>
-              <strong>{analytics.sensitiveEvents}</strong>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-
-  const renderFinanzas = () => (
-    <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-white border border-velum-200 p-5">
-          <p className="text-[10px] uppercase tracking-widest text-velum-500">MRR</p>
-          <p className="text-3xl font-serif text-velum-900 mt-2">{formatMoney(analytics.mrr)}</p>
-        </div>
-        <div className="bg-white border border-velum-200 p-5">
-          <p className="text-[10px] uppercase tracking-widest text-velum-500">ARPU</p>
-          <p className="text-3xl font-serif text-velum-900 mt-2">{formatMoney(analytics.arpu)}</p>
-        </div>
-        <div className="bg-white border border-velum-200 p-5">
-          <p className="text-[10px] uppercase tracking-widest text-velum-500">Cuentas en cobranza</p>
-          <p className="text-3xl font-serif text-velum-900 mt-2">{analytics.collectionQueue.length}</p>
-        </div>
-      </div>
-
-      <div className="bg-white border border-velum-200">
-        <div className="p-5 border-b border-velum-200 flex items-center justify-between">
-          <div>
-            <h3 className="text-lg font-serif text-velum-900">Radar financiero</h3>
-            <p className="text-xs text-velum-500 uppercase tracking-widest mt-1">Top cuentas que impactan flujo</p>
-          </div>
-          <Button size="sm" variant="outline" onClick={() => setActiveSection('cobranza')}>Ir a cobranza</Button>
-        </div>
-
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-velum-50 text-[10px] uppercase font-bold text-velum-600">
-              <tr>
-                <th className="p-4">Socio</th>
-                <th className="p-4">Plan</th>
-                <th className="p-4">Monto</th>
-                <th className="p-4">Estado</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-velum-100">
-              {members.slice(0, 25).map((member) => (
-                <tr key={member.id}>
-                  <td className="p-4">{member.name}</td>
-                  <td className="p-4">{member.plan ?? 'Plan Velum'}</td>
-                  <td className="p-4">{formatMoney(member.amount ?? 0)}</td>
-                  <td className="p-4">
-                    <span className={`inline-flex text-[10px] uppercase tracking-widest border px-2 py-1 ${statusPill(member.subscriptionStatus)}`}>
-                      {statusLabel(member.subscriptionStatus)}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  );
-
-  const renderExpedientes = () => {
-    const pendingIntakes = members.filter((m) => m.intakeStatus === 'submitted');
-    return (
-      <div className="space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-          <div className="bg-white border border-velum-200 p-5">
-            <p className="text-[10px] uppercase tracking-widest text-velum-500">Expedientes firmados</p>
-            <p className="text-3xl font-serif text-velum-900 mt-2">{analytics.expedientesFirmados}</p>
-          </div>
-          <div className="bg-white border border-velum-200 p-5">
-            <p className="text-[10px] uppercase tracking-widest text-velum-500">Pendientes firma</p>
-            <p className="text-3xl font-serif text-velum-900 mt-2">{analytics.expedientesPendientes}</p>
-          </div>
-          <div className="bg-white border border-velum-200 p-5">
-            <p className="text-[10px] uppercase tracking-widest text-velum-500">Evaluaciones por revisar</p>
-            <p className={`text-3xl font-serif mt-2 ${pendingIntakes.length > 0 ? 'text-amber-700' : 'text-velum-900'}`}>{pendingIntakes.length}</p>
-          </div>
-          <div className="bg-white border border-velum-200 p-5">
-            <p className="text-[10px] uppercase tracking-widest text-velum-500">Alto riesgo clínico</p>
-            <p className="text-3xl font-serif text-velum-900 mt-2">{analytics.highRiskMembers.length}</p>
-          </div>
-        </div>
-
-        {pendingIntakes.length > 0 && (
-          <div className="bg-amber-50 border border-amber-200 p-4 space-y-3">
-            <p className="text-xs uppercase tracking-widest text-amber-700 font-semibold flex items-center gap-2">
-              <ClipboardList size={14} /> Evaluaciones médicas pendientes de revisión ({pendingIntakes.length})
-            </p>
-            <div className="space-y-2">
-              {pendingIntakes.map((member) => (
-                <div key={member.id} className="bg-white border border-amber-200 p-3 flex items-center justify-between gap-4">
-                  <div>
-                    <p className="font-semibold text-sm text-velum-900">{member.name}</p>
-                    <p className="text-xs text-velum-500">{member.email}</p>
-                  </div>
-                  {intakeToReject === member.id ? (
-                    <div className="flex gap-2 items-center flex-1 max-w-sm">
-                      <input
-                        value={intakeRejectReason}
-                        onChange={(e) => setIntakeRejectReason(e.target.value)}
-                        placeholder="Motivo de rechazo..."
-                        className="flex-1 border border-velum-300 rounded px-2 py-1 text-xs"
-                      />
-                      <Button size="sm" variant="outline" className="text-red-700 border-red-300 text-xs" isLoading={isApprovingIntake === member.id} onClick={() => handleApproveIntake(member.id, false)}>
-                        Confirmar
-                      </Button>
-                      <button className="text-xs text-velum-500 underline" onClick={() => { setIntakeToReject(null); setIntakeRejectReason(''); }}>Cancelar</button>
-                    </div>
-                  ) : (
-                    <div className="flex gap-2 shrink-0">
-                      <Button size="sm" className="gap-1 text-xs" isLoading={isApprovingIntake === member.id} onClick={() => handleApproveIntake(member.id, true)}>
-                        <CheckCheck size={12} /> Aprobar
-                      </Button>
-                      <Button size="sm" variant="outline" className="text-red-700 border-red-300 gap-1 text-xs" onClick={() => setIntakeToReject(member.id)}>
-                        <XCircle size={12} /> Rechazar
-                      </Button>
+                      <button onClick={() => handleApproveIntake(m.id, true)} disabled={isApprovingIntake === m.id}
+                        className="flex-1 bg-emerald-600 text-white rounded-xl py-2 text-xs font-medium hover:bg-emerald-700 transition disabled:opacity-50">
+                        {isApprovingIntake === m.id ? '...' : 'Aprobar'}
+                      </button>
+                      <button onClick={() => setIntakeToReject(m.id)}
+                        className="flex-1 border border-red-200 text-red-600 bg-red-50 rounded-xl py-2 text-xs font-medium hover:bg-red-100 transition">Rechazar</button>
                     </div>
                   )}
                 </div>
@@ -2017,1420 +1949,854 @@ export const Admin: React.FC = () => {
             </div>
           </div>
         )}
-
-        <div className="bg-white border border-velum-200 shadow-sm overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-velum-50 text-[10px] uppercase font-bold text-velum-600">
-              <tr>
-                <th className="p-4">Socio</th>
-                <th className="p-4">Evaluación inicial</th>
-                <th className="p-4">Consentimiento</th>
-                <th className="p-4">Documentos</th>
-                <th className="p-4">Acciones</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-velum-100">
-              {members.map((member) => {
-                const { label, cls } = intakeStatusLabel(member.intakeStatus);
-                return (
-                  <tr key={member.id}>
-                    <td className="p-4">
-                      <p className="font-semibold">{member.name}</p>
-                      <p className="text-xs text-velum-500">{member.email}</p>
-                    </td>
-                    <td className="p-4">
-                      <span className={`text-xs px-2 py-0.5 border rounded-full font-semibold ${cls}`}>{label}</span>
-                    </td>
-                    <td className="p-4 text-xs uppercase tracking-widest">
-                      {member.clinical?.consentFormSigned ? 'Firmado' : 'Pendiente'}
-                    </td>
-                    <td className="p-4">{member.clinical?.documents?.length ?? 0}</td>
-                    <td className="p-4">
-                      <div className="flex gap-2">
-                        <Button size="sm" variant="outline" onClick={() => { handleOpenMemberDrawer(member); setActiveSection('socios'); }}>
-                          Ver detalle
-                        </Button>
-                        <Button size="sm" variant="outline" className="gap-1" onClick={() => openSessionModal(member)}>
-                          <Zap size={12} /> Sesión
-                        </Button>
-                      </div>
-                    </td>
+        {/* Full table */}
+        <div>
+          <h2 className="text-xs font-bold uppercase tracking-widest text-velum-500 mb-3">Todos los expedientes</h2>
+          <div className="bg-white rounded-2xl border border-velum-100 overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-velum-100 bg-velum-50/50">
+                    {['Socio', 'Consentimiento', 'Estado expediente', 'Docs', 'Acciones'].map((h) => (
+                      <th key={h} className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-widest text-velum-400">{h}</th>
+                    ))}
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                </thead>
+                <tbody>
+                  {members.map((m, i) => {
+                    const intake = intakeStatusLabel(m.intakeStatus);
+                    return (
+                      <tr key={m.id} className={`hover:bg-velum-50 transition ${i < members.length - 1 ? 'border-b border-velum-50' : ''}`}>
+                        <td className="px-4 py-3">
+                          <p className="font-medium text-velum-900">{m.name}</p>
+                          <p className="text-xs text-velum-400">{m.email}</p>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className={`inline-flex items-center gap-1 text-xs font-medium ${m.clinical?.consentFormSigned ? 'text-emerald-600' : 'text-velum-400'}`}>
+                            {m.clinical?.consentFormSigned ? <CheckCircle2 size={13} /> : <XCircle size={13} />}
+                            {m.clinical?.consentFormSigned ? 'Firmado' : 'Pendiente'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3"><Pill label={intake.label} cls={intake.cls} /></td>
+                        <td className="px-4 py-3 text-velum-500">{m.clinical?.documents?.length ?? 0}</td>
+                        <td className="px-4 py-3">
+                          <button onClick={() => handleOpenMemberDrawer(m)} className="text-xs text-velum-600 hover:text-velum-900 transition font-medium">Ver perfil</button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
       </div>
     );
   };
 
-  const renderAgendaSettingsCategory = () => {
-    const activeCabins = agendaCabinsDraft
-      .filter((cabin) => cabin.isActive)
-      .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
-    const selectedDateSpecialRule = agendaSpecialDateRulesDraft.find((rule) => rule.dateKey === agendaDate);
-    const effectiveRule = agendaSnapshot?.effectiveRule;
+  // ─── Section: Agenda ──────────────────────────────────────────────────────
 
+  const renderAgenda = () => {
+    const fmtMinutes = (minutes: number) => {
+      const h = Math.floor(minutes / 60).toString().padStart(2, '0');
+      const m = (minutes % 60).toString().padStart(2, '0');
+      return `${h}:${m}`;
+    };
+    const activeCabins = (agendaSnapshot?.cabins ?? agendaConfig?.cabins ?? []).filter((c) => c.isActive);
+    const activeTreatments = agendaTreatmentsDraft.filter((t) => t.isActive).sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+    const effectiveRule = agendaSnapshot?.effectiveRule;
     return (
       <div className="space-y-6">
-        <AgendaIntegrations
-          canManage={canManageGoogleIntegration}
-          status={googleIntegrationStatus}
-          isLoading={isGoogleIntegrationLoading}
-          isSaving={isGoogleIntegrationSaving}
-          message={googleIntegrationMessage}
-          onConnect={handleGoogleConnect}
-          onDisconnect={handleGoogleDisconnect}
-          onChangeMode={handleGoogleModeChange}
-        />
-
-        <div className="bg-white border border-velum-200 p-5 space-y-5">
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-            <div>
-              <h3 className="text-lg font-serif text-velum-900">Agenda</h3>
-              <p className="text-xs text-velum-500 uppercase tracking-widest mt-1">
-                Configuración predeterminada: horario, intervalos, cabinas y reglas de apertura
-              </p>
-            </div>
-            <Button onClick={saveAgendaConfiguration} isLoading={isAgendaConfigSaving}>
-              Guardar configuración
-            </Button>
+        <div>
+          <h1 className="text-2xl font-serif text-velum-900">Agenda</h1>
+          <p className="text-sm text-velum-500 mt-1">Gestión de citas, slots y cabinas</p>
+        </div>
+        {/* Date navigation */}
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="flex items-center gap-1 bg-white border border-velum-200 rounded-xl overflow-hidden">
+            <button onClick={() => setAgendaDate(toLocalDateKey(plusDays(new Date(agendaDate + 'T12:00:00'), -1)))}
+              className="p-2.5 hover:bg-velum-50 text-velum-600 transition"><ChevronLeft size={16} /></button>
+            <span className="px-3 py-2 text-sm font-medium text-velum-900 min-w-[140px] text-center">
+              {new Date(agendaDate + 'T12:00:00').toLocaleDateString('es-MX', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' })}
+            </span>
+            <button onClick={() => setAgendaDate(toLocalDateKey(plusDays(new Date(agendaDate + 'T12:00:00'), 1)))}
+              className="p-2.5 hover:bg-velum-50 text-velum-600 transition"><ChevronRight size={16} /></button>
           </div>
+          <button onClick={() => setAgendaDate(toLocalDateKey(new Date()))}
+            className="px-3 py-2.5 rounded-xl border border-velum-200 bg-white text-sm text-velum-600 hover:bg-velum-50 transition">Hoy</button>
+          <div className="flex gap-2 flex-wrap">
+            {[
+              { label: `${agendaSummary.appointmentsToday} citas`, cls: 'bg-blue-50 text-blue-700 border-blue-200' },
+              { label: `${agendaSummary.availableUnits} disponibles`, cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+              { label: `${agendaSummary.blockedSlots} bloqueados`, cls: 'bg-velum-100 text-velum-600 border-velum-200' }
+            ].map(({ label, cls }) => (
+              <span key={label} className={`px-3 py-1.5 rounded-xl text-xs font-medium border ${cls}`}>{label}</span>
+            ))}
+          </div>
+          {agendaMessage && (
+            <p className={`text-xs font-medium px-3 py-1.5 rounded-xl ${agendaMessage.type === 'ok' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
+              {agendaMessage.text}
+            </p>
+          )}
+        </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-3">
-            <label className="text-xs uppercase tracking-widest text-velum-600">
-              Fecha regla especial
-              <input
-                type="date"
-                className="mt-2 w-full border border-velum-300 bg-velum-50 px-3 py-2 text-sm"
-                value={agendaDate}
-                onChange={(event) => setAgendaDate(event.target.value)}
-              />
-            </label>
-            <label className="text-xs uppercase tracking-widest text-velum-600">
-              Cabina objetivo
-              <select
-                className="mt-2 w-full border border-velum-300 bg-velum-50 px-3 py-2 text-sm"
-                value={selectedAgendaCabinId}
-                onChange={(event) => setSelectedAgendaCabinId(event.target.value)}
-              >
-                <option value="">Automática / Bloqueo general</option>
-                {activeCabins.map((cabin) => (
-                  <option key={cabin.id} value={cabin.id}>
-                    {cabin.name}
-                  </option>
-                ))}
+        {/* Rule info */}
+        {effectiveRule && (
+          <div className={`flex items-center gap-3 p-3 rounded-xl text-xs ${effectiveRule.isOpen ? 'bg-emerald-50 border border-emerald-200 text-emerald-700' : 'bg-red-50 border border-red-200 text-red-700'}`}>
+            <span>{effectiveRule.isOpen ? '✓ Abierto' : '✗ Cerrado'}</span>
+            {effectiveRule.isOpen && <span>{effectiveRule.startHour ?? 0}:00 – {effectiveRule.endHour ?? 0}:00</span>}
+            <span className="text-[10px] opacity-60">[{effectiveRule.source}]</span>
+          </div>
+        )}
+
+        <div className="grid lg:grid-cols-2 gap-6">
+          {/* Left: new appointment form + slots */}
+          <div className="space-y-4">
+            {/* New appointment selectors */}
+            <div className="bg-white rounded-2xl border border-velum-100 p-5 space-y-3">
+              <p className="text-xs font-bold uppercase tracking-widest text-velum-500">Nueva cita</p>
+              <select value={selectedAgendaMemberId} onChange={(e) => setSelectedAgendaMemberId(e.target.value)}
+                className="w-full rounded-xl border border-velum-200 px-3 py-2.5 text-sm focus:outline-none focus:border-velum-900 transition bg-white">
+                <option value="">Seleccionar socio</option>
+                {members.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
               </select>
-            </label>
-            <label className="text-xs uppercase tracking-widest text-velum-600">
-              Timezone clínica
-              <input
-                className="mt-2 w-full border border-velum-300 bg-velum-50 px-3 py-2 text-sm"
-                value={agendaPolicyDraft.timezone}
-                onChange={(event) => updateAgendaPolicyField('timezone', event.target.value)}
-              />
-            </label>
-            <label className="text-xs uppercase tracking-widest text-velum-600">
-              Intervalo (min)
-              <select
-                className="mt-2 w-full border border-velum-300 bg-velum-50 px-3 py-2 text-sm"
-                value={agendaPolicyDraft.slotMinutes}
-                onChange={(event) => updateAgendaPolicyField('slotMinutes', Number(event.target.value))}
-              >
-                <option value={10}>10</option>
-                <option value={15}>15</option>
-                <option value={20}>20</option>
-                <option value={30}>30</option>
-                <option value={45}>45</option>
-                <option value={60}>60</option>
-                <option value={90}>90</option>
-                <option value={120}>120</option>
-              </select>
-            </label>
-            <label className="text-xs uppercase tracking-widest text-velum-600">
-              Auto-confirmación (h)
-              <input
-                type="number"
-                min={0}
-                max={72}
-                className="mt-2 w-full border border-velum-300 bg-velum-50 px-3 py-2 text-sm"
-                value={agendaPolicyDraft.autoConfirmHours}
-                onChange={(event) => updateAgendaPolicyField('autoConfirmHours', Number(event.target.value))}
-              />
-            </label>
-            <label className="text-xs uppercase tracking-widest text-velum-600">
-              Gracia no-show (min)
-              <input
-                type="number"
-                min={5}
-                max={240}
-                className="mt-2 w-full border border-velum-300 bg-velum-50 px-3 py-2 text-sm"
-                value={agendaPolicyDraft.noShowGraceMinutes}
-                onChange={(event) => updateAgendaPolicyField('noShowGraceMinutes', Number(event.target.value))}
-              />
-            </label>
-            <label className="text-xs uppercase tracking-widest text-velum-600">
-              Anticipación mínima (min)
-              <input
-                type="number"
-                min={0}
-                max={10080}
-                className="mt-2 w-full border border-velum-300 bg-velum-50 px-3 py-2 text-sm"
-                value={agendaPolicyDraft.minAdvanceMinutes}
-                onChange={(event) => updateAgendaPolicyField('minAdvanceMinutes', Number(event.target.value))}
-              />
-            </label>
-            <label className="text-xs uppercase tracking-widest text-velum-600">
-              Anticipación máxima (días)
-              <input
-                type="number"
-                min={1}
-                max={365}
-                className="mt-2 w-full border border-velum-300 bg-velum-50 px-3 py-2 text-sm"
-                value={agendaPolicyDraft.maxAdvanceDays}
-                onChange={(event) => updateAgendaPolicyField('maxAdvanceDays', Number(event.target.value))}
-              />
-            </label>
-            <label className="text-xs uppercase tracking-widest text-velum-600">
-              Máx. citas activas/semana
-              <input
-                type="number"
-                min={1}
-                max={50}
-                className="mt-2 w-full border border-velum-300 bg-velum-50 px-3 py-2 text-sm"
-                value={agendaPolicyDraft.maxActiveAppointmentsPerWeek}
-                onChange={(event) => updateAgendaPolicyField('maxActiveAppointmentsPerWeek', Number(event.target.value))}
-              />
-            </label>
-            <label className="text-xs uppercase tracking-widest text-velum-600">
-              Máx. citas activas/mes
-              <input
-                type="number"
-                min={1}
-                max={200}
-                className="mt-2 w-full border border-velum-300 bg-velum-50 px-3 py-2 text-sm"
-                value={agendaPolicyDraft.maxActiveAppointmentsPerMonth}
-                onChange={(event) => updateAgendaPolicyField('maxActiveAppointmentsPerMonth', Number(event.target.value))}
-              />
-            </label>
-          </div>
-
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
-            <div className="border border-velum-200 p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <p className="text-xs uppercase tracking-widest text-velum-500">Cabinas</p>
-                <Button size="sm" variant="outline" onClick={addCabinDraft}>Agregar cabina</Button>
-              </div>
-              <div className="space-y-2">
-                {agendaCabinsDraft.map((cabin) => (
-                  <div key={cabin.id} className="grid grid-cols-1 md:grid-cols-5 gap-2">
-                    <input
-                      className="border border-velum-300 bg-velum-50 px-3 py-2 text-sm md:col-span-2"
-                      value={cabin.name}
-                      onChange={(event) => updateCabinDraftField(cabin.id, { name: event.target.value })}
-                    />
-                    <input
-                      type="number"
-                      className="border border-velum-300 bg-velum-50 px-3 py-2 text-sm"
-                      value={cabin.sortOrder}
-                      onChange={(event) => updateCabinDraftField(cabin.id, { sortOrder: Number(event.target.value) })}
-                    />
-                    <label className="text-xs uppercase tracking-widest text-velum-600 flex items-center gap-2 border border-velum-200 px-3 py-2">
-                      <input
-                        type="checkbox"
-                        checked={cabin.isActive}
-                        onChange={(event) => updateCabinDraftField(cabin.id, { isActive: event.target.checked })}
-                      />
-                      Activa
-                    </label>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="text-red-700 border-red-300 hover:bg-red-600 hover:text-white"
-                      onClick={() => removeCabinDraft(cabin.id)}
-                    >
-                      <Trash2 size={14} />
-                    </Button>
-                  </div>
-                ))}
+              <div className="grid grid-cols-2 gap-3">
+                <select value={selectedAgendaCabinId} onChange={(e) => setSelectedAgendaCabinId(e.target.value)}
+                  className="w-full rounded-xl border border-velum-200 px-3 py-2.5 text-sm focus:outline-none focus:border-velum-900 transition bg-white">
+                  <option value="">Cabina (opcional)</option>
+                  {activeCabins.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+                <select value={selectedAgendaTreatmentId} onChange={(e) => setSelectedAgendaTreatmentId(e.target.value)}
+                  className="w-full rounded-xl border border-velum-200 px-3 py-2.5 text-sm focus:outline-none focus:border-velum-900 transition bg-white">
+                  <option value="">Tratamiento (opcional)</option>
+                  {activeTreatments.map((t) => <option key={t.id} value={t.id}>{t.name} ({t.durationMinutes}min)</option>)}
+                </select>
               </div>
             </div>
-
-            <div className="border border-velum-200 p-4 space-y-3">
-              <p className="text-xs uppercase tracking-widest text-velum-500">Reglas semanales (workdays)</p>
-              <div className="space-y-2">
-                {[...agendaWeeklyRulesDraft]
-                  .sort((a, b) => a.dayOfWeek - b.dayOfWeek)
-                  .map((rule) => (
-                    <div key={rule.id} className="grid grid-cols-1 md:grid-cols-5 gap-2">
-                      <p className="text-sm font-semibold md:col-span-2">{weekDayLabel[rule.dayOfWeek]}</p>
-                      <label className="text-xs uppercase tracking-widest text-velum-600 flex items-center gap-2">
-                        <input
-                          type="checkbox"
-                          checked={rule.isOpen}
-                          onChange={(event) => updateWeeklyRuleField(rule.dayOfWeek, { isOpen: event.target.checked })}
-                        />
-                        Abierto
-                      </label>
-                      <input
-                        type="number"
-                        min={0}
-                        max={23}
-                        className="border border-velum-300 bg-velum-50 px-2 py-1 text-sm"
-                        value={rule.startHour}
-                        onChange={(event) => updateWeeklyRuleField(rule.dayOfWeek, { startHour: Number(event.target.value) })}
-                        disabled={!rule.isOpen}
-                      />
-                      <input
-                        type="number"
-                        min={1}
-                        max={24}
-                        className="border border-velum-300 bg-velum-50 px-2 py-1 text-sm"
-                        value={rule.endHour}
-                        onChange={(event) => updateWeeklyRuleField(rule.dayOfWeek, { endHour: Number(event.target.value) })}
-                        disabled={!rule.isOpen}
-                      />
-                    </div>
-                  ))}
+            {/* Slots matrix */}
+            <div className="bg-white rounded-2xl border border-velum-100 overflow-hidden">
+              <div className="px-5 py-4 border-b border-velum-100 flex items-center justify-between">
+                <p className="text-xs font-bold uppercase tracking-widest text-velum-500">Slots del día</p>
+                {isAgendaSaving && <span className="text-xs text-velum-400 animate-pulse">Procesando...</span>}
               </div>
-            </div>
-          </div>
-
-          <div className="border border-velum-200 p-4 space-y-3">
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
-              <div>
-                <p className="text-xs uppercase tracking-widest text-velum-500">Tratamientos</p>
-                <p className="text-xs text-velum-500 mt-1">
-                  Catálogo editable para agenda: duración, cabina específica y estado operativo
-                </p>
-              </div>
-              <Button size="sm" variant="outline" onClick={addTreatmentDraft}>
-                Agregar tratamiento
-              </Button>
-            </div>
-
-            <div className="space-y-3">
-              {agendaTreatmentsDraft
-                .slice()
-                .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
-                .map((treatment) => {
-                  const allowedCabins = treatment.allowedCabinIds ?? [];
-                  const requiresCabinButMissing = treatment.requiresSpecificCabin && allowedCabins.length === 0;
-                  return (
-                    <div
-                      key={treatment.id}
-                      className={`border p-3 space-y-3 ${requiresCabinButMissing ? 'border-red-300 bg-red-50' : 'border-velum-200'}`}
-                    >
-                      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-7 gap-2">
-                        <label className="text-xs uppercase tracking-widest text-velum-600 xl:col-span-2">
-                          Nombre
-                          <input
-                            className="mt-2 w-full border border-velum-300 bg-velum-50 px-3 py-2 text-sm"
-                            value={treatment.name}
-                            onChange={(event) => updateTreatmentDraftField(treatment.id, { name: event.target.value })}
-                          />
-                        </label>
-
-                        <label className="text-xs uppercase tracking-widest text-velum-600">
-                          Código
-                          <input
-                            className="mt-2 w-full border border-velum-300 bg-velum-50 px-3 py-2 text-sm"
-                            value={treatment.code}
-                            onChange={(event) =>
-                              updateTreatmentDraftField(treatment.id, {
-                                code: event.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '_')
-                              })
-                            }
-                          />
-                        </label>
-
-                        <label className="text-xs uppercase tracking-widest text-velum-600">
-                          Duración (min)
-                          <input
-                            type="number"
-                            min={10}
-                            max={240}
-                            className="mt-2 w-full border border-velum-300 bg-velum-50 px-3 py-2 text-sm"
-                            value={treatment.durationMinutes}
-                            onChange={(event) =>
-                              updateTreatmentDraftField(treatment.id, { durationMinutes: Number(event.target.value) })
-                            }
-                          />
-                        </label>
-
-                        <label className="text-xs uppercase tracking-widest text-velum-600">
-                          Buffer preparación
-                          <input
-                            type="number"
-                            min={0}
-                            max={120}
-                            className="mt-2 w-full border border-velum-300 bg-velum-50 px-3 py-2 text-sm"
-                            value={treatment.prepBufferMinutes ?? 0}
-                            onChange={(event) =>
-                              updateTreatmentDraftField(treatment.id, { prepBufferMinutes: Number(event.target.value) })
-                            }
-                          />
-                        </label>
-
-                        <label className="text-xs uppercase tracking-widest text-velum-600">
-                          Buffer limpieza
-                          <input
-                            type="number"
-                            min={0}
-                            max={120}
-                            className="mt-2 w-full border border-velum-300 bg-velum-50 px-3 py-2 text-sm"
-                            value={treatment.cleanupBufferMinutes ?? 0}
-                            onChange={(event) =>
-                              updateTreatmentDraftField(treatment.id, { cleanupBufferMinutes: Number(event.target.value) })
-                            }
-                          />
-                        </label>
-
-                        <label className="text-xs uppercase tracking-widest text-velum-600">
-                          Orden
-                          <input
-                            type="number"
-                            min={0}
-                            max={999}
-                            className="mt-2 w-full border border-velum-300 bg-velum-50 px-3 py-2 text-sm"
-                            value={treatment.sortOrder}
-                            onChange={(event) => updateTreatmentDraftField(treatment.id, { sortOrder: Number(event.target.value) })}
-                          />
-                        </label>
-                      </div>
-
-                      <label className="text-xs uppercase tracking-widest text-velum-600 block">
-                        Descripción clínica
-                        <textarea
-                          className="mt-2 w-full border border-velum-300 bg-velum-50 px-3 py-2 text-sm min-h-[72px]"
-                          value={treatment.description ?? ''}
-                          onChange={(event) => updateTreatmentDraftField(treatment.id, { description: event.target.value || null })}
-                        />
-                      </label>
-
-                      <div className="flex flex-wrap items-center justify-between gap-3">
-                        <div className="flex flex-wrap items-center gap-4">
-                          <label className="text-xs uppercase tracking-widest text-velum-600 flex items-center gap-2">
-                            <input
-                              type="checkbox"
-                              checked={treatment.requiresSpecificCabin}
-                              onChange={(event) =>
-                                updateTreatmentDraftField(treatment.id, {
-                                  requiresSpecificCabin: event.target.checked,
-                                  allowedCabinIds:
-                                    event.target.checked && allowedCabins.length === 0 && activeCabins[0]
-                                      ? [activeCabins[0].id]
-                                      : allowedCabins,
-                                  cabinId:
-                                    event.target.checked && allowedCabins.length === 0 && activeCabins[0]
-                                      ? activeCabins[0].id
-                                      : allowedCabins[0] ?? null
-                                })
-                              }
-                            />
-                            Requiere cabina específica
-                          </label>
-                          <label className="text-xs uppercase tracking-widest text-velum-600 flex items-center gap-2">
-                            <input
-                              type="checkbox"
-                              checked={treatment.isActive}
-                              onChange={(event) => updateTreatmentDraftField(treatment.id, { isActive: event.target.checked })}
-                            />
-                            Activo
-                          </label>
-                        </div>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="text-red-700 border-red-300 hover:bg-red-600 hover:text-white"
-                          onClick={() => removeTreatmentDraft(treatment.id)}
-                        >
-                          <Trash2 size={14} />
-                        </Button>
-                      </div>
-
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        <div className="border border-velum-200 p-3">
-                          <p className="text-xs uppercase tracking-widest text-velum-500 mb-2">
-                            Cabinas permitidas
-                          </p>
-                          <div className="space-y-2 max-h-40 overflow-auto pr-1">
-                            {agendaCabinsDraft
-                              .slice()
-                              .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
-                              .map((cabin) => {
-                                const checked = allowedCabins.includes(cabin.id);
-                                const blockedByInactive = treatment.requiresSpecificCabin && !cabin.isActive;
-                                return (
-                                  <button
-                                    key={cabin.id}
-                                    type="button"
-                                    className={`w-full flex items-center justify-between gap-2 text-sm px-2 py-1 border ${
-                                      checked
-                                        ? 'border-velum-900 bg-velum-900 text-white'
-                                        : 'border-velum-300 bg-velum-50 text-velum-700'
-                                    } ${blockedByInactive ? 'opacity-60 cursor-not-allowed' : ''}`}
-                                    onClick={() => {
-                                      if (blockedByInactive) return;
-                                      toggleTreatmentCabinAllowed(treatment.id, cabin.id, !checked);
-                                    }}
-                                    disabled={blockedByInactive}
-                                  >
-                                    <span className="flex items-center gap-2">
-                                      <span
-                                        className={`inline-flex h-4 w-4 items-center justify-center border text-[10px] ${
-                                          checked ? 'border-white' : 'border-velum-500'
-                                        }`}
-                                      >
-                                        {checked ? '✓' : ''}
-                                      </span>
-                                      {cabin.name}
-                                    </span>
-                                    {!cabin.isActive && (
-                                      <span className={`text-[10px] uppercase ${checked ? 'text-white' : 'text-amber-700'}`}>
-                                        (inactiva)
-                                      </span>
-                                    )}
-                                  </button>
-                                );
-                              })}
+              {agendaSlots.length === 0 ? (
+                <div className="py-12 text-center text-xs text-velum-400">
+                  <CalendarDays size={28} className="mx-auto mb-2 text-velum-200" />Sin slots configurados para este día
+                </div>
+              ) : (
+                <div className="divide-y divide-velum-50">
+                  {agendaSlots.map((slot) => {
+                    const isBlocked = slot.blocked;
+                    return (
+                      <div key={slot.key} className={`flex items-center gap-3 px-5 py-3 ${isBlocked ? 'bg-velum-50/70' : 'hover:bg-velum-50/40 transition'}`}>
+                        <span className={`text-sm font-mono w-24 shrink-0 ${isBlocked ? 'text-velum-400 line-through' : 'text-velum-700 font-medium'}`}>{slot.label}</span>
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <div className="flex-1 h-1.5 bg-velum-100 rounded-full overflow-hidden">
+                              <div className={`h-full rounded-full transition-all ${isBlocked ? 'bg-velum-300 w-full' : 'bg-velum-900'}`}
+                                style={{ width: isBlocked ? '100%' : `${slot.capacity > 0 ? (slot.booked / slot.capacity) * 100 : 0}%` }} />
+                            </div>
+                            <span className="text-xs text-velum-400 whitespace-nowrap">{slot.booked}/{slot.capacity}</span>
                           </div>
                         </div>
-
-                        <div className="border border-velum-200 p-3">
-                          <p className="text-xs uppercase tracking-widest text-velum-500 mb-2">
-                            Prioridad de cabinas
-                          </p>
-                          <div className="space-y-2">
-                            {allowedCabins.length === 0 && (
-                              <p className="text-sm text-velum-500">Selecciona cabinas permitidas para definir prioridad.</p>
-                            )}
-                            {allowedCabins.map((cabinId, index) => {
-                              const cabin = agendaCabinsDraft.find((candidate) => candidate.id === cabinId);
-                              return (
-                                <div key={`${treatment.id}-${cabinId}`} className="flex items-center justify-between border border-velum-200 px-2 py-1">
-                                  <span className="text-sm">{index + 1}. {cabin?.name ?? cabinId}</span>
-                                  <div className="flex items-center gap-1">
-                                    <Button size="sm" variant="outline" onClick={() => moveTreatmentCabinPriority(treatment.id, cabinId, -1)}>
-                                      ↑
-                                    </Button>
-                                    <Button size="sm" variant="outline" onClick={() => moveTreatmentCabinPriority(treatment.id, cabinId, 1)}>
-                                      ↓
-                                    </Button>
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
+                        <div className="flex gap-2 shrink-0">
+                          <button onClick={() => toggleAgendaSlotBlock(slot)} disabled={isAgendaSaving}
+                            className={`text-xs px-2.5 py-1 rounded-lg transition ${isBlocked ? 'bg-velum-100 text-velum-700 hover:bg-velum-200' : 'border border-velum-200 text-velum-500 hover:bg-velum-100'}`}>
+                            {isBlocked ? 'Desbloquear' : 'Bloquear'}
+                          </button>
+                          {!isBlocked && slot.available > 0 && (
+                            <button onClick={() => handleAgendaCreateAppointment(slot)} disabled={isAgendaSaving || !selectedAgendaMemberId}
+                              className="text-xs px-2.5 py-1 rounded-lg bg-velum-900 text-white hover:bg-velum-800 transition disabled:opacity-40">
+                              + Cita
+                            </button>
+                          )}
                         </div>
                       </div>
-
-                      {requiresCabinButMissing && (
-                        <p className="text-xs text-red-700">
-                          Este tratamiento exige cabina específica. Debes definir al menos una cabina permitida.
-                        </p>
-                      )}
-                    </div>
-                  );
-                })}
-
-              {agendaTreatmentsDraft.length === 0 && (
-                <p className="text-sm text-velum-500">
-                  No hay tratamientos configurados. Agrega al menos uno para operar la agenda por tratamiento.
-                </p>
+                    );
+                  })}
+                </div>
               )}
             </div>
           </div>
 
-          <div className="border border-velum-200 p-4 space-y-3">
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
-              <div>
-                <p className="text-xs uppercase tracking-widest text-velum-500">Plantillas rápidas de temporada / feriado</p>
-                <p className="text-xs text-velum-500 mt-1">
-                  Aplica reglas especiales por rango de fechas y duplica configuración de forma masiva
-                </p>
+          {/* Right: appointments for the day */}
+          <div className="space-y-4">
+            <div className="bg-white rounded-2xl border border-velum-100 overflow-hidden">
+              <div className="px-5 py-4 border-b border-velum-100">
+                <p className="text-xs font-bold uppercase tracking-widest text-velum-500">Citas del día</p>
               </div>
-              <Button size="sm" variant="outline" onClick={applySpecialTemplate}>
-                Aplicar plantilla
-              </Button>
+              {dayAppointments.length === 0 ? (
+                <div className="py-12 text-center text-xs text-velum-400">
+                  <CalendarDays size={28} className="mx-auto mb-2 text-velum-200" />No hay citas para este día
+                </div>
+              ) : (
+                <div className="divide-y divide-velum-50">
+                  {dayAppointments.map((a) => {
+                    const s = apptStatusLabel(a.status);
+                    const memberName = resolveAppointmentMember(a);
+                    const isCancelConfirm = cancelConfirmApptId === a.id;
+                    return (
+                      <div key={a.id} className="px-5 py-4 space-y-2">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-xs font-mono text-velum-500">
+                                {new Date(a.startAt).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}
+                              </span>
+                              <Pill label={s.label} cls={s.cls} />
+                            </div>
+                            <p className="font-medium text-velum-900 text-sm mt-1 truncate">{memberName}</p>
+                            {(a.treatment || a.cabin) && (
+                              <p className="text-xs text-velum-400 mt-0.5">{[a.treatment?.name, a.cabin?.name].filter(Boolean).join(' · ')}</p>
+                            )}
+                          </div>
+                        </div>
+                        {isCancelConfirm ? (
+                          <div className="flex gap-2">
+                            <button onClick={() => confirmCancelAppointment(a.id)} disabled={isAgendaSaving}
+                              className="flex-1 text-xs bg-red-600 text-white px-3 py-1.5 rounded-lg hover:bg-red-700 transition disabled:opacity-50">
+                              Confirmar cancelación
+                            </button>
+                            <button onClick={() => setCancelConfirmApptId(null)} className="text-xs px-3 py-1.5 rounded-lg border border-velum-200 text-velum-600 hover:bg-velum-50 transition">No</button>
+                          </div>
+                        ) : (
+                          <div className="flex gap-1.5 flex-wrap">
+                            {a.status === 'scheduled' && (
+                              <button onClick={() => handleAgendaAppointmentAction(a.id, 'confirm', 'Cita confirmada.')} disabled={isAgendaSaving}
+                                className="text-xs px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 transition">Confirmar</button>
+                            )}
+                            {(a.status === 'scheduled' || a.status === 'confirmed') && (
+                              <>
+                                <button onClick={() => openSessionModalForAppointment(a)} disabled={isAgendaSaving}
+                                  className="text-xs px-2.5 py-1 rounded-lg bg-velum-900 text-white hover:bg-velum-800 transition">Completar</button>
+                                <button onClick={() => handleAgendaAppointmentAction(a.id, 'mark_no_show', 'Marcado como no-show.')} disabled={isAgendaSaving}
+                                  className="text-xs px-2.5 py-1 rounded-lg border border-amber-200 text-amber-700 bg-amber-50 hover:bg-amber-100 transition">No show</button>
+                                <button onClick={() => handleAgendaCancelAppointment(a.id)}
+                                  className="text-xs px-2.5 py-1 rounded-lg border border-red-200 text-red-600 bg-red-50 hover:bg-red-100 transition">Cancelar</button>
+                              </>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
-              <label className="text-xs uppercase tracking-widest text-velum-600">
-                Desde
-                <input
-                  type="date"
-                  className="mt-2 w-full border border-velum-300 bg-velum-50 px-3 py-2 text-sm"
-                  value={templateRangeStart}
-                  onChange={(event) => setTemplateRangeStart(event.target.value)}
-                />
-              </label>
-              <label className="text-xs uppercase tracking-widest text-velum-600">
-                Hasta
-                <input
-                  type="date"
-                  className="mt-2 w-full border border-velum-300 bg-velum-50 px-3 py-2 text-sm"
-                  value={templateRangeEnd}
-                  onChange={(event) => setTemplateRangeEnd(event.target.value)}
-                />
-              </label>
-              <label className="text-xs uppercase tracking-widest text-velum-600 xl:col-span-2">
-                Plantilla
-                <select
-                  className="mt-2 w-full border border-velum-300 bg-velum-50 px-3 py-2 text-sm"
-                  value={templatePreset}
-                  onChange={(event) => setTemplatePreset(event.target.value as AgendaTemplatePreset)}
-                >
-                  <option value="weekly_copy">Duplicar regla semanal</option>
-                  <option value="holiday_closed">Feriado cerrado</option>
-                  <option value="season_extended">Temporada alta (08:00-22:00)</option>
-                  <option value="season_compact">Temporada baja (10:00-18:00)</option>
-                </select>
-              </label>
-            </div>
-
-            <div className="flex flex-wrap gap-2">
-              {Object.entries(weekDayLabel).map(([day, label]) => {
-                const dayNumber = Number(day);
-                const checked = templateDaysOfWeek.includes(dayNumber);
-                return (
-                  <label
-                    key={`template-day-${day}`}
-                    className={`px-2 py-1 border text-xs uppercase tracking-widest cursor-pointer ${
-                      checked
-                        ? 'border-velum-900 bg-velum-900 text-white'
-                        : 'border-velum-300 text-velum-700 bg-velum-50'
-                    }`}
-                  >
-                    <input
-                      type="checkbox"
-                      className="hidden"
-                      checked={checked}
-                      onChange={() => toggleTemplateDay(dayNumber)}
-                    />
-                    {label}
-                  </label>
-                );
-              })}
-            </div>
+            {/* Report */}
+            {agendaSnapshot?.report && (
+              <div className="bg-white rounded-2xl border border-velum-100 p-5 space-y-3">
+                <p className="text-xs font-bold uppercase tracking-widest text-velum-500">Reporte diario</p>
+                <div className="grid grid-cols-2 gap-3 text-xs">
+                  {[
+                    { label: 'Utilización', value: `${agendaSnapshot.report.utilizationPct.toFixed(0)}%` },
+                    { label: 'Productividad', value: `${agendaSnapshot.report.productivityPct.toFixed(0)}%` },
+                    { label: 'Completadas', value: agendaSnapshot.report.totals.completed },
+                    { label: 'No show', value: agendaSnapshot.report.totals.noShow },
+                    { label: 'Canceladas', value: agendaSnapshot.report.totals.canceled },
+                    { label: 'Agendadas', value: agendaSnapshot.report.totals.scheduledOrConfirmed }
+                  ].map(({ label, value }) => (
+                    <div key={label} className="flex justify-between">
+                      <span className="text-velum-400">{label}</span>
+                      <span className="font-medium text-velum-900">{value}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
-
-          <div className="border border-velum-200 p-4 space-y-3">
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
-              <p className="text-xs uppercase tracking-widest text-velum-500">Regla especial para {agendaDate}</p>
-              <p className="text-xs text-velum-500">
-                {effectiveRule?.isOpen
-                  ? `${effectiveRule.source === 'special' ? 'Especial' : 'Semanal'} ${String(
-                      effectiveRule.startHour
-                    ).padStart(2, '0')}:00 - ${String(effectiveRule.endHour).padStart(2, '0')}:00`
-                  : 'Día cerrado'}
-              </p>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
-              <label className="text-xs uppercase tracking-widest text-velum-600">
-                Inicio especial
-                <input
-                  type="number"
-                  min={0}
-                  max={23}
-                  className="mt-2 w-full border border-velum-300 bg-velum-50 px-3 py-2 text-sm"
-                  value={selectedDateSpecialRule?.startHour ?? effectiveRule?.startHour ?? 9}
-                  onChange={(event) =>
-                    setSpecialRuleForDate(
-                      selectedDateSpecialRule?.isOpen ?? true,
-                      Number(event.target.value),
-                      selectedDateSpecialRule?.endHour ?? effectiveRule?.endHour ?? 20
-                    )
-                  }
-                />
-              </label>
-              <label className="text-xs uppercase tracking-widest text-velum-600">
-                Fin especial
-                <input
-                  type="number"
-                  min={1}
-                  max={24}
-                  className="mt-2 w-full border border-velum-300 bg-velum-50 px-3 py-2 text-sm"
-                  value={selectedDateSpecialRule?.endHour ?? effectiveRule?.endHour ?? 20}
-                  onChange={(event) =>
-                    setSpecialRuleForDate(
-                      selectedDateSpecialRule?.isOpen ?? true,
-                      selectedDateSpecialRule?.startHour ?? effectiveRule?.startHour ?? 9,
-                      Number(event.target.value)
-                    )
-                  }
-                />
-              </label>
-              <Button variant="outline" onClick={() => setSpecialRuleForDate(false)}>
-                Marcar cerrado (feriado)
-              </Button>
-              <Button variant="outline" onClick={clearSpecialRuleForDate}>
-                Usar regla semanal
-              </Button>
-            </div>
-          </div>
-
-          {agendaMessage && (
-            <div className={`text-xs border px-3 py-2 ${agendaMessage.type === 'ok' ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-red-50 border-red-200 text-red-700'}`}>
-              {agendaMessage.text}
-            </div>
-          )}
         </div>
       </div>
     );
   };
 
-  const renderAgenda = () => {
-    const activeCabins = agendaCabinsDraft
-      .filter((cabin) => cabin.isActive)
-      .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
-    const effectiveRule = agendaSnapshot?.effectiveRule;
+  // ─── Section: Cobranza ────────────────────────────────────────────────────
 
+  const renderCobranza = () => {
+    const queue = analytics.collectionQueue;
+    const totalRisk = queue.reduce((acc, m) => acc + (m.amount ?? 0), 0);
     return (
       <div className="space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4">
-          <div className="bg-white border border-velum-200 p-5">
-            <p className="text-[10px] uppercase tracking-widest text-velum-500">Capacidad diaria</p>
-            <p className="text-3xl font-serif text-velum-900 mt-2">{agendaSummary.totalCapacity}</p>
-            <p className="text-xs text-velum-500 mt-1">{agendaSummary.totalSlots} slots configurados</p>
-          </div>
-          <div className="bg-white border border-velum-200 p-5">
-            <p className="text-[10px] uppercase tracking-widest text-velum-500">Unidades ocupadas</p>
-            <p className="text-3xl font-serif text-velum-900 mt-2">{agendaSummary.usedUnits}</p>
-            <p className="text-xs text-velum-500 mt-1">Ocupación {agendaSummary.occupancy.toFixed(1)}%</p>
-          </div>
-          <div className="bg-white border border-velum-200 p-5">
-            <p className="text-[10px] uppercase tracking-widest text-velum-500">Disponibles</p>
-            <p className="text-3xl font-serif text-velum-900 mt-2">{agendaSummary.availableUnits}</p>
-            <p className="text-xs text-velum-500 mt-1">Slots abiertos para reservar</p>
-          </div>
-          <div className="bg-white border border-velum-200 p-5">
-            <p className="text-[10px] uppercase tracking-widest text-velum-500">No-show del día</p>
-            <p className="text-3xl font-serif text-velum-900 mt-2">{agendaSummary.noShowToday}</p>
-            <p className="text-xs text-velum-500 mt-1">Completadas: {agendaSummary.completedToday}</p>
-          </div>
-          <div className="bg-white border border-velum-200 p-5">
-            <p className="text-[10px] uppercase tracking-widest text-velum-500">Citas del día</p>
-            <p className="text-3xl font-serif text-velum-900 mt-2">{agendaSummary.appointmentsToday}</p>
-            <p className="text-xs text-velum-500 mt-1">Canceladas: {agendaSummary.canceledToday}</p>
-          </div>
+        <div>
+          <h1 className="text-2xl font-serif text-velum-900">Cobranza</h1>
+          <p className="text-sm text-velum-500 mt-1">Pipeline de recuperación de cuentas</p>
         </div>
-
-        <div className="bg-white border border-velum-200 p-5 space-y-5">
-          <div>
-            <h3 className="text-lg font-serif text-velum-900">Operación diaria de agenda</h3>
-            <p className="text-xs text-velum-500 uppercase tracking-widest mt-1">
-              Reserva directa, bloqueo por cabina y control exacto de disponibilidad
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
-            <label className="text-xs uppercase tracking-widest text-velum-600">
-              Fecha operativa
-              <input
-                type="date"
-                className="mt-2 w-full border border-velum-300 bg-velum-50 px-3 py-2 text-sm"
-                value={agendaDate}
-                onChange={(event) => setAgendaDate(event.target.value)}
-              />
-            </label>
-            <label className="text-xs uppercase tracking-widest text-velum-600">
-              Socio para agendar
-              <select
-                className="mt-2 w-full border border-velum-300 bg-velum-50 px-3 py-2 text-sm"
-                value={selectedAgendaMemberId}
-                onChange={(event) => setSelectedAgendaMemberId(event.target.value)}
-              >
-                <option value="">Seleccionar socio</option>
-                {members.map((member) => (
-                  <option key={member.id} value={member.id}>
-                    {member.name} · {member.email}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="text-xs uppercase tracking-widest text-velum-600">
-              Tratamiento
-              <select
-                className="mt-2 w-full border border-velum-300 bg-velum-50 px-3 py-2 text-sm"
-                value={selectedAgendaTreatmentId}
-                onChange={(event) => setSelectedAgendaTreatmentId(event.target.value)}
-              >
-                <option value="">Sin tratamiento específico</option>
-                {agendaTreatmentsDraft
-                  .filter((treatment) => treatment.isActive)
-                  .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
-                  .map((treatment) => (
-                    <option key={treatment.id} value={treatment.id}>
-                      {treatment.name}
-                    </option>
-                  ))}
-              </select>
-            </label>
-            <div className="text-xs uppercase tracking-widest text-velum-600 border border-velum-200 bg-velum-50 px-3 py-2">
-              Regla aplicada
-              <p className="mt-2 text-sm normal-case text-velum-800">
-                {effectiveRule?.isOpen
-                  ? `${effectiveRule.source === 'special' ? 'Especial' : 'Semanal'} ${String(
-                      effectiveRule.startHour
-                    ).padStart(2, '0')}:00 - ${String(effectiveRule.endHour).padStart(2, '0')}:00`
-                  : 'Día cerrado'}
-              </p>
-            </div>
-          </div>
-
-          {agendaMessage && (
-            <div className={`text-xs border px-3 py-2 ${agendaMessage.type === 'ok' ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-red-50 border-red-200 text-red-700'}`}>
-              {agendaMessage.text}
-            </div>
-          )}
+        <div className="grid grid-cols-3 gap-4">
+          <KpiCard icon={<HandCoins size={18} />} label="Por recuperar" value={queue.length} accent={queue.length > 0 ? 'text-red-600' : 'text-velum-900'} />
+          <KpiCard icon={<Wallet size={18} />} label="Monto en riesgo" value={formatMoney(totalRisk)} accent="text-amber-600" />
+          <KpiCard icon={<CheckCheck size={18} />} label="Activos" value={analytics.sociosActivos} accent="text-emerald-700" />
         </div>
-
-        <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-          <div className="xl:col-span-2 bg-white border border-velum-200">
-            <div className="p-5 border-b border-velum-200">
-              <h3 className="text-lg font-serif text-velum-900">Matriz de slots diarios</h3>
-              <p className="text-xs text-velum-500 uppercase tracking-widest mt-1">
-                Reserva directa, bloqueo por cabina/general y control exacto de disponibilidad
-              </p>
+        <div className="bg-white rounded-2xl border border-velum-100 overflow-hidden">
+          {queue.length === 0 ? (
+            <div className="py-16 text-center">
+              <CheckCircle2 size={32} className="mx-auto text-emerald-300 mb-3" />
+              <p className="text-sm text-velum-400">Sin cuentas en cobranza activa</p>
             </div>
+          ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead className="bg-velum-50 text-[10px] uppercase font-bold text-velum-600">
-                  <tr>
-                    <th className="p-3">Franja</th>
-                    <th className="p-3">Capacidad</th>
-                    <th className="p-3">Reservado</th>
-                    <th className="p-3">Disponible</th>
-                    <th className="p-3">Cabinas</th>
-                    <th className="p-3">Acciones</th>
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-velum-100 bg-velum-50/50">
+                    {['Socio', 'Estado', 'Plan', 'Monto', 'Riesgo', 'Acciones'].map((h) => (
+                      <th key={h} className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-widest text-velum-400">{h}</th>
+                    ))}
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-velum-100">
-                  {agendaSlots.map((slot) => {
-                    const selectedBlock = (agendaSnapshot?.blocks ?? []).find(
-                      (block) =>
-                        block.dateKey === agendaDate &&
-                        block.startMinute === slot.startMinute &&
-                        block.endMinute === slot.endMinute &&
-                        (block.cabinId ?? '') === (selectedAgendaCabinId || '')
-                    );
+                <tbody>
+                  {queue.map((m, i) => {
+                    const risk = riskOfMember(m);
                     return (
-                      <tr key={slot.key}>
-                        <td className="p-3 font-medium">{slot.label}</td>
-                        <td className="p-3">{slot.capacity}</td>
-                        <td className="p-3">{slot.booked}</td>
-                        <td className="p-3">{slot.available}</td>
-                        <td className="p-3 text-xs text-velum-600">
-                          {slot.cabins.map((cabin) => `${cabin.cabinName}:${cabin.available}`).join(' · ')}
+                      <tr key={m.id} className={`hover:bg-velum-50 transition ${i < queue.length - 1 ? 'border-b border-velum-50' : ''}`}>
+                        <td className="px-4 py-3">
+                          <p className="font-medium text-velum-900">{m.name}</p>
+                          <p className="text-xs text-velum-400">{m.email}</p>
                         </td>
-                        <td className="p-3">
-                          <div className="flex flex-wrap gap-2">
-                            <Button size="sm" variant="outline" onClick={() => toggleAgendaSlotBlock(slot)} disabled={isAgendaSaving}>
-                              {selectedBlock ? 'Desbloquear' : selectedAgendaCabinId ? 'Bloquear cabina' : 'Bloquear general'}
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="secondary"
-                              onClick={() => handleAgendaCreateAppointment(slot)}
-                              disabled={isAgendaSaving || slot.blocked || slot.available <= 0 || !selectedAgendaMemberId}
-                            >
-                              Reservar
-                            </Button>
+                        <td className="px-4 py-3"><Pill label={statusLabel(m.subscriptionStatus)} cls={statusPill(m.subscriptionStatus)} /></td>
+                        <td className="px-4 py-3 text-velum-600">{m.plan ?? '—'}</td>
+                        <td className="px-4 py-3 font-medium text-velum-900">{m.amount ? formatMoney(m.amount) : '—'}</td>
+                        <td className="px-4 py-3">
+                          <span className={`inline-flex items-center gap-1.5 text-xs font-medium ${risk === 'critical' ? 'text-red-600' : 'text-amber-600'}`}>
+                            <span className={`w-2 h-2 rounded-full ${risk === 'critical' ? 'bg-red-500' : 'bg-amber-400'}`} />
+                            {risk === 'critical' ? 'Crítico' : 'Atención'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex gap-2">
+                            <button onClick={() => handleUpdateMember(m.id, 'active')}
+                              className="text-xs px-2.5 py-1 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 transition">Regularizar</button>
+                            <button onClick={() => handleOpenMemberDrawer(m)}
+                              className="text-xs px-2.5 py-1 rounded-lg border border-velum-200 text-velum-600 hover:bg-velum-50 transition">Ver</button>
                           </div>
                         </td>
                       </tr>
                     );
                   })}
-                  {agendaSlots.length === 0 && (
-                    <tr>
-                      <td colSpan={6} className="p-6 text-center text-sm text-velum-500">
-                        No hay slots disponibles para esta fecha o está marcada como cerrada.
-                      </td>
-                    </tr>
-                  )}
                 </tbody>
               </table>
             </div>
-          </div>
-
-          <div className="space-y-6">
-            <div className="bg-white border border-velum-200 p-5">
-              <h3 className="text-lg font-serif text-velum-900">Reporte diario por cabina</h3>
-              <div className="mt-3 space-y-2 text-sm">
-                {(agendaSnapshot?.report.cabins ?? []).map((item) => (
-                  <div key={item.cabinId} className="border border-velum-200 p-3">
-                    <p className="font-semibold">{item.cabinName}</p>
-                    <p className="text-xs text-velum-500">
-                      Utilización {item.utilizationPct.toFixed(1)}% · Productividad {item.productivityPct.toFixed(1)}%
-                    </p>
-                    <p className="text-xs text-velum-500">
-                      Completadas {item.completed} · No-show {item.noShow} · Canceladas {item.canceled}
-                    </p>
-                  </div>
-                ))}
-                {(agendaSnapshot?.report.cabins ?? []).length === 0 && (
-                  <p className="text-xs text-velum-500">Sin datos de productividad para la fecha seleccionada.</p>
-                )}
-              </div>
-            </div>
-
-            <div className="bg-white border border-velum-200 p-5">
-              <h3 className="text-lg font-serif text-velum-900">Próximos slots libres</h3>
-              <div className="mt-3 space-y-2 text-sm">
-                {availableAgendaSlots.slice(0, 8).map((slot) => (
-                  <div key={slot.key} className="border border-velum-200 px-3 py-2 flex items-center justify-between">
-                    <span>{slot.label}</span>
-                    <span className="text-xs text-velum-500">Disp: {slot.available}</span>
-                  </div>
-                ))}
-                {availableAgendaSlots.length === 0 && <p className="text-xs text-velum-500">No hay slots libres en esta fecha.</p>}
-              </div>
-            </div>
-
-            <div className="bg-white border border-velum-200 p-5">
-              <div className="flex items-center justify-between gap-2">
-                <h3 className="text-lg font-serif text-velum-900">Agenda del día</h3>
-                <Link to="/agenda"><Button size="sm" variant="outline">Vista cliente</Button></Link>
-              </div>
-              <div className="mt-3 space-y-2">
-                {dayAppointments.map((appointment) => (
-                  <div key={appointment.id} className="border border-velum-200 p-3">
-                    <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <p className="text-sm font-semibold text-velum-900">
-                          {new Date(appointment.startAt).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })} - {new Date(appointment.endAt).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}
-                        </p>
-                        <p className="text-xs text-velum-500">
-                          {resolveAppointmentMember(appointment)} · {appointment.cabin?.name ?? 'Sin cabina'}
-                        </p>
-                      </div>
-                      <span className={`text-[10px] uppercase tracking-widest border px-2 py-1 ${statusPill(appointment.status)}`}>
-                        {statusLabel(appointment.status)}
-                      </span>
-                    </div>
-                    {(appointment.status === 'scheduled' || appointment.status === 'confirmed') && (
-                      <div className="mt-2 flex flex-wrap gap-2">
-                        {appointment.status === 'scheduled' && (
-                          <Button size="sm" variant="outline" onClick={() => handleAgendaAppointmentAction(appointment.id, 'confirm', 'Cita confirmada.')} disabled={isAgendaSaving}>
-                            Confirmar
-                          </Button>
-                        )}
-                        <Button size="sm" variant="outline" onClick={() => openSessionModalForAppointment(appointment)} disabled={isAgendaSaving}>
-                          Completar
-                        </Button>
-                        <Button size="sm" variant="outline" onClick={() => handleAgendaAppointmentAction(appointment.id, 'mark_no_show', 'Cita marcada como no-show.')} disabled={isAgendaSaving}>
-                          No-show
-                        </Button>
-                        {cancelConfirmApptId === appointment.id ? (
-                          <div className="inline-flex items-center gap-1">
-                            <Button size="sm" variant="outline" className="text-red-700 border-red-300" onClick={() => confirmCancelAppointment(appointment.id)} disabled={isAgendaSaving}>
-                              Confirmar
-                            </Button>
-                            <Button size="sm" variant="outline" onClick={() => setCancelConfirmApptId(null)} disabled={isAgendaSaving}>
-                              Mantener
-                            </Button>
-                          </div>
-                        ) : (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="text-red-700 border-red-300 hover:bg-red-600 hover:text-white"
-                            onClick={() => handleAgendaCancelAppointment(appointment.id)}
-                            disabled={isAgendaSaving}
-                          >
-                            Cancelar
-                          </Button>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                ))}
-                {dayAppointments.length === 0 && (
-                  <p className="text-sm text-velum-500">No hay citas registradas para esta fecha.</p>
-                )}
-              </div>
-            </div>
-          </div>
+          )}
         </div>
       </div>
     );
   };
 
-  const renderCobranza = () => (
-    <div className="bg-white border border-velum-200 shadow-sm">
-      <div className="p-5 border-b border-velum-200">
-        <h3 className="text-lg font-serif text-velum-900">Pipeline de cobranza</h3>
-        <p className="text-xs text-velum-500 uppercase tracking-widest mt-1">Recuperación y normalización de cuentas</p>
-      </div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-left text-sm">
-          <thead className="bg-velum-50 text-[10px] uppercase font-bold text-velum-600">
-            <tr>
-              <th className="p-4">Socio</th>
-              <th className="p-4">Estado</th>
-              <th className="p-4">Monto</th>
-              <th className="p-4">Riesgo</th>
-              <th className="p-4">Acciones</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-velum-100">
-            {analytics.collectionQueue.map((member) => {
-              const risk = riskOfMember(member);
-              return (
-                <tr key={member.id}>
-                  <td className="p-4">
-                    <p className="font-semibold">{member.name}</p>
-                    <p className="text-xs text-velum-500">{member.email}</p>
-                  </td>
-                  <td className="p-4">
-                    <span className={`inline-flex text-[10px] uppercase tracking-widest border px-2 py-1 ${statusPill(member.subscriptionStatus)}`}>
-                      {statusLabel(member.subscriptionStatus)}
-                    </span>
-                  </td>
-                  <td className="p-4">{formatMoney(member.amount ?? 0)}</td>
-                  <td className="p-4 text-xs uppercase tracking-widest">
-                    {risk === 'critical' ? 'Crítico' : risk === 'warning' ? 'Atención' : 'OK'}
-                  </td>
-                  <td className="p-4">
-                    <div className="flex flex-wrap gap-2">
-                      <Button size="sm" variant="secondary" onClick={() => handleUpdateMember(member.id, 'active')}>
-                        Regularizar
-                      </Button>
-                      <Button size="sm" variant="outline" onClick={() => handleOpenMemberDrawer(member)}>
-                        Abrir
-                      </Button>
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
-            {analytics.collectionQueue.length === 0 && (
-              <tr>
-                <td colSpan={5} className="p-6 text-center text-sm text-velum-500">No hay cuentas en cobranza activa.</td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
+  // ─── Section: Riesgos ─────────────────────────────────────────────────────
 
-  const renderRiesgos = () => (
-    <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-white border border-velum-200 p-5">
-          <p className="text-[10px] uppercase tracking-widest text-velum-500">Críticos</p>
-          <p className="text-3xl font-serif text-velum-900 mt-2">{analytics.highRiskMembers.length}</p>
+  const renderRiesgos = () => {
+    const critical = members.filter((m) => riskOfMember(m) === 'critical');
+    const warning = members.filter((m) => riskOfMember(m) === 'warning');
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-serif text-velum-900">Riesgos</h1>
+          <p className="text-sm text-velum-500 mt-1">Monitoreo de exposición operativa y clínica</p>
         </div>
-        <div className="bg-white border border-velum-200 p-5">
-          <p className="text-[10px] uppercase tracking-widest text-velum-500">Auditorías fallidas</p>
-          <p className="text-3xl font-serif text-velum-900 mt-2">{analytics.failedAudits}</p>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <KpiCard icon={<AlertTriangle size={18} />} label="Críticos" value={critical.length} accent={critical.length > 0 ? 'text-red-600' : 'text-velum-900'} />
+          <KpiCard icon={<CircleAlert size={18} />} label="En atención" value={warning.length} accent={warning.length > 0 ? 'text-amber-600' : 'text-velum-900'} />
+          <KpiCard icon={<ShieldCheck size={18} />} label="Sin consentimiento" value={members.filter((m) => !m.clinical?.consentFormSigned).length} />
+          <KpiCard icon={<Activity size={18} />} label="Eventos fallidos" value={analytics.failedAudits} accent={analytics.failedAudits > 0 ? 'text-red-600' : 'text-velum-900'} />
         </div>
-        <div className="bg-white border border-velum-200 p-5">
-          <p className="text-[10px] uppercase tracking-widest text-velum-500">Eventos sensibles</p>
-          <p className="text-3xl font-serif text-velum-900 mt-2">{analytics.sensitiveEvents}</p>
-        </div>
-      </div>
-
-      <div className="bg-white border border-velum-200 p-5">
-        <h3 className="font-serif text-xl text-velum-900 mb-4">Matriz de riesgos</h3>
-        <div className="space-y-3">
-          {analytics.highRiskMembers.map((member) => (
-            <div key={member.id} className="border border-red-200 bg-red-50 p-4 text-sm">
-              <p className="font-semibold text-red-800">{member.name}</p>
-              <p className="text-xs text-red-700 mt-1">
-                Estado: {statusLabel(member.subscriptionStatus)} · Consentimiento: {member.clinical?.consentFormSigned ? 'Firmado' : 'Pendiente'}
-              </p>
-              <div className="mt-3 flex gap-2">
-                <Button size="sm" variant="outline" className="border-red-300 text-red-700 hover:bg-red-700 hover:text-white" onClick={() => handleOpenMemberDrawer(member)}>
-                  Tomar acción
-                </Button>
-              </div>
+        <div className="bg-white rounded-2xl border border-velum-100 overflow-hidden">
+          {critical.length === 0 && warning.length === 0 ? (
+            <div className="py-16 text-center">
+              <ShieldCheck size={32} className="mx-auto text-emerald-300 mb-3" />
+              <p className="text-sm text-velum-400">No hay socios en situación de riesgo</p>
             </div>
-          ))}
-          {analytics.highRiskMembers.length === 0 && <p className="text-sm text-velum-500">Sin riesgos críticos detectados.</p>}
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-velum-100 bg-velum-50/50">
+                    {['Socio', 'Estado', 'Consentimiento', 'Expediente', 'Nivel', 'Acciones'].map((h) => (
+                      <th key={h} className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-widest text-velum-400">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {[...critical, ...warning].map((m, i) => {
+                    const risk = riskOfMember(m);
+                    const intake = intakeStatusLabel(m.intakeStatus);
+                    return (
+                      <tr key={m.id} className={`hover:bg-velum-50 transition ${i < critical.length + warning.length - 1 ? 'border-b border-velum-50' : ''} ${risk === 'critical' ? 'bg-red-50/30' : ''}`}>
+                        <td className="px-4 py-3">
+                          <p className="font-medium text-velum-900">{m.name}</p>
+                          <p className="text-xs text-velum-400">{m.email}</p>
+                        </td>
+                        <td className="px-4 py-3"><Pill label={statusLabel(m.subscriptionStatus)} cls={statusPill(m.subscriptionStatus)} /></td>
+                        <td className="px-4 py-3">
+                          <span className={`text-xs font-medium ${m.clinical?.consentFormSigned ? 'text-emerald-600' : 'text-red-500'}`}>
+                            {m.clinical?.consentFormSigned ? 'Firmado' : 'Sin firma'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3"><Pill label={intake.label} cls={intake.cls} /></td>
+                        <td className="px-4 py-3">
+                          <span className={`inline-flex items-center gap-1.5 text-xs font-bold ${risk === 'critical' ? 'text-red-600' : 'text-amber-600'}`}>
+                            <span className={`w-2 h-2 rounded-full ${risk === 'critical' ? 'bg-red-500' : 'bg-amber-400'}`} />
+                            {risk === 'critical' ? 'Crítico' : 'Atención'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <button onClick={() => handleOpenMemberDrawer(m)} className="text-xs text-velum-600 hover:text-velum-900 transition font-medium">Ver perfil</button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       </div>
-    </div>
-  );
+    );
+  };
+
+  // ─── Section: Cumplimiento ────────────────────────────────────────────────
 
   const renderCumplimiento = () => (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-        <div className="bg-white border border-velum-200 p-5">
-          <p className="text-[10px] uppercase tracking-widest text-velum-500">Firmas de consentimiento</p>
-          <p className="text-3xl font-serif text-velum-900 mt-2">{analytics.expedientesFirmados}</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-serif text-velum-900">Cumplimiento</h1>
+          <p className="text-sm text-velum-500 mt-1">Bitácora de auditoría y control de acceso</p>
         </div>
-        <div className="bg-white border border-velum-200 p-5">
-          <p className="text-[10px] uppercase tracking-widest text-velum-500">Pendientes regulatorios</p>
-          <p className="text-3xl font-serif text-velum-900 mt-2">{analytics.expedientesPendientes}</p>
-        </div>
-        <div className="bg-white border border-velum-200 p-5">
-          <p className="text-[10px] uppercase tracking-widest text-velum-500">Eventos fallidos</p>
-          <p className="text-3xl font-serif text-velum-900 mt-2">{analytics.failedAudits}</p>
-        </div>
-        <div className="bg-white border border-velum-200 p-5">
-          <p className="text-[10px] uppercase tracking-widest text-velum-500">Usuarios con acceso</p>
-          <p className="text-3xl font-serif text-velum-900 mt-2">{allowedRoles.length}</p>
-        </div>
+        <button onClick={loadData} className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-velum-200 bg-white text-sm text-velum-600 hover:bg-velum-50 transition">
+          <RefreshCw size={14} />Actualizar
+        </button>
       </div>
-
-      <div className="bg-white border border-velum-200 shadow-sm">
-        <div className="p-5 border-b border-velum-200 flex items-center justify-between">
-          <div>
-            <h3 className="text-lg font-serif text-velum-900">Bitácora de cumplimiento</h3>
-            <p className="text-xs text-velum-500 uppercase tracking-widest mt-1">Trazabilidad y evidencia</p>
-          </div>
-          <Button variant="outline" size="sm" onClick={loadData} className="gap-2">
-            <RefreshCw size={14} />
-            Actualizar
-          </Button>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <KpiCard icon={<CheckCheck size={18} />} label="Firmas de consentimiento" value={analytics.expedientesFirmados} accent="text-emerald-700" />
+        <KpiCard icon={<AlertTriangle size={18} />} label="Eventos fallidos" value={analytics.failedAudits} accent={analytics.failedAudits > 0 ? 'text-red-600' : 'text-velum-900'} />
+        <KpiCard icon={<Activity size={18} />} label="Eventos sensibles" value={analytics.sensitiveEvents} />
+        <KpiCard icon={<Users size={18} />} label="Usuarios con acceso" value={members.filter((m) => m.role !== 'member').length + 1} />
+      </div>
+      <div className="bg-white rounded-2xl border border-velum-100 overflow-hidden">
+        <div className="px-5 py-4 border-b border-velum-100">
+          <p className="text-xs font-bold uppercase tracking-widest text-velum-500">Bitácora de auditoría</p>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-velum-50 text-[10px] uppercase font-bold text-velum-600">
-              <tr>
-                <th className="p-3">Timestamp</th>
-                <th className="p-3">Usuario</th>
-                <th className="p-3">Acción</th>
-                <th className="p-3">IP</th>
-                <th className="p-3">Status</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-velum-100">
-              {auditLogs.slice(0, 200).map((log) => (
-                <tr key={log.id} className="hover:bg-velum-50">
-                  <td className="p-3 text-xs text-velum-500">{log.timestamp}</td>
-                  <td className="p-3 text-xs">{log.user} ({log.role})</td>
-                  <td className="p-3 text-xs">{log.action} - {log.resource}</td>
-                  <td className="p-3 text-xs text-velum-500">{log.ip}</td>
-                  <td className="p-3 text-xs uppercase">
-                    <span className={`inline-flex px-2 py-1 border ${log.status === 'failed' ? 'bg-red-50 border-red-200 text-red-700' : 'bg-emerald-50 border-emerald-200 text-emerald-700'}`}>
-                      {log.status}
-                    </span>
-                  </td>
+        {auditLogs.length === 0 ? (
+          <div className="py-12 text-center text-xs text-velum-400">Sin registros de auditoría disponibles</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b border-velum-100 bg-velum-50/50">
+                  {['Timestamp', 'Usuario', 'Acción', 'IP', 'Estado'].map((h) => (
+                    <th key={h} className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-widest text-velum-400">{h}</th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {auditLogs.map((log, i) => (
+                  <tr key={log.id ?? i} className={`hover:bg-velum-50 transition ${i < auditLogs.length - 1 ? 'border-b border-velum-50' : ''}`}>
+                    <td className="px-4 py-3 text-velum-400 whitespace-nowrap font-mono">
+                      {new Date(log.timestamp).toLocaleString('es-MX', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                    </td>
+                    <td className="px-4 py-3 text-velum-700 max-w-[140px] truncate">{log.user ?? '—'}</td>
+                    <td className="px-4 py-3 text-velum-500 font-mono max-w-[200px] truncate">{log.action}</td>
+                    <td className="px-4 py-3 text-velum-400 font-mono">{log.ip ?? '—'}</td>
+                    <td className="px-4 py-3">
+                      <span className={`inline-flex items-center gap-1 text-xs font-medium ${log.status === 'success' ? 'text-emerald-600' : 'text-red-600'}`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${log.status === 'success' ? 'bg-emerald-500' : 'bg-red-500'}`} />
+                        {log.status === 'success' ? 'OK' : 'ERROR'}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   );
 
-  const renderGeneralSettingsCategory = () => (
-    <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-        <div className="bg-white border border-velum-200 p-5">
-          <p className="text-[10px] uppercase tracking-widest text-velum-500">Política de acceso</p>
-          <p className="text-sm font-semibold text-velum-900 mt-2">RBAC activo</p>
-          <p className="text-xs text-velum-500 mt-1">Control por roles admin/staff/system.</p>
-        </div>
-        <div className="bg-white border border-velum-200 p-5">
-          <p className="text-[10px] uppercase tracking-widest text-velum-500">Controles de auditoría</p>
-          <p className="text-sm font-semibold text-velum-900 mt-2">Bitácora trazable</p>
-          <p className="text-xs text-velum-500 mt-1">Registro de acciones sensibles habilitado.</p>
-        </div>
-        <div className="bg-white border border-velum-200 p-5">
-          <p className="text-[10px] uppercase tracking-widest text-velum-500">Operación clínica</p>
-          <p className="text-sm font-semibold text-velum-900 mt-2">Checklist activo</p>
-          <p className="text-xs text-velum-500 mt-1">Expediente + consentimiento antes de sesión.</p>
+  // ─── Section: Configuraciones ─────────────────────────────────────────────
+
+  const configTabs: Array<{ id: SettingsCategory; label: string }> = [
+    { id: 'agenda', label: 'Agenda' },
+    { id: 'usuarios_permisos', label: 'Usuarios' },
+    { id: 'whatsapp_business', label: 'WhatsApp' },
+    { id: 'stripe', label: 'Stripe' },
+    { id: 'meta', label: 'Integraciones' }
+  ];
+
+  const renderAgendaSettings = () => (
+    <div className="space-y-8">
+      {/* Google Calendar */}
+      <AgendaIntegrations
+        status={googleIntegrationStatus}
+        isLoading={isGoogleIntegrationLoading}
+        isSaving={isGoogleIntegrationSaving}
+        message={googleIntegrationMessage}
+        canManage={canManageGoogleIntegration}
+        onConnect={handleGoogleConnect}
+        onDisconnect={handleGoogleDisconnect}
+        onChangeMode={handleGoogleModeChange}
+      />
+
+      {/* Policy */}
+      <div className="bg-white rounded-2xl border border-velum-100 p-6 space-y-5">
+        <p className="text-xs font-bold uppercase tracking-widest text-velum-500">Política de agenda</p>
+        <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+          <div>
+            <label className="block text-xs font-bold uppercase tracking-widest text-velum-400 mb-2">Zona horaria</label>
+            <input value={agendaPolicyDraft.timezone} onChange={(e) => updateAgendaPolicyField('timezone', e.target.value)}
+              className="w-full rounded-xl border border-velum-200 px-3 py-2.5 text-sm focus:outline-none focus:border-velum-900 transition" />
+          </div>
+          <div>
+            <label className="block text-xs font-bold uppercase tracking-widest text-velum-400 mb-2">Intervalo de slot (min)</label>
+            <select value={agendaPolicyDraft.slotMinutes} onChange={(e) => updateAgendaPolicyField('slotMinutes', Number(e.target.value))}
+              className="w-full rounded-xl border border-velum-200 px-3 py-2.5 text-sm focus:outline-none focus:border-velum-900 transition bg-white">
+              {[10, 15, 20, 30, 45, 60, 90, 120].map((v) => <option key={v} value={v}>{v} min</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-bold uppercase tracking-widest text-velum-400 mb-2">Auto-confirmar (horas)</label>
+            <input type="number" min="0" max="72" value={agendaPolicyDraft.autoConfirmHours} onChange={(e) => updateAgendaPolicyField('autoConfirmHours', Number(e.target.value))}
+              className="w-full rounded-xl border border-velum-200 px-3 py-2.5 text-sm focus:outline-none focus:border-velum-900 transition" />
+          </div>
+          <div>
+            <label className="block text-xs font-bold uppercase tracking-widest text-velum-400 mb-2">Gracia no-show (min)</label>
+            <input type="number" min="5" max="240" value={agendaPolicyDraft.noShowGraceMinutes} onChange={(e) => updateAgendaPolicyField('noShowGraceMinutes', Number(e.target.value))}
+              className="w-full rounded-xl border border-velum-200 px-3 py-2.5 text-sm focus:outline-none focus:border-velum-900 transition" />
+          </div>
+          <div>
+            <label className="block text-xs font-bold uppercase tracking-widest text-velum-400 mb-2">Anticipación mínima (min)</label>
+            <input type="number" min="0" value={agendaPolicyDraft.minAdvanceMinutes} onChange={(e) => updateAgendaPolicyField('minAdvanceMinutes', Number(e.target.value))}
+              className="w-full rounded-xl border border-velum-200 px-3 py-2.5 text-sm focus:outline-none focus:border-velum-900 transition" />
+          </div>
+          <div>
+            <label className="block text-xs font-bold uppercase tracking-widest text-velum-400 mb-2">Máx. días de anticipación</label>
+            <input type="number" min="1" max="365" value={agendaPolicyDraft.maxAdvanceDays} onChange={(e) => updateAgendaPolicyField('maxAdvanceDays', Number(e.target.value))}
+              className="w-full rounded-xl border border-velum-200 px-3 py-2.5 text-sm focus:outline-none focus:border-velum-900 transition" />
+          </div>
+          <div>
+            <label className="block text-xs font-bold uppercase tracking-widest text-velum-400 mb-2">Citas activas/semana</label>
+            <input type="number" min="1" max="50" value={agendaPolicyDraft.maxActiveAppointmentsPerWeek} onChange={(e) => updateAgendaPolicyField('maxActiveAppointmentsPerWeek', Number(e.target.value))}
+              className="w-full rounded-xl border border-velum-200 px-3 py-2.5 text-sm focus:outline-none focus:border-velum-900 transition" />
+          </div>
+          <div>
+            <label className="block text-xs font-bold uppercase tracking-widest text-velum-400 mb-2">Citas activas/mes</label>
+            <input type="number" min="1" max="200" value={agendaPolicyDraft.maxActiveAppointmentsPerMonth} onChange={(e) => updateAgendaPolicyField('maxActiveAppointmentsPerMonth', Number(e.target.value))}
+              className="w-full rounded-xl border border-velum-200 px-3 py-2.5 text-sm focus:outline-none focus:border-velum-900 transition" />
+          </div>
         </div>
       </div>
 
-      <div className="bg-white border border-velum-200 p-5">
-        <h3 className="font-serif text-xl text-velum-900 mb-4">Configuración avanzada sugerida</h3>
-        <div className="space-y-3 text-sm">
-          <div className="border border-velum-200 p-3 flex items-center justify-between">
-            <span className="flex items-center gap-2"><ShieldCheck size={14} /> Rotación obligatoria de contraseña admin</span>
-            <span className="text-xs uppercase tracking-widest text-velum-500">Recomendado</span>
+      {/* Cabins */}
+      <div className="bg-white rounded-2xl border border-velum-100 p-6 space-y-4">
+        <div className="flex items-center justify-between">
+          <p className="text-xs font-bold uppercase tracking-widest text-velum-500">Cabinas</p>
+          <button onClick={addCabinDraft} className="text-xs px-3 py-1.5 rounded-lg bg-velum-900 text-white hover:bg-velum-800 transition">+ Agregar</button>
+        </div>
+        {agendaCabinsDraft.length === 0 ? (
+          <p className="text-xs text-velum-400 text-center py-4">Sin cabinas configuradas</p>
+        ) : (
+          <div className="space-y-3">
+            {agendaCabinsDraft.map((cabin) => (
+              <div key={cabin.id} className="flex items-center gap-3 p-3 rounded-xl bg-velum-50 border border-velum-100">
+                <input value={cabin.name} onChange={(e) => updateCabinDraftField(cabin.id, { name: e.target.value })}
+                  className="flex-1 rounded-lg border border-velum-200 px-3 py-2 text-sm focus:outline-none focus:border-velum-900 transition bg-white" placeholder="Nombre de la cabina" />
+                <label className="flex items-center gap-1.5 text-xs text-velum-600 cursor-pointer">
+                  <input type="checkbox" checked={cabin.isActive} onChange={(e) => updateCabinDraftField(cabin.id, { isActive: e.target.checked })} className="rounded" />
+                  Activa
+                </label>
+                <button onClick={() => removeCabinDraft(cabin.id)} className="p-1.5 rounded-lg text-velum-400 hover:text-red-600 hover:bg-red-50 transition"><Trash2 size={14} /></button>
+              </div>
+            ))}
           </div>
-          <div className="border border-velum-200 p-3 flex items-center justify-between">
-            <span className="flex items-center gap-2"><FileText size={14} /> Política de retención documental clínica</span>
-            <span className="text-xs uppercase tracking-widest text-velum-500">Recomendado</span>
+        )}
+      </div>
+
+      {/* Treatments */}
+      <div className="bg-white rounded-2xl border border-velum-100 p-6 space-y-4">
+        <div className="flex items-center justify-between">
+          <p className="text-xs font-bold uppercase tracking-widest text-velum-500">Tratamientos</p>
+          <button onClick={addTreatmentDraft} className="text-xs px-3 py-1.5 rounded-lg bg-velum-900 text-white hover:bg-velum-800 transition">+ Agregar</button>
+        </div>
+        {agendaTreatmentsDraft.length === 0 ? (
+          <p className="text-xs text-velum-400 text-center py-4">Sin tratamientos configurados</p>
+        ) : (
+          <div className="space-y-4">
+            {agendaTreatmentsDraft.map((t) => (
+              <div key={t.id} className="p-4 rounded-xl bg-velum-50 border border-velum-100 space-y-3">
+                <div className="flex items-center gap-3">
+                  <input value={t.name} onChange={(e) => updateTreatmentDraftField(t.id, { name: e.target.value })}
+                    className="flex-1 rounded-lg border border-velum-200 px-3 py-2 text-sm bg-white focus:outline-none focus:border-velum-900 transition" placeholder="Nombre del tratamiento" />
+                  <input value={t.code} onChange={(e) => updateTreatmentDraftField(t.id, { code: e.target.value.toLowerCase() })}
+                    className="w-32 rounded-lg border border-velum-200 px-3 py-2 text-sm font-mono bg-white focus:outline-none focus:border-velum-900 transition" placeholder="codigo" />
+                  <label className="flex items-center gap-1.5 text-xs text-velum-600 cursor-pointer shrink-0">
+                    <input type="checkbox" checked={t.isActive} onChange={(e) => updateTreatmentDraftField(t.id, { isActive: e.target.checked })} className="rounded" />
+                    Activo
+                  </label>
+                  <button onClick={() => removeTreatmentDraft(t.id)} className="p-1.5 rounded-lg text-velum-400 hover:text-red-600 hover:bg-red-50 transition"><Trash2 size={14} /></button>
+                </div>
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-[10px] text-velum-400 mb-1 font-bold uppercase tracking-wider">Duración (min)</label>
+                    <input type="number" min="10" step="5" value={t.durationMinutes} onChange={(e) => updateTreatmentDraftField(t.id, { durationMinutes: Number(e.target.value) })}
+                      className="w-full rounded-lg border border-velum-200 px-3 py-2 text-sm bg-white focus:outline-none focus:border-velum-900 transition" />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-velum-400 mb-1 font-bold uppercase tracking-wider">Buffer prep (min)</label>
+                    <input type="number" min="0" value={t.prepBufferMinutes ?? 0} onChange={(e) => updateTreatmentDraftField(t.id, { prepBufferMinutes: Number(e.target.value) })}
+                      className="w-full rounded-lg border border-velum-200 px-3 py-2 text-sm bg-white focus:outline-none focus:border-velum-900 transition" />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-velum-400 mb-1 font-bold uppercase tracking-wider">Buffer limpieza (min)</label>
+                    <input type="number" min="0" value={t.cleanupBufferMinutes ?? 0} onChange={(e) => updateTreatmentDraftField(t.id, { cleanupBufferMinutes: Number(e.target.value) })}
+                      className="w-full rounded-lg border border-velum-200 px-3 py-2 text-sm bg-white focus:outline-none focus:border-velum-900 transition" />
+                  </div>
+                </div>
+                {agendaCabinsDraft.length > 0 && (
+                  <div>
+                    <label className="flex items-center gap-2 text-xs text-velum-600 cursor-pointer mb-2">
+                      <input type="checkbox" checked={t.requiresSpecificCabin} onChange={(e) => updateTreatmentDraftField(t.id, { requiresSpecificCabin: e.target.checked })} className="rounded" />
+                      Requiere cabina específica
+                    </label>
+                    <div className="flex flex-wrap gap-2">
+                      {agendaCabinsDraft.map((cabin) => (
+                        <label key={cabin.id} className="flex items-center gap-1.5 text-xs text-velum-600 cursor-pointer">
+                          <input type="checkbox" checked={(t.allowedCabinIds ?? []).includes(cabin.id)}
+                            onChange={(e) => toggleTreatmentCabinAllowed(t.id, cabin.id, e.target.checked)} className="rounded" />
+                          {cabin.name}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
           </div>
-          <div className="border border-velum-200 p-3 flex items-center justify-between">
-            <span className="flex items-center gap-2"><Activity size={14} /> Monitoreo semanal de riesgo operacional</span>
-            <span className="text-xs uppercase tracking-widest text-velum-500">Recomendado</span>
-          </div>
+        )}
+      </div>
+
+      {/* Weekly rules */}
+      <div className="bg-white rounded-2xl border border-velum-100 p-6 space-y-4">
+        <p className="text-xs font-bold uppercase tracking-widest text-velum-500">Horarios semanales</p>
+        <div className="space-y-2">
+          {agendaWeeklyRulesDraft.map((rule) => (
+            <div key={rule.dayOfWeek} className="flex items-center gap-4 py-2 border-b border-velum-50 last:border-0">
+              <label className="flex items-center gap-2 w-32 text-sm text-velum-700 cursor-pointer">
+                <input type="checkbox" checked={rule.isOpen} onChange={(e) => updateWeeklyRuleField(rule.dayOfWeek, { isOpen: e.target.checked })} className="rounded" />
+                {weekDayLabel[rule.dayOfWeek]}
+              </label>
+              {rule.isOpen && (
+                <div className="flex items-center gap-2 text-sm">
+                  <input type="number" min="0" max="23" value={rule.startHour} onChange={(e) => updateWeeklyRuleField(rule.dayOfWeek, { startHour: Number(e.target.value) })}
+                    className="w-16 rounded-lg border border-velum-200 px-2 py-1.5 text-sm text-center focus:outline-none focus:border-velum-900 transition" />
+                  <span className="text-velum-400">—</span>
+                  <input type="number" min="1" max="24" value={rule.endHour} onChange={(e) => updateWeeklyRuleField(rule.dayOfWeek, { endHour: Number(e.target.value) })}
+                    className="w-16 rounded-lg border border-velum-200 px-2 py-1.5 text-sm text-center focus:outline-none focus:border-velum-900 transition" />
+                  <span className="text-xs text-velum-400">hrs</span>
+                </div>
+              )}
+              {!rule.isOpen && <span className="text-xs text-velum-400 italic">Cerrado</span>}
+            </div>
+          ))}
         </div>
       </div>
+
+      {/* Save */}
+      {agendaMessage && (
+        <div className={`p-4 rounded-xl text-sm ${agendaMessage.type === 'ok' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
+          {agendaMessage.text}
+        </div>
+      )}
+      <button onClick={saveAgendaConfiguration} disabled={isAgendaConfigSaving}
+        className="w-full bg-velum-900 text-white rounded-xl py-3 text-sm font-medium hover:bg-velum-800 transition disabled:opacity-50">
+        {isAgendaConfigSaving ? 'Guardando configuración...' : 'Guardar configuración de agenda'}
+      </button>
     </div>
   );
 
-
-const renderConfiguracionesV2 = () => {
-  const configTabs = [
-    { key: "general", label: "General" },
-    { key: "usuarios_permisos", label: "Usuarios y permisos" },
-    { key: "logs", label: "Logs" },
-    { key: "cumplimiento", label: "Cumplimiento" },
-    { key: "riesgos", label: "Riesgos" },
-    { key: "agenda", label: "Agenda" },
-    { key: "meta", label: "Meta" },
-    { key: "stripe", label: "Stripe" },
-    { key: "whatsapp_business", label: "WhatsApp Business" },
-  ] as const;
-
-  return (
+  const renderConfiguraciones = () => (
     <div className="space-y-6">
-      <div className="bg-white border border-velum-200 p-2 inline-flex flex-wrap items-center gap-2">
+      <div>
+        <h1 className="text-2xl font-serif text-velum-900">Configuraciones</h1>
+        <p className="text-sm text-velum-500 mt-1">Parámetros del sistema e integraciones</p>
+      </div>
+      {/* Sub-tabs */}
+      <div className="flex gap-1 bg-velum-100 p-1 rounded-xl w-fit">
         {configTabs.map((tab) => (
-          <Button
-            key={tab.key}
-            size="sm"
-            variant={settingsCategory === tab.key ? "secondary" : "outline"}
-            onClick={() => setSettingsCategory(tab.key as any)}
-          >
+          <button key={tab.id} onClick={() => setSettingsCategory(tab.id)}
+            className={`px-4 py-2 rounded-lg text-xs font-medium transition ${settingsCategory === tab.id ? 'bg-white text-velum-900 shadow-sm' : 'text-velum-500 hover:text-velum-700'}`}>
             {tab.label}
-          </Button>
+          </button>
         ))}
       </div>
-
-      {settingsCategory === "agenda" ? (
-        renderAgendaSettingsCategory()
-      ) : settingsCategory === "usuarios_permisos" ? (
-        <AdminUsersPermissions embedded />
-      ) : settingsCategory === "logs" ? (
-        renderCumplimiento()
-      ) : settingsCategory === "cumplimiento" ? (
-        renderCumplimiento()
-      ) : settingsCategory === "riesgos" ? (
-        renderRiesgos()
-      ) : settingsCategory === "meta" ? (
-        <div className="bg-white border border-velum-200 p-6 space-y-3">
-          <h3 className="text-lg font-serif text-velum-900">Meta</h3>
-          <p className="text-sm text-velum-600">
-            Configuración de credenciales y parámetros para campañas de marketing.
-          </p>
-          <p className="text-xs text-velum-500">
-            Si quieres, aquí conectamos endpoints reales en el siguiente paso.
-          </p>
+      {settingsCategory === 'agenda' && renderAgendaSettings()}
+      {settingsCategory === 'usuarios_permisos' && <AdminUsersPermissions embedded />}
+      {settingsCategory === 'whatsapp_business' && <AdminWhatsAppSettings embedded />}
+      {settingsCategory === 'stripe' && <AdminStripeSettings embedded />}
+      {settingsCategory === 'meta' && (
+        <div className="bg-white rounded-2xl border border-velum-100 p-6">
+          <p className="text-xs font-bold uppercase tracking-widest text-velum-500 mb-2">Integraciones externas</p>
+          <p className="text-sm text-velum-500">Google Calendar está disponible en la pestaña Agenda.</p>
         </div>
-      ) : settingsCategory === "stripe" ? (
-        <div className="space-y-2">
-          <div className="bg-velum-50 border border-velum-200 rounded-2xl px-5 py-3">
-            <p className="text-xs text-velum-500 uppercase tracking-widest">Stripe — Pagos y suscripciones</p>
-            <p className="text-xs text-velum-400 mt-1">
-              Configura las claves de API de Stripe y el catálogo de planes de membresía.
-            </p>
-          </div>
-          <AdminStripeSettings embedded />
-        </div>
-      ) : settingsCategory === "whatsapp_business" ? (
-        <div className="space-y-2">
-          <div className="bg-velum-50 border border-velum-200 rounded-2xl px-5 py-3">
-            <p className="text-xs text-velum-500 uppercase tracking-widest">WhatsApp Business — Integración Meta Cloud API</p>
-            <p className="text-xs text-velum-400 mt-1">
-              Configura el canal OTP vía WhatsApp para cambios de contraseña e identificación de usuarios.
-              Requiere aprobación de Meta Business y un template activo.
-            </p>
-          </div>
-          <AdminWhatsAppSettings embedded />
-        </div>
-      ) : (
-        renderGeneralSettingsCategory()
       )}
     </div>
   );
-};
 
-const renderSection = () => {
+  // ─── Section dispatcher ───────────────────────────────────────────────────
+
+  const renderSection = () => {
+    if (isLoadingData) {
+      return (
+        <div className="space-y-4">
+          {[1, 2, 3, 4].map((i) => <div key={i} className="h-24 bg-velum-100 rounded-2xl animate-pulse" />)}
+        </div>
+      );
+    }
     switch (activeSection) {
-      case 'control':
-        return renderControl();
-      case 'socios':
-        return renderSocios();
-      case 'kpis':
-        return renderKpis();
-      case 'finanzas':
-        return renderFinanzas();
-      case 'expedientes':
-        return renderExpedientes();
-      case 'agenda':
-        return renderAgenda();
-      case 'cobranza':
-        return renderCobranza();
-      case 'riesgos':
-        return renderRiesgos();
-      case 'cumplimiento':
-        return renderCumplimiento();
-      case 'configuraciones': return renderConfiguracionesV2();
-      default:
-        return renderControl();
+      case 'control': return renderControl();
+      case 'socios': return renderSocios();
+      case 'kpis': return renderKPIs();
+      case 'finanzas': return renderFinanzas();
+      case 'expedientes': return renderExpedientes();
+      case 'agenda': return renderAgenda();
+      case 'cobranza': return renderCobranza();
+      case 'riesgos': return renderRiesgos();
+      case 'cumplimiento': return renderCumplimiento();
+      case 'configuraciones': return renderConfiguraciones();
+      default: return null;
     }
   };
 
-  if (!isAuthenticated) {
+  // ─── Login form ───────────────────────────────────────────────────────────
+
+  if (isAuthLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-velum-50 px-4">
-        <div className="max-w-md w-full bg-white p-10 border border-velum-200 shadow-2xl animate-fade-in-up">
-          <div className="flex justify-center mb-8">
-            <VelumLogo className="h-16 w-auto text-velum-900" />
-          </div>
+      <div className="min-h-screen bg-velum-50 flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-velum-900 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (!isAuthenticated || !hasAccess) {
+    return (
+      <div className="min-h-screen bg-velum-50 flex items-center justify-center p-4">
+        <div className="w-full max-w-sm">
           <div className="text-center mb-8">
-            <h2 className="font-serif text-2xl text-velum-900 italic">Portal Corporativo</h2>
-            <p className="text-xs text-velum-500 uppercase tracking-widest mt-2">CRM + ERP Clínico Empresarial</p>
+            <VelumLogo className="h-8 w-auto mx-auto mb-6 opacity-90" />
+            <h1 className="text-2xl font-serif text-velum-900">Acceso administrativo</h1>
+            <p className="text-sm text-velum-500 mt-2">Solo personal autorizado</p>
           </div>
-          <form onSubmit={handleLogin} className="space-y-6">
-            <div>
-              <label className="block text-xs uppercase tracking-widest text-velum-600 mb-2 font-bold">ID Administrativo</label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full p-3 border border-velum-300 bg-velum-50 focus:border-velum-900 outline-none transition-colors text-sm"
-                placeholder="admin@velum.mx"
-              />
-            </div>
-            <div>
-              <label className="block text-xs uppercase tracking-widest text-velum-600 mb-2 font-bold">Clave de Seguridad</label>
-              <PasswordInput
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full p-3 border border-velum-300 bg-velum-50 focus:border-velum-900 outline-none transition-colors text-sm"
-                placeholder="••••••••"
-              />
-            </div>
+          <form onSubmit={handleLogin} className="bg-white rounded-2xl border border-velum-100 shadow-sm p-8 space-y-5">
             {loginError && (
-              <div className="text-red-700 bg-red-50 p-3 text-xs border border-red-100">
-                {loginError}
-              </div>
+              <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-700">{loginError}</div>
             )}
-            <Button type="submit" className="w-full py-4" isLoading={isAuthLoading}>
-              Autenticar
-            </Button>
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-widest text-velum-500 mb-2">Correo electrónico</label>
+              <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoFocus
+                placeholder="admin@velum.mx"
+                className="w-full rounded-xl border border-velum-200 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-velum-900/20 focus:border-velum-900 transition" />
+            </div>
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-widest text-velum-500 mb-2">Contraseña</label>
+              <PasswordInput value={password} onChange={(e) => setPassword(e.target.value)} required
+                className="w-full rounded-xl border border-velum-200 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-velum-900/20 focus:border-velum-900 transition" />
+            </div>
+            <button type="submit" disabled={isAuthLoading}
+              className="w-full bg-velum-900 text-white rounded-xl py-3 text-sm font-medium hover:bg-velum-800 transition disabled:opacity-50">
+              {isAuthLoading ? 'Accediendo...' : 'Acceder al panel'}
+            </button>
           </form>
         </div>
       </div>
     );
   }
 
-  if (!hasAccess) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-velum-50 px-4">
-        <div className="max-w-lg w-full bg-white p-10 border border-velum-200 shadow-xl text-center">
-          <ShieldCheck className="mx-auto mb-4 text-velum-900" size={34} />
-          <h2 className="text-2xl font-serif text-velum-900 mb-2">No autorizado</h2>
-          <p className="text-sm text-velum-600 mb-6">Tu cuenta no tiene permisos para acceder al panel administrativo.</p>
-          <Button onClick={logout}>Cerrar sesión</Button>
-        </div>
-      </div>
-    );
-  }
+  // ─── Main Admin Layout ─────────────────────────────────────────────────────
 
-  const ActiveSectionIcon = sectionMeta[activeSection].icon;
+  const sidebarW = isSidebarCollapsed ? 'w-[68px]' : 'w-[240px]';
+  const contentML = isSidebarCollapsed ? 'ml-[68px]' : 'ml-[240px]';
 
   return (
-    <div className="min-h-screen bg-velum-50 text-velum-900 relative">
-      {selectedMember && renderMemberDrawer()}
-      {sessionModalMember && renderSessionModal()}
-
-      <div className="flex min-h-screen">
-        <aside className={`fixed md:static top-0 left-0 z-40 h-screen w-72 ${isSidebarCollapsed ? 'md:w-24' : 'md:w-72'} bg-velum-900 text-velum-100 border-r border-velum-800 transform transition-all duration-300 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
-          <div className="h-full flex flex-col">
-            <div className={`p-5 border-b border-velum-800 transition-all ${isSidebarCollapsed ? 'md:px-3' : 'md:px-6'}`}>
-              <div className={`flex items-start ${isSidebarCollapsed ? 'justify-center md:justify-between' : 'justify-between'} gap-3`}>
-                <VelumLogo className={isSidebarCollapsed ? 'h-10 w-10 rounded-md object-cover' : 'h-10 w-auto'} />
-                <button
-                  onClick={() => setIsSidebarCollapsed((current) => !current)}
-                  className="hidden md:inline-flex items-center justify-center h-8 w-8 border border-velum-600 text-velum-200 hover:text-white hover:border-velum-300 transition-colors"
-                  aria-label={isSidebarCollapsed ? 'Expandir menú' : 'Contraer menú'}
-                >
-                  {isSidebarCollapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
-                </button>
-              </div>
+    <div className="min-h-screen bg-velum-50">
+      {/* Sidebar */}
+      <aside className={`fixed left-0 top-0 h-full ${sidebarW} bg-velum-900 flex flex-col z-30 transition-all duration-200`}>
+        {/* Logo */}
+        <div className="flex items-center gap-3 px-4 py-5 border-b border-white/10">
+          <VelumLogo className="h-6 w-auto shrink-0 brightness-0 invert" />
+          {!isSidebarCollapsed && <span className="text-white font-serif text-base leading-tight">Velum<br /><span className="text-[10px] font-sans uppercase tracking-widest text-white/50">Admin</span></span>}
+        </div>
+        {/* Nav */}
+        <nav className="flex-1 overflow-y-auto py-4 space-y-0.5 px-2">
+          {sectionGroups.map((group) => (
+            <div key={group.title} className="mb-4">
               {!isSidebarCollapsed && (
-                <div className="mt-4">
-                  <p className="text-xs uppercase tracking-widest text-velum-300">Administrador</p>
-                  <p className="text-sm font-semibold mt-1">{user?.name || user?.email}</p>
-                  <p className="text-xs text-velum-400 uppercase mt-1">Puesto: {roleTitle[user?.role ?? 'staff']}</p>
-                </div>
+                <p className="px-3 mb-1.5 text-[9px] font-bold uppercase tracking-[0.2em] text-white/30">{group.title}</p>
               )}
-              {isSidebarCollapsed && (
-                <p className="hidden md:block mt-3 text-center text-[10px] uppercase tracking-widest text-velum-400">
-                  ERP
-                </p>
-              )}
+              {group.items.map((section) => {
+                const meta = sectionMeta[section];
+                const Icon = meta.icon;
+                const isActive = activeSection === section;
+                return (
+                  <button key={section} onClick={() => setActiveSection(section)}
+                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-all mb-0.5 ${isActive ? 'bg-white/15 text-white font-medium' : 'text-white/50 hover:text-white hover:bg-white/8'}`}
+                    title={isSidebarCollapsed ? meta.label : undefined}>
+                    <Icon size={17} className="shrink-0" />
+                    {!isSidebarCollapsed && <span className="truncate">{meta.label}</span>}
+                  </button>
+                );
+              })}
             </div>
-
-            <nav className="flex-1 p-3 space-y-4 overflow-y-auto">
-              {sectionGroups.map((group) => (
-                <div key={group.title} className="space-y-1">
-                  {!isSidebarCollapsed && <p className="px-3 text-[10px] uppercase tracking-widest text-velum-400">{group.title}</p>}
-                  {group.items.map((sectionKey) => {
-                    const meta = sectionMeta[sectionKey];
-                    const Icon = meta.icon;
-                    const isActive = sectionKey === activeSection;
-                    return (
-                      <button
-                        key={sectionKey}
-                        onClick={() => {
-                          setActiveSection(sectionKey);
-                          setSidebarOpen(false);
-                        }}
-                        className={`w-full flex items-center ${isSidebarCollapsed ? 'md:justify-center' : 'justify-start'} gap-3 px-3 py-3 text-sm rounded transition-colors ${isActive ? 'bg-velum-700 text-white' : 'text-velum-300 hover:bg-velum-800 hover:text-white'}`}
-                        title={meta.label}
-                      >
-                        <Icon size={16} />
-                        {!isSidebarCollapsed && <span>{meta.label}</span>}
-                      </button>
-                    );
-                  })}
-                </div>
-              ))}
-            </nav>
-
-            <div className="p-4 border-t border-velum-800 space-y-3">
-              <Button
-                variant="outline"
-                size="sm"
-                className={`border-velum-500 text-velum-100 hover:bg-velum-700 gap-2 ${isSidebarCollapsed ? 'w-full md:w-auto md:px-3 md:justify-center' : 'w-full'}`}
-                onClick={logout}
-                title="Cerrar sesión"
-              >
-                <LogOut size={14} />
-                {!isSidebarCollapsed && 'Cerrar sesión'}
-              </Button>
+          ))}
+        </nav>
+        {/* Bottom: user + collapse */}
+        <div className="border-t border-white/10 p-3 space-y-1">
+          {!isSidebarCollapsed && (
+            <div className="px-2 py-2">
+              <p className="text-[10px] text-white/30 truncate">{user?.email}</p>
+              <p className="text-[10px] text-white/50">{roleTitle[user?.role as UserRole] ?? user?.role}</p>
             </div>
+          )}
+          <button onClick={logout} className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-white/40 hover:text-white hover:bg-white/10 transition text-sm">
+            <LogOut size={15} className="shrink-0" />
+            {!isSidebarCollapsed && 'Cerrar sesión'}
+          </button>
+          <button onClick={() => setIsSidebarCollapsed((v) => !v)} className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-white/30 hover:text-white/60 transition">
+            <ChevronLeft size={15} className={`shrink-0 transition-transform ${isSidebarCollapsed ? 'rotate-180' : ''}`} />
+            {!isSidebarCollapsed && <span className="text-xs">Colapsar</span>}
+          </button>
+        </div>
+      </aside>
+
+      {/* Top bar */}
+      <header className={`fixed top-0 right-0 ${contentML} h-14 bg-white border-b border-velum-100 z-20 flex items-center justify-between px-6 transition-all duration-200`}>
+        <div className="flex items-center gap-2 text-sm text-velum-700">
+          <span className="text-velum-400 text-xs font-medium uppercase tracking-widest">Admin</span>
+          <ChevronRight size={14} className="text-velum-300" />
+          <span className="font-medium text-velum-900">{sectionMeta[activeSection].label}</span>
+        </div>
+        <div className="flex items-center gap-3">
+          <button onClick={loadData} className="p-2 rounded-xl text-velum-400 hover:text-velum-700 hover:bg-velum-50 transition" title="Actualizar datos">
+            <RefreshCw size={15} className={isLoadingData ? 'animate-spin' : ''} />
+          </button>
+          <div className="w-8 h-8 rounded-full bg-velum-900 flex items-center justify-center text-white text-xs font-bold">
+            {user?.email?.[0]?.toUpperCase() ?? 'A'}
           </div>
-        </aside>
+        </div>
+      </header>
 
-        {sidebarOpen && (
-          <button
-            className="fixed inset-0 bg-black/40 z-30 md:hidden"
-            onClick={() => setSidebarOpen(false)}
-            aria-label="Cerrar menú"
-          />
-        )}
+      {/* Content */}
+      <main className={`${contentML} pt-14 transition-all duration-200`}>
+        <div className="max-w-7xl mx-auto px-6 py-8">
+          {renderSection()}
+        </div>
+      </main>
 
-        <section className="flex-1 md:ml-0 min-w-0">
-          <header className="sticky top-0 z-20 bg-velum-50/95 backdrop-blur border-b border-velum-200 px-4 md:px-8 py-4 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <button className="md:hidden text-velum-900 p-2 border border-velum-300" onClick={() => setSidebarOpen(true)} aria-label="Abrir menú">
-                <Menu size={18} />
-              </button>
-              <div className="flex items-center gap-2">
-                <ActiveSectionIcon size={16} className="text-velum-700" />
-                <div>
-                  <p className="text-[10px] uppercase tracking-widest text-velum-500">CRM + ERP Empresarial</p>
-                  <h1 className="text-xl md:text-2xl font-serif">{sectionMeta[activeSection].label}</h1>
-                </div>
-              </div>
-            </div>
-            <Button variant="outline" size="sm" className="gap-2" onClick={loadData} disabled={isLoadingData}>
-              <RefreshCw size={14} className={isLoadingData ? 'animate-spin' : ''} />
-              Actualizar
-            </Button>
-          </header>
+      {/* Mobile menu toggle */}
+      <button onClick={() => setSidebarOpen(!sidebarOpen)}
+        className="fixed bottom-4 right-4 z-40 md:hidden bg-velum-900 text-white p-3 rounded-full shadow-lg">
+        <Menu size={20} />
+      </button>
 
-          <main className="p-4 md:p-8">
-            {renderSection()}
-          </main>
-        </section>
-      </div>
+      {/* Modals */}
+      {renderSessionModal()}
+      {renderMemberDrawer()}
     </div>
   );
 };
