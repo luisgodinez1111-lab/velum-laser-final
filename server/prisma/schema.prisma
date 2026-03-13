@@ -301,6 +301,7 @@ model AgendaCabin {
   treatments   AgendaTreatment[]
 
   @@index([isActive, sortOrder])
+  treatmentCabinRules AgendaTreatmentCabinRule[]
 }
 
 model AgendaTreatment {

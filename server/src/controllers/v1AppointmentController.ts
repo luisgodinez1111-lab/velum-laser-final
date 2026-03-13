@@ -841,7 +841,7 @@ export const getAdminAgendaConfig = async (_req: AuthRequest, res: Response) => 
 };
 
 export const putAdminAgendaConfig = async (req: AuthRequest, res: Response) => {
-  const payload = agendaConfigUpdateSchema.parse(req.body);
+  const payload = agendaConfigUpdateSchema.parse(req.body) as Parameters<typeof updateAgendaConfig>[0];
   const config = await updateAgendaConfig(payload);
 
   await createAuditLog({
@@ -869,7 +869,7 @@ export const postAdminAgendaBlock = async (req: AuthRequest, res: Response) => {
   let block;
   try {
     block = await createAgendaBlock({
-      ...payload,
+      ...(payload as { dateKey: string; startMinute: number; endMinute: number; cabinId?: string | null; reason?: string }),
       actorUserId: req.user!.id
     });
   } catch (error) {

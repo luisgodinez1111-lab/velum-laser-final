@@ -91,7 +91,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
                       </div>
 
                       <Link
-                        to="/dashboard"
+                        to="/agenda"
                         onClick={() => setIsUserMenuOpen(false)}
                         className="flex items-center gap-3 px-4 py-2.5 text-sm text-velum-700 transition hover:bg-velum-50 hover:text-velum-900"
                       >
@@ -165,7 +165,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
               {isAuthenticated ? (
                 <>
                   <Link
-                    to="/dashboard"
+                    to="/agenda"
                     onClick={() => setIsMenuOpen(false)}
                     className="flex items-center justify-center gap-2 px-3 py-3 text-sm text-velum-700 rounded-xl hover:bg-velum-100"
                   >

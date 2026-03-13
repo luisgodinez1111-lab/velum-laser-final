@@ -1,3 +1,4 @@
+/// <reference types="vite/client" />
 const API_BASE_URL = import.meta.env.VITE_API_URL ?? "/api";
 
 export const apiFetch = async <T>(path: string, options: RequestInit = {}): Promise<T> => {

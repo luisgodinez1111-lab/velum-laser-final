@@ -19,7 +19,7 @@ import { useAuth } from "../context/AuthContext";
 import { redirectToCustomerPortal } from "../services/stripeService";
 import { documentService, memberService } from "../services/dataService";
 import { LegalDocument, Member } from "../types";
-import { clinicalService, SessionTreatment } from "../services/clinicalService";
+import { clinicalService, Payment, SessionTreatment } from "../services/clinicalService";
 import { useToast } from "../context/ToastContext";
 
 type TabKey = "overview" | "citas" | "profile" | "security" | "records" | "historial" | "billing";
@@ -43,7 +43,7 @@ const apptStatusLabel = (status: string) => {
   }
 };
 
-const AppointmentCard: React.FC<{ appt: import("../services/clinicalService").Appointment; past?: boolean }> = ({ appt, past }) => {
+const AppointmentCard: React.FC<{ appt: import("../services/clinicalService").Appointment; past?: boolean; onCancel?: () => void }> = ({ appt, past, onCancel }) => {
   const { label, cls } = apptStatusLabel(appt.status);
   const start = new Date(appt.startAt);
   const end = new Date(appt.endAt);
@@ -66,7 +66,18 @@ const AppointmentCard: React.FC<{ appt: import("../services/clinicalService").Ap
           {appt.canceledReason && <p className="text-xs text-red-600 mt-1">Motivo: {appt.canceledReason}</p>}
         </div>
       </div>
-      <span className={`shrink-0 text-xs px-2 py-0.5 border rounded-full font-semibold ${cls}`}>{label}</span>
+      <div className="flex flex-col items-end gap-2">
+        <span className={`shrink-0 text-xs px-2 py-0.5 border rounded-full font-semibold ${cls}`}>{label}</span>
+        {onCancel && !past && appt.status !== 'canceled' && appt.status !== 'completed' && appt.status !== 'no_show' && (
+          <button
+            type="button"
+            onClick={onCancel}
+            className="text-xs text-red-600 underline underline-offset-2 hover:text-red-800 transition-colors"
+          >
+            Cancelar cita
+          </button>
+        )}
+      </div>
     </div>
   );
 };
@@ -116,6 +127,16 @@ export const Dashboard: React.FC = () => {
   const [isLoadingSessions, setIsLoadingSessions] = useState(false);
   const [appointments, setAppointments] = useState<import("../services/clinicalService").Appointment[]>([]);
   const [isLoadingAppointments, setIsLoadingAppointments] = useState(false);
+  const [payments, setPayments] = useState<Payment[]>([]);
+  const [isLoadingPayments, setIsLoadingPayments] = useState(false);
+
+  const [cancelApptId, setCancelApptId] = useState<string | null>(null);
+  const [cancelReason, setCancelReason] = useState('');
+  const [isCancellingAppt, setIsCancellingAppt] = useState(false);
+
+  const [feedbackOpenId, setFeedbackOpenId] = useState<string | null>(null);
+  const [feedbackText, setFeedbackText] = useState('');
+  const [savingFeedbackId, setSavingFeedbackId] = useState<string | null>(null);
 
   const [showSignatureModal, setShowSignatureModal] = useState(false);
   const [currentDocToSign, setCurrentDocToSign] = useState<LegalDocument | null>(null);
@@ -180,6 +201,16 @@ export const Dashboard: React.FC = () => {
       } finally {
         setIsLoadingAppointments(false);
       }
+
+      setIsLoadingPayments(true);
+      try {
+        const paymentData = await clinicalService.getMyPayments();
+        setPayments(paymentData);
+      } catch {
+        setPayments([]);
+      } finally {
+        setIsLoadingPayments(false);
+      }
     };
 
     void load();
@@ -187,6 +218,43 @@ export const Dashboard: React.FC = () => {
 
   const handlePortalAccess = async () => {
     await redirectToCustomerPortal();
+  };
+
+  const handleCancelAppointment = async () => {
+    if (!cancelApptId) return;
+    setIsCancellingAppt(true);
+    try {
+      await clinicalService.updateAppointment(cancelApptId, {
+        action: 'cancel',
+        ...(cancelReason.trim() ? { canceledReason: cancelReason.trim() } : {})
+      });
+      setAppointments((prev) => prev.map((a) =>
+        a.id === cancelApptId ? { ...a, status: 'canceled', canceledReason: cancelReason.trim() || undefined } : a
+      ));
+      toast.success('Cita cancelada correctamente.');
+    } catch (err: any) {
+      toast.error(asString(err?.message, 'No se pudo cancelar la cita.'));
+    } finally {
+      setIsCancellingAppt(false);
+      setCancelApptId(null);
+      setCancelReason('');
+    }
+  };
+
+  const handleSubmitFeedback = async (sessionId: string) => {
+    if (!feedbackText.trim()) return;
+    setSavingFeedbackId(sessionId);
+    try {
+      const updated = await clinicalService.addSessionFeedback(sessionId, feedbackText.trim());
+      setSessions((prev) => prev.map((s) => s.id === sessionId ? updated : s));
+      setFeedbackOpenId(null);
+      setFeedbackText('');
+      toast.success('Comentario guardado.');
+    } catch (err: any) {
+      toast.error(asString(err?.message, 'No se pudo guardar el comentario.'));
+    } finally {
+      setSavingFeedbackId(null);
+    }
   };
 
   const initiateSigning = (doc: LegalDocument) => {
@@ -449,7 +517,7 @@ export const Dashboard: React.FC = () => {
               <p className="text-xs uppercase tracking-widest text-velum-500 mb-3">Próximas</p>
               <div className="space-y-3">
                 {upcomingAppointments.map((appt) => (
-                  <AppointmentCard key={appt.id} appt={appt} />
+                  <AppointmentCard key={appt.id} appt={appt} onCancel={() => setCancelApptId(appt.id)} />
                 ))}
               </div>
             </div>
@@ -704,6 +772,55 @@ export const Dashboard: React.FC = () => {
                         <p className="text-sm text-amber-800">{session.adverseEvents}</p>
                       </div>
                     )}
+
+                    <div className="pt-1 border-t border-velum-100">
+                      {session.memberFeedback ? (
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <p className="text-[10px] uppercase text-velum-500 mb-1">Tu comentario</p>
+                            <p className="text-sm text-velum-700 italic">"{session.memberFeedback}"</p>
+                          </div>
+                          <button
+                            type="button"
+                            className="text-xs text-velum-500 underline underline-offset-2 hover:text-velum-900 shrink-0"
+                            onClick={() => { setFeedbackOpenId(session.id); setFeedbackText(session.memberFeedback ?? ''); }}
+                          >
+                            Editar
+                          </button>
+                        </div>
+                      ) : feedbackOpenId === session.id ? (
+                        <div className="space-y-2">
+                          <p className="text-[10px] uppercase text-velum-500">Dejar comentario</p>
+                          <textarea
+                            className="w-full rounded-lg border border-velum-300 px-3 py-2 text-sm resize-none"
+                            rows={2}
+                            value={feedbackText}
+                            onChange={(e) => setFeedbackText(e.target.value)}
+                            placeholder="¿Cómo fue tu experiencia en esta sesión?"
+                          />
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              onClick={() => handleSubmitFeedback(session.id)}
+                              disabled={savingFeedbackId === session.id || !feedbackText.trim()}
+                            >
+                              {savingFeedbackId === session.id ? 'Guardando...' : 'Guardar'}
+                            </Button>
+                            <Button size="sm" variant="outline" onClick={() => { setFeedbackOpenId(null); setFeedbackText(''); }}>
+                              Cancelar
+                            </Button>
+                          </div>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          className="text-xs text-velum-600 underline underline-offset-2 hover:text-velum-900"
+                          onClick={() => { setFeedbackOpenId(session.id); setFeedbackText(''); }}
+                        >
+                          + Dejar comentario
+                        </button>
+                      )}
+                    </div>
                   </div>
                 );
               })}
@@ -713,17 +830,55 @@ export const Dashboard: React.FC = () => {
       )}
 
       {activeTab === "billing" && (
-        <div className="bg-white border border-velum-200 rounded-2xl p-6 space-y-4">
-          <h2 className="font-serif text-xl text-velum-900">Facturacion y pagos</h2>
-          <div className="rounded-xl border border-velum-200 p-4 flex items-start gap-3">
-            <CreditCard className="text-velum-700 mt-0.5" size={18} />
-            <div>
-              <p className="text-sm text-velum-700">Administra metodos de pago, facturas y renovaciones.</p>
-              <Button variant="outline" className="mt-3" onClick={handlePortalAccess}>
-                <ExternalLink size={14} className="mr-2" />
-                Portal de cliente
-              </Button>
+        <div className="space-y-4">
+          <div className="bg-white border border-velum-200 rounded-2xl p-6 space-y-4">
+            <h2 className="font-serif text-xl text-velum-900">Facturación y pagos</h2>
+            <div className="rounded-xl border border-velum-200 p-4 flex items-start gap-3">
+              <CreditCard className="text-velum-700 mt-0.5" size={18} />
+              <div>
+                <p className="text-sm text-velum-700">Administra métodos de pago, facturas y renovaciones desde el portal de cliente.</p>
+                <Button variant="outline" className="mt-3" onClick={handlePortalAccess}>
+                  <ExternalLink size={14} className="mr-2" />
+                  Portal de cliente
+                </Button>
+              </div>
             </div>
+          </div>
+
+          <div className="bg-white border border-velum-200 rounded-2xl p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="font-serif text-lg text-velum-900">Historial de pagos</h3>
+              {isLoadingPayments && <Loader2 className="animate-spin text-velum-400" size={16} />}
+            </div>
+            {!isLoadingPayments && payments.length === 0 && (
+              <p className="text-sm text-velum-500">Sin historial de pagos registrado.</p>
+            )}
+            {!isLoadingPayments && payments.length > 0 && (
+              <div className="space-y-2">
+                {payments.map((payment) => {
+                  const paymentDate = payment.paidAt ?? payment.createdAt;
+                  const dateStr = new Date(paymentDate).toLocaleDateString('es-MX', { day: '2-digit', month: 'long', year: 'numeric' });
+                  const statusMap: Record<string, { label: string; cls: string }> = {
+                    paid: { label: 'Pagado', cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+                    pending: { label: 'Pendiente', cls: 'bg-amber-50 text-amber-700 border-amber-200' },
+                    failed: { label: 'Fallido', cls: 'bg-red-50 text-red-600 border-red-200' },
+                    refunded: { label: 'Reembolsado', cls: 'bg-zinc-100 text-zinc-600 border-zinc-200' }
+                  };
+                  const { label: statusLabel, cls: statusCls } = statusMap[payment.status] ?? { label: payment.status, cls: 'bg-zinc-100 text-zinc-600 border-zinc-200' };
+                  return (
+                    <div key={payment.id} className="flex items-center justify-between border border-velum-100 rounded-xl px-4 py-3">
+                      <div>
+                        <p className="text-sm font-semibold text-velum-900">
+                          {new Intl.NumberFormat('es-MX', { style: 'currency', currency: (payment.currency || 'mxn').toUpperCase(), maximumFractionDigits: 0 }).format(payment.amount)}
+                        </p>
+                        <p className="text-xs text-velum-500 mt-0.5">{dateStr}</p>
+                      </div>
+                      <span className={`text-xs px-2 py-0.5 border rounded-full font-semibold ${statusCls}`}>{statusLabel}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -735,6 +890,41 @@ export const Dashboard: React.FC = () => {
             onCancel={() => setShowSignatureModal(false)}
             onSave={handleSignatureSave}
           />
+        </div>
+      )}
+
+      {cancelApptId && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl border border-velum-200 shadow-2xl p-6 max-w-sm w-full space-y-4 animate-fade-in">
+            <h3 className="font-serif text-lg text-velum-900">Cancelar cita</h3>
+            <p className="text-sm text-velum-600">¿Confirmas que deseas cancelar esta cita? Esta acción no se puede deshacer.</p>
+            <div>
+              <label className="block text-xs uppercase tracking-wide text-velum-500 mb-1">Motivo (opcional)</label>
+              <textarea
+                className="w-full rounded-xl border border-velum-300 px-4 py-3 text-sm resize-none"
+                rows={2}
+                value={cancelReason}
+                onChange={(e) => setCancelReason(e.target.value)}
+                placeholder="¿Por qué cancelas esta cita?"
+              />
+            </div>
+            <div className="flex gap-3">
+              <Button
+                onClick={handleCancelAppointment}
+                disabled={isCancellingAppt}
+                className="flex-1 bg-red-600 hover:bg-red-700 border-red-600 hover:border-red-700"
+              >
+                {isCancellingAppt ? 'Cancelando...' : 'Confirmar cancelación'}
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => { setCancelApptId(null); setCancelReason(''); }}
+                disabled={isCancellingAppt}
+              >
+                Mantener cita
+              </Button>
+            </div>
+          </div>
         </div>
       )}
     </div>

@@ -58,8 +58,12 @@ export const createSessionTreatment = async (req: AuthRequest, res: Response) =>
 };
 
 export const listMySessions = async (req: AuthRequest, res: Response) => {
+  const filterUserId = req.user!.role === "member"
+    ? req.user!.id
+    : (typeof req.query.userId === "string" ? req.query.userId : undefined);
+
   const sessions = await prisma.sessionTreatment.findMany({
-    where: req.user!.role === "member" ? { userId: req.user!.id } : undefined,
+    where: filterUserId ? { userId: filterUserId } : undefined,
     include: {
       appointment: true,
       staffUser: {

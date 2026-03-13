@@ -279,6 +279,23 @@ export interface SessionCreatePayload {
   adverseEvents?: string;
 }
 
+export interface Payment {
+  id: string;
+  userId: string;
+  membershipId?: string | null;
+  stripeInvoiceId?: string | null;
+  stripePaymentIntentId?: string | null;
+  amount: number;
+  currency: string;
+  status: "pending" | "paid" | "failed" | "refunded";
+  paidAt?: string | null;
+  failedAt?: string | null;
+  failureCode?: string | null;
+  failureMessage?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export const clinicalService = {
   getMyMedicalIntake: async (): Promise<MedicalIntake> => {
     return apiFetch<MedicalIntake>("/v1/medical-intakes/me");
@@ -385,5 +402,16 @@ export const clinicalService = {
       method: "POST",
       body: JSON.stringify({ approved, ...(rejectionReason ? { rejectionReason } : {}) })
     });
+  },
+
+  addSessionFeedback: async (sessionId: string, memberFeedback: string): Promise<SessionTreatment> => {
+    return apiFetch<SessionTreatment>(`/v1/sessions/${sessionId}/feedback`, {
+      method: "PATCH",
+      body: JSON.stringify({ memberFeedback })
+    });
+  },
+
+  getMyPayments: async (): Promise<Payment[]> => {
+    return apiFetch<Payment[]>("/v1/payments/me");
   }
 };

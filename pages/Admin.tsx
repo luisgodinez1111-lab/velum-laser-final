@@ -39,6 +39,7 @@ import { useAuth } from '../context/AuthContext';
 import { memberService, auditService } from '../services/dataService';
 import { SessionTreatment, SessionCreatePayload } from '../services/clinicalService';
 import { AdminUsersPermissions } from "./AdminUsersPermissions";
+import { AdminStripeSettings } from "./AdminStripeSettings";
 import { AdminWhatsAppSettings } from "./AdminWhatsAppSettings";
 import { useToast } from "../context/ToastContext";
 import {
@@ -92,7 +93,10 @@ type AgendaPolicyDraft = {
 
 type AgendaTemplatePreset = 'weekly_copy' | 'holiday_closed' | 'season_extended' | 'season_compact';
 
-type SettingsCategory = 'general' | 'agenda';
+type SettingsCategory =
+  | 'general' | 'agenda'
+  | 'usuarios_permisos' | 'logs' | 'cumplimiento' | 'riesgos'
+  | 'meta' | 'stripe' | 'whatsapp_business';
 
 const weekDayLabel: Record<number, string> = {
   0: 'Domingo',
@@ -120,7 +124,7 @@ const sectionMeta: Record<AdminSection, { label: string; icon: React.ComponentTy
 const sectionGroups: Array<{ title: string; items: AdminSection[] }> = [
   { title: 'Dirección', items: ['control', 'socios', 'kpis'] },
   { title: 'Operación', items: ['finanzas', 'expedientes', 'agenda', 'cobranza'] },
-  { title: 'Gobierno', items: ['configuraciones'] }
+  { title: 'Gobierno', items: ['riesgos', 'cumplimiento', 'configuraciones'] }
 ];
 
 const allowedRoles: UserRole[] = ['admin', 'staff', 'system'];
@@ -242,6 +246,7 @@ export const Admin: React.FC = () => {
   const [sessionModalMember, setSessionModalMember] = useState<Member | null>(null);
   const [sessionForm, setSessionForm] = useState({ appointmentId: '', zona: '', fluencia: '', frecuencia: '', spot: '', passes: '', notes: '', adverseEvents: '' });
   const [isSessionSaving, setIsSessionSaving] = useState(false);
+  const [cancelConfirmApptId, setCancelConfirmApptId] = useState<string | null>(null);
 
   // Drawer history (shared between modal and drawer)
   const [memberSessions, setMemberSessions] = useState<SessionTreatment[]>([]);
@@ -485,7 +490,7 @@ export const Admin: React.FC = () => {
         setSelectedMember({ ...selectedMember, subscriptionStatus: status });
       }
     } catch (_error) {
-      alert('No fue posible actualizar el estatus de la membresía.');
+      toast.error('No fue posible actualizar el estatus de la membresía.');
     }
   };
 
@@ -523,6 +528,14 @@ export const Admin: React.FC = () => {
     } finally {
       setIsLoadingSessions(false);
     }
+  };
+
+  const openSessionModalForAppointment = (appointment: Appointment) => {
+    const member = members.find((m) => m.id === appointment.userId) ?? null;
+    if (!member) return;
+    setSessionForm({ appointmentId: appointment.id, zona: '', fluencia: '', frecuencia: '', spot: '', passes: '', notes: '', adverseEvents: '' });
+    setMemberAppointments([appointment]);
+    setSessionModalMember(member);
   };
 
   const handleSubmitSession = async () => {
@@ -907,8 +920,8 @@ export const Admin: React.FC = () => {
       return;
     }
 
-    const draftByDate = new Map(
-      agendaSpecialDateRulesDraft.map((rule) => [rule.dateKey, rule] as const)
+    const draftByDate = new Map<string, AgendaSpecialDateRule>(
+      agendaSpecialDateRulesDraft.map((rule) => [rule.dateKey, rule])
     );
     let cursor = start;
     let updatedCount = 0;
@@ -1281,10 +1294,12 @@ export const Admin: React.FC = () => {
     }
   };
 
-  const handleAgendaCancelAppointment = async (appointmentId: string) => {
-    if (typeof window !== 'undefined' && !window.confirm('¿Confirmas cancelar esta cita?')) {
-      return;
-    }
+  const handleAgendaCancelAppointment = (appointmentId: string) => {
+    setCancelConfirmApptId(appointmentId);
+  };
+
+  const confirmCancelAppointment = async (appointmentId: string) => {
+    setCancelConfirmApptId(null);
     await handleAgendaAppointmentAction(appointmentId, 'cancel', 'Cita cancelada correctamente.');
   };
 
@@ -2901,21 +2916,32 @@ export const Admin: React.FC = () => {
                             Confirmar
                           </Button>
                         )}
-                        <Button size="sm" variant="outline" onClick={() => handleAgendaAppointmentAction(appointment.id, 'complete', 'Cita marcada como completada.')} disabled={isAgendaSaving}>
+                        <Button size="sm" variant="outline" onClick={() => openSessionModalForAppointment(appointment)} disabled={isAgendaSaving}>
                           Completar
                         </Button>
                         <Button size="sm" variant="outline" onClick={() => handleAgendaAppointmentAction(appointment.id, 'mark_no_show', 'Cita marcada como no-show.')} disabled={isAgendaSaving}>
                           No-show
                         </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="text-red-700 border-red-300 hover:bg-red-600 hover:text-white"
-                          onClick={() => handleAgendaCancelAppointment(appointment.id)}
-                          disabled={isAgendaSaving}
-                        >
-                          Cancelar
-                        </Button>
+                        {cancelConfirmApptId === appointment.id ? (
+                          <div className="inline-flex items-center gap-1">
+                            <Button size="sm" variant="outline" className="text-red-700 border-red-300" onClick={() => confirmCancelAppointment(appointment.id)} disabled={isAgendaSaving}>
+                              Confirmar
+                            </Button>
+                            <Button size="sm" variant="outline" onClick={() => setCancelConfirmApptId(null)} disabled={isAgendaSaving}>
+                              Mantener
+                            </Button>
+                          </div>
+                        ) : (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="text-red-700 border-red-300 hover:bg-red-600 hover:text-white"
+                            onClick={() => handleAgendaCancelAppointment(appointment.id)}
+                            disabled={isAgendaSaving}
+                          >
+                            Cancelar
+                          </Button>
+                        )}
                       </div>
                     )}
                   </div>
@@ -3133,52 +3159,7 @@ export const Admin: React.FC = () => {
     </div>
   );
 
-  const renderConfiguraciones = () => (
-    <div className="space-y-6">
-      <div className="bg-white border border-velum-200 p-2 inline-flex items-center gap-2">
-        <Button
-          size="sm"
-          variant={settingsCategory === 'general' ? 'secondary' : 'outline'}
-          onClick={() => setSettingsCategory('general')}
-        >
-          General
-        </Button>
-        <Button
-          size="sm"
-          variant={settingsCategory === 'agenda' ? 'secondary' : 'outline'}
-          onClick={() => setSettingsCategory('agenda')}
-        >
-          Agenda
-        </Button>
-      </div>
 
-      <>
-        <div className="mt-3 flex flex-wrap gap-2">
-          <Button size="sm" variant={settingsCategory === 'control' ? 'secondary' : 'outline'} onClick={() => setSettingsCategory('control' as any)}>Torre</Button>
-          <Button size="sm" variant={settingsCategory === 'socios' ? 'secondary' : 'outline'} onClick={() => setSettingsCategory('socios' as any)}>Usuarios</Button>
-          <Button size="sm" variant={settingsCategory === 'kpis' ? 'secondary' : 'outline'} onClick={() => setSettingsCategory('kpis' as any)}>KPIs</Button>
-          <Button size="sm" variant={settingsCategory === 'finanzas' ? 'secondary' : 'outline'} onClick={() => setSettingsCategory('finanzas' as any)}>Finanzas</Button>
-          <Button size="sm" variant={settingsCategory === 'expedientes' ? 'secondary' : 'outline'} onClick={() => setSettingsCategory('expedientes' as any)}>Expedientes</Button>
-          <Button size="sm" variant={settingsCategory === 'cobranza' ? 'secondary' : 'outline'} onClick={() => setSettingsCategory('cobranza' as any)}>Cobranza</Button>
-          <Button size="sm" variant={settingsCategory === 'riesgos' ? 'secondary' : 'outline'} onClick={() => setSettingsCategory('riesgos' as any)}>Riesgos</Button>
-          <Button size="sm" variant={settingsCategory === 'cumplimiento' ? 'secondary' : 'outline'} onClick={() => setSettingsCategory('cumplimiento' as any)}>Permisos</Button>
-        </div>
-        {settingsCategory === 'agenda'
-          ? renderAgendaSettingsCategory()
-          : settingsCategory === 'control' ? renderControl() :
-            settingsCategory === 'socios' ? renderSocios() :
-            settingsCategory === 'kpis' ? renderKpis() :
-            settingsCategory === 'finanzas' ? renderFinanzas() :
-            settingsCategory === 'expedientes' ? renderExpedientes() :
-            settingsCategory === 'cobranza' ? renderCobranza() :
-            settingsCategory === 'riesgos' ? renderRiesgos() :
-            settingsCategory === 'cumplimiento' ? renderCumplimiento()
-            : renderGeneralSettingsCategory()}
-      </>
-    </div>
-  );
-
-  
 const renderConfiguracionesV2 = () => {
   const configTabs = [
     { key: "general", label: "General" },
@@ -3228,16 +3209,14 @@ const renderConfiguracionesV2 = () => {
           </p>
         </div>
       ) : settingsCategory === "stripe" ? (
-        <div className="bg-white border border-velum-200 p-6 space-y-3">
-          <h3 className="text-lg font-serif text-velum-900">Stripe</h3>
-          <p className="text-sm text-velum-600">
-            Configura y guarda STRIPE_SECRET_KEY, STRIPE_PUBLISHABLE_KEY y STRIPE_WEBHOOK_SECRET.
-          </p>
-          <Link to="/admin/stripe">
-            <button className="rounded-xl border border-velum-300 px-4 py-2 text-sm text-velum-700 hover:border-velum-600">
-              Abrir configuración Stripe
-            </button>
-          </Link>
+        <div className="space-y-2">
+          <div className="bg-velum-50 border border-velum-200 rounded-2xl px-5 py-3">
+            <p className="text-xs text-velum-500 uppercase tracking-widest">Stripe — Pagos y suscripciones</p>
+            <p className="text-xs text-velum-400 mt-1">
+              Configura las claves de API de Stripe y el catálogo de planes de membresía.
+            </p>
+          </div>
+          <AdminStripeSettings embedded />
         </div>
       ) : settingsCategory === "whatsapp_business" ? (
         <div className="space-y-2">
