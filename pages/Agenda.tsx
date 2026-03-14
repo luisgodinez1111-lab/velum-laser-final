@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "../components/Button";
 import { PasswordInput } from "../components/PasswordInput";
 import { ChevronLeft, ChevronRight, Lock, User, Sparkles, Shield, FileText, Stethoscope, CircleCheck, KeyRound, Mail } from "lucide-react";
@@ -65,6 +65,8 @@ const intakeStepMeta = [
 
 export const Agenda: React.FC = () => {
   const { login, register, isAuthenticated, user } = useAuth();
+  const userRef = useRef(user);
+  useEffect(() => { userRef.current = user; }, [user]);
   const toast = useToast();
   const location = useLocation();
   const navigate = useNavigate();
@@ -157,7 +159,7 @@ export const Agenda: React.FC = () => {
         (current.personalJson as IntakeDraft["personalJson"]) ?? {};
 
       // Pre-fill from profile when intake fields are still empty (new registrations)
-      const src = profile ?? user;
+      const src = profile ?? userRef.current;
       if (src) {
         if (!personalJson.fullName) personalJson.fullName = src.name;
         if (!personalJson.phone && src.phone) personalJson.phone = src.phone;
