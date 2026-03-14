@@ -150,7 +150,7 @@ export const Agenda: React.FC = () => {
     return `${y}-${m}-${day}`;
   };
 
-  const refreshIntake = async (profile?: AuthUser | null) => {
+  const refreshIntake = async (prefill?: { fullName?: string; phone?: string; birthDate?: string }) => {
     if (!isAuthenticated) {
       return;
     }
@@ -160,13 +160,10 @@ export const Agenda: React.FC = () => {
       const personalJson: IntakeDraft["personalJson"] =
         (current.personalJson as IntakeDraft["personalJson"]) ?? {};
 
-      // Pre-fill from profile when intake fields are still empty (new registrations)
-      const src = profile ?? userRef.current;
-      if (src) {
-        if (!personalJson.fullName) personalJson.fullName = src.name;
-        if (!personalJson.phone && src.phone) personalJson.phone = src.phone;
-        if (!personalJson.birthDate && src.birthDate) personalJson.birthDate = src.birthDate;
-      }
+      // Pre-fill when intake fields are empty (new registration)
+      if (!personalJson.fullName && prefill?.fullName) personalJson.fullName = prefill.fullName;
+      if (!personalJson.phone && prefill?.phone) personalJson.phone = prefill.phone;
+      if (!personalJson.birthDate && prefill?.birthDate) personalJson.birthDate = prefill.birthDate;
 
       setIntake(current);
       setIntakeDraft({
@@ -183,6 +180,16 @@ export const Agenda: React.FC = () => {
         setViewState("intake");
       }
     } catch {
+      if (prefill?.fullName || prefill?.phone || prefill?.birthDate) {
+        setIntakeDraft(prev => ({
+          ...prev,
+          personalJson: {
+            fullName: prefill.fullName || prev.personalJson.fullName,
+            phone: prefill.phone || prev.personalJson.phone,
+            birthDate: prefill.birthDate || prev.personalJson.birthDate
+          }
+        }));
+      }
       setViewState("intake");
     }
   };
@@ -261,7 +268,7 @@ export const Agenda: React.FC = () => {
     setAppointmentMessage(null);
     try {
       const userData = await login(email, password);
-      await refreshIntake(userData);
+      await refreshIntake({ fullName: userData.name, phone: userData.phone, birthDate: userData.birthDate });
     } catch {
       toast.error("Credenciales incorrectas. Verifica tu correo y contraseña.");
     }
@@ -371,14 +378,16 @@ export const Agenda: React.FC = () => {
       await authService.verifyEmail(email, otpCode);
       setOtpSuccess(true);
       setOtpMessage("¡Correo verificado! Continuando con tu expediente...");
+      // Capture form state NOW (before setTimeout closure)
+      const prefillName = `${firstName.trim()} ${lastName.trim()}`.trim();
+      const prefillPhone = phone.trim();
+      const prefillBirthDate = birthDate;
       setTimeout(async () => {
         setOtpCode("");
         setOtpMessage(null);
         setOtpSuccess(false);
         setPendingEmailVerify(false);
-        const regUser = pendingRegistrationUser.current;
-        pendingRegistrationUser.current = null;
-        await refreshIntake(regUser ?? userRef.current);
+        await refreshIntake({ fullName: prefillName, phone: prefillPhone, birthDate: prefillBirthDate });
       }, 1800);
     } catch {
       setOtpMessage("Código incorrecto o expirado. Verifica e intenta de nuevo.");
@@ -985,7 +994,7 @@ export const Agenda: React.FC = () => {
               </button>
               <button
                 type="button"
-                onClick={() => { setOtpCode(""); setOtpMessage(null); setPendingEmailVerify(false); const regUser = pendingRegistrationUser.current; pendingRegistrationUser.current = null; refreshIntake(regUser ?? userRef.current); }}
+                onClick={() => { const pf = { fullName: `${firstName.trim()} ${lastName.trim()}`.trim(), phone: phone.trim(), birthDate }; setOtpCode(""); setOtpMessage(null); setPendingEmailVerify(false); refreshIntake(pf); }}
                 className="text-xs text-velum-400 underline underline-offset-2 hover:text-velum-700 transition"
               >
                 Omitir por ahora y continuar
