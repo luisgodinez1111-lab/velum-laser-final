@@ -4,7 +4,7 @@ import { listAuditLogs, listDocumentsAdmin, listMemberships, listUsers, reports,
 
 export const adminRoutes = Router();
 
-adminRoutes.use(requireAuth, requireRole(["staff", "admin", "system"]));
+adminRoutes.use("/admin", requireAuth, requireRole(["staff", "admin", "system"]));
 
 adminRoutes.get("/admin/users", listUsers);
 adminRoutes.get("/admin/memberships", listMemberships);
