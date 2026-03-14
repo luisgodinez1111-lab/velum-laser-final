@@ -429,6 +429,22 @@ const processCheckoutCompleted = async (event: Stripe.Event, stripe: Stripe): Pr
   const user = await findUserBySignals(requestedUserId || null, requestedEmail || null, subCtx.stripeCustomerId || stripeCustomerId);
   const userId = getUserIdFromRow(user);
 
+  // Guardar stripeCustomerId en el usuario para poder usar el portal de cliente después
+  const resolvedCustomerId = subCtx.stripeCustomerId ?? stripeCustomerId;
+  if (userId && resolvedCustomerId) {
+    const userDelegate = getDelegate("user");
+    if (userDelegate?.update) {
+      try {
+        const userFields = getDelegateFieldSet("user");
+        if (userFields.has("stripeCustomerId")) {
+          await userDelegate.update({ where: { id: userId }, data: { stripeCustomerId: resolvedCustomerId } });
+        }
+      } catch (error) {
+        console.warn("[stripe-webhook] could not update user.stripeCustomerId", error);
+      }
+    }
+  }
+
   await upsertMembership({
     eventId: event.id,
     eventType: event.type,

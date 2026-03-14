@@ -9,12 +9,9 @@ export const Home: React.FC = () => {
       {/* Hero Section */}
       <section className="relative h-[90vh] w-full overflow-hidden flex items-center justify-center">
         <div className="absolute inset-0 z-0">
-          {/* Imagen Médica / Spa Premium - Dermatológica */}
-          <img 
-            src="https://images.unsplash.com/photo-1600334129128-685c5582fd35?q=80&w=2070&auto=format&fit=crop" 
-            alt="Velum Medical Spa Atmosphere" 
-            className="w-full h-full object-cover"
-          />
+          {/* TODO producción: reemplazar con asset propio en /public/hero-velum.jpg */}
+          {/* Fondo degradado como placeholder — misma paleta crema/dorada de la marca */}
+          <div className="w-full h-full bg-gradient-to-br from-stone-100 via-amber-50 to-stone-200" />
           {/* Degradado para legibilidad del texto oscuro (Lujo Silencioso) */}
           {/* Se usa un degradado radial desde el centro (blanco crema) hacia afuera para que el texto resalte */}
           <div className="absolute inset-0 bg-gradient-to-b from-velum-50/90 via-velum-50/60 to-transparent"></div>
@@ -85,12 +82,8 @@ export const Home: React.FC = () => {
           </div>
 
           <div className="relative h-[600px] w-full overflow-hidden shadow-2xl rounded-sm group">
-             {/* Imagen: Close up dermatológico, piel muy limpia, luz clínica suave */}
-             <img 
-               src="https://images.unsplash.com/photo-1616394584738-fc6e612e71b9?q=80&w=2070&auto=format&fit=crop" 
-               alt="Detalles Finos y Piel Impecable" 
-               className="object-cover w-full h-full transition-transform duration-[2s] ease-out group-hover:scale-105"
-             />
+             {/* TODO producción: reemplazar con asset propio en /public/velum-closeup.jpg */}
+             <div className="w-full h-full bg-gradient-to-br from-stone-200 via-amber-100 to-stone-300 transition-transform duration-[2s] ease-out group-hover:scale-105" />
              {/* Overlay sutil para unificar tono */}
              <div className="absolute inset-0 bg-velum-900/10 group-hover:bg-transparent transition-colors duration-500"></div>
              
@@ -143,9 +136,9 @@ export const Home: React.FC = () => {
 
       {/* CTA Banner */}
       <section className="bg-velum-900 text-velum-50 py-24 relative overflow-hidden">
-         {/* Imagen de fondo sutil clínica oscura */}
+         {/* TODO producción: reemplazar con asset propio en /public/velum-texture-dark.jpg */}
          <div className="absolute inset-0 opacity-20">
-            <img src="https://images.unsplash.com/photo-1516549655169-df83a092dd14?q=80&w=2070" className="w-full h-full object-cover grayscale" alt="Medical Texture" />
+            <div className="w-full h-full bg-gradient-to-br from-stone-800 via-stone-700 to-stone-900" />
          </div>
          <div className="absolute inset-0 bg-velum-900/80"></div>
          

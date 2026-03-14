@@ -5,7 +5,8 @@ export const registerSchema = z.object({
   password: z.string().min(12),
   firstName: z.string().min(1).optional(),
   lastName: z.string().min(1).optional(),
-  phone: z.string().min(7).optional()
+  phone: z.string().min(7).optional(),
+  birthDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Formato YYYY-MM-DD requerido").optional()
 });
 
 export const loginSchema = z.object({

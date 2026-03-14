@@ -28,7 +28,8 @@ export const register = async (req: Request, res: Response) => {
     passwordHash: await hashPassword(payload.password),
     firstName: payload.firstName,
     lastName: payload.lastName,
-    phone: payload.phone
+    phone: payload.phone,
+    birthDate: payload.birthDate
   });
 
   const latestLead = await prisma.lead.findFirst({
@@ -171,4 +172,20 @@ export const verifyEmail = async (req: Request, res: Response) => {
   });
 
   return res.json({ message: "Correo verificado correctamente" });
+};
+
+export const resendVerification = async (req: Request, res: Response) => {
+  const { email } = forgotSchema.parse(req.body); // mismo shape: { email }
+  const user = await getUserByEmail(email);
+  // Respuesta genérica para no revelar si el email existe
+  if (!user) {
+    return res.json({ message: "Si el correo existe, recibirás un nuevo código" });
+  }
+  const verification = await createEmailVerification(user.id);
+  sendEmailVerificationEmail(user.email, verification.otp).catch(() => {
+    if (!isProduction) {
+      console.log(`[auth] RESEND VERIFY OTP para ${user.email}: ${verification.otp}`);
+    }
+  });
+  return res.json({ message: "Código reenviado. Revisa tu bandeja de entrada." });
 };

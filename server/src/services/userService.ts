@@ -8,6 +8,7 @@ export const createUser = async (data: {
   firstName?: string;
   lastName?: string;
   phone?: string;
+  birthDate?: string;
 }) => {
   return prisma.$transaction(async (tx) => {
     return tx.user.create({
@@ -18,7 +19,8 @@ export const createUser = async (data: {
           create: {
             firstName: data.firstName,
             lastName: data.lastName,
-            ...(data.phone ? { phone: data.phone } : {})
+            ...(data.phone ? { phone: data.phone } : {}),
+            ...(data.birthDate ? { birthDate: new Date(data.birthDate) } : {})
           }
         },
         memberships: {

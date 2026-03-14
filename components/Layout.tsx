@@ -24,7 +24,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
   const handleLogout = async () => {
     setIsUserMenuOpen(false);
     setIsMenuOpen(false);
-    logout();
+    await logout();
     navigate('/');
   };
 

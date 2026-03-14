@@ -30,7 +30,7 @@ export const authService = {
     return mapUser(me);
   },
 
-  register: async (payload: { email: string; password: string; firstName?: string; lastName?: string; phone?: string }) => {
+  register: async (payload: { email: string; password: string; firstName?: string; lastName?: string; phone?: string; birthDate?: string }) => {
     await apiFetch("/auth/register", {
       method: "POST",
       body: JSON.stringify(payload)
@@ -72,6 +72,13 @@ export const authService = {
     await apiFetch("/auth/verify-email", {
       method: "POST",
       body: JSON.stringify({ email, otp })
+    });
+  },
+
+  resendVerification: async (email: string): Promise<void> => {
+    await apiFetch("/auth/resend-verification", {
+      method: "POST",
+      body: JSON.stringify({ email })
     });
   }
 };

@@ -9,6 +9,8 @@ import { Admin } from './pages/Admin';
 import { AdminWhatsAppSettings } from "./pages/AdminWhatsAppSettings";
 import { AdminStripeSettings } from "./pages/AdminStripeSettings";
 import { AdminUsersPermissions } from "./pages/AdminUsersPermissions";
+import { AgendaIntegrations } from "./pages/settings/AgendaIntegrations";
+import { OnboardingAdmin } from "./pages/OnboardingAdmin";
 import { AuthProvider } from './context/AuthContext';
 import { ToastProvider } from './context/ToastContext';
 import { ToastContainer } from './components/ToastContainer';
@@ -28,6 +30,8 @@ const App: React.FC = () => {
               <Route path="/admin/whatsapp" element={<AdminWhatsAppSettings />} />
               <Route path="/admin/stripe" element={<AdminStripeSettings />} />
               <Route path="/admin/users-permissions" element={<AdminUsersPermissions />} />
+              <Route path="/settings/agenda-integrations" element={<AgendaIntegrations />} />
+              <Route path="/admin/onboarding" element={<OnboardingAdmin />} />
             </Routes>
           </Layout>
         </Router>

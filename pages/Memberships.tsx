@@ -56,7 +56,7 @@ export const Memberships: React.FC = () => {
     if (!selectedTier) return;
     if (!isAuthenticated) {
       toast.info("Inicia sesión para continuar con el pago.");
-      navigate('/login');
+      navigate('/agenda?mode=login');
       return;
     }
     setIsCheckingOut(true);

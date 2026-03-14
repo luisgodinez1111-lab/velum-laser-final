@@ -46,8 +46,9 @@ export const createBillingCheckout = async (req: AuthRequest, res: Response) => 
     params.set("success_url", successUrl);
     params.set("cancel_url", cancelUrl);
     params.set("client_reference_id", me.id);
-    params.set("metadata[plan_code]", plan.planCode);
-    params.set("metadata[user_id]", me.id);
+    // Usar camelCase para que coincidan con lo que stripeWebhookService lee en metadata.planCode / metadata.userId
+    params.set("metadata[planCode]", plan.planCode);
+    params.set("metadata[userId]", me.id);
     params.set("customer_email", me.email);
 
     const rsp = await fetch("https://api.stripe.com/v1/checkout/sessions", {
@@ -75,5 +76,51 @@ export const createBillingCheckout = async (req: AuthRequest, res: Response) => 
   } catch (error: any) {
     console.error("createBillingCheckout error:", error);
     return res.status(500).json({ message: "Error creando checkout", detail: error?.message ?? "unknown" });
+  }
+};
+
+export const createBillingPortal = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user?.id) return res.status(401).json({ message: "No autorizado" });
+
+    const me = await prisma.user.findUnique({
+      where: { id: req.user.id },
+      select: { stripeCustomerId: true },
+    });
+    if (!me?.stripeCustomerId) {
+      return res.status(400).json({ message: "No tienes una suscripción activa con Stripe" });
+    }
+
+    const stripe = await resolveStripeConfig();
+    const secret = stripe.config.secretKey;
+    if (!secret) return res.status(400).json({ message: "Stripe no configurado (falta STRIPE_SECRET_KEY)" });
+
+    const base = resolveBaseUrl(req);
+    const returnUrl = `${base}/#/dashboard`;
+
+    const params = new URLSearchParams();
+    params.set("customer", me.stripeCustomerId);
+    params.set("return_url", returnUrl);
+
+    const rsp = await fetch("https://api.stripe.com/v1/billing_portal/sessions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${secret}`,
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: params.toString(),
+    });
+
+    const json: any = await rsp.json().catch(() => ({}));
+
+    if (!rsp.ok) {
+      const detail = json?.error?.message || "Error creando sesión del portal";
+      return res.status(502).json({ message: "No se pudo abrir el portal de facturación", detail });
+    }
+
+    return res.json({ url: json?.url || "" });
+  } catch (error: any) {
+    console.error("createBillingPortal error:", error);
+    return res.status(500).json({ message: "Error abriendo portal", detail: error?.message ?? "unknown" });
   }
 };

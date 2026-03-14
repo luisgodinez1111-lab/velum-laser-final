@@ -94,6 +94,7 @@ export const Agenda: React.FC = () => {
 
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
+  const [birthDate, setBirthDate] = useState("");
 
   const [intakeStep, setIntakeStep] = useState(1);
   const [intake, setIntake] = useState<MedicalIntake | null>(null);
@@ -112,6 +113,8 @@ export const Agenda: React.FC = () => {
 
   const [appointmentMessage, setAppointmentMessage] = useState<string | null>(null);
   const [isScheduling, setIsScheduling] = useState(false);
+  // Previene que refreshIntake() sobreescriba "email-verify" al activarse isAuthenticated post-registro
+  const [pendingEmailVerify, setPendingEmailVerify] = useState(false);
 
   // ── Real calendar state ────────────────────────────────────────────────
   type PublicSlot = { label: string; startMinute: number; endMinute: number; available: boolean };
@@ -170,7 +173,7 @@ export const Agenda: React.FC = () => {
   };
 
   useEffect(() => {
-    if (isAuthenticated) {
+    if (isAuthenticated && !pendingEmailVerify) {
       refreshIntake();
     }
   }, [isAuthenticated]);
@@ -260,6 +263,18 @@ export const Agenda: React.FC = () => {
       toast.warning("Ingresa tu número celular para continuar.");
       return;
     }
+    if (!birthDate) {
+      toast.warning("Ingresa tu fecha de nacimiento para continuar.");
+      return;
+    }
+    const birthDateObj = new Date(birthDate);
+    const today = new Date();
+    const age = today.getFullYear() - birthDateObj.getFullYear() -
+      (today < new Date(today.getFullYear(), birthDateObj.getMonth(), birthDateObj.getDate()) ? 1 : 0);
+    if (age < 18) {
+      toast.warning("Debes tener al menos 18 años para registrarte.");
+      return;
+    }
     if (!Object.values(getPasswordChecks(password)).every(Boolean)) {
       toast.warning("La contraseña no cumple los requisitos de seguridad.");
       return;
@@ -270,10 +285,12 @@ export const Agenda: React.FC = () => {
     }
 
     try {
-      await register({ email, password, firstName: firstName.trim(), lastName: lastName.trim(), phone: phone.trim() });
+      setPendingEmailVerify(true);
+      await register({ email, password, firstName: firstName.trim(), lastName: lastName.trim(), phone: phone.trim(), birthDate });
       toast.success("¡Cuenta creada! Confirma tu correo para continuar.");
       setViewState("email-verify");
     } catch (err: any) {
+      setPendingEmailVerify(false);
       toast.error(err?.message ?? "No se pudo completar el registro. Intenta de nuevo.");
     }
   };
@@ -342,10 +359,24 @@ export const Agenda: React.FC = () => {
         setOtpCode("");
         setOtpMessage(null);
         setOtpSuccess(false);
+        setPendingEmailVerify(false);
         await refreshIntake();
       }, 1800);
     } catch {
       setOtpMessage("Código incorrecto o expirado. Verifica e intenta de nuevo.");
+    } finally {
+      setIsOtpLoading(false);
+    }
+  };
+
+  const handleResendVerificationEmail = async () => {
+    setIsOtpLoading(true);
+    setOtpMessage(null);
+    try {
+      await authService.resendVerification(email);
+      setOtpMessage("Código reenviado. Revisa tu bandeja de entrada.");
+    } catch {
+      setOtpMessage("No se pudo reenviar el código. Intenta de nuevo.");
     } finally {
       setIsOtpLoading(false);
     }
@@ -646,22 +677,34 @@ export const Agenda: React.FC = () => {
                     placeholder="ana.garcia@gmail.com"
                   />
                 </div>
-                <div>
-                  
-                <div>
-                  <label className={labelClass}>Numero celular</label>
-                  <input
-                    type="tel"
-                    inputMode="tel"
-                    autoComplete="tel"
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    required
-                    className={fieldClass}
-                    placeholder="+52 55 1234 5678"
-                  />
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div>
+                    <label className={labelClass}>Número celular</label>
+                    <input
+                      type="tel"
+                      inputMode="tel"
+                      autoComplete="tel"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      required
+                      className={fieldClass}
+                      placeholder="+52 55 1234 5678"
+                    />
+                  </div>
+                  <div>
+                    <label className={labelClass}>Fecha de nacimiento</label>
+                    <input
+                      type="date"
+                      value={birthDate}
+                      onChange={(e) => setBirthDate(e.target.value)}
+                      required
+                      max={new Date(new Date().setFullYear(new Date().getFullYear() - 18)).toISOString().split("T")[0]}
+                      className={fieldClass}
+                    />
+                  </div>
                 </div>
 
+                <div>
                   <label className={labelClass}>Contraseña</label>
                   <PasswordInput
                     value={password}
@@ -913,13 +956,23 @@ export const Agenda: React.FC = () => {
               </p>
             )}
 
-            <button
-              type="button"
-              onClick={() => { setOtpCode(""); setOtpMessage(null); refreshIntake(); }}
-              className="mt-4 w-full text-center text-xs text-velum-500 underline underline-offset-2 hover:text-velum-900 transition"
-            >
-              Omitir por ahora y continuar
-            </button>
+            <div className="mt-4 flex flex-col gap-2 text-center">
+              <button
+                type="button"
+                onClick={handleResendVerificationEmail}
+                disabled={isOtpLoading}
+                className="text-xs text-velum-600 underline underline-offset-2 hover:text-velum-900 transition disabled:opacity-50"
+              >
+                {isOtpLoading ? "Enviando..." : "Reenviar código"}
+              </button>
+              <button
+                type="button"
+                onClick={() => { setOtpCode(""); setOtpMessage(null); setPendingEmailVerify(false); refreshIntake(); }}
+                className="text-xs text-velum-400 underline underline-offset-2 hover:text-velum-700 transition"
+              >
+                Omitir por ahora y continuar
+              </button>
+            </div>
           </div>
         </section>
       </div>
