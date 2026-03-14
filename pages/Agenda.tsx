@@ -67,6 +67,8 @@ export const Agenda: React.FC = () => {
   const { login, register, isAuthenticated, user } = useAuth();
   const userRef = useRef(user);
   useEffect(() => { userRef.current = user; }, [user]);
+  // Stores the AuthUser returned at registration so OTP verify can pre-fill intake
+  const pendingRegistrationUser = useRef<AuthUser | null>(null);
   const toast = useToast();
   const location = useLocation();
   const navigate = useNavigate();
@@ -299,7 +301,8 @@ export const Agenda: React.FC = () => {
 
     try {
       setPendingEmailVerify(true);
-      await register({ email, password, firstName: firstName.trim(), lastName: lastName.trim(), phone: phone.trim(), birthDate });
+      const registeredUser = await register({ email, password, firstName: firstName.trim(), lastName: lastName.trim(), phone: phone.trim(), birthDate });
+      pendingRegistrationUser.current = registeredUser;
       toast.success("¡Cuenta creada! Confirma tu correo para continuar.");
       setViewState("email-verify");
     } catch (err: any) {
@@ -373,7 +376,9 @@ export const Agenda: React.FC = () => {
         setOtpMessage(null);
         setOtpSuccess(false);
         setPendingEmailVerify(false);
-        await refreshIntake();
+        const regUser = pendingRegistrationUser.current;
+        pendingRegistrationUser.current = null;
+        await refreshIntake(regUser ?? userRef.current);
       }, 1800);
     } catch {
       setOtpMessage("Código incorrecto o expirado. Verifica e intenta de nuevo.");
@@ -980,7 +985,7 @@ export const Agenda: React.FC = () => {
               </button>
               <button
                 type="button"
-                onClick={() => { setOtpCode(""); setOtpMessage(null); setPendingEmailVerify(false); refreshIntake(); }}
+                onClick={() => { setOtpCode(""); setOtpMessage(null); setPendingEmailVerify(false); const regUser = pendingRegistrationUser.current; pendingRegistrationUser.current = null; refreshIntake(regUser ?? userRef.current); }}
                 className="text-xs text-velum-400 underline underline-offset-2 hover:text-velum-700 transition"
               >
                 Omitir por ahora y continuar
