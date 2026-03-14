@@ -171,7 +171,7 @@ export const Agenda: React.FC = () => {
       setIntakeDraft({
         personalJson,
         historyJson: (current.historyJson as IntakeDraft["historyJson"]) ?? {},
-        phototype: current.phototype,
+        phototype: current.phototype ?? undefined,
         consentAccepted: current.consentAccepted,
         signatureKey: undefined
       });
