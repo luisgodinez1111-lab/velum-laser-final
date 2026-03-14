@@ -6,6 +6,7 @@ import { useAuth } from "../context/AuthContext";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { clinicalService, MedicalIntake } from "../services/clinicalService";
 import { AuthUser, authService } from "../services/authService";
+import { DEFAULT_PHOTOTYPE_QUESTIONS, getFototipo } from "../components/PhototypeQuestionnaire";
 import { useToast } from "../context/ToastContext";
 
 type ViewState = "intro" | "login" | "register" | "intake" | "calendar" | "forgot" | "forgot-otp" | "email-verify";
@@ -105,6 +106,7 @@ export const Agenda: React.FC = () => {
   const [intakeDraft, setIntakeDraft] = useState<IntakeDraft>(emptyIntakeDraft);
   const [intakeError, setIntakeError] = useState<string | null>(null);
   const [isSavingIntake, setIsSavingIntake] = useState(false);
+  const [phototypeAnswers, setPhototypeAnswers] = useState<Record<string, string>>({});
 
   // OTP flows
   const [otpCode, setOtpCode] = useState("");
@@ -432,7 +434,27 @@ export const Agenda: React.FC = () => {
     }
   };
 
+  const PHOTOTYPE_CODE_TO_NUM: Record<string, number> = { I: 1, II: 2, III: 3, IV: 4, V: 5, VI: 6 };
+
+  const handlePhototypeAnswer = (questionId: string, optionId: string) => {
+    const updated = { ...phototypeAnswers, [questionId]: optionId };
+    setPhototypeAnswers(updated);
+    const allAnswered = DEFAULT_PHOTOTYPE_QUESTIONS.every((q) => updated[q.id]);
+    if (allAnswered) {
+      const total = DEFAULT_PHOTOTYPE_QUESTIONS.reduce((sum, q) => {
+        const opt = q.options.find((o) => o.id === updated[q.id]);
+        return sum + (opt?.score ?? 0);
+      }, 0);
+      const result = getFototipo(total);
+      setIntakeDraft((prev) => ({ ...prev, phototype: PHOTOTYPE_CODE_TO_NUM[result.phototype] }));
+    }
+  };
+
   const handleNextIntakeStep = async () => {
+    if (intakeStep === 3 && !intakeDraft.phototype) {
+      setIntakeError("Responde todas las preguntas para calcular tu fototipo.");
+      return;
+    }
     const ok = await saveIntakeDraft(false);
     if (!ok) {
       return;
@@ -1146,28 +1168,67 @@ export const Agenda: React.FC = () => {
                   </div>
                 )}
 
-                {intakeStep === 3 && (
-                  <div className="space-y-4">
-                    <h3 className="font-serif text-2xl text-velum-900">Fototipo (Fitzpatrick)</h3>
-                    <p className="text-sm text-velum-600">Selecciona el fototipo identificado durante valoración clínica.</p>
-                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                      {[1, 2, 3, 4, 5, 6].map((value) => (
-                        <button
-                          key={value}
-                          type="button"
-                          onClick={() => setIntakeDraft((prev) => ({ ...prev, phototype: value }))}
-                          className={`rounded-2xl border px-4 py-3 text-sm font-semibold transition ${
-                            intakeDraft.phototype === value
-                              ? "border-velum-900 bg-velum-900 text-white shadow-md"
-                              : "border-velum-300 bg-white text-velum-700 hover:border-velum-500"
-                          }`}
-                        >
-                          Tipo {value}
-                        </button>
+                {intakeStep === 3 && (() => {
+                  const answered = DEFAULT_PHOTOTYPE_QUESTIONS.filter((q) => phototypeAnswers[q.id]).length;
+                  const allDone = answered === DEFAULT_PHOTOTYPE_QUESTIONS.length;
+                  const total = allDone
+                    ? DEFAULT_PHOTOTYPE_QUESTIONS.reduce((s, q) => {
+                        const opt = q.options.find((o) => o.id === phototypeAnswers[q.id]);
+                        return s + (opt?.score ?? 0);
+                      }, 0)
+                    : null;
+                  const result = total !== null ? getFototipo(total) : null;
+                  return (
+                    <div className="space-y-5">
+                      <div>
+                        <h3 className="font-serif text-2xl text-velum-900">Clasificación de fototipo</h3>
+                        <p className="mt-1 text-sm text-velum-600">
+                          Responde las siguientes preguntas para determinar tu fototipo Fitzpatrick.
+                        </p>
+                        <p className="mt-1 text-xs text-velum-500">{answered}/{DEFAULT_PHOTOTYPE_QUESTIONS.length} preguntas respondidas</p>
+                      </div>
+
+                      {DEFAULT_PHOTOTYPE_QUESTIONS.map((q) => (
+                        <div key={q.id} className="rounded-2xl border border-velum-200 bg-white p-4">
+                          <p className="mb-3 text-sm font-semibold text-velum-800">{q.title}</p>
+                          <div className="space-y-2">
+                            {q.options.map((opt) => {
+                              const checked = phototypeAnswers[q.id] === opt.id;
+                              return (
+                                <label
+                                  key={opt.id}
+                                  className={`flex cursor-pointer items-center gap-3 rounded-xl border px-3 py-2 text-sm transition ${
+                                    checked
+                                      ? "border-velum-900 bg-velum-50 font-medium text-velum-900"
+                                      : "border-velum-200 text-velum-700 hover:border-velum-400"
+                                  }`}
+                                >
+                                  <input
+                                    type="radio"
+                                    name={q.id}
+                                    value={opt.id}
+                                    checked={checked}
+                                    onChange={() => handlePhototypeAnswer(q.id, opt.id)}
+                                    className="accent-velum-900"
+                                  />
+                                  {opt.label}
+                                </label>
+                              );
+                            })}
+                          </div>
+                        </div>
                       ))}
+
+                      {result && (
+                        <div className="rounded-2xl border border-velum-300 bg-velum-50 p-4">
+                          <p className="text-xs font-bold uppercase tracking-widest text-velum-500">Resultado</p>
+                          <p className="mt-1 font-serif text-xl text-velum-900">Fototipo {result.phototype}</p>
+                          <p className="mt-1 text-sm text-velum-600">{result.description}</p>
+                        </div>
+                      )}
                     </div>
-                  </div>
-                )}
+                  );
+                })()}
 
                 {intakeStep === 4 && (
                   <div className="space-y-4">
