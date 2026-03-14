@@ -1,0 +1,544 @@
+import Stripe from "stripe";
+import { Prisma } from "@prisma/client";
+import { prisma } from "../db/prisma";
+
+type JsonObject = Record<string, unknown>;
+type Delegate = {
+  findUnique?: (args: unknown) => Promise<unknown>;
+  findFirst?: (args: unknown) => Promise<unknown>;
+  create?: (args: unknown) => Promise<unknown>;
+  update?: (args: unknown) => Promise<unknown>;
+};
+
+type StripeConfig = {
+  secretKey: string;
+  publishableKey: string;
+  webhookSecret: string;
+  source: "env" | "db" | "mixed" | "none";
+};
+
+export type StripePlanMapping = {
+  planCode: string;
+  name: string;
+  amount: number;
+  interval: "day" | "week" | "month" | "year";
+  stripePriceId: string;
+  active: boolean;
+};
+
+type MembershipUpsertInput = {
+  eventId: string;
+  eventType: string;
+  userId: string | null;
+  stripeSubscriptionId: string | null;
+  stripeCustomerId: string | null;
+  stripePriceId: string | null;
+  planCode: string | null;
+  status: string;
+  currentPeriodEnd: Date | null;
+  cancelAtPeriodEnd: boolean | null;
+  amount: number | null;
+  currency: string | null;
+};
+
+const STRIPE_CONFIG_KEY = "stripe_config_v1";
+const STRIPE_PLAN_CATALOG_KEY = "stripe_plan_catalog_v1";
+const PLACEHOLDER_RE = /(REEMPLAZA|CHANGE_ME|EXAMPLE|YOUR_|_HERE)/i;
+
+const asRecord = (value: unknown): JsonObject => {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return value as JsonObject;
+  }
+  return {};
+};
+
+const safeParseRecord = (value: unknown): JsonObject => {
+  if (typeof value === "string") {
+    try {
+      return asRecord(JSON.parse(value));
+    } catch {
+      return {};
+    }
+  }
+  return asRecord(value);
+};
+
+const safeParseArray = (value: unknown): unknown[] => {
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+  return Array.isArray(value) ? value : [];
+};
+
+const cleanString = (value: unknown): string => {
+  if (typeof value !== "string") return "";
+  const out = value.trim();
+  if (!out) return "";
+  if (PLACEHOLDER_RE.test(out)) return "";
+  return out;
+};
+
+const asNumber = (value: unknown): number => {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : 0;
+};
+
+const asBoolean = (value: unknown): boolean => {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "string") {
+    const lower = value.trim().toLowerCase();
+    return lower === "true" || lower === "1" || lower === "yes" || lower === "on";
+  }
+  if (typeof value === "number") return value !== 0;
+  return false;
+};
+
+const extractExpandableId = (value: unknown): string | null => {
+  if (typeof value === "string" && value.trim()) return value.trim();
+  if (value && typeof value === "object") {
+    const id = (value as JsonObject).id;
+    if (typeof id === "string" && id.trim()) return id.trim();
+  }
+  return null;
+};
+
+const centsToMajor = (value: unknown): number | null => {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return null;
+  return Math.round(n) / 100;
+};
+
+const unixToDate = (value: unknown): Date | null => {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return new Date(n * 1000);
+};
+
+const getDelegate = (name: string): Delegate | null => {
+  const map = prisma as unknown as Record<string, unknown>;
+  const delegate = map[name] as Delegate | undefined;
+  return delegate ?? null;
+};
+
+const pickDelegateName = (candidates: string[]): string | null => {
+  for (const name of candidates) {
+    const delegate = getDelegate(name);
+    if (!delegate) continue;
+    if (delegate.findFirst || delegate.findUnique || delegate.create || delegate.update) {
+      return name;
+    }
+  }
+  return null;
+};
+
+const lowerFirst = (value: string): string =>
+  value.length > 0 ? value.charAt(0).toLowerCase() + value.slice(1) : value;
+
+const getDelegateFieldSet = (delegateName: string): Set<string> => {
+  const models = Prisma.dmmf.datamodel.models as unknown as ReadonlyArray<{ name: string; fields: ReadonlyArray<{ name: string }> }>;
+  const model = models.find((m) => lowerFirst(m.name) === delegateName || m.name === delegateName);
+  if (!model) return new Set<string>();
+  return new Set<string>(model.fields.map((f) => f.name));
+};
+
+const filterDataByFields = (delegateName: string, data: JsonObject): JsonObject => {
+  const fields = getDelegateFieldSet(delegateName);
+  const out: JsonObject = {};
+  for (const [key, value] of Object.entries(data)) {
+    if (value === undefined) continue;
+    if (fields.size === 0 || fields.has(key)) {
+      out[key] = value;
+    }
+  }
+  return out;
+};
+
+const readAppSettingValue = async (key: string): Promise<unknown> => {
+  const delegate = getDelegate("appSetting");
+  if (!delegate?.findUnique) return null;
+  try {
+    const row = (await delegate.findUnique({ where: { key } })) as JsonObject | null;
+    if (!row) return null;
+    return row.value ?? null;
+  } catch {
+    return null;
+  }
+};
+
+export const getStripeWebhookConfig = async (): Promise<StripeConfig> => {
+  const envSecret = cleanString(process.env.STRIPE_SECRET_KEY);
+  const envPublishable = cleanString(process.env.STRIPE_PUBLISHABLE_KEY);
+  const envWebhook = cleanString(process.env.STRIPE_WEBHOOK_SECRET);
+
+  const raw = await readAppSettingValue(STRIPE_CONFIG_KEY);
+  const db = safeParseRecord(raw);
+  const dbSecret = cleanString(db.secretKey ?? db.secret_key ?? db.STRIPE_SECRET_KEY);
+  const dbPublishable = cleanString(db.publishableKey ?? db.publishable_key ?? db.STRIPE_PUBLISHABLE_KEY);
+  const dbWebhook = cleanString(db.webhookSecret ?? db.webhook_secret ?? db.STRIPE_WEBHOOK_SECRET);
+
+  const secretKey = envSecret || dbSecret;
+  const publishableKey = envPublishable || dbPublishable;
+  const webhookSecret = envWebhook || dbWebhook;
+
+  const hasEnv = Boolean(envSecret || envPublishable || envWebhook);
+  const hasDb = Boolean(dbSecret || dbPublishable || dbWebhook);
+
+  let source: StripeConfig["source"] = "none";
+  if (hasEnv && hasDb) source = "mixed";
+  else if (hasEnv) source = "env";
+  else if (hasDb) source = "db";
+
+  return { secretKey, publishableKey, webhookSecret, source };
+};
+
+export const createStripeClientForWebhook = (secretKey: string): Stripe => new Stripe(secretKey);
+
+const getPlanCatalog = async (): Promise<StripePlanMapping[]> => {
+  const raw = await readAppSettingValue(STRIPE_PLAN_CATALOG_KEY);
+  const arr = safeParseArray(raw);
+  const out: StripePlanMapping[] = [];
+
+  for (const item of arr) {
+    const row = asRecord(item);
+    const planCode = cleanString(row.planCode ?? row.plan_code);
+    const name = cleanString(row.name);
+    const stripePriceId = cleanString(row.stripePriceId ?? row.stripe_price_id);
+    const intervalRaw = cleanString(row.interval).toLowerCase();
+    const interval =
+      intervalRaw === "day" || intervalRaw === "week" || intervalRaw === "month" || intervalRaw === "year"
+        ? (intervalRaw as "day" | "week" | "month" | "year")
+        : "month";
+
+    if (!planCode || !stripePriceId) continue;
+
+    out.push({
+      planCode,
+      name: name || planCode,
+      amount: asNumber(row.amount),
+      interval,
+      stripePriceId,
+      active: asBoolean(row.active ?? true),
+    });
+  }
+
+  return out;
+};
+
+const findPlanByPriceId = async (priceId: string | null): Promise<StripePlanMapping | null> => {
+  if (!priceId) return null;
+  const catalog = await getPlanCatalog();
+  const found = catalog.find((p) => p.stripePriceId === priceId && p.active);
+  return found ?? null;
+};
+
+const findUserBySignals = async (
+  userId: string | null,
+  email: string | null,
+  stripeCustomerId: string | null
+): Promise<JsonObject | null> => {
+  const delegateName = pickDelegateName(["user", "users"]);
+  if (!delegateName) return null;
+
+  const delegate = getDelegate(delegateName);
+  if (!delegate) return null;
+
+  const fields = getDelegateFieldSet(delegateName);
+
+  try {
+    if (userId && fields.has("id") && delegate.findUnique) {
+      const row = (await delegate.findUnique({ where: { id: userId } })) as JsonObject | null;
+      if (row) return row;
+    }
+
+    if (email && fields.has("email") && delegate.findFirst) {
+      const row = (await delegate.findFirst({ where: { email } })) as JsonObject | null;
+      if (row) return row;
+    }
+
+    if (stripeCustomerId && fields.has("stripeCustomerId") && delegate.findFirst) {
+      const row = (await delegate.findFirst({ where: { stripeCustomerId } })) as JsonObject | null;
+      if (row) return row;
+    }
+  } catch (error) {
+    console.error("[stripe-webhook] user lookup failed", error);
+  }
+
+  return null;
+};
+
+const toMembershipStatus = (stripeStatus: string | null | undefined): string => {
+  const value = (stripeStatus ?? "").toLowerCase();
+  if (value === "active" || value === "trialing") return "active";
+  if (value === "past_due" || value === "unpaid") return "past_due";
+  if (value === "canceled") return "canceled";
+  if (value === "paused") return "paused";
+  if (value === "incomplete" || value === "incomplete_expired") return "pending";
+  return "inactive";
+};
+
+const upsertMembership = async (input: MembershipUpsertInput): Promise<void> => {
+  const delegateName = pickDelegateName(["membership", "userMembership", "subscription", "subscriptions"]);
+  if (!delegateName) {
+    console.warn("[stripe-webhook] no membership model delegate found");
+    return;
+  }
+
+  const delegate = getDelegate(delegateName);
+  if (!delegate) return;
+
+  const fields = getDelegateFieldSet(delegateName);
+  let existing: JsonObject | null = null;
+
+  try {
+    if (input.stripeSubscriptionId && fields.has("stripeSubscriptionId") && delegate.findFirst) {
+      existing = (await delegate.findFirst({
+        where: { stripeSubscriptionId: input.stripeSubscriptionId },
+      })) as JsonObject | null;
+    }
+
+    if (!existing && input.stripeCustomerId && fields.has("stripeCustomerId") && delegate.findFirst) {
+      existing = (await delegate.findFirst({
+        where: { stripeCustomerId: input.stripeCustomerId },
+      })) as JsonObject | null;
+    }
+
+    if (!existing && input.userId && fields.has("userId") && delegate.findFirst) {
+      existing = (await delegate.findFirst({
+        where: { userId: input.userId },
+      })) as JsonObject | null;
+    }
+  } catch (error) {
+    console.error("[stripe-webhook] membership lookup failed", error);
+  }
+
+  const data: JsonObject = {
+    status: input.status,
+    userId: input.userId,
+    stripeSubscriptionId: input.stripeSubscriptionId,
+    stripeCustomerId: input.stripeCustomerId,
+    stripePriceId: input.stripePriceId,
+    planCode: input.planCode,
+    planId: input.stripePriceId ?? input.planCode ?? null,
+    currentPeriodEnd: input.currentPeriodEnd,
+    cancelAtPeriodEnd: input.cancelAtPeriodEnd,
+    amount: input.amount,
+    currency: input.currency,
+    lastStripeEventId: input.eventId,
+    lastStripeEventType: input.eventType,
+    source: "stripe",
+    updatedAt: new Date(),
+  };
+
+  const filtered = filterDataByFields(delegateName, data);
+  const hasAnyField = Object.keys(filtered).length > 0;
+  if (!hasAnyField) {
+    console.warn("[stripe-webhook] filtered membership payload is empty");
+    return;
+  }
+
+  try {
+    const existingId = cleanString(existing?.id);
+    if (existing && existingId && delegate.update) {
+      await delegate.update({
+        where: { id: existingId },
+        data: filtered,
+      });
+      return;
+    }
+
+    if (fields.has("userId") && !cleanString(filtered.userId)) {
+      console.warn("[stripe-webhook] membership create skipped: missing userId");
+      return;
+    }
+
+    if (delegate.create) {
+      await delegate.create({ data: filtered });
+    }
+  } catch (error) {
+    console.error("[stripe-webhook] membership upsert failed", error);
+  }
+};
+
+type SubscriptionContext = {
+  stripeSubscriptionId: string;
+  stripeCustomerId: string | null;
+  stripePriceId: string | null;
+  planCode: string | null;
+  status: string;
+  currentPeriodEnd: Date | null;
+  cancelAtPeriodEnd: boolean | null;
+};
+
+const loadSubscriptionContext = async (
+  stripe: Stripe,
+  subscriptionId: string
+): Promise<SubscriptionContext | null> => {
+  try {
+    const sub = await stripe.subscriptions.retrieve(subscriptionId, {
+      expand: ["items.data.price", "customer"],
+    });
+
+    const firstItem = sub.items.data[0];
+    const stripePriceId = cleanString(firstItem?.price?.id);
+    const plan = await findPlanByPriceId(stripePriceId || null);
+
+    return {
+      stripeSubscriptionId: subscriptionId,
+      stripeCustomerId: extractExpandableId(sub.customer),
+      stripePriceId: stripePriceId || null,
+      planCode: plan?.planCode ?? null,
+      status: toMembershipStatus(sub.status),
+      currentPeriodEnd: unixToDate(sub.current_period_end),
+      cancelAtPeriodEnd: typeof sub.cancel_at_period_end === "boolean" ? sub.cancel_at_period_end : null,
+    };
+  } catch (error) {
+    console.error("[stripe-webhook] subscription retrieve failed", error);
+    return null;
+  }
+};
+
+const getUserIdFromRow = (row: JsonObject | null): string | null => {
+  if (!row) return null;
+  const id = cleanString(row.id);
+  return id || null;
+};
+
+const processCheckoutCompleted = async (event: Stripe.Event, stripe: Stripe): Promise<void> => {
+  const session = event.data.object as Stripe.Checkout.Session;
+  const metadata = asRecord(session.metadata ?? {});
+  const requestedPlanCode = cleanString(metadata.planCode);
+  const requestedUserId = cleanString(metadata.userId ?? session.client_reference_id);
+  const requestedEmail = cleanString(metadata.userEmail ?? session.customer_details?.email ?? session.customer_email);
+
+  const subscriptionId = extractExpandableId(session.subscription);
+  const stripeCustomerId = extractExpandableId(session.customer);
+
+  if (!subscriptionId) {
+    console.info("[stripe-webhook] checkout completed without subscription", { eventId: event.id });
+    return;
+  }
+
+  const subCtx = await loadSubscriptionContext(stripe, subscriptionId);
+  if (!subCtx) return;
+
+  const user = await findUserBySignals(requestedUserId || null, requestedEmail || null, subCtx.stripeCustomerId || stripeCustomerId);
+  const userId = getUserIdFromRow(user);
+
+  await upsertMembership({
+    eventId: event.id,
+    eventType: event.type,
+    userId,
+    stripeSubscriptionId: subCtx.stripeSubscriptionId,
+    stripeCustomerId: subCtx.stripeCustomerId ?? stripeCustomerId,
+    stripePriceId: subCtx.stripePriceId,
+    planCode: requestedPlanCode || subCtx.planCode,
+    status: subCtx.status,
+    currentPeriodEnd: subCtx.currentPeriodEnd,
+    cancelAtPeriodEnd: subCtx.cancelAtPeriodEnd,
+    amount: centsToMajor(session.amount_total),
+    currency: cleanString(session.currency) || null,
+  });
+
+  console.info("[stripe-webhook] checkout.session.completed processed", {
+    eventId: event.id,
+    subscriptionId,
+    userId,
+  });
+};
+
+const processInvoiceEvent = async (event: Stripe.Event, stripe: Stripe, success: boolean): Promise<void> => {
+  const invoice = event.data.object as Stripe.Invoice;
+  const subscriptionId = extractExpandableId(invoice.subscription);
+  const stripeCustomerId = extractExpandableId(invoice.customer);
+
+  if (!subscriptionId) {
+    console.info("[stripe-webhook] invoice event without subscription", { eventId: event.id });
+    return;
+  }
+
+  const subCtx = await loadSubscriptionContext(stripe, subscriptionId);
+  const email = cleanString(invoice.customer_email);
+  const user = await findUserBySignals(null, email || null, subCtx?.stripeCustomerId ?? stripeCustomerId);
+  const userId = getUserIdFromRow(user);
+
+  await upsertMembership({
+    eventId: event.id,
+    eventType: event.type,
+    userId,
+    stripeSubscriptionId: subscriptionId,
+    stripeCustomerId: subCtx?.stripeCustomerId ?? stripeCustomerId,
+    stripePriceId: subCtx?.stripePriceId ?? null,
+    planCode: subCtx?.planCode ?? null,
+    status: success ? "active" : "past_due",
+    currentPeriodEnd: subCtx?.currentPeriodEnd ?? null,
+    cancelAtPeriodEnd: subCtx?.cancelAtPeriodEnd ?? null,
+    amount: centsToMajor(success ? invoice.amount_paid : invoice.amount_due),
+    currency: cleanString(invoice.currency) || null,
+  });
+
+  console.info("[stripe-webhook] invoice processed", {
+    eventId: event.id,
+    success,
+    subscriptionId,
+    userId,
+  });
+};
+
+const processSubscriptionEvent = async (event: Stripe.Event): Promise<void> => {
+  const sub = event.data.object as Stripe.Subscription;
+  const stripeSubscriptionId = cleanString(sub.id);
+  const stripeCustomerId = extractExpandableId(sub.customer);
+  const firstItem = sub.items.data[0];
+  const stripePriceId = cleanString(firstItem?.price?.id);
+  const plan = await findPlanByPriceId(stripePriceId || null);
+
+  const status =
+    event.type === "customer.subscription.deleted" ? "canceled" : toMembershipStatus(sub.status);
+
+  await upsertMembership({
+    eventId: event.id,
+    eventType: event.type,
+    userId: null,
+    stripeSubscriptionId: stripeSubscriptionId || null,
+    stripeCustomerId,
+    stripePriceId: stripePriceId || null,
+    planCode: plan?.planCode ?? null,
+    status,
+    currentPeriodEnd: unixToDate(sub.current_period_end),
+    cancelAtPeriodEnd: typeof sub.cancel_at_period_end === "boolean" ? sub.cancel_at_period_end : null,
+    amount: null,
+    currency: cleanString(sub.currency) || null,
+  });
+
+  console.info("[stripe-webhook] subscription event processed", {
+    eventId: event.id,
+    type: event.type,
+    subscriptionId: stripeSubscriptionId,
+  });
+};
+
+export const handleBusinessStripeEvent = async (event: Stripe.Event, stripe: Stripe): Promise<void> => {
+  switch (event.type) {
+    case "checkout.session.completed":
+      await processCheckoutCompleted(event, stripe);
+      return;
+    case "invoice.payment_succeeded":
+      await processInvoiceEvent(event, stripe, true);
+      return;
+    case "invoice.payment_failed":
+      await processInvoiceEvent(event, stripe, false);
+      return;
+    case "customer.subscription.created":
+    case "customer.subscription.updated":
+    case "customer.subscription.deleted":
+      await processSubscriptionEvent(event);
+      return;
+    default:
+      console.info("[stripe-webhook] ignored", { eventId: event.id, type: event.type });
+  }
+};
