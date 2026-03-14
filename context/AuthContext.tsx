@@ -6,8 +6,8 @@ interface AuthContextType {
   user: AuthUser | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (email: string, pass: string) => Promise<void>;
-  register: (payload: { email: string; password: string; firstName?: string; lastName?: string; phone?: string; birthDate?: string }) => Promise<void>;
+  login: (email: string, pass: string) => Promise<AuthUser>;
+  register: (payload: { email: string; password: string; firstName?: string; lastName?: string; phone?: string; birthDate?: string }) => Promise<AuthUser>;
   logout: () => Promise<void>;
   hasRole: (roles: UserRole[]) => boolean;
 }
@@ -31,11 +31,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     initializeAuth();
   }, []);
 
-  const login = async (email: string, pass: string) => {
+  const login = async (email: string, pass: string): Promise<AuthUser> => {
     setIsLoading(true);
     try {
       const userData = await authService.login(email, pass);
       setUser(userData);
+      return userData;
     } catch (error) {
       throw error;
     } finally {
@@ -43,11 +44,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const register = async (payload: { email: string; password: string; firstName?: string; lastName?: string; phone?: string; birthDate?: string }) => {
+  const register = async (payload: { email: string; password: string; firstName?: string; lastName?: string; phone?: string; birthDate?: string }): Promise<AuthUser> => {
     setIsLoading(true);
     try {
       const userData = await authService.register(payload);
       setUser(userData);
+      return userData;
     } catch (error) {
       throw error;
     } finally {

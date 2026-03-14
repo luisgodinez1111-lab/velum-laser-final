@@ -6,17 +6,25 @@ export interface AuthUser {
   name: string;
   email: string;
   role: UserRole;
+  phone?: string;
+  birthDate?: string; // YYYY-MM-DD
 }
 
 const mapUser = (user: any): AuthUser => {
   const firstName = user?.profile?.firstName ?? "";
   const lastName = user?.profile?.lastName ?? "";
   const name = `${firstName} ${lastName}`.trim() || user.email;
+  const rawBirthDate = user?.profile?.birthDate;
+  const birthDate = rawBirthDate
+    ? new Date(rawBirthDate).toISOString().split("T")[0]
+    : undefined;
   return {
     id: user.id,
     name,
     email: user.email,
-    role: user.role
+    role: user.role,
+    phone: user?.profile?.phone ?? undefined,
+    birthDate
   };
 };
 

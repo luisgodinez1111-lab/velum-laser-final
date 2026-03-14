@@ -5,7 +5,7 @@ import { ChevronLeft, ChevronRight, Lock, User, Sparkles, Shield, FileText, Stet
 import { useAuth } from "../context/AuthContext";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { clinicalService, MedicalIntake } from "../services/clinicalService";
-import { authService } from "../services/authService";
+import { AuthUser, authService } from "../services/authService";
 import { useToast } from "../context/ToastContext";
 
 type ViewState = "intro" | "login" | "register" | "intake" | "calendar" | "forgot" | "forgot-otp" | "email-verify";
@@ -146,16 +146,27 @@ export const Agenda: React.FC = () => {
     return `${y}-${m}-${day}`;
   };
 
-  const refreshIntake = async () => {
+  const refreshIntake = async (profile?: AuthUser | null) => {
     if (!isAuthenticated) {
       return;
     }
 
     try {
       const current = await clinicalService.getMyMedicalIntake();
+      const personalJson: IntakeDraft["personalJson"] =
+        (current.personalJson as IntakeDraft["personalJson"]) ?? {};
+
+      // Pre-fill from profile when intake fields are still empty (new registrations)
+      const src = profile ?? user;
+      if (src) {
+        if (!personalJson.fullName) personalJson.fullName = src.name;
+        if (!personalJson.phone && src.phone) personalJson.phone = src.phone;
+        if (!personalJson.birthDate && src.birthDate) personalJson.birthDate = src.birthDate;
+      }
+
       setIntake(current);
       setIntakeDraft({
-        personalJson: (current.personalJson as IntakeDraft["personalJson"]) ?? {},
+        personalJson,
         historyJson: (current.historyJson as IntakeDraft["historyJson"]) ?? {},
         phototype: current.phototype,
         consentAccepted: current.consentAccepted,
@@ -245,8 +256,8 @@ export const Agenda: React.FC = () => {
     e.preventDefault();
     setAppointmentMessage(null);
     try {
-      await login(email, password);
-      await refreshIntake();
+      const userData = await login(email, password);
+      await refreshIntake(userData);
     } catch {
       toast.error("Credenciales incorrectas. Verifica tu correo y contraseña.");
     }
