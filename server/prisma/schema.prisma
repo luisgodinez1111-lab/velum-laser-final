@@ -482,6 +482,12 @@ model GoogleCalendarIntegration {
   @@index([watchChannelId])
 }
 
+model AppSetting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
+}
+
 model IntegrationJob {
   id                   String               @id @default(cuid())
   clinicId             String
