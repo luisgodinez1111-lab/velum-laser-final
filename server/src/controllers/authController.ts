@@ -83,6 +83,9 @@ export const login = async (req: Request, res: Response) => {
   if (!valid) {
     return res.status(401).json({ message: "Credenciales inválidas" });
   }
+  if (user.isActive === false) {
+    return res.status(403).json({ message: "Tu cuenta ha sido desactivada. Contacta a la clínica para más información." });
+  }
   const token = signToken({ sub: user.id, role: user.role });
   setAuthCookie(res, token);
   await createAuditLog({

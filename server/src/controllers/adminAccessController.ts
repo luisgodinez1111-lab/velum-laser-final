@@ -12,6 +12,7 @@ import {
   defaultPermissionsByRole,
 } from "../services/adminAccessService";
 import { sendWhatsappOtpCode, getEffectiveWhatsappMetaConfig, normalizePhone } from "../services/whatsappMetaService";
+import { stripe } from "../services/stripeService";
 
 // ── In-memory OTP store for user-deletion confirmation ─────────────────────
 // Key: actorUserId  Value: { otp, targetUserId, expiresAt }
@@ -49,8 +50,11 @@ export const listAdminAccessUsers = async (req: AuthRequest, res: Response) => {
         id: true,
         email: true,
         role: true,
+        isActive: true,
+        deactivatedAt: true,
         createdAt: true,
         emailVerifiedAt: true,
+        memberships: { select: { stripeSubscriptionId: true, status: true } },
       },
     });
 
@@ -60,9 +64,12 @@ export const listAdminAccessUsers = async (req: AuthRequest, res: Response) => {
       id: u.id,
       email: u.email,
       role: u.role,
+      isActive: u.isActive,
+      deactivatedAt: u.deactivatedAt,
       kind: u.role === "member" ? "paciente" : "administrativo",
       createdAt: u.createdAt,
       emailVerifiedAt: u.emailVerifiedAt,
+      membershipStatus: u.memberships[0]?.status ?? null,
       permissions: getEffectivePermissions(store, u.id, u.role),
     }));
 
@@ -219,6 +226,112 @@ export const resetAdminAccessPassword = async (req: AuthRequest, res: Response) 
   }
 };
 
+// ── Deactivate user (cancel Stripe + block login) ──────────────────────────
+export const deactivateUser = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!isAdminUser(req)) return res.status(403).json({ message: "No autorizado" });
+
+    const actorId = req.user!.id;
+    const targetUserId = clean(req.params.userId);
+
+    if (actorId === targetUserId) {
+      return res.status(400).json({ message: "No puedes desactivar tu propia cuenta" });
+    }
+
+    const target = await prisma.user.findUnique({
+      where: { id: targetUserId },
+      select: { id: true, email: true, role: true, isActive: true, memberships: { select: { stripeSubscriptionId: true, status: true } } },
+    });
+    if (!target) return res.status(404).json({ message: "Usuario no encontrado" });
+    if (!target.isActive) return res.status(409).json({ message: "El usuario ya está desactivado" });
+
+    // Cancel Stripe subscription if active
+    const sub = target.memberships[0];
+    let stripeCanceled = false;
+    if (sub?.stripeSubscriptionId && sub.status === "active") {
+      try {
+        await stripe.subscriptions.cancel(sub.stripeSubscriptionId);
+        stripeCanceled = true;
+      } catch (stripeErr: any) {
+        if (stripeErr?.code !== "resource_missing") {
+          console.error("Stripe cancel on deactivate:", stripeErr?.message);
+        }
+      }
+    }
+
+    // Update membership status in DB
+    if (sub?.stripeSubscriptionId) {
+      await prisma.membership.updateMany({
+        where: { userId: targetUserId },
+        data: { status: "canceled" },
+      });
+    }
+
+    // Mark user as inactive
+    await prisma.user.update({
+      where: { id: targetUserId },
+      data: { isActive: false, deactivatedAt: new Date() },
+    });
+
+    await createAuditLog({
+      userId: actorId,
+      actorUserId: actorId,
+      targetUserId,
+      action: "admin.user.deactivate",
+      resourceType: "user",
+      resourceId: targetUserId,
+      ip: req.ip,
+      metadata: { targetEmail: target.email, stripeCanceled },
+    });
+
+    return res.json({
+      message: `Usuario ${target.email} desactivado${stripeCanceled ? " y suscripción de Stripe cancelada" : ""}`,
+      stripeCanceled,
+    });
+  } catch (error: any) {
+    console.error("deactivateUser error:", error);
+    return res.status(500).json({ message: "Error al desactivar usuario", detail: error?.message ?? "unknown" });
+  }
+};
+
+// ── Activate user (re-enable login) ────────────────────────────────────────
+export const activateUser = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!isAdminUser(req)) return res.status(403).json({ message: "No autorizado" });
+
+    const actorId = req.user!.id;
+    const targetUserId = clean(req.params.userId);
+
+    const target = await prisma.user.findUnique({
+      where: { id: targetUserId },
+      select: { id: true, email: true, isActive: true },
+    });
+    if (!target) return res.status(404).json({ message: "Usuario no encontrado" });
+    if (target.isActive) return res.status(409).json({ message: "El usuario ya está activo" });
+
+    await prisma.user.update({
+      where: { id: targetUserId },
+      data: { isActive: true, deactivatedAt: null },
+    });
+
+    await createAuditLog({
+      userId: actorId,
+      actorUserId: actorId,
+      targetUserId,
+      action: "admin.user.activate",
+      resourceType: "user",
+      resourceId: targetUserId,
+      ip: req.ip,
+      metadata: { targetEmail: target.email },
+    });
+
+    return res.json({ message: `Usuario ${target.email} activado. Deberá iniciar sesión nuevamente.` });
+  } catch (error: any) {
+    console.error("activateUser error:", error);
+    return res.status(500).json({ message: "Error al activar usuario", detail: error?.message ?? "unknown" });
+  }
+};
+
 // ── OTP request for user deletion ──────────────────────────────────────────
 export const requestDeleteUserOtp = async (req: AuthRequest, res: Response) => {
   try {
@@ -316,6 +429,22 @@ export const deleteUser = async (req: AuthRequest, res: Response) => {
     if (!target) {
       deleteOtpStore.delete(actorId);
       return res.status(404).json({ message: "Usuario no encontrado" });
+    }
+
+    // Cancel Stripe subscription BEFORE deleting (avoids orphaned active subscriptions)
+    const membership = await prisma.membership.findUnique({
+      where: { userId: targetUserId },
+      select: { stripeSubscriptionId: true },
+    });
+    if (membership?.stripeSubscriptionId) {
+      try {
+        await stripe.subscriptions.cancel(membership.stripeSubscriptionId);
+      } catch (stripeErr: any) {
+        // If already canceled or not found in Stripe, continue with DB deletion
+        if (stripeErr?.code !== "resource_missing") {
+          console.error("Stripe cancel error on user delete:", stripeErr?.message);
+        }
+      }
     }
 
     // Reassign Restrict FK relations to the acting admin before deleting

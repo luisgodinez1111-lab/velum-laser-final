@@ -22,6 +22,9 @@ type UserRow = {
   email: string;
   role: UserRole;
   kind: "administrativo" | "paciente";
+  isActive: boolean;
+  deactivatedAt?: string | null;
+  membershipStatus?: string | null;
   createdAt: string;
   permissions: string[];
 };
@@ -59,6 +62,10 @@ export const AdminUsersPermissions: React.FC<Props> = ({ embedded = false }) => 
   const [createRole, setCreateRole] = useState<"admin" | "staff" | "member">("staff");
   const [isCreating, setIsCreating] = useState(false);
   const [createExpanded, setCreateExpanded] = useState(false);
+
+  // Filter state
+  const [filterStatus, setFilterStatus] = useState<"all" | "active" | "inactive">("all");
+  const [filterRole, setFilterRole] = useState<"all" | UserRole>("all");
 
   // Delete + OTP state
   const [deleteTarget, setDeleteTarget] = useState<UserRow | null>(null);
@@ -218,10 +225,33 @@ export const AdminUsersPermissions: React.FC<Props> = ({ embedded = false }) => 
     }
   };
 
-  const sorted = useMemo(
-    () => [...users].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
-    [users]
-  );
+  const [togglingActive, setTogglingActive] = useState<string | null>(null);
+
+  const toggleActive = async (u: UserRow) => {
+    setTogglingActive(u.id);
+    setError(""); setMessage("");
+    try {
+      const action = u.isActive ? "deactivate" : "activate";
+      const out = await api(`/api/v1/admin/access/users/${u.id}/${action}`, { method: "PATCH" });
+      setMessage(out?.message ?? (u.isActive ? "Usuario desactivado" : "Usuario activado"));
+      await load();
+    } catch (e: any) {
+      setError(e?.message ?? "No se pudo cambiar el estado del usuario");
+    } finally {
+      setTogglingActive(null);
+    }
+  };
+
+  const sorted = useMemo(() => {
+    return [...users]
+      .filter((u) => {
+        if (filterStatus === "active" && !u.isActive) return false;
+        if (filterStatus === "inactive" && u.isActive) return false;
+        if (filterRole !== "all" && u.role !== filterRole) return false;
+        return true;
+      })
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }, [users, filterStatus, filterRole]);
 
   const adminCount = users.filter((u) => u.role === "admin").length;
   const staffCount = users.filter((u) => u.role === "staff").length;
@@ -321,6 +351,32 @@ export const AdminUsersPermissions: React.FC<Props> = ({ embedded = false }) => 
           </button>
         </div>
 
+        {/* Filters */}
+        <div className="flex flex-wrap gap-2">
+          <div className="flex rounded-xl overflow-hidden border border-velum-200 text-xs">
+            {(["all", "active", "inactive"] as const).map((s) => (
+              <button key={s} onClick={() => setFilterStatus(s)}
+                className={`px-3 py-1.5 font-medium transition ${filterStatus === s ? "bg-velum-900 text-white" : "bg-white text-velum-500 hover:bg-velum-50"}`}>
+                {s === "all" ? "Todos" : s === "active" ? "Activos" : "Inactivos"}
+              </button>
+            ))}
+          </div>
+          <div className="flex rounded-xl overflow-hidden border border-velum-200 text-xs">
+            {(["all", "admin", "staff", "member", "system"] as const).map((r) => (
+              <button key={r} onClick={() => setFilterRole(r)}
+                className={`px-3 py-1.5 font-medium transition ${filterRole === r ? "bg-velum-900 text-white" : "bg-white text-velum-500 hover:bg-velum-50"}`}>
+                {r === "all" ? "Todos" : ROLE_CONFIG[r]?.label ?? r}
+              </button>
+            ))}
+          </div>
+          {(filterStatus !== "all" || filterRole !== "all") && (
+            <button onClick={() => { setFilterStatus("all"); setFilterRole("all"); }}
+              className="px-3 py-1.5 rounded-xl border border-velum-200 text-xs text-velum-400 hover:text-velum-700 hover:bg-velum-50 transition">
+              Limpiar filtros
+            </button>
+          )}
+        </div>
+
         {loading ? (
           <div className="space-y-2">{[1,2,3].map(i => <div key={i} className="h-16 bg-velum-100 rounded-2xl animate-pulse" />)}</div>
         ) : sorted.length === 0 ? (
@@ -348,9 +404,15 @@ export const AdminUsersPermissions: React.FC<Props> = ({ embedded = false }) => 
                   </div>
                   {/* Info */}
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-velum-900 truncate">{u.email}</p>
+                    <p className={`text-sm font-medium truncate ${u.isActive ? "text-velum-900" : "text-velum-400 line-through"}`}>{u.email}</p>
                     <div className="flex items-center gap-2 mt-0.5">
                       <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md ${roleCfg.cls}`}>{roleCfg.label}</span>
+                      {!u.isActive && (
+                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-red-100 text-red-600">Inactivo</span>
+                      )}
+                      {u.isActive && u.membershipStatus && (
+                        <span className="text-[10px] text-velum-400">{u.membershipStatus}</span>
+                      )}
                       {canHavePermissions(u.role) && (
                         <span className="text-[10px] text-velum-400">{u.permissions.length} permisos</span>
                       )}
@@ -411,6 +473,25 @@ export const AdminUsersPermissions: React.FC<Props> = ({ embedded = false }) => 
                         </div>
                       </div>
                     )}
+
+                    {/* Activate / Deactivate */}
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => toggleActive(u)}
+                        disabled={togglingActive === u.id}
+                        className={`flex-1 py-2 rounded-xl text-xs font-medium border transition disabled:opacity-50 ${
+                          u.isActive
+                            ? "border-amber-300 text-amber-700 hover:bg-amber-50"
+                            : "border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+                        }`}
+                      >
+                        {togglingActive === u.id
+                          ? "..."
+                          : u.isActive
+                          ? "Desactivar (cancela Stripe)"
+                          : "Reactivar cuenta"}
+                      </button>
+                    </div>
 
                     {/* Save role/perms */}
                     <button onClick={() => saveUser(u)} disabled={savingUser === u.id}

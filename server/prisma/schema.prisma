@@ -65,6 +65,8 @@ model User {
   clinicId            String                  @default("default")
   stripeCustomerId    String?                 @unique
   emailVerifiedAt     DateTime?
+  isActive            Boolean                 @default(true)
+  deactivatedAt       DateTime?
   createdAt           DateTime                @default(now())
   updatedAt           DateTime                @updatedAt
   profile             Profile?
