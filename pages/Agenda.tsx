@@ -36,11 +36,9 @@ const emptyIntakeDraft: IntakeDraft = {
 };
 
 const shellWrapperClass = "w-full max-w-5xl mx-auto px-4 py-8 sm:py-10 animate-fade-in";
-const glassCardClass =
-  "rounded-[28px] border border-velum-200/80 bg-white/95 shadow-[0_24px_80px_rgba(84,69,56,0.12)] backdrop-blur-sm";
-const fieldClass =
-  "w-full rounded-2xl border border-velum-300 bg-white px-4 py-3 text-sm text-velum-900 placeholder:text-velum-400 outline-none transition focus:border-velum-700 focus:ring-2 focus:ring-velum-200";
-const labelClass = "mb-2 block text-[11px] font-bold uppercase tracking-[0.14em] text-velum-600";
+const glassCardClass = "rounded-[28px] border border-velum-200/80 bg-white/95 shadow-[0_24px_80px_rgba(84,69,56,0.12)] backdrop-blur-sm";
+const fieldClass = "w-full rounded-2xl bg-velum-50 border border-velum-200/60 px-5 py-4 text-[15px] text-velum-900 placeholder:text-velum-400 outline-none transition-all duration-200 focus:bg-white focus:border-velum-900 focus:ring-4 focus:ring-velum-900/[0.07]";
+const labelClass = "mb-2 block text-[11px] font-bold uppercase tracking-[0.18em] text-velum-500";
 
 const intakeStepMeta = [
   {
@@ -506,8 +504,8 @@ export const Agenda: React.FC = () => {
     const params = new URLSearchParams(search);
     if (params.get("booking") === "success" && isAuthenticated) {
       toast.success("¡Cita reservada! Te confirmaremos los detalles pronto.");
-      // Clean up URL
-      window.history.replaceState(null, "", window.location.pathname + "#/agenda");
+      window.history.replaceState(null, "", window.location.pathname + "#/dashboard");
+      navigate("/dashboard");
     }
   }, [isAuthenticated]);
 
@@ -521,288 +519,424 @@ export const Agenda: React.FC = () => {
 
   if (!isAuthenticated && __effectiveViewState === "intro") {
     return (
-      <div className={shellWrapperClass}>
-        <section className={`${glassCardClass} relative overflow-hidden p-7 sm:p-10`}>
-          <div className="pointer-events-none absolute -right-20 -top-24 h-64 w-64 rounded-full bg-velum-200/70 blur-3xl" />
-          <div className="pointer-events-none absolute -left-12 bottom-0 h-44 w-44 rounded-full bg-velum-100 blur-2xl" />
-
-          <header className="relative mb-8 text-center">
-            <Lock className="mx-auto mb-4 text-velum-500" size={36} />
-            <div className="mx-auto mb-3 inline-flex items-center gap-2 rounded-full border border-velum-200 bg-white/80 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-velum-500">
-              <Shield size={12} />
-              Sesión privada protegida
+      <div className="min-h-[calc(100vh-7rem)] flex animate-fade-in">
+        {/* Brand panel */}
+        <div className="hidden lg:flex flex-col justify-between w-[44%] bg-velum-900 p-12 xl:p-16 relative overflow-hidden">
+          <div className="absolute -top-40 -right-40 w-96 h-96 rounded-full bg-velum-700/25 blur-[80px] pointer-events-none" />
+          <div className="absolute -bottom-32 -left-20 w-72 h-72 rounded-full bg-velum-600/15 blur-[60px] pointer-events-none" />
+          <div className="relative">
+            <div className="inline-flex items-center gap-2 mb-10">
+              <div className="w-1.5 h-1.5 rounded-full bg-velum-400" />
+              <p className="text-[11px] font-bold uppercase tracking-[0.26em] text-velum-400">Velum Laser</p>
             </div>
-            <h1 className="mt-2 font-serif text-4xl italic text-velum-900 sm:text-5xl">Acceso de pacientes</h1>
-            <p className="mx-auto mt-3 max-w-xl text-sm font-light leading-relaxed text-velum-700 sm:text-base">
-              Utiliza el mismo flujo premium para iniciar sesión, registrarte por primera vez y completar tu expediente médico.
+            <h1 className="font-serif text-4xl xl:text-5xl italic text-white leading-[1.15]">
+              Tu piel.<br/>Tu agenda.<br/>Tu historia.
+            </h1>
+            <p className="mt-7 text-velum-300 text-[13px] font-light leading-relaxed max-w-[260px]">
+              Plataforma clínica privada para depilación láser de alto estándar. Expediente digital, seguimiento y membresía integrados.
             </p>
-          </header>
-
-          <div className="relative grid grid-cols-1 gap-4 md:grid-cols-2">
-            <button
-              type="button"
-              onClick={() => setGuestViewState("login")}
-              className="group rounded-3xl border border-velum-200 bg-white p-6 text-left shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:border-velum-700 hover:shadow-xl"
-            >
-              <User className="mb-4 text-velum-700 transition-transform duration-300 group-hover:scale-105" size={30} />
-              <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-velum-500">Socio activo</p>
-              <h3 className="mt-1 font-serif text-2xl text-velum-900">Iniciar sesión</h3>
-              <p className="mt-2 text-sm text-velum-600">Accede a tu expediente y agenda en segundos.</p>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setGuestViewState("register")}
-              className="group rounded-3xl border border-velum-900 bg-velum-900 p-6 text-left shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:bg-velum-800 hover:shadow-xl"
-            >
-              <Sparkles className="mb-4 text-velum-100 transition-transform duration-300 group-hover:scale-105" size={30} />
-              <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-velum-300">Primera visita</p>
-              <h3 className="mt-1 font-serif text-2xl text-velum-50">Crear cuenta</h3>
-              <p className="mt-2 text-sm text-velum-200">Regístrate y comienza tu proceso clínico guiado.</p>
-            </button>
           </div>
-        </section>
+          <div className="relative">
+            <div className="space-y-3 mb-8">
+              <div className="flex items-center gap-3 text-velum-300 text-sm">
+                <div className="w-7 h-7 rounded-xl bg-velum-800 flex items-center justify-center shrink-0">
+                  <Shield size={13} className="text-velum-400" />
+                </div>
+                Historial clínico protegido y privado
+              </div>
+              <div className="flex items-center gap-3 text-velum-300 text-sm">
+                <div className="w-7 h-7 rounded-xl bg-velum-800 flex items-center justify-center shrink-0">
+                  <CircleCheck size={13} className="text-velum-400" />
+                </div>
+                Agenda directa sin intermediarios
+              </div>
+              <div className="flex items-center gap-3 text-velum-300 text-sm">
+                <div className="w-7 h-7 rounded-xl bg-velum-800 flex items-center justify-center shrink-0">
+                  <Sparkles size={13} className="text-velum-400" />
+                </div>
+                Seguimiento de sesiones y parámetros
+              </div>
+            </div>
+            <div className="flex items-center gap-2 pt-5 border-t border-velum-800">
+              <Lock size={11} className="text-velum-600" />
+              <p className="text-[11px] uppercase tracking-[0.16em] text-velum-600">Sesión encriptada</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Choice panel */}
+        <div className="flex-1 flex flex-col items-center justify-center px-6 py-12 sm:px-10 bg-white">
+          <div className="w-full max-w-md">
+            <div className="mb-10 text-center lg:hidden">
+              <div className="inline-flex items-center gap-2 mb-3">
+                <div className="w-1.5 h-1.5 rounded-full bg-velum-500" />
+                <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-velum-500">Velum Laser</p>
+              </div>
+              <h1 className="font-serif text-4xl italic text-velum-900">Portal de pacientes</h1>
+            </div>
+            <div className="mb-10 hidden lg:block">
+              <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-velum-500 mb-2">Portal de pacientes</p>
+              <h2 className="font-serif text-[2.5rem] italic text-velum-900 leading-tight">¿Cómo deseas acceder?</h2>
+            </div>
+            <div className="space-y-4">
+              <button
+                type="button"
+                onClick={() => setGuestViewState("login")}
+                className="group w-full flex items-center gap-5 rounded-3xl border-2 border-velum-100 bg-velum-50 p-6 text-left transition-all duration-300 hover:border-velum-300 hover:bg-white hover:shadow-lg active:scale-[0.99]"
+              >
+                <div className="w-12 h-12 rounded-2xl bg-white shadow-sm border border-velum-200 flex items-center justify-center text-velum-700 group-hover:bg-velum-900 group-hover:text-white group-hover:border-velum-900 transition-all duration-300 shrink-0">
+                  <User size={20} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-velum-500 mb-0.5">Ya tengo cuenta</p>
+                  <p className="text-[17px] font-semibold text-velum-900">Iniciar sesión</p>
+                </div>
+                <ChevronRight size={18} className="text-velum-300 group-hover:text-velum-700 group-hover:translate-x-0.5 transition-all duration-200 shrink-0" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setGuestViewState("register")}
+                className="group w-full flex items-center gap-5 rounded-3xl bg-velum-900 p-6 text-left transition-all duration-300 hover:bg-velum-800 hover:shadow-xl active:scale-[0.99]"
+              >
+                <div className="w-12 h-12 rounded-2xl bg-velum-800 flex items-center justify-center text-velum-300 group-hover:bg-velum-700 transition-all duration-300 shrink-0">
+                  <Sparkles size={20} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-velum-500 mb-0.5">Primera visita</p>
+                  <p className="text-[17px] font-semibold text-white">Crear cuenta</p>
+                </div>
+                <ChevronRight size={18} className="text-velum-600 group-hover:text-velum-300 group-hover:translate-x-0.5 transition-all duration-200 shrink-0" />
+              </button>
+            </div>
+            <p className="mt-10 text-center text-[11px] text-velum-400">
+              Acceso exclusivo para pacientes registrados en Velum Laser
+            </p>
+          </div>
+        </div>
       </div>
     );
   }
 
   if (!isAuthenticated && __effectiveViewState === "login") {
     return (
-      <div className={shellWrapperClass}>
-        <section className={`${glassCardClass} mx-auto w-full max-w-5xl overflow-hidden`}>
-          <div className="grid lg:grid-cols-[0.9fr_1.1fr]">
-            <aside className="relative border-b border-velum-200 bg-gradient-to-br from-velum-100 to-white p-7 sm:p-9 lg:border-b-0 lg:border-r">
-              <div className="pointer-events-none absolute -right-16 bottom-0 h-40 w-40 rounded-full bg-velum-200/70 blur-2xl" />
-              <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-velum-500">Acceso seguro</p>
-              <h2 className="mt-2 font-serif text-3xl italic text-velum-900">Bienvenido de nuevo</h2>
-              <p className="mt-3 text-sm text-velum-700">Tu historial clínico y agenda se cargan automáticamente al iniciar sesión.</p>
-
-              <div className="mt-7 space-y-3 text-sm text-velum-700">
-                <div className="flex items-center gap-3 rounded-2xl border border-velum-200 bg-white/80 px-3 py-2">
-                  <Shield size={16} className="text-velum-600" />
-                  Protección de sesión y datos clínicos
+      <div className="min-h-[calc(100vh-7rem)] flex animate-fade-in">
+        {/* Brand panel */}
+        <div className="hidden lg:flex flex-col justify-between w-[44%] bg-velum-900 p-12 xl:p-16 relative overflow-hidden">
+          <div className="absolute -top-40 -right-40 w-96 h-96 rounded-full bg-velum-700/25 blur-[80px] pointer-events-none" />
+          <div className="absolute bottom-0 left-0 w-80 h-80 rounded-full bg-velum-600/15 blur-[60px] pointer-events-none" />
+          <div className="relative">
+            <div className="inline-flex items-center gap-2 mb-10">
+              <div className="w-1.5 h-1.5 rounded-full bg-velum-400" />
+              <p className="text-[11px] font-bold uppercase tracking-[0.26em] text-velum-400">Velum Laser</p>
+            </div>
+            <h1 className="font-serif text-4xl xl:text-[2.75rem] italic text-white leading-[1.2]">
+              Bienvenido<br/>de vuelta.
+            </h1>
+            <p className="mt-6 text-velum-300 text-[13px] font-light leading-relaxed max-w-[260px]">
+              Tu expediente clínico y agenda te esperan. Ingresa para continuar.
+            </p>
+          </div>
+          <div className="relative">
+            <div className="space-y-3 mb-8">
+              <div className="flex items-center gap-3 text-velum-300 text-sm">
+                <div className="w-7 h-7 rounded-xl bg-velum-800 flex items-center justify-center shrink-0">
+                  <Shield size={13} className="text-velum-400" />
                 </div>
-                <div className="flex items-center gap-3 rounded-2xl border border-velum-200 bg-white/80 px-3 py-2">
-                  <CircleCheck size={16} className="text-velum-600" />
-                  Flujo continuo hacia expediente y agenda
-                </div>
+                Datos clínicos protegidos
               </div>
-            </aside>
-
-            <div className="p-7 sm:p-10">
-              <header className="mb-8 flex items-start justify-between gap-4">
-                <button
-                  type="button"
-                  onClick={() => setGuestViewState("intro")}
-                  className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-velum-200 text-velum-500 transition hover:border-velum-500 hover:text-velum-900"
-                >
-                  <ChevronLeft size={20} />
-                </button>
-
-                <div className="text-right">
-                  <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-velum-500">Ingreso</p>
-                  <p className="mt-1 text-xs text-velum-500">Verificación de credenciales</p>
+              <div className="flex items-center gap-3 text-velum-300 text-sm">
+                <div className="w-7 h-7 rounded-xl bg-velum-800 flex items-center justify-center shrink-0">
+                  <CircleCheck size={13} className="text-velum-400" />
                 </div>
-              </header>
-
-              <form onSubmit={handleLoginSubmit} className="space-y-5">
-                <div>
-                  <label className={labelClass}>Correo electrónico</label>
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    required
-                    className={fieldClass}
-                    placeholder="ana.garcia@gmail.com"
-                  />
-                </div>
-                <div>
-                  <div className="mb-2 flex items-center justify-between">
-                    <label className={labelClass} style={{ margin: 0 }}>Contraseña</label>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setOtpEmail(email);
-                        setOtpCode("");
-                        setOtpMessage(null);
-                        setOtpSuccess(false);
-                        setViewState("forgot");
-                      }}
-                      className="text-[11px] font-semibold text-velum-600 underline underline-offset-2 hover:text-velum-900 transition"
-                    >
-                      ¿Olvidaste tu contraseña?
-                    </button>
-                  </div>
-                  <PasswordInput
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                    className={fieldClass}
-                    placeholder="••••••••"
-                  />
-                </div>
-                <Button type="submit" className="w-full rounded-2xl">
-                  Entrar a la agenda
-                </Button>
-              </form>
-
-              {appointmentMessage && (
-                <p className="mt-4 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{appointmentMessage}</p>
-              )}
+                Flujo directo a expediente y agenda
+              </div>
+            </div>
+            <div className="flex items-center gap-3 pt-5 border-t border-velum-800">
+              <span className="text-[11px] uppercase tracking-[0.16em] text-velum-600">¿Primera vez?</span>
+              <button
+                type="button"
+                onClick={() => setGuestViewState("register")}
+                className="text-[11px] uppercase tracking-[0.16em] text-velum-400 underline underline-offset-2 hover:text-velum-200 transition"
+              >
+                Crear cuenta
+              </button>
             </div>
           </div>
-        </section>
+        </div>
+
+        {/* Form panel */}
+        <div className="flex-1 flex flex-col items-center justify-center px-6 py-12 sm:px-10 lg:px-16 bg-white">
+          <div className="w-full max-w-sm">
+            <button
+              type="button"
+              onClick={() => setGuestViewState("intro")}
+              className="mb-10 inline-flex items-center gap-1.5 text-sm text-velum-400 hover:text-velum-900 transition-colors"
+            >
+              <ChevronLeft size={16} />
+              Atrás
+            </button>
+            <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-velum-500 mb-2">Acceso seguro</p>
+            <h2 className="font-serif text-[2.25rem] italic text-velum-900 mb-10 leading-tight">Iniciar sesión</h2>
+            <form onSubmit={handleLoginSubmit} className="space-y-5">
+              <div>
+                <label className="mb-2 block text-[11px] font-bold uppercase tracking-[0.18em] text-velum-500">
+                  Correo electrónico
+                </label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  className="w-full rounded-2xl bg-velum-50 border border-velum-200/60 px-5 py-4 text-[15px] text-velum-900 placeholder:text-velum-400 outline-none transition-all duration-200 focus:bg-white focus:border-velum-900 focus:ring-4 focus:ring-velum-900/[0.07]"
+                  placeholder="correo@ejemplo.com"
+                  autoComplete="email"
+                />
+              </div>
+              <div>
+                <div className="mb-2 flex items-center justify-between">
+                  <label className="text-[11px] font-bold uppercase tracking-[0.18em] text-velum-500">
+                    Contraseña
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => { setOtpEmail(email); setOtpCode(""); setOtpMessage(null); setOtpSuccess(false); setViewState("forgot"); }}
+                    className="text-[11px] text-velum-500 hover:text-velum-900 transition underline underline-offset-2"
+                  >
+                    ¿Olvidaste tu contraseña?
+                  </button>
+                </div>
+                <PasswordInput
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  className="w-full rounded-2xl bg-velum-50 border border-velum-200/60 px-5 py-4 text-[15px] text-velum-900 placeholder:text-velum-400 outline-none transition-all duration-200 focus:bg-white focus:border-velum-900 focus:ring-4 focus:ring-velum-900/[0.07]"
+                  placeholder="••••••••"
+                  autoComplete="current-password"
+                />
+              </div>
+              <button
+                type="submit"
+                className="mt-2 w-full rounded-2xl bg-velum-900 py-4 text-[15px] font-semibold text-white hover:bg-velum-800 active:scale-[0.99] transition-all duration-200"
+              >
+                Entrar
+              </button>
+            </form>
+            {appointmentMessage && (
+              <div className="mt-5 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                {appointmentMessage}
+              </div>
+            )}
+            <p className="mt-10 text-center text-sm text-velum-400 lg:hidden">
+              ¿Primera vez?{" "}
+              <button
+                type="button"
+                onClick={() => setGuestViewState("register")}
+                className="text-velum-700 font-semibold underline underline-offset-2 hover:text-velum-900 transition"
+              >
+                Crear cuenta
+              </button>
+            </p>
+          </div>
+        </div>
       </div>
     );
   }
 
   if (!isAuthenticated && __effectiveViewState === "register") {
     return (
-      <div className={shellWrapperClass}>
-        <section className={`${glassCardClass} mx-auto w-full max-w-5xl overflow-hidden`}>
-          <div className="grid lg:grid-cols-[0.9fr_1.1fr]">
-            <aside className="relative border-b border-velum-200 bg-gradient-to-br from-velum-100 to-white p-7 sm:p-9 lg:border-b-0 lg:border-r">
-              <div className="pointer-events-none absolute -left-10 top-0 h-40 w-40 rounded-full bg-velum-200/60 blur-3xl" />
-              <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-velum-500">Registro inicial</p>
-              <h2 className="mt-2 font-serif text-3xl italic text-velum-900">Crear cuenta clínica</h2>
-              <p className="mt-3 text-sm text-velum-700">Después del registro continuarás directo a tu expediente médico.</p>
-
-              <div className="mt-7 space-y-3 text-sm text-velum-700">
-                <div className="flex items-center gap-3 rounded-2xl border border-velum-200 bg-white/80 px-3 py-2">
-                  <CircleCheck size={16} className="text-velum-600" />
-                  Alta en menos de 1 minuto
+      <div className="min-h-[calc(100vh-7rem)] flex animate-fade-in">
+        {/* Brand panel */}
+        <div className="hidden lg:flex flex-col justify-between w-[44%] bg-velum-900 p-12 xl:p-16 relative overflow-hidden">
+          <div className="absolute -top-32 -right-32 w-80 h-80 rounded-full bg-velum-700/25 blur-[80px] pointer-events-none" />
+          <div className="absolute -bottom-32 -left-16 w-72 h-72 rounded-full bg-velum-600/20 blur-[60px] pointer-events-none" />
+          <div className="relative">
+            <div className="inline-flex items-center gap-2 mb-10">
+              <div className="w-1.5 h-1.5 rounded-full bg-velum-400" />
+              <p className="text-[11px] font-bold uppercase tracking-[0.26em] text-velum-400">Velum Laser</p>
+            </div>
+            <h1 className="font-serif text-4xl xl:text-[2.75rem] italic text-white leading-[1.2]">
+              Comienza tu<br/>expediente<br/>clínico.
+            </h1>
+            <p className="mt-6 text-velum-300 text-[13px] font-light leading-relaxed max-w-[260px]">
+              Alta en menos de 1 minuto. Después del registro completarás tu expediente médico directamente.
+            </p>
+          </div>
+          <div className="relative">
+            <div className="space-y-3 mb-8">
+              <div className="flex items-center gap-3 text-velum-300 text-sm">
+                <div className="w-7 h-7 rounded-xl bg-velum-800 flex items-center justify-center shrink-0">
+                  <CircleCheck size={13} className="text-velum-400" />
                 </div>
-                <div className="flex items-center gap-3 rounded-2xl border border-velum-200 bg-white/80 px-3 py-2">
-                  <FileText size={16} className="text-velum-600" />
-                  Perfil conectado con expediente y consentimiento
-                </div>
+                Alta en menos de 1 minuto
               </div>
-            </aside>
-
-            <div className="p-7 sm:p-10">
-              <header className="mb-8 flex items-start justify-between gap-4">
-                <button
-                  type="button"
-                  onClick={() => setGuestViewState("intro")}
-                  className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-velum-200 text-velum-500 transition hover:border-velum-500 hover:text-velum-900"
-                >
-                  <ChevronLeft size={20} />
-                </button>
-
-                <div className="text-right">
-                  <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-velum-500">Cuenta nueva</p>
-                  <p className="mt-1 text-xs text-velum-500">Acceso de paciente</p>
+              <div className="flex items-center gap-3 text-velum-300 text-sm">
+                <div className="w-7 h-7 rounded-xl bg-velum-800 flex items-center justify-center shrink-0">
+                  <FileText size={13} className="text-velum-400" />
                 </div>
-              </header>
-
-              <form onSubmit={handleRegisterSubmit} className="space-y-5">
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  <div>
-                    <label className={labelClass}>Nombre</label>
-                    <input
-                      type="text"
-                      value={firstName}
-                      onChange={(e) => setFirstName(e.target.value)}
-                      required
-                      className={fieldClass}
-                      placeholder="Ana"
-                    />
-                  </div>
-                  <div>
-                    <label className={labelClass}>Apellido</label>
-                    <input
-                      type="text"
-                      value={lastName}
-                      onChange={(e) => setLastName(e.target.value)}
-                      required
-                      className={fieldClass}
-                      placeholder="García"
-                    />
-                  </div>
+                Perfil conectado con expediente y consentimiento
+              </div>
+              <div className="flex items-center gap-3 text-velum-300 text-sm">
+                <div className="w-7 h-7 rounded-xl bg-velum-800 flex items-center justify-center shrink-0">
+                  <Shield size={13} className="text-velum-400" />
                 </div>
-                <div>
-                  <label className={labelClass}>Correo electrónico</label>
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    required
-                    className={fieldClass}
-                    placeholder="ana.garcia@gmail.com"
-                  />
-                </div>
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  <div>
-                    <label className={labelClass}>Número celular</label>
-                    <input
-                      type="tel"
-                      inputMode="tel"
-                      autoComplete="tel"
-                      value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
-                      required
-                      className={fieldClass}
-                      placeholder="+52 55 1234 5678"
-                    />
-                  </div>
-                  <div>
-                    <label className={labelClass}>Fecha de nacimiento</label>
-                    <input
-                      type="date"
-                      value={birthDate}
-                      onChange={(e) => setBirthDate(e.target.value)}
-                      required
-                      max={new Date(new Date().setFullYear(new Date().getFullYear() - 18)).toISOString().split("T")[0]}
-                      className={fieldClass}
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className={labelClass}>Contraseña</label>
-                  <PasswordInput
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                    className={fieldClass}
-                    placeholder="••••••••"
-                  />
-                  <div className="mt-3 rounded-2xl border border-velum-200 bg-velum-50/40 px-3 py-2">
-                    <p className={`text-xs font-semibold ${registerPasswordStrengthClass}`}>Seguridad de contrasena: {registerPasswordStrength}</p>
-                    <p className="mt-1 text-[11px] text-velum-600">Requisitos minimos de seguridad:</p>
-                    <div className="mt-2 grid grid-cols-1 gap-1 text-[11px] sm:grid-cols-2">
-                      <span className={registerPasswordChecks.length ? "text-green-700" : "text-velum-500"}>{registerPasswordChecks.length ? "✓" : "•"} 8+ caracteres</span>
-                      <span className={registerPasswordChecks.upper ? "text-green-700" : "text-velum-500"}>{registerPasswordChecks.upper ? "✓" : "•"} 1 mayuscula</span>
-                      <span className={registerPasswordChecks.lower ? "text-green-700" : "text-velum-500"}>{registerPasswordChecks.lower ? "✓" : "•"} 1 minuscula</span>
-                      <span className={registerPasswordChecks.number ? "text-green-700" : "text-velum-500"}>{registerPasswordChecks.number ? "✓" : "•"} 1 numero</span>
-                      <span className={registerPasswordChecks.special ? "text-green-700" : "text-velum-500"}>{registerPasswordChecks.special ? "✓" : "•"} 1 simbolo</span>
-                    </div>
-                  </div>
-
-                </div>
-                                <div>
-                  <label className={labelClass}>Confirmar contrasena</label>
-                  <PasswordInput
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    required
-                    className={fieldClass}
-                    placeholder="••••••••"
-                  />
-                </div>
-
-<Button type="submit" className="w-full rounded-2xl">
-                  Crear cuenta
-                </Button>
-              </form>
-
-              {appointmentMessage && (
-                <p className="mt-4 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{appointmentMessage}</p>
-              )}
+                Datos protegidos bajo NOM-004
+              </div>
+            </div>
+            <div className="flex items-center gap-3 pt-5 border-t border-velum-800">
+              <span className="text-[11px] uppercase tracking-[0.16em] text-velum-600">¿Ya tienes cuenta?</span>
+              <button
+                type="button"
+                onClick={() => setGuestViewState("login")}
+                className="text-[11px] uppercase tracking-[0.16em] text-velum-400 underline underline-offset-2 hover:text-velum-200 transition"
+              >
+                Iniciar sesión
+              </button>
             </div>
           </div>
-        </section>
+        </div>
+
+        {/* Form panel */}
+        <div className="flex-1 flex flex-col items-center justify-center px-6 py-12 sm:px-10 lg:px-16 bg-white overflow-y-auto">
+          <div className="w-full max-w-sm">
+            <button
+              type="button"
+              onClick={() => setGuestViewState("intro")}
+              className="mb-10 inline-flex items-center gap-1.5 text-sm text-velum-400 hover:text-velum-900 transition-colors"
+            >
+              <ChevronLeft size={16} />
+              Atrás
+            </button>
+            <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-velum-500 mb-2">Cuenta nueva</p>
+            <h2 className="font-serif text-[2.25rem] italic text-velum-900 mb-10 leading-tight">Crear cuenta</h2>
+            <form onSubmit={handleRegisterSubmit} className="space-y-5">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="mb-2 block text-[11px] font-bold uppercase tracking-[0.18em] text-velum-500">Nombre</label>
+                  <input
+                    type="text"
+                    value={firstName}
+                    onChange={(e) => setFirstName(e.target.value)}
+                    required
+                    className="w-full rounded-2xl bg-velum-50 border border-velum-200/60 px-4 py-4 text-[15px] text-velum-900 placeholder:text-velum-400 outline-none transition-all duration-200 focus:bg-white focus:border-velum-900 focus:ring-4 focus:ring-velum-900/[0.07]"
+                    placeholder="Ana"
+                    autoComplete="given-name"
+                  />
+                </div>
+                <div>
+                  <label className="mb-2 block text-[11px] font-bold uppercase tracking-[0.18em] text-velum-500">Apellido</label>
+                  <input
+                    type="text"
+                    value={lastName}
+                    onChange={(e) => setLastName(e.target.value)}
+                    required
+                    className="w-full rounded-2xl bg-velum-50 border border-velum-200/60 px-4 py-4 text-[15px] text-velum-900 placeholder:text-velum-400 outline-none transition-all duration-200 focus:bg-white focus:border-velum-900 focus:ring-4 focus:ring-velum-900/[0.07]"
+                    placeholder="García"
+                    autoComplete="family-name"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="mb-2 block text-[11px] font-bold uppercase tracking-[0.18em] text-velum-500">Correo electrónico</label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  className="w-full rounded-2xl bg-velum-50 border border-velum-200/60 px-5 py-4 text-[15px] text-velum-900 placeholder:text-velum-400 outline-none transition-all duration-200 focus:bg-white focus:border-velum-900 focus:ring-4 focus:ring-velum-900/[0.07]"
+                  placeholder="correo@ejemplo.com"
+                  autoComplete="email"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="mb-2 block text-[11px] font-bold uppercase tracking-[0.18em] text-velum-500">Celular</label>
+                  <input
+                    type="tel"
+                    inputMode="tel"
+                    autoComplete="tel"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    required
+                    className="w-full rounded-2xl bg-velum-50 border border-velum-200/60 px-4 py-4 text-[15px] text-velum-900 placeholder:text-velum-400 outline-none transition-all duration-200 focus:bg-white focus:border-velum-900 focus:ring-4 focus:ring-velum-900/[0.07]"
+                    placeholder="+52 55…"
+                  />
+                </div>
+                <div>
+                  <label className="mb-2 block text-[11px] font-bold uppercase tracking-[0.18em] text-velum-500">Nacimiento</label>
+                  <input
+                    type="date"
+                    value={birthDate}
+                    onChange={(e) => setBirthDate(e.target.value)}
+                    required
+                    max={new Date(new Date().setFullYear(new Date().getFullYear() - 18)).toISOString().split("T")[0]}
+                    className="w-full rounded-2xl bg-velum-50 border border-velum-200/60 px-4 py-4 text-[15px] text-velum-900 outline-none transition-all duration-200 focus:bg-white focus:border-velum-900 focus:ring-4 focus:ring-velum-900/[0.07]"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="mb-2 block text-[11px] font-bold uppercase tracking-[0.18em] text-velum-500">Contraseña</label>
+                <PasswordInput
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  className="w-full rounded-2xl bg-velum-50 border border-velum-200/60 px-5 py-4 text-[15px] text-velum-900 placeholder:text-velum-400 outline-none transition-all duration-200 focus:bg-white focus:border-velum-900 focus:ring-4 focus:ring-velum-900/[0.07]"
+                  placeholder="••••••••"
+                  autoComplete="new-password"
+                />
+                <div className="mt-3 rounded-2xl bg-velum-50 border border-velum-200/60 px-4 py-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-[11px] uppercase tracking-[0.16em] text-velum-500">Fortaleza</p>
+                    <p className={`text-[11px] font-bold ${registerPasswordStrengthClass}`}>{registerPasswordStrength}</p>
+                  </div>
+                  <div className="flex gap-1 mb-3">
+                    {[1,2,3,4,5].map((i) => (
+                      <div key={i} className={`h-1 flex-1 rounded-full transition-all duration-300 ${i <= registerPasswordScore ? (registerPasswordScore <= 2 ? "bg-red-400" : registerPasswordScore <= 4 ? "bg-amber-400" : "bg-green-500") : "bg-velum-200"}`} />
+                    ))}
+                  </div>
+                  <div className="grid grid-cols-2 gap-1 text-[11px]">
+                    <span className={registerPasswordChecks.length ? "text-green-700" : "text-velum-400"}>{registerPasswordChecks.length ? "✓" : "·"} 8+ caracteres</span>
+                    <span className={registerPasswordChecks.upper ? "text-green-700" : "text-velum-400"}>{registerPasswordChecks.upper ? "✓" : "·"} Mayúscula</span>
+                    <span className={registerPasswordChecks.lower ? "text-green-700" : "text-velum-400"}>{registerPasswordChecks.lower ? "✓" : "·"} Minúscula</span>
+                    <span className={registerPasswordChecks.number ? "text-green-700" : "text-velum-400"}>{registerPasswordChecks.number ? "✓" : "·"} Número</span>
+                    <span className={registerPasswordChecks.special ? "text-green-700" : "text-velum-400"}>{registerPasswordChecks.special ? "✓" : "·"} Símbolo</span>
+                  </div>
+                </div>
+              </div>
+              <div>
+                <label className="mb-2 block text-[11px] font-bold uppercase tracking-[0.18em] text-velum-500">Confirmar contraseña</label>
+                <PasswordInput
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  required
+                  className="w-full rounded-2xl bg-velum-50 border border-velum-200/60 px-5 py-4 text-[15px] text-velum-900 placeholder:text-velum-400 outline-none transition-all duration-200 focus:bg-white focus:border-velum-900 focus:ring-4 focus:ring-velum-900/[0.07]"
+                  placeholder="••••••••"
+                  autoComplete="new-password"
+                />
+              </div>
+              <button
+                type="submit"
+                className="mt-2 w-full rounded-2xl bg-velum-900 py-4 text-[15px] font-semibold text-white hover:bg-velum-800 active:scale-[0.99] transition-all duration-200"
+              >
+                Crear cuenta
+              </button>
+            </form>
+            {appointmentMessage && (
+              <div className="mt-5 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                {appointmentMessage}
+              </div>
+            )}
+            <p className="mt-8 text-center text-sm text-velum-400 lg:hidden">
+              ¿Ya tienes cuenta?{" "}
+              <button
+                type="button"
+                onClick={() => setGuestViewState("login")}
+                className="text-velum-700 font-semibold underline underline-offset-2 hover:text-velum-900 transition"
+              >
+                Iniciar sesión
+              </button>
+            </p>
+          </div>
+        </div>
       </div>
     );
   }
@@ -810,56 +944,55 @@ export const Agenda: React.FC = () => {
   // ── Olvidé mi contraseña: ingresar correo ─────────────────────────
   if (!isAuthenticated && viewState === "forgot") {
     return (
-      <div className={shellWrapperClass}>
-        <section className={`${glassCardClass} mx-auto w-full max-w-lg overflow-hidden`}>
-          <div className="p-7 sm:p-10">
-            <header className="mb-8 flex items-start justify-between gap-4">
-              <button
-                type="button"
-                onClick={() => { setOtpMessage(null); setViewState("login"); }}
-                className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-velum-200 text-velum-500 transition hover:border-velum-500 hover:text-velum-900"
-              >
-                <ChevronLeft size={20} />
-              </button>
-              <div className="text-right">
-                <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-velum-500">Recuperar acceso</p>
-                <p className="mt-1 text-xs text-velum-500">Te enviaremos un código de 6 dígitos</p>
-              </div>
-            </header>
-
-            <div className="mb-7 flex flex-col items-center gap-3 text-center">
-              <div className="flex h-14 w-14 items-center justify-center rounded-full border border-velum-200 bg-velum-50">
-                <KeyRound size={24} className="text-velum-700" />
-              </div>
-              <h2 className="font-serif text-2xl italic text-velum-900">Restablecer contraseña</h2>
-              <p className="text-sm text-velum-600">Ingresa tu correo y te enviaremos un código para crear una nueva contraseña.</p>
+      <div className="min-h-[calc(100vh-7rem)] flex items-center justify-center bg-white px-6 py-12 animate-fade-in">
+        <div className="w-full max-w-sm">
+          <button
+            type="button"
+            onClick={() => { setOtpMessage(null); setViewState("login"); }}
+            className="mb-10 inline-flex items-center gap-1.5 text-sm text-velum-400 hover:text-velum-900 transition-colors"
+          >
+            <ChevronLeft size={16} />
+            Volver al inicio de sesión
+          </button>
+          <div className="mb-10">
+            <div className="w-14 h-14 rounded-2xl bg-velum-50 border border-velum-200 flex items-center justify-center mb-6">
+              <KeyRound size={24} className="text-velum-700" />
             </div>
-
-            <form onSubmit={handleForgotSubmit} className="space-y-5">
-              <div>
-                <label className={labelClass}>Correo electrónico</label>
-                <input
-                  type="email"
-                  value={otpEmail}
-                  onChange={(e) => setOtpEmail(e.target.value)}
-                  required
-                  className={fieldClass}
-                  placeholder="ana.garcia@gmail.com"
-                  autoFocus
-                />
-              </div>
-              <Button type="submit" className="w-full rounded-2xl" disabled={isOtpLoading}>
-                {isOtpLoading ? "Enviando..." : "Enviar código"}
-              </Button>
-            </form>
-
-            {otpMessage && (
-              <p className={`mt-4 rounded-xl border px-3 py-2 text-xs ${otpSuccess ? "border-green-200 bg-green-50 text-green-700" : "border-amber-200 bg-amber-50 text-amber-800"}`}>
-                {otpMessage}
-              </p>
-            )}
+            <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-velum-500 mb-2">Recuperar acceso</p>
+            <h2 className="font-serif text-[2.25rem] italic text-velum-900 mb-3 leading-tight">Restablecer contraseña</h2>
+            <p className="text-[14px] text-velum-500 leading-relaxed">
+              Ingresa tu correo y te enviaremos un código de 6 dígitos para crear una nueva contraseña.
+            </p>
           </div>
-        </section>
+          <form onSubmit={handleForgotSubmit} className="space-y-5">
+            <div>
+              <label className="mb-2 block text-[11px] font-bold uppercase tracking-[0.18em] text-velum-500">
+                Correo electrónico
+              </label>
+              <input
+                type="email"
+                value={otpEmail}
+                onChange={(e) => setOtpEmail(e.target.value)}
+                required
+                className="w-full rounded-2xl bg-velum-50 border border-velum-200/60 px-5 py-4 text-[15px] text-velum-900 placeholder:text-velum-400 outline-none transition-all duration-200 focus:bg-white focus:border-velum-900 focus:ring-4 focus:ring-velum-900/[0.07]"
+                placeholder="correo@ejemplo.com"
+                autoFocus
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={isOtpLoading}
+              className="w-full rounded-2xl bg-velum-900 py-4 text-[15px] font-semibold text-white hover:bg-velum-800 disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.99] transition-all duration-200"
+            >
+              {isOtpLoading ? "Enviando..." : "Enviar código"}
+            </button>
+          </form>
+          {otpMessage && (
+            <div className={`mt-5 rounded-2xl px-4 py-3 text-[13px] ${otpSuccess ? "bg-green-50 text-green-700" : "bg-amber-50 text-amber-700"}`}>
+              {otpMessage}
+            </div>
+          )}
+        </div>
       </div>
     );
   }
@@ -872,97 +1005,95 @@ export const Agenda: React.FC = () => {
     const newPasswordStrengthClass = newPasswordScore <= 2 ? "text-red-600" : newPasswordScore <= 4 ? "text-amber-600" : "text-green-700";
 
     return (
-      <div className={shellWrapperClass}>
-        <section className={`${glassCardClass} mx-auto w-full max-w-lg overflow-hidden`}>
-          <div className="p-7 sm:p-10">
-            <header className="mb-8 flex items-start justify-between gap-4">
-              <button
-                type="button"
-                onClick={() => { setOtpMessage(null); setViewState("forgot"); }}
-                className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-velum-200 text-velum-500 transition hover:border-velum-500 hover:text-velum-900"
-              >
-                <ChevronLeft size={20} />
-              </button>
-              <div className="text-right">
-                <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-velum-500">Verificación</p>
-                <p className="mt-1 text-xs text-velum-500">{otpEmail}</p>
-              </div>
-            </header>
-
-            <div className="mb-7 flex flex-col items-center gap-3 text-center">
-              <div className="flex h-14 w-14 items-center justify-center rounded-full border border-velum-200 bg-velum-50">
-                <Mail size={24} className="text-velum-700" />
-              </div>
-              <h2 className="font-serif text-2xl italic text-velum-900">Ingresa el código</h2>
-              <p className="text-sm text-velum-600">Revisa tu bandeja de entrada y escribe el código de 6 dígitos.</p>
+      <div className="min-h-[calc(100vh-7rem)] flex items-center justify-center bg-white px-6 py-12 animate-fade-in">
+        <div className="w-full max-w-sm">
+          <button
+            type="button"
+            onClick={() => { setOtpMessage(null); setViewState("forgot"); }}
+            className="mb-10 inline-flex items-center gap-1.5 text-sm text-velum-400 hover:text-velum-900 transition-colors"
+          >
+            <ChevronLeft size={16} />
+            Atrás
+          </button>
+          <div className="mb-10">
+            <div className="w-14 h-14 rounded-2xl bg-velum-50 border border-velum-200 flex items-center justify-center mb-6">
+              <Mail size={24} className="text-velum-700" />
             </div>
-
-            <form onSubmit={handleResetPasswordSubmit} className="space-y-5">
-              <div>
-                <label className={labelClass}>Código de verificación</label>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  pattern="\d{6}"
-                  maxLength={6}
-                  value={otpCode}
-                  onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                  required
-                  className={`${fieldClass} text-center text-2xl font-bold tracking-[0.32em]`}
-                  placeholder="• • • • • •"
-                  autoFocus
-                />
-              </div>
-              <div>
-                <label className={labelClass}>Nueva contraseña</label>
-                <PasswordInput
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  required
-                  className={fieldClass}
-                  placeholder="••••••••"
-                />
-                <div className="mt-2 rounded-2xl border border-velum-200 bg-velum-50/40 px-3 py-2">
-                  <p className={`text-xs font-semibold ${newPasswordStrengthClass}`}>Seguridad: {newPasswordStrength}</p>
-                  <div className="mt-1 grid grid-cols-2 gap-1 text-[11px]">
-                    <span className={newPasswordChecks.length ? "text-green-700" : "text-velum-500"}>{newPasswordChecks.length ? "✓" : "•"} 8+ caracteres</span>
-                    <span className={newPasswordChecks.upper ? "text-green-700" : "text-velum-500"}>{newPasswordChecks.upper ? "✓" : "•"} Mayúscula</span>
-                    <span className={newPasswordChecks.lower ? "text-green-700" : "text-velum-500"}>{newPasswordChecks.lower ? "✓" : "•"} Minúscula</span>
-                    <span className={newPasswordChecks.number ? "text-green-700" : "text-velum-500"}>{newPasswordChecks.number ? "✓" : "•"} Número</span>
-                    <span className={newPasswordChecks.special ? "text-green-700" : "text-velum-500"}>{newPasswordChecks.special ? "✓" : "•"} Símbolo</span>
-                  </div>
+            <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-velum-500 mb-1">Verificación</p>
+            <p className="text-[13px] text-velum-500 mb-3">{otpEmail}</p>
+            <h2 className="font-serif text-[2.25rem] italic text-velum-900 mb-3 leading-tight">Ingresa el código</h2>
+            <p className="text-[14px] text-velum-500">Revisa tu bandeja de entrada y escribe el código de 6 dígitos.</p>
+          </div>
+          <form onSubmit={handleResetPasswordSubmit} className="space-y-5">
+            <div>
+              <label className="mb-2 block text-[11px] font-bold uppercase tracking-[0.18em] text-velum-500">
+                Código de verificación
+              </label>
+              <input
+                type="text"
+                inputMode="numeric"
+                pattern="\d{6}"
+                maxLength={6}
+                value={otpCode}
+                onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                required
+                className="w-full rounded-2xl bg-velum-50 border border-velum-200/60 px-5 py-5 text-center text-[28px] font-bold tracking-[0.4em] text-velum-900 outline-none transition-all duration-200 focus:bg-white focus:border-velum-900 focus:ring-4 focus:ring-velum-900/[0.07]"
+                placeholder="000000"
+                autoFocus
+              />
+            </div>
+            <div>
+              <label className="mb-2 block text-[11px] font-bold uppercase tracking-[0.18em] text-velum-500">Nueva contraseña</label>
+              <PasswordInput
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                required
+                className="w-full rounded-2xl bg-velum-50 border border-velum-200/60 px-5 py-4 text-[15px] text-velum-900 placeholder:text-velum-400 outline-none transition-all duration-200 focus:bg-white focus:border-velum-900 focus:ring-4 focus:ring-velum-900/[0.07]"
+                placeholder="••••••••"
+              />
+              <div className="mt-3 rounded-2xl bg-velum-50 border border-velum-200/60 px-4 py-3">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-[11px] uppercase tracking-[0.16em] text-velum-500">Fortaleza</p>
+                  <p className={`text-[11px] font-bold ${newPasswordStrengthClass}`}>{newPasswordStrength}</p>
+                </div>
+                <div className="flex gap-1">
+                  {[1,2,3,4,5].map((i) => (
+                    <div key={i} className={`h-1 flex-1 rounded-full transition-all duration-300 ${i <= newPasswordScore ? (newPasswordScore <= 2 ? "bg-red-400" : newPasswordScore <= 4 ? "bg-amber-400" : "bg-green-500") : "bg-velum-200"}`} />
+                  ))}
                 </div>
               </div>
-              <div>
-                <label className={labelClass}>Confirmar nueva contraseña</label>
-                <PasswordInput
-                  value={confirmNewPassword}
-                  onChange={(e) => setConfirmNewPassword(e.target.value)}
-                  required
-                  className={fieldClass}
-                  placeholder="••••••••"
-                />
-              </div>
-              <Button type="submit" className="w-full rounded-2xl" disabled={isOtpLoading || otpSuccess}>
-                {isOtpLoading ? "Verificando..." : "Actualizar contraseña"}
-              </Button>
-            </form>
-
-            {otpMessage && (
-              <p className={`mt-4 rounded-xl border px-3 py-2 text-xs ${otpSuccess ? "border-green-200 bg-green-50 text-green-700" : "border-red-200 bg-red-50 text-red-700"}`}>
-                {otpMessage}
-              </p>
-            )}
-
+            </div>
+            <div>
+              <label className="mb-2 block text-[11px] font-bold uppercase tracking-[0.18em] text-velum-500">Confirmar nueva contraseña</label>
+              <PasswordInput
+                value={confirmNewPassword}
+                onChange={(e) => setConfirmNewPassword(e.target.value)}
+                required
+                className="w-full rounded-2xl bg-velum-50 border border-velum-200/60 px-5 py-4 text-[15px] text-velum-900 placeholder:text-velum-400 outline-none transition-all duration-200 focus:bg-white focus:border-velum-900 focus:ring-4 focus:ring-velum-900/[0.07]"
+                placeholder="••••••••"
+              />
+            </div>
             <button
-              type="button"
-              onClick={() => { setOtpCode(""); setOtpMessage(null); setViewState("forgot"); }}
-              className="mt-4 w-full text-center text-xs text-velum-500 underline underline-offset-2 hover:text-velum-900 transition"
+              type="submit"
+              disabled={isOtpLoading || otpSuccess}
+              className="w-full rounded-2xl bg-velum-900 py-4 text-[15px] font-semibold text-white hover:bg-velum-800 disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.99] transition-all duration-200"
             >
-              Reenviar código
+              {isOtpLoading ? "Verificando..." : "Actualizar contraseña"}
             </button>
-          </div>
-        </section>
+          </form>
+          {otpMessage && (
+            <div className={`mt-5 rounded-2xl px-4 py-3 text-[13px] ${otpSuccess ? "bg-green-50 text-green-700" : "bg-red-50 text-red-600"}`}>
+              {otpMessage}
+            </div>
+          )}
+          <button
+            type="button"
+            onClick={() => { setOtpCode(""); setOtpMessage(null); setViewState("forgot"); }}
+            className="mt-6 w-full text-center text-[13px] text-velum-400 hover:text-velum-900 transition underline underline-offset-2"
+          >
+            Reenviar código
+          </button>
+        </div>
       </div>
     );
   }
@@ -970,66 +1101,64 @@ export const Agenda: React.FC = () => {
   // ── Verificación de correo post-registro ────────────────────────────
   if (isAuthenticated && viewState === "email-verify") {
     return (
-      <div className={shellWrapperClass}>
-        <section className={`${glassCardClass} mx-auto w-full max-w-lg overflow-hidden`}>
-          <div className="p-7 sm:p-10">
-            <div className="mb-7 flex flex-col items-center gap-3 text-center">
-              <div className="flex h-14 w-14 items-center justify-center rounded-full border border-velum-200 bg-velum-50">
-                <Mail size={24} className="text-velum-700" />
-              </div>
-              <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-velum-500">Activación de cuenta</p>
-              <h2 className="font-serif text-2xl italic text-velum-900">Confirma tu correo</h2>
-              <p className="text-sm text-velum-600 max-w-sm">
-                Te enviamos un código de 6 dígitos a <strong>{email}</strong>. Ingrésalo para continuar con tu expediente.
-              </p>
-            </div>
-
-            <form onSubmit={handleEmailVerifySubmit} className="space-y-5">
-              <div>
-                <label className={labelClass}>Código de verificación</label>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  pattern="\d{6}"
-                  maxLength={6}
-                  value={otpCode}
-                  onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                  required
-                  className={`${fieldClass} text-center text-2xl font-bold tracking-[0.32em]`}
-                  placeholder="• • • • • •"
-                  autoFocus
-                />
-              </div>
-              <Button type="submit" className="w-full rounded-2xl" disabled={isOtpLoading || otpSuccess}>
-                {isOtpLoading ? "Verificando..." : "Confirmar correo"}
-              </Button>
-            </form>
-
-            {otpMessage && (
-              <p className={`mt-4 rounded-xl border px-3 py-2 text-xs ${otpSuccess ? "border-green-200 bg-green-50 text-green-700" : "border-red-200 bg-red-50 text-red-700"}`}>
-                {otpMessage}
-              </p>
-            )}
-
-            <div className="mt-4 flex flex-col gap-2 text-center">
-              <button
-                type="button"
-                onClick={handleResendVerificationEmail}
-                disabled={isOtpLoading}
-                className="text-xs text-velum-600 underline underline-offset-2 hover:text-velum-900 transition disabled:opacity-50"
-              >
-                {isOtpLoading ? "Enviando..." : "Reenviar código"}
-              </button>
-              <button
-                type="button"
-                onClick={() => { const pf = { fullName: `${firstName.trim()} ${lastName.trim()}`.trim(), phone: phone.trim(), birthDate }; setOtpCode(""); setOtpMessage(null); setPendingEmailVerify(false); refreshIntake(pf); }}
-                className="text-xs text-velum-400 underline underline-offset-2 hover:text-velum-700 transition"
-              >
-                Omitir por ahora y continuar
-              </button>
-            </div>
+      <div className="min-h-[calc(100vh-7rem)] flex items-center justify-center bg-white px-6 py-12 animate-fade-in">
+        <div className="w-full max-w-sm text-center">
+          <div className="w-16 h-16 rounded-2xl bg-velum-50 border border-velum-200 flex items-center justify-center mx-auto mb-8">
+            <Mail size={28} className="text-velum-700" />
           </div>
-        </section>
+          <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-velum-500 mb-3">Activación de cuenta</p>
+          <h2 className="font-serif text-[2.25rem] italic text-velum-900 mb-5 leading-tight">Confirma tu correo</h2>
+          <p className="text-[14px] text-velum-500 leading-relaxed mb-10">
+            Enviamos un código de 6 dígitos a<br/>
+            <strong className="text-velum-900 font-semibold">{email}</strong>
+          </p>
+          <form onSubmit={handleEmailVerifySubmit} className="space-y-5">
+            <div>
+              <input
+                type="text"
+                inputMode="numeric"
+                pattern="\d{6}"
+                maxLength={6}
+                value={otpCode}
+                onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                required
+                className="w-full rounded-2xl bg-velum-50 border border-velum-200/60 px-5 py-5 text-center text-[32px] font-bold tracking-[0.44em] text-velum-900 outline-none transition-all duration-200 focus:bg-white focus:border-velum-900 focus:ring-4 focus:ring-velum-900/[0.07]"
+                placeholder="000000"
+                autoFocus
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={isOtpLoading || otpSuccess || otpCode.length < 6}
+              className="w-full rounded-2xl bg-velum-900 py-4 text-[15px] font-semibold text-white hover:bg-velum-800 disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.99] transition-all duration-200"
+            >
+              {isOtpLoading ? "Verificando..." : otpSuccess ? "¡Verificado!" : "Confirmar correo"}
+            </button>
+          </form>
+          {otpMessage && (
+            <div className={`mt-5 rounded-2xl px-4 py-3 text-[13px] ${otpSuccess ? "bg-green-50 text-green-700" : "bg-red-50 text-red-600"}`}>
+              {otpMessage}
+            </div>
+          )}
+          <div className="mt-8 space-y-4">
+            <button
+              type="button"
+              onClick={handleResendVerificationEmail}
+              disabled={isOtpLoading}
+              className="text-[13px] text-velum-500 hover:text-velum-900 transition underline underline-offset-2 disabled:opacity-50"
+            >
+              {isOtpLoading ? "Enviando..." : "Reenviar código"}
+            </button>
+            <div />
+            <button
+              type="button"
+              onClick={() => { const pf = { fullName: `${firstName.trim()} ${lastName.trim()}`.trim(), phone: phone.trim(), birthDate }; setOtpCode(""); setOtpMessage(null); setPendingEmailVerify(false); refreshIntake(pf); }}
+              className="text-[12px] text-velum-400 hover:text-velum-600 transition"
+            >
+              Omitir y continuar →
+            </button>
+          </div>
+        </div>
       </div>
     );
   }

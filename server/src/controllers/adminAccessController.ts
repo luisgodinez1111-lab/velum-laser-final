@@ -2,6 +2,7 @@ import { Response } from "express";
 import bcrypt from "bcryptjs";
 import { prisma } from "../db/prisma";
 import { AuthRequest } from "../middlewares/auth";
+import { createAuditLog } from "../services/auditService";
 import {
   PERMISSIONS_CATALOG,
   readAccessStore,
@@ -145,6 +146,16 @@ export const updateAdminAccessUser = async (req: AuthRequest, res: Response) => 
       }
     }
 
+    await createAuditLog({
+      userId: req.user!.id,
+      targetUserId: userId,
+      action: "admin.user.update",
+      resourceType: "user",
+      resourceId: userId,
+      ip: req.ip,
+      metadata: { newRole: nextRole, permissionsUpdated: Array.isArray(incomingPerms) }
+    });
+
     return res.json({
       message: "Usuario actualizado",
       user: updated,
@@ -171,6 +182,16 @@ export const resetAdminAccessPassword = async (req: AuthRequest, res: Response) 
 
     const passwordHash = await bcrypt.hash(newPassword, 10);
     await prisma.user.update({ where: { id: userId }, data: { passwordHash } });
+
+    await createAuditLog({
+      userId: req.user!.id,
+      targetUserId: userId,
+      action: "admin.user.password_reset",
+      resourceType: "user",
+      resourceId: userId,
+      ip: req.ip,
+      metadata: { resetBy: req.user!.id }
+    });
 
     return res.json({ message: "Contraseña actualizada" });
   } catch (error: any) {

@@ -38,7 +38,7 @@ import {
 import { AuditLogEntry, Member, UserRole } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { memberService, auditService } from '../services/dataService';
-import { SessionTreatment, SessionCreatePayload } from '../services/clinicalService';
+import { SessionTreatment, SessionCreatePayload, MedicalIntake } from '../services/clinicalService';
 import { AdminUsersPermissions } from "./AdminUsersPermissions";
 import { AdminStripeSettings } from "./AdminStripeSettings";
 import { AdminWhatsAppSettings } from "./AdminWhatsAppSettings";
@@ -59,17 +59,7 @@ import {
   googleCalendarIntegrationService
 } from '../services/googleCalendarIntegrationService';
 
-type AdminSection =
-  | 'control'
-  | 'socios'
-  | 'kpis'
-  | 'finanzas'
-  | 'expedientes'
-  | 'agenda'
-  | 'cobranza'
-  | 'riesgos'
-  | 'cumplimiento'
-  | 'configuraciones';
+type AdminSection = 'panel' | 'socias' | 'agenda' | 'expedientes' | 'ajustes';
 
 type HealthFlag = 'ok' | 'warning' | 'critical';
 
@@ -94,10 +84,7 @@ type AgendaPolicyDraft = {
 
 type AgendaTemplatePreset = 'weekly_copy' | 'holiday_closed' | 'season_extended' | 'season_compact';
 
-type SettingsCategory =
-  | 'general' | 'agenda'
-  | 'usuarios_permisos' | 'logs' | 'cumplimiento' | 'riesgos'
-  | 'meta' | 'stripe' | 'whatsapp_business';
+type SettingsCategory = 'agenda' | 'sistema' | 'integraciones' | 'auditoria';
 
 const weekDayLabel: Record<number, string> = {
   0: 'Domingo',
@@ -109,24 +96,15 @@ const weekDayLabel: Record<number, string> = {
   6: 'Sábado'
 };
 
-const sectionMeta: Record<AdminSection, { label: string; icon: React.ComponentType<any>; group: string }> = {
-  control: { label: 'Torre de Control', icon: Activity, group: 'Dirección' },
-  socios: { label: 'Socios', icon: Users, group: 'Dirección' },
-  kpis: { label: 'KPIs', icon: BarChart3, group: 'Dirección' },
-  finanzas: { label: 'Finanzas', icon: Wallet, group: 'Operación' },
-  expedientes: { label: 'Expedientes', icon: FolderOpen, group: 'Operación' },
-  agenda: { label: 'Agendas', icon: CalendarDays, group: 'Operación' },
-  cobranza: { label: 'Cobranza', icon: HandCoins, group: 'Operación' },
-  riesgos: { label: 'Riesgos', icon: AlertTriangle, group: 'Gobierno' },
-  cumplimiento: { label: 'Cumplimiento', icon: Shield, group: 'Gobierno' },
-  configuraciones: { label: 'Configuraciones', icon: Settings, group: 'Gobierno' }
+const sectionMeta: Record<AdminSection, { label: string; icon: React.ComponentType<any> }> = {
+  panel:       { label: 'Panel',        icon: Activity },
+  socias:      { label: 'Socias',       icon: Users },
+  agenda:      { label: 'Agenda',       icon: CalendarDays },
+  expedientes: { label: 'Expedientes',  icon: FolderOpen },
+  ajustes:     { label: 'Ajustes',      icon: Settings },
 };
 
-const sectionGroups: Array<{ title: string; items: AdminSection[] }> = [
-  { title: 'Dirección', items: ['control', 'socios', 'kpis'] },
-  { title: 'Operación', items: ['finanzas', 'expedientes', 'agenda', 'cobranza'] },
-  { title: 'Gobierno', items: ['riesgos', 'cumplimiento', 'configuraciones'] }
-];
+const NAV_SECTIONS: AdminSection[] = ['panel', 'socias', 'agenda', 'expedientes', 'ajustes'];
 
 const allowedRoles: UserRole[] = ['admin', 'staff', 'system'];
 
@@ -232,10 +210,11 @@ export const Admin: React.FC = () => {
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-  const [activeSection, setActiveSection] = useState<AdminSection>('control');
+  const [activeSection, setActiveSection] = useState<AdminSection>('panel');
   const [settingsCategory, setSettingsCategory] = useState<SettingsCategory>('agenda');
 
   const [isLoadingData, setIsLoadingData] = useState(false);
+  const [dataLoadError, setDataLoadError] = useState('');
   const [members, setMembers] = useState<Member[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
 
@@ -248,6 +227,7 @@ export const Admin: React.FC = () => {
   const [sessionForm, setSessionForm] = useState({ appointmentId: '', zona: '', fluencia: '', frecuencia: '', spot: '', passes: '', notes: '', adverseEvents: '' });
   const [isSessionSaving, setIsSessionSaving] = useState(false);
   const [cancelConfirmApptId, setCancelConfirmApptId] = useState<string | null>(null);
+  const [confirmCancelMemberId, setConfirmCancelMemberId] = useState<string | null>(null);
 
   // Drawer history (shared between modal and drawer)
   const [memberSessions, setMemberSessions] = useState<SessionTreatment[]>([]);
@@ -259,6 +239,10 @@ export const Admin: React.FC = () => {
   const [isApprovingIntake, setIsApprovingIntake] = useState<string | null>(null);
   const [intakeToReject, setIntakeToReject] = useState<string | null>(null);
   const [intakeRejectReason, setIntakeRejectReason] = useState('');
+
+  // Expediente viewer modal
+  const [intakeModal, setIntakeModal] = useState<{ member: Member; intake: MedicalIntake | null } | null>(null);
+  const [intakeModalLoading, setIntakeModalLoading] = useState(false);
 
   const [agendaDate, setAgendaDate] = useState(() => toLocalDateKey(new Date()));
   const [agendaConfig, setAgendaConfig] = useState<AgendaConfig | null>(null);
@@ -306,10 +290,13 @@ export const Admin: React.FC = () => {
   const loadData = async () => {
     setIsLoadingData(true);
     setIsGoogleIntegrationLoading(true);
+    setDataLoadError('');
     try {
       const [membersData, logsData, configData, dayData, integrationData] = await Promise.all([
         memberService.getAll(),
-        user?.role === 'admin' || user?.role === 'system' ? auditService.getLogs() : Promise.resolve([]),
+        user?.role === 'admin' || user?.role === 'system'
+          ? auditService.getLogs().catch(() => [] as AuditLogEntry[])
+          : Promise.resolve([] as AuditLogEntry[]),
         clinicalService.getAdminAgendaConfig().catch(() => null),
         clinicalService.getAdminAgendaDay(agendaDate).catch(() => null),
         user?.role === 'admin' || user?.role === 'system'
@@ -343,8 +330,10 @@ export const Admin: React.FC = () => {
       if (!selectedAgendaMemberId && membersData.length > 0) {
         setSelectedAgendaMemberId(membersData[0].id);
       }
-    } catch (_error) {
-      // Keep panel usable if one endpoint fails.
+    } catch (err: any) {
+      const msg = err?.message || 'No se pudo cargar los datos del panel.';
+      setDataLoadError(msg);
+      toast.error(msg);
     } finally {
       setIsLoadingData(false);
       setIsGoogleIntegrationLoading(false);
@@ -371,11 +360,11 @@ export const Admin: React.FC = () => {
     const section = params.get('section');
     const settings = params.get('settingsCategory');
 
-    if (section === 'configuraciones') {
-      setActiveSection('configuraciones');
+    if (section === 'configuraciones' || section === 'ajustes') {
+      setActiveSection('ajustes');
     }
-    if (settings === 'agenda' || settings === 'general') {
-      setSettingsCategory(settings);
+    if (settings === 'agenda') {
+      setSettingsCategory('agenda');
     }
 
     if (integration === 'google' && status === 'success') {
@@ -483,16 +472,23 @@ export const Admin: React.FC = () => {
     }
   };
 
-  const handleUpdateMember = async (id: string, status: string) => {
+  const doUpdateMember = async (id: string, status: string) => {
     try {
       await memberService.updateMembershipStatus(id, status);
       await loadData();
-      if (selectedMember?.id === id) {
-        setSelectedMember({ ...selectedMember, subscriptionStatus: status });
-      }
-    } catch (_error) {
+      setSelectedMember((prev) => prev?.id === id ? { ...prev, subscriptionStatus: status } : prev);
+      toast.success('Membresía actualizada.');
+    } catch {
       toast.error('No fue posible actualizar el estatus de la membresía.');
     }
+  };
+
+  const handleUpdateMember = (id: string, status: string) => {
+    if (status === 'canceled') {
+      setConfirmCancelMemberId(id);
+      return;
+    }
+    void doUpdateMember(id, status);
   };
 
   const loadMemberHistory = async (member: Member) => {
@@ -568,6 +564,19 @@ export const Admin: React.FC = () => {
     }
   };
 
+  const openIntakeModal = async (m: Member) => {
+    setIntakeModal({ member: m, intake: null });
+    setIntakeModalLoading(true);
+    try {
+      const data = await clinicalService.getMedicalIntakeByUserId(m.id);
+      setIntakeModal({ member: m, intake: data });
+    } catch {
+      toast.error("No se pudo cargar el expediente.");
+    } finally {
+      setIntakeModalLoading(false);
+    }
+  };
+
   const handleApproveIntake = async (userId: string, approved: boolean) => {
     if (!approved && !intakeRejectReason.trim()) return;
     setIsApprovingIntake(userId);
@@ -578,6 +587,9 @@ export const Admin: React.FC = () => {
       await loadData();
       if (selectedMember?.id === userId) {
         setSelectedMember((prev) => prev ? { ...prev, intakeStatus: approved ? 'approved' : 'rejected' } : prev);
+      }
+      if (intakeModal?.member.id === userId) {
+        setIntakeModal((prev) => prev ? { ...prev, member: { ...prev.member, intakeStatus: approved ? 'approved' : 'rejected' } } : prev);
       }
       toast.success(approved ? "Expediente aprobado." : "Expediente rechazado.");
     } catch (err: any) {
@@ -659,9 +671,9 @@ export const Admin: React.FC = () => {
       alerts.push({
         id: 'risk-members',
         level: 'critical',
-        title: 'Socios en riesgo crítico',
-        detail: `${analytics.highRiskMembers.length} socios combinan problema de pago + expediente incompleto.`,
-        section: 'riesgos'
+        title: 'Socias en riesgo crítico',
+        detail: `${analytics.highRiskMembers.length} socias combinan pago vencido + expediente incompleto.`,
+        section: 'socias'
       });
     }
 
@@ -681,7 +693,7 @@ export const Admin: React.FC = () => {
         level: 'warning',
         title: 'Cola de cobranza activa',
         detail: `${analytics.collectionQueue.length} cuentas requieren recuperación o regularización.`,
-        section: 'cobranza'
+        section: 'socias'
       });
     }
 
@@ -691,7 +703,7 @@ export const Admin: React.FC = () => {
         level: 'critical',
         title: 'Eventos de seguridad fallidos',
         detail: `${analytics.failedAudits} eventos en bitácora con estatus FAILED.`,
-        section: 'cumplimiento'
+        section: 'ajustes'
       });
     }
 
@@ -701,7 +713,7 @@ export const Admin: React.FC = () => {
         level: 'ok',
         title: 'Operación estable',
         detail: 'No hay alertas críticas al momento. Mantén monitoreo continuo.',
-        section: 'control'
+        section: 'panel'
       });
     }
 
@@ -1538,6 +1550,15 @@ export const Admin: React.FC = () => {
                 </button>
               )}
             </div>
+            {/* Expediente viewer button */}
+            {selectedMember.intakeStatus && selectedMember.intakeStatus !== 'draft' && (
+              <div className="px-4 pt-4 pb-0">
+                <button onClick={() => { openIntakeModal(mem); setSelectedMember(null); }}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-2.5 border border-velum-200 text-velum-700 rounded-xl text-sm font-medium hover:bg-velum-50 transition">
+                  <FolderOpen size={14} />Ver expediente completo
+                </button>
+              </div>
+            )}
             {/* Intake approval */}
             {(selectedMember.intakeStatus === 'submitted' || intakeToReject === mem.id) && (
               <div className="p-4 border-b border-velum-100">
@@ -1629,78 +1650,169 @@ export const Admin: React.FC = () => {
     );
   };
 
-  // ─── Section: Torre de Control ────────────────────────────────────────────
+  // ─── Section: Panel ───────────────────────────────────────────────────────
 
-  const renderControl = () => (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-serif text-velum-900">Torre de Control</h1>
-        <p className="text-sm text-velum-500 mt-1">Visión ejecutiva en tiempo real</p>
-      </div>
-      {/* KPIs row 1 */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <KpiCard icon={<Users size={18} />} label="Socios activos" value={analytics.sociosActivos} sub={`de ${analytics.totalSocios} totales`} />
-        <KpiCard icon={<Wallet size={18} />} label="MRR estimado" value={formatMoney(analytics.mrr)} sub={`ARPU ${formatMoney(analytics.arpu)}`} accent="text-emerald-700" />
-        <KpiCard icon={<FolderOpen size={18} />} label="Expedientes pendientes" value={analytics.expedientesPendientes} sub="sin firmar o validar" accent={analytics.expedientesPendientes > 0 ? 'text-amber-600' : 'text-velum-900'} />
-        <KpiCard icon={<AlertTriangle size={18} />} label="Riesgo de churn" value={`${analytics.churnRisk.toFixed(0)}%`} sub={`${analytics.sociosConRiesgo} socios con incidencia`} accent={analytics.churnRisk > 20 ? 'text-red-600' : 'text-velum-900'} />
-      </div>
-      {/* KPIs row 2 */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <KpiCard icon={<CalendarDays size={18} />} label="Citas hoy" value={agendaSummary.appointmentsToday} sub={`${agendaSummary.completedToday} completadas`} />
-        <KpiCard icon={<FileText size={18} />} label="Sin consentimiento" value={analytics.totalSocios - analytics.expedientesFirmados} sub="pendientes de firma" accent={(analytics.totalSocios - analytics.expedientesFirmados) > 0 ? 'text-amber-600' : 'text-velum-900'} />
-        <KpiCard icon={<Shield size={18} />} label="Eventos fallidos" value={analytics.failedAudits} sub="en bitácora de auditoría" accent={analytics.failedAudits > 0 ? 'text-red-600' : 'text-velum-900'} />
-        <KpiCard icon={<HandCoins size={18} />} label="En cobranza" value={analytics.collectionQueue.length} sub="cuentas por regularizar" accent={analytics.collectionQueue.length > 0 ? 'text-amber-600' : 'text-velum-900'} />
-      </div>
-      {/* Alertas */}
-      <div>
-        <h2 className="text-xs font-bold uppercase tracking-widest text-velum-500 mb-3">Alertas del sistema</h2>
-        <div className="space-y-3">
-          {controlAlerts.map((alert) => (
-            <div key={alert.id} className={`flex items-start gap-4 p-4 rounded-2xl border ${alert.level === 'ok' ? 'bg-emerald-50 border-emerald-200' : alert.level === 'warning' ? 'bg-amber-50 border-amber-200' : 'bg-red-50 border-red-200'}`}>
-              <div className={`mt-0.5 shrink-0 ${alert.level === 'ok' ? 'text-emerald-600' : alert.level === 'warning' ? 'text-amber-600' : 'text-red-600'}`}>
-                {alert.level === 'ok' ? <CheckCircle2 size={18} /> : alert.level === 'warning' ? <CircleAlert size={18} /> : <AlertTriangle size={18} />}
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className={`text-sm font-semibold ${alert.level === 'ok' ? 'text-emerald-900' : alert.level === 'warning' ? 'text-amber-900' : 'text-red-900'}`}>{alert.title}</p>
-                <p className={`text-xs mt-0.5 ${alert.level === 'ok' ? 'text-emerald-700' : alert.level === 'warning' ? 'text-amber-700' : 'text-red-700'}`}>{alert.detail}</p>
-              </div>
-              {alert.section !== 'control' && (
-                <button onClick={() => setActiveSection(alert.section)}
-                  className={`shrink-0 text-xs font-medium px-3 py-1.5 rounded-xl transition ${alert.level === 'ok' ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200' : alert.level === 'warning' ? 'bg-amber-100 text-amber-700 hover:bg-amber-200' : 'bg-red-100 text-red-700 hover:bg-red-200'}`}>
-                  Ver <ArrowRight size={12} className="inline ml-1" />
-                </button>
-              )}
-            </div>
+  const renderPanel = () => {
+    const todayLabel = new Date().toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' });
+    const userName = user?.email?.split('@')[0] ?? 'Admin';
+    const actionAlerts = controlAlerts.filter((a) => a.level !== 'ok');
+
+    return (
+      <div className="space-y-8">
+        {/* Greeting */}
+        <div>
+          <p className="text-xs text-velum-400 capitalize">{todayLabel}</p>
+          <h1 className="text-2xl font-serif text-velum-900 mt-0.5">Hola, {userName}</h1>
+        </div>
+
+        {/* 3 primary metrics — tappable shortcuts */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {[
+            {
+              label: 'Socias activas',
+              value: analytics.sociosActivos,
+              sub: `de ${analytics.totalSocios} registradas`,
+              accent: 'text-velum-900',
+              section: 'socias' as AdminSection,
+            },
+            {
+              label: 'Citas hoy',
+              value: agendaSummary.appointmentsToday,
+              sub: `${agendaSummary.completedToday} completadas`,
+              accent: 'text-velum-900',
+              section: 'agenda' as AdminSection,
+            },
+            {
+              label: 'Expedientes pendientes',
+              value: analytics.expedientesPendientes,
+              sub: 'requieren revisión clínica',
+              accent: analytics.expedientesPendientes > 0 ? 'text-amber-600' : 'text-emerald-600',
+              section: 'expedientes' as AdminSection,
+            },
+          ].map(({ label, value, sub, accent, section }) => (
+            <button key={label} onClick={() => setActiveSection(section)}
+              className="bg-white rounded-2xl border border-velum-100 p-5 text-left hover:border-velum-300 hover:shadow-sm transition group">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-velum-400 mb-2">{label}</p>
+              <p className={`text-4xl font-serif font-bold ${accent}`}>{value}</p>
+              <p className="text-xs text-velum-400 mt-1.5 group-hover:text-velum-600 transition flex items-center gap-1">
+                {sub} <ArrowRight size={11} />
+              </p>
+            </button>
           ))}
         </div>
-      </div>
-      {/* Audit recent */}
-      <div>
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-xs font-bold uppercase tracking-widest text-velum-500">Actividad reciente</h2>
-          <button onClick={() => setActiveSection('cumplimiento')} className="text-xs text-velum-500 hover:text-velum-900 transition">Ver todo →</button>
+
+        {/* Acciones urgentes — only shown when needed */}
+        {actionAlerts.length > 0 && (
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-widest text-velum-400 mb-3">Requieren atención</p>
+            <div className="space-y-2">
+              {actionAlerts.map((alert) => (
+                <div key={alert.id}
+                  className={`flex items-center gap-3 px-4 py-3 rounded-2xl border ${alert.level === 'warning' ? 'bg-amber-50 border-amber-200' : 'bg-red-50 border-red-200'}`}>
+                  <div className={`shrink-0 ${alert.level === 'warning' ? 'text-amber-500' : 'text-red-500'}`}>
+                    {alert.level === 'warning' ? <CircleAlert size={16} /> : <AlertTriangle size={16} />}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className={`text-sm font-semibold ${alert.level === 'warning' ? 'text-amber-900' : 'text-red-900'}`}>{alert.title}</p>
+                    <p className={`text-xs ${alert.level === 'warning' ? 'text-amber-700' : 'text-red-700'}`}>{alert.detail}</p>
+                  </div>
+                  {alert.section !== 'panel' && (
+                    <button onClick={() => {
+                      setActiveSection(alert.section);
+                      if (alert.section === 'ajustes') setSettingsCategory('auditoria');
+                    }}
+                      className={`shrink-0 text-xs font-medium px-3 py-1.5 rounded-xl transition
+                        ${alert.level === 'warning' ? 'bg-amber-100 text-amber-700 hover:bg-amber-200' : 'bg-red-100 text-red-700 hover:bg-red-200'}`}>
+                      Ver <ArrowRight size={11} className="inline ml-0.5" />
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Two-column: agenda de hoy + actividad reciente */}
+        <div className="grid lg:grid-cols-2 gap-6">
+          {/* Agenda de hoy */}
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-velum-400">Agenda de hoy</p>
+              <button onClick={() => setActiveSection('agenda')} className="text-xs text-velum-400 hover:text-velum-900 transition flex items-center gap-1">
+                Ver agenda <ArrowRight size={11} />
+              </button>
+            </div>
+            <div className="bg-white rounded-2xl border border-velum-100 overflow-hidden">
+              {dayAppointments.length === 0 ? (
+                <div className="py-10 text-center">
+                  <CalendarDays size={24} className="mx-auto text-velum-200 mb-2" />
+                  <p className="text-sm text-velum-400">Sin citas programadas hoy</p>
+                </div>
+              ) : (
+                <div className="divide-y divide-velum-50">
+                  {dayAppointments.slice(0, 6).map((appt) => {
+                    const m = memberById.get(appt.userId ?? '');
+                    const s = apptStatusLabel(appt.status);
+                    return (
+                      <div key={appt.id} className="flex items-center gap-3 px-4 py-3">
+                        <p className="text-xs font-mono text-velum-400 w-12 shrink-0">
+                          {new Date(appt.startAt).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}
+                        </p>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-velum-900 truncate">{m?.name || m?.email || 'Paciente'}</p>
+                        </div>
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${s.cls}`}>{s.label}</span>
+                      </div>
+                    );
+                  })}
+                  {dayAppointments.length > 6 && (
+                    <button onClick={() => setActiveSection('agenda')}
+                      className="w-full py-2.5 text-xs text-velum-400 hover:text-velum-700 hover:bg-velum-50 transition">
+                      +{dayAppointments.length - 6} más → Ver agenda completa
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Actividad reciente */}
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-velum-400">Actividad reciente</p>
+              <button onClick={() => { setActiveSection('ajustes'); setSettingsCategory('auditoria'); }}
+                className="text-xs text-velum-400 hover:text-velum-900 transition flex items-center gap-1">
+                Ver todo <ArrowRight size={11} />
+              </button>
+            </div>
+            <div className="bg-white rounded-2xl border border-velum-100 overflow-hidden">
+              {auditLogs.length === 0 ? (
+                <div className="py-10 text-center">
+                  <Activity size={24} className="mx-auto text-velum-200 mb-2" />
+                  <p className="text-sm text-velum-400">Sin actividad registrada</p>
+                </div>
+              ) : (
+                <div className="divide-y divide-velum-50">
+                  {auditLogs.slice(0, 6).map((log, i) => (
+                    <div key={log.id ?? i} className="flex items-center gap-3 px-4 py-2.5">
+                      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${log.status === 'success' ? 'bg-emerald-500' : 'bg-red-500'}`} />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-mono text-velum-600 truncate">{log.action}</p>
+                        <p className="text-[10px] text-velum-400">{log.user ?? '—'}</p>
+                      </div>
+                      <p className="text-[10px] text-velum-300 shrink-0 whitespace-nowrap">
+                        {new Date(log.timestamp).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
-        <div className="bg-white rounded-2xl border border-velum-100 overflow-hidden">
-          {auditLogs.length === 0 ? (
-            <div className="p-8 text-center text-xs text-velum-400">Sin registros de auditoría</div>
-          ) : (
-            <table className="w-full text-xs">
-              <tbody>
-                {auditLogs.slice(0, 8).map((log, i) => (
-                  <tr key={log.id ?? i} className={`${i < auditLogs.slice(0, 8).length - 1 ? 'border-b border-velum-50' : ''}`}>
-                    <td className="px-4 py-3 text-velum-400 whitespace-nowrap">{new Date(log.timestamp).toLocaleString('es-MX', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</td>
-                    <td className="px-4 py-3 text-velum-700 font-medium max-w-[160px] truncate">{log.user ?? '—'}</td>
-                    <td className="px-4 py-3 text-velum-500 font-mono">{log.action}</td>
-                    <td className="px-4 py-3"><span className={`inline-block w-2 h-2 rounded-full ${log.status === 'success' ? 'bg-emerald-500' : 'bg-red-500'}`} /></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   // ─── Section: Socios ──────────────────────────────────────────────────────
 
@@ -1708,8 +1820,8 @@ export const Admin: React.FC = () => {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-serif text-velum-900">Socios</h1>
-          <p className="text-sm text-velum-500 mt-1">{members.length} miembros registrados</p>
+          <h1 className="text-2xl font-serif text-velum-900">Socias</h1>
+          <p className="text-sm text-velum-500 mt-1">{members.length} pacientes registradas</p>
         </div>
       </div>
       {/* Search + filters */}
@@ -1887,6 +1999,216 @@ export const Admin: React.FC = () => {
     );
   };
 
+  // ─── Expediente viewer modal ───────────────────────────────────────────────
+
+  const FITZPATRICK = [
+    { type: 1, label: 'Tipo I', desc: 'Muy clara. Siempre se quema, nunca broncea.', color: '#FDEBD0', textCls: 'text-amber-900' },
+    { type: 2, label: 'Tipo II', desc: 'Clara. Siempre se quema, a veces broncea.', color: '#F5CBA7', textCls: 'text-amber-900' },
+    { type: 3, label: 'Tipo III', desc: 'Media. A veces se quema, siempre broncea.', color: '#E59866', textCls: 'text-amber-900' },
+    { type: 4, label: 'Tipo IV', desc: 'Oliva. Raramente se quema, siempre broncea.', color: '#CA6F1E', textCls: 'text-white' },
+    { type: 5, label: 'Tipo V', desc: 'Morena oscura. Muy raramente se quema.', color: '#784212', textCls: 'text-white' },
+    { type: 6, label: 'Tipo VI', desc: 'Negra. No se quema, broncea profundamente.', color: '#2C1503', textCls: 'text-white' },
+  ];
+
+  const renderIntakeModal = () => {
+    if (!intakeModal) return null;
+    const { member: m, intake } = intakeModal;
+    const pj = (intake?.personalJson as any) ?? {};
+    const hj = (intake?.historyJson as any) ?? {};
+    const fitz = FITZPATRICK.find((f) => f.type === intake?.phototype);
+    const intakeStatus = intakeStatusLabel(m.intakeStatus);
+
+    return (
+      <>
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50" onClick={() => setIntakeModal(null)} />
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
+          <div className="pointer-events-auto w-full max-w-2xl max-h-[90vh] bg-white rounded-3xl shadow-2xl flex flex-col overflow-hidden">
+            {/* Header */}
+            <div className="px-6 py-5 border-b border-velum-100 flex items-start justify-between shrink-0">
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-velum-400">Expediente clínico</p>
+                <h2 className="font-serif text-xl text-velum-900 mt-0.5">{m.name || m.email}</h2>
+                <p className="text-xs text-velum-500 mt-0.5">{m.email}</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <Pill label={intakeStatus.label} cls={intakeStatus.cls} />
+                <button onClick={() => setIntakeModal(null)} className="p-2 rounded-xl hover:bg-velum-50 text-velum-400 hover:text-velum-700 transition ml-1">
+                  <X size={18} />
+                </button>
+              </div>
+            </div>
+
+            {/* Body */}
+            <div className="flex-1 overflow-y-auto">
+              {intakeModalLoading ? (
+                <div className="p-8 flex flex-col items-center gap-3">
+                  <div className="w-10 h-10 border-2 border-velum-200 border-t-velum-700 rounded-full animate-spin" />
+                  <p className="text-sm text-velum-500">Cargando expediente...</p>
+                </div>
+              ) : !intake ? (
+                <div className="p-8 text-center">
+                  <FolderOpen size={32} className="mx-auto text-velum-300 mb-3" />
+                  <p className="text-sm text-velum-500">Este paciente aún no tiene expediente registrado.</p>
+                </div>
+              ) : (
+                <div className="divide-y divide-velum-50">
+                  {/* Fototipo Fitzpatrick */}
+                  <div className="p-5 space-y-3">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-velum-400">Fototipo de Fitzpatrick</p>
+                    <div className="flex gap-1.5">
+                      {FITZPATRICK.map((f) => (
+                        <div key={f.type}
+                          className={`flex-1 rounded-xl py-2 text-center transition ${intake.phototype === f.type ? 'ring-2 ring-offset-1 ring-velum-900 scale-105' : 'opacity-50'}`}
+                          style={{ backgroundColor: f.color }}>
+                          <p className={`text-[10px] font-bold ${f.textCls}`}>{f.label}</p>
+                        </div>
+                      ))}
+                    </div>
+                    {fitz ? (
+                      <div className="flex items-start gap-3 bg-velum-50 rounded-xl p-3">
+                        <div className="w-8 h-8 rounded-full shrink-0 ring-2 ring-velum-200" style={{ backgroundColor: fitz.color }} />
+                        <div>
+                          <p className="text-sm font-semibold text-velum-900">{fitz.label}</p>
+                          <p className="text-xs text-velum-500 mt-0.5">{fitz.desc}</p>
+                          {intake.phototype && intake.phototype >= 4 && (
+                            <p className="text-xs text-amber-700 font-medium mt-1.5 flex items-center gap-1">
+                              <AlertTriangle size={11} /> Precaución: fototipos altos requieren parámetros láser ajustados.
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-xs text-velum-400 italic">No registrado</p>
+                    )}
+                  </div>
+
+                  {/* Datos personales */}
+                  <div className="p-5 space-y-3">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-velum-400">Datos personales</p>
+                    <div className="grid grid-cols-2 gap-3">
+                      {[
+                        { label: 'Nombre completo', value: pj.fullName },
+                        { label: 'Teléfono', value: pj.phone },
+                        { label: 'Fecha de nacimiento', value: pj.birthDate ? new Date(pj.birthDate).toLocaleDateString('es-MX', { day: '2-digit', month: 'long', year: 'numeric' }) : null },
+                        { label: 'Correo electrónico', value: m.email },
+                      ].map(({ label, value }) => (
+                        <div key={label} className="bg-velum-50 rounded-xl p-3">
+                          <p className="text-[10px] font-bold uppercase tracking-widest text-velum-400 mb-1">{label}</p>
+                          <p className="text-sm text-velum-900">{value || <span className="text-velum-300 italic">No registrado</span>}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Historia clínica */}
+                  <div className="p-5 space-y-3">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-velum-400">Historia clínica</p>
+                    <div className="space-y-3">
+                      {[
+                        { label: 'Alergias', value: hj.allergies, icon: <AlertTriangle size={12} /> },
+                        { label: 'Medicamentos actuales', value: hj.medications, icon: <FileText size={12} /> },
+                        { label: 'Condiciones de piel', value: hj.skinConditions, icon: <Activity size={12} /> },
+                      ].map(({ label, value, icon }) => (
+                        <div key={label} className="bg-velum-50 rounded-xl p-3">
+                          <p className="text-[10px] font-bold uppercase tracking-widest text-velum-400 mb-1 flex items-center gap-1">{icon}{label}</p>
+                          <p className="text-sm text-velum-900 whitespace-pre-wrap">{value || <span className="text-velum-300 italic">Ninguna / No especificado</span>}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Consentimiento */}
+                  <div className="p-5 space-y-3">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-velum-400">Consentimiento informado</p>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className={`rounded-xl p-3 flex items-center gap-2 ${intake.consentAccepted ? 'bg-emerald-50' : 'bg-velum-50'}`}>
+                        {intake.consentAccepted ? <CheckCircle2 size={16} className="text-emerald-600 shrink-0" /> : <XCircle size={16} className="text-velum-300 shrink-0" />}
+                        <div>
+                          <p className="text-[10px] font-bold uppercase tracking-widest text-velum-400">Consentimiento</p>
+                          <p className={`text-sm font-medium ${intake.consentAccepted ? 'text-emerald-700' : 'text-velum-500'}`}>
+                            {intake.consentAccepted ? 'Aceptado' : 'Pendiente'}
+                          </p>
+                        </div>
+                      </div>
+                      <div className={`rounded-xl p-3 flex items-center gap-2 ${intake.signatureKey ? 'bg-emerald-50' : 'bg-velum-50'}`}>
+                        {intake.signatureKey ? <CheckCheck size={16} className="text-emerald-600 shrink-0" /> : <XCircle size={16} className="text-velum-300 shrink-0" />}
+                        <div>
+                          <p className="text-[10px] font-bold uppercase tracking-widest text-velum-400">Firma digital</p>
+                          <p className={`text-sm font-medium ${intake.signatureKey ? 'text-emerald-700' : 'text-velum-500'}`}>
+                            {intake.signatureKey ? 'Firmado' : 'Sin firma'}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Candidacy note */}
+                  {intake.phototype && (
+                    <div className="p-5">
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-velum-400 mb-3">Determinación de candidatura</p>
+                      <div className={`rounded-xl p-4 text-sm ${intake.phototype <= 3 ? 'bg-emerald-50 border border-emerald-200 text-emerald-800' : intake.phototype === 4 ? 'bg-amber-50 border border-amber-200 text-amber-800' : 'bg-red-50 border border-red-200 text-red-800'}`}>
+                        {intake.phototype <= 3 && <><strong>Candidata favorable.</strong> Fototipo I–III: responde óptimamente al láser de depilación con mínimo riesgo de pigmentación.</>}
+                        {intake.phototype === 4 && <><strong>Candidata con precaución.</strong> Fototipo IV: requiere parámetros ajustados (fluencia reducida, pulso largo). Riesgo moderado de hiperpigmentación post-tratamiento.</>}
+                        {intake.phototype >= 5 && <><strong>Candidata de alto riesgo.</strong> Fototipo V–VI: alto riesgo de hiperpigmentación. Evaluar con especialista antes de iniciar tratamiento. Considerar láser Nd:YAG 1064 nm.</>}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Footer — approve/reject */}
+            {!intakeModalLoading && intake && (m.intakeStatus === 'submitted' || intakeToReject === m.id) && (
+              <div className="px-6 py-4 border-t border-velum-100 bg-velum-50/50 shrink-0 space-y-3">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-velum-400">Resolución del expediente</p>
+                {intakeToReject === m.id ? (
+                  <div className="space-y-2">
+                    <textarea value={intakeRejectReason} onChange={(e) => setIntakeRejectReason(e.target.value)}
+                      placeholder="Motivo del rechazo (requerido)" rows={2}
+                      className="w-full rounded-xl border border-red-200 bg-white px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-red-300 transition" />
+                    <div className="flex gap-2">
+                      <button onClick={() => handleApproveIntake(m.id, false)} disabled={!intakeRejectReason.trim() || isApprovingIntake === m.id}
+                        className="flex-1 bg-red-600 text-white rounded-xl py-2.5 text-sm font-medium hover:bg-red-700 transition disabled:opacity-50">
+                        {isApprovingIntake === m.id ? 'Procesando...' : 'Confirmar rechazo'}
+                      </button>
+                      <button onClick={() => { setIntakeToReject(null); setIntakeRejectReason(''); }}
+                        className="px-4 py-2.5 rounded-xl border border-velum-200 text-sm text-velum-600 hover:bg-white transition">Cancelar</button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex gap-2">
+                    <button onClick={() => handleApproveIntake(m.id, true)} disabled={isApprovingIntake === m.id}
+                      className="flex-1 bg-emerald-600 text-white rounded-xl py-2.5 text-sm font-medium hover:bg-emerald-700 transition disabled:opacity-50">
+                      {isApprovingIntake === m.id ? 'Procesando...' : 'Aprobar candidatura'}
+                    </button>
+                    <button onClick={() => setIntakeToReject(m.id)}
+                      className="flex-1 border border-red-200 text-red-600 bg-white rounded-xl py-2.5 text-sm font-medium hover:bg-red-50 transition">Rechazar</button>
+                  </div>
+                )}
+              </div>
+            )}
+            {!intakeModalLoading && intake && m.intakeStatus === 'approved' && (
+              <div className="px-6 py-4 border-t border-velum-100 bg-emerald-50/50 shrink-0">
+                <div className="flex items-center gap-2 text-emerald-700">
+                  <CheckCircle2 size={16} />
+                  <p className="text-sm font-medium">Expediente aprobado. Paciente candidata confirmada.</p>
+                </div>
+              </div>
+            )}
+            {!intakeModalLoading && intake && m.intakeStatus === 'rejected' && (
+              <div className="px-6 py-4 border-t border-velum-100 bg-red-50/50 shrink-0">
+                <div className="flex items-center gap-2 text-red-700">
+                  <XCircle size={16} />
+                  <p className="text-sm font-medium">Expediente rechazado. Revisar con la paciente.</p>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </>
+    );
+  };
+
   // ─── Section: Expedientes ─────────────────────────────────────────────────
 
   const renderExpedientes = () => {
@@ -1918,9 +2240,14 @@ export const Admin: React.FC = () => {
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {pendingApproval.map((m) => (
                 <div key={m.id} className="bg-white rounded-2xl border border-amber-200 bg-amber-50/30 p-4 space-y-3">
-                  <div>
-                    <p className="font-medium text-velum-900 text-sm">{m.name}</p>
-                    <p className="text-xs text-velum-500">{m.email}</p>
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <p className="font-medium text-velum-900 text-sm">{m.name}</p>
+                      <p className="text-xs text-velum-500">{m.email}</p>
+                    </div>
+                    <button onClick={() => openIntakeModal(m)} className="text-[10px] font-bold uppercase tracking-widest text-velum-600 hover:text-velum-900 transition border border-velum-200 rounded-lg px-2 py-1 bg-white shrink-0">
+                      Ver expediente
+                    </button>
                   </div>
                   {intakeToReject === m.id ? (
                     <div className="space-y-2">
@@ -1980,7 +2307,10 @@ export const Admin: React.FC = () => {
                         <td className="px-4 py-3"><Pill label={intake.label} cls={intake.cls} /></td>
                         <td className="px-4 py-3 text-velum-500">{m.clinical?.documents?.length ?? 0}</td>
                         <td className="px-4 py-3">
-                          <button onClick={() => handleOpenMemberDrawer(m)} className="text-xs text-velum-600 hover:text-velum-900 transition font-medium">Ver perfil</button>
+                          <div className="flex items-center gap-3">
+                            <button onClick={() => openIntakeModal(m)} className="text-xs text-velum-900 font-semibold hover:underline transition">Ver expediente</button>
+                            <button onClick={() => handleOpenMemberDrawer(m)} className="text-xs text-velum-400 hover:text-velum-700 transition">Perfil</button>
+                          </div>
                         </td>
                       </tr>
                     );
@@ -2414,11 +2744,10 @@ export const Admin: React.FC = () => {
   // ─── Section: Configuraciones ─────────────────────────────────────────────
 
   const configTabs: Array<{ id: SettingsCategory; label: string }> = [
-    { id: 'agenda', label: 'Agenda' },
-    { id: 'usuarios_permisos', label: 'Usuarios' },
-    { id: 'whatsapp_business', label: 'WhatsApp' },
-    { id: 'stripe', label: 'Stripe' },
-    { id: 'meta', label: 'Integraciones' }
+    { id: 'agenda',        label: 'Agenda' },
+    { id: 'sistema',       label: 'Sistema' },
+    { id: 'integraciones', label: 'Integraciones' },
+    { id: 'auditoria',     label: 'Auditoría' },
   ];
 
   const renderAgendaSettings = () => (
@@ -2614,11 +2943,11 @@ export const Admin: React.FC = () => {
   const renderConfiguraciones = () => (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-serif text-velum-900">Configuraciones</h1>
-        <p className="text-sm text-velum-500 mt-1">Parámetros del sistema e integraciones</p>
+        <h1 className="text-2xl font-serif text-velum-900">Ajustes</h1>
+        <p className="text-sm text-velum-500 mt-1">Configuración del sistema, integraciones y auditoría</p>
       </div>
       {/* Sub-tabs */}
-      <div className="flex gap-1 bg-velum-100 p-1 rounded-xl w-fit">
+      <div className="flex gap-1 bg-velum-100 p-1 rounded-xl w-fit flex-wrap">
         {configTabs.map((tab) => (
           <button key={tab.id} onClick={() => setSettingsCategory(tab.id)}
             className={`px-4 py-2 rounded-lg text-xs font-medium transition ${settingsCategory === tab.id ? 'bg-white text-velum-900 shadow-sm' : 'text-velum-500 hover:text-velum-700'}`}>
@@ -2627,13 +2956,72 @@ export const Admin: React.FC = () => {
         ))}
       </div>
       {settingsCategory === 'agenda' && renderAgendaSettings()}
-      {settingsCategory === 'usuarios_permisos' && <AdminUsersPermissions embedded />}
-      {settingsCategory === 'whatsapp_business' && <AdminWhatsAppSettings embedded />}
-      {settingsCategory === 'stripe' && <AdminStripeSettings embedded />}
-      {settingsCategory === 'meta' && (
-        <div className="bg-white rounded-2xl border border-velum-100 p-6">
-          <p className="text-xs font-bold uppercase tracking-widest text-velum-500 mb-2">Integraciones externas</p>
-          <p className="text-sm text-velum-500">Google Calendar está disponible en la pestaña Agenda.</p>
+      {settingsCategory === 'sistema' && <AdminUsersPermissions embedded />}
+      {settingsCategory === 'integraciones' && (
+        <div className="space-y-6">
+          <AdminStripeSettings embedded />
+          <AdminWhatsAppSettings embedded />
+        </div>
+      )}
+      {settingsCategory === 'auditoria' && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-velum-400">Bitácora de auditoría</p>
+            <button onClick={() => void loadData()} className="flex items-center gap-1.5 text-xs text-velum-400 hover:text-velum-900 transition">
+              <RefreshCw size={12} className={isLoadingData ? 'animate-spin' : ''} />Actualizar
+            </button>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-2">
+            {[
+              { label: 'Firmas de consentimiento', value: analytics.expedientesFirmados, cls: 'text-emerald-700' },
+              { label: 'Eventos fallidos', value: analytics.failedAudits, cls: analytics.failedAudits > 0 ? 'text-red-600' : 'text-velum-900' },
+              { label: 'Eventos sensibles', value: analytics.sensitiveEvents, cls: 'text-velum-900' },
+              { label: 'Usuarios con acceso', value: members.filter((m) => m.role !== 'member').length + 1, cls: 'text-velum-900' },
+            ].map(({ label, value, cls }) => (
+              <div key={label} className="bg-white rounded-2xl border border-velum-100 p-4">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-velum-400 mb-2">{label}</p>
+                <p className={`text-2xl font-serif font-bold ${cls}`}>{value}</p>
+              </div>
+            ))}
+          </div>
+          <div className="bg-white rounded-2xl border border-velum-100 overflow-hidden">
+            {auditLogs.length === 0 ? (
+              <div className="py-12 text-center">
+                <Shield size={28} className="mx-auto text-velum-200 mb-3" />
+                <p className="text-sm text-velum-400">Sin registros de auditoría</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="border-b border-velum-100 bg-velum-50/50">
+                      {['Fecha', 'Usuario', 'Acción', 'IP', 'Estado'].map((h) => (
+                        <th key={h} className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-widest text-velum-400">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {auditLogs.map((log, i) => (
+                      <tr key={log.id ?? i} className={`${i < auditLogs.length - 1 ? 'border-b border-velum-50' : ''} hover:bg-velum-50/50 transition`}>
+                        <td className="px-4 py-2.5 text-velum-400 whitespace-nowrap">
+                          {new Date(log.timestamp).toLocaleString('es-MX', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                        </td>
+                        <td className="px-4 py-2.5 text-velum-700 font-medium max-w-[140px] truncate">{log.user ?? '—'}</td>
+                        <td className="px-4 py-2.5 text-velum-500 font-mono">{log.action}</td>
+                        <td className="px-4 py-2.5 text-velum-400 font-mono">{log.ip ?? '—'}</td>
+                        <td className="px-4 py-2.5">
+                          <span className={`inline-flex items-center gap-1.5 text-xs font-medium ${log.status === 'success' ? 'text-emerald-600' : 'text-red-600'}`}>
+                            <span className={`w-1.5 h-1.5 rounded-full ${log.status === 'success' ? 'bg-emerald-500' : 'bg-red-500'}`} />
+                            {log.status === 'success' ? 'OK' : 'Error'}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>
@@ -2649,18 +3037,30 @@ export const Admin: React.FC = () => {
         </div>
       );
     }
+    if (dataLoadError) {
+      return (
+        <div className="flex flex-col items-center justify-center py-20 gap-4">
+          <div className="w-12 h-12 rounded-2xl bg-red-50 border border-red-200 flex items-center justify-center">
+            <AlertTriangle size={22} className="text-red-500" />
+          </div>
+          <div className="text-center">
+            <p className="text-sm font-semibold text-velum-900">Error al cargar datos</p>
+            <p className="text-xs text-velum-400 mt-1 max-w-xs">{dataLoadError}</p>
+          </div>
+          <button onClick={() => void loadData()}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-velum-900 text-white text-sm font-medium hover:bg-velum-800 transition">
+            <RefreshCw size={14} />Reintentar
+          </button>
+        </div>
+      );
+    }
     switch (activeSection) {
-      case 'control': return renderControl();
-      case 'socios': return renderSocios();
-      case 'kpis': return renderKPIs();
-      case 'finanzas': return renderFinanzas();
-      case 'expedientes': return renderExpedientes();
-      case 'agenda': return renderAgenda();
-      case 'cobranza': return renderCobranza();
-      case 'riesgos': return renderRiesgos();
-      case 'cumplimiento': return renderCumplimiento();
-      case 'configuraciones': return renderConfiguraciones();
-      default: return null;
+      case 'panel':        return renderPanel();
+      case 'socias':       return renderSocios();
+      case 'agenda':       return renderAgenda();
+      case 'expedientes':  return renderExpedientes();
+      case 'ajustes':      return renderConfiguraciones();
+      default:             return null;
     }
   };
 
@@ -2723,27 +3123,36 @@ export const Admin: React.FC = () => {
           {!isSidebarCollapsed && <span className="text-white font-serif text-base leading-tight">Velum<br /><span className="text-[10px] font-sans uppercase tracking-widest text-white/50">Admin</span></span>}
         </div>
         {/* Nav */}
-        <nav className="flex-1 overflow-y-auto py-4 space-y-0.5 px-2">
-          {sectionGroups.map((group) => (
-            <div key={group.title} className="mb-4">
-              {!isSidebarCollapsed && (
-                <p className="px-3 mb-1.5 text-[9px] font-bold uppercase tracking-[0.2em] text-white/30">{group.title}</p>
-              )}
-              {group.items.map((section) => {
-                const meta = sectionMeta[section];
-                const Icon = meta.icon;
-                const isActive = activeSection === section;
-                return (
-                  <button key={section} onClick={() => setActiveSection(section)}
-                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-all mb-0.5 ${isActive ? 'bg-white/15 text-white font-medium' : 'text-white/50 hover:text-white hover:bg-white/8'}`}
-                    title={isSidebarCollapsed ? meta.label : undefined}>
-                    <Icon size={17} className="shrink-0" />
-                    {!isSidebarCollapsed && <span className="truncate">{meta.label}</span>}
-                  </button>
-                );
-              })}
-            </div>
-          ))}
+        <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-0.5">
+          {NAV_SECTIONS.map((section) => {
+            const meta = sectionMeta[section];
+            const Icon = meta.icon;
+            const isActive = activeSection === section;
+            // Compute badges
+            const badge =
+              section === 'expedientes' ? members.filter((m) => m.intakeStatus === 'submitted').length
+              : section === 'socias' ? members.filter((m) => riskOfMember(m) !== 'ok').length
+              : 0;
+            return (
+              <button key={section} onClick={() => { setActiveSection(section); setSidebarOpen(false); }}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-all
+                  ${isActive ? 'bg-white/15 text-white font-medium' : 'text-white/50 hover:text-white hover:bg-white/8'}`}
+                title={isSidebarCollapsed ? meta.label : undefined}>
+                <div className="relative shrink-0">
+                  <Icon size={17} />
+                  {!isActive && badge > 0 && (
+                    <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-red-500 rounded-full text-[8px] font-bold text-white flex items-center justify-center leading-none">
+                      {badge > 9 ? '9+' : badge}
+                    </span>
+                  )}
+                </div>
+                {!isSidebarCollapsed && <span className="truncate flex-1">{meta.label}</span>}
+                {!isSidebarCollapsed && !isActive && badge > 0 && (
+                  <span className="shrink-0 text-[10px] font-bold bg-red-500 text-white rounded-full px-1.5 py-0.5 leading-none">{badge > 9 ? '9+' : badge}</span>
+                )}
+              </button>
+            );
+          })}
         </nav>
         {/* Bottom: user + collapse */}
         <div className="border-t border-white/10 p-3 space-y-1">
@@ -2797,6 +3206,48 @@ export const Admin: React.FC = () => {
       {/* Modals */}
       {renderSessionModal()}
       {renderMemberDrawer()}
+      {renderIntakeModal()}
+
+      {/* Cancel membership confirmation dialog */}
+      {confirmCancelMemberId && (() => {
+        const m = members.find((x) => x.id === confirmCancelMemberId);
+        return (
+          <>
+            <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50" onClick={() => setConfirmCancelMemberId(null)} />
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
+              <div className="pointer-events-auto w-full max-w-sm bg-white rounded-3xl shadow-2xl p-6 space-y-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-red-50 border border-red-200 flex items-center justify-center shrink-0">
+                    <XCircle size={18} className="text-red-500" />
+                  </div>
+                  <div>
+                    <p className="font-semibold text-velum-900 text-sm">Cancelar membresía</p>
+                    <p className="text-xs text-velum-500 mt-0.5">Esta acción es reversible desde el panel.</p>
+                  </div>
+                </div>
+                {m && (
+                  <div className="bg-velum-50 rounded-xl px-4 py-3">
+                    <p className="text-xs font-bold uppercase tracking-widest text-velum-400 mb-0.5">Socio</p>
+                    <p className="text-sm font-medium text-velum-900">{m.name || m.email}</p>
+                    <p className="text-xs text-velum-500">{m.email}</p>
+                  </div>
+                )}
+                <p className="text-xs text-velum-600">¿Confirmas que deseas cancelar la membresía de este socio? Su acceso quedará suspendido.</p>
+                <div className="flex gap-2">
+                  <button onClick={() => { setConfirmCancelMemberId(null); void doUpdateMember(confirmCancelMemberId, 'canceled'); }}
+                    className="flex-1 bg-red-600 text-white rounded-xl py-2.5 text-sm font-medium hover:bg-red-700 transition">
+                    Confirmar cancelación
+                  </button>
+                  <button onClick={() => setConfirmCancelMemberId(null)}
+                    className="px-4 py-2.5 rounded-xl border border-velum-200 text-sm text-velum-600 hover:bg-velum-50 transition">
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            </div>
+          </>
+        );
+      })()}
     </div>
   );
 };

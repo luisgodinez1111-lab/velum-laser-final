@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { requireAuth } from "../middlewares/auth";
+import { requireAuth, requireRole } from "../middlewares/auth";
 import {
   listAdminAccessUsers,
   createAdminAccessUser,
@@ -9,7 +9,7 @@ import {
 
 export const adminAccessRoutes = Router();
 
-adminAccessRoutes.get("/api/v1/admin/access/users", requireAuth, listAdminAccessUsers);
-adminAccessRoutes.post("/api/v1/admin/access/users", requireAuth, createAdminAccessUser);
-adminAccessRoutes.patch("/api/v1/admin/access/users/:userId", requireAuth, updateAdminAccessUser);
-adminAccessRoutes.post("/api/v1/admin/access/users/:userId/reset-password", requireAuth, resetAdminAccessPassword);
+adminAccessRoutes.get("/api/v1/admin/access/users", requireAuth, requireRole(["admin", "system"]), listAdminAccessUsers);
+adminAccessRoutes.post("/api/v1/admin/access/users", requireAuth, requireRole(["admin", "system"]), createAdminAccessUser);
+adminAccessRoutes.patch("/api/v1/admin/access/users/:userId", requireAuth, requireRole(["admin", "system"]), updateAdminAccessUser);
+adminAccessRoutes.post("/api/v1/admin/access/users/:userId/reset-password", requireAuth, requireRole(["admin", "system"]), resetAdminAccessPassword);

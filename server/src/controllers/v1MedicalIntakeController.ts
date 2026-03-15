@@ -63,6 +63,13 @@ export const updateMyMedicalIntake = async (req: AuthRequest, res: Response) => 
   return res.json(updated);
 };
 
+export const getMedicalIntakeByUserId = async (req: AuthRequest, res: Response) => {
+  const { userId } = req.params;
+  const intake = await prisma.medicalIntake.findUnique({ where: { userId } });
+  if (!intake) return res.status(404).json({ message: "Expediente no encontrado" });
+  return res.json(intake);
+};
+
 export const approveMedicalIntake = async (req: AuthRequest, res: Response) => {
   const payload = medicalIntakeApproveSchema.parse(req.body);
 
