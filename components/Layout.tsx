@@ -247,16 +247,18 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
             </div>
             <div className="mt-8 flex flex-col items-end gap-3">
               <p className="text-xs text-velum-500">
-                © 2025 Velum Laser. Todos los derechos reservados.
+                © {new Date().getFullYear()} Velum Laser. Todos los derechos reservados.
               </p>
-              {/* Acceso administrativo — visible para staff/admin que no estén en el panel */}
-              <Link
-                to="/admin"
-                className="inline-flex items-center gap-1.5 text-xs text-velum-400 hover:text-velum-50 uppercase tracking-widest transition-colors border border-velum-700 hover:border-velum-400 rounded px-3 py-1"
-              >
-                <Settings size={11} />
-                Acceso Administrativo
-              </Link>
+              {/* Acceso administrativo — solo visible para staff/admin */}
+              {isAdmin && (
+                <Link
+                  to="/admin"
+                  className="inline-flex items-center gap-1.5 text-xs text-velum-400 hover:text-velum-50 uppercase tracking-widest transition-colors border border-velum-700 hover:border-velum-400 rounded px-3 py-1"
+                >
+                  <Settings size={11} />
+                  Acceso Administrativo
+                </Link>
+              )}
             </div>
           </div>
         </div>

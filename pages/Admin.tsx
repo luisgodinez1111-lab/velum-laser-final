@@ -1,12 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Button } from '../components/Button';
 import { PasswordInput } from '../components/PasswordInput';
 import { VelumLogo } from '../components/VelumLogo';
 import { AgendaIntegrations } from './settings/AgendaIntegrations';
 import {
   Users,
-  BarChart3,
   Wallet,
   FolderOpen,
   CalendarDays,
@@ -31,7 +29,6 @@ import {
   HandCoins,
   Trash2,
   Zap,
-  ClipboardList,
   CheckCheck,
   XCircle
 } from 'lucide-react';
@@ -115,6 +112,112 @@ const roleTitle: Record<UserRole, string> = {
   system: 'Sistema'
 };
 
+// ─── Sidebar extraído como componente estable fuera de Admin ─────────────────
+// IMPORTANTE: definirlo dentro del componente padre hace que React lo trate
+// como un tipo nuevo en cada render → desmonta/remonta el sidebar completo.
+
+type AdminSidebarProps = {
+  isSidebarCollapsed: boolean;
+  activeSection: AdminSection;
+  members: Member[];
+  user: { email?: string; name?: string; role?: string } | null;
+  onSectionChange: (section: AdminSection) => void;
+  onToggleCollapse: () => void;
+  onLogout: () => void;
+};
+
+const AdminSidebarContent: React.FC<AdminSidebarProps> = ({
+  isSidebarCollapsed,
+  activeSection,
+  members,
+  user,
+  onSectionChange,
+  onToggleCollapse,
+  onLogout,
+}) => (
+  <>
+    {/* Logo */}
+    <div className="flex items-center gap-3 px-4 h-14 border-b border-white/10 shrink-0">
+      <VelumLogo className="h-5 w-auto shrink-0 brightness-0 invert" />
+      {!isSidebarCollapsed && (
+        <span className="text-white font-serif text-[15px] leading-tight truncate">
+          Velum <span className="text-white/40 font-sans text-[10px] uppercase tracking-widest">Admin</span>
+        </span>
+      )}
+    </div>
+
+    {/* Nav */}
+    <nav className="flex-1 overflow-y-auto py-4 px-2 space-y-1">
+      {NAV_SECTIONS.map((section) => {
+        const meta = sectionMeta[section];
+        const Icon = meta.icon;
+        const isActive = activeSection === section;
+        const badge =
+          section === 'expedientes' ? members.filter((m) => m.intakeStatus === 'submitted').length
+          : section === 'socias'    ? members.filter((m) => riskOfMember(m) !== 'ok').length
+          : 0;
+        return (
+          <button
+            key={section}
+            onClick={() => onSectionChange(section)}
+            title={isSidebarCollapsed ? meta.label : undefined}
+            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-medium transition-all duration-150
+              ${isActive
+                ? 'bg-white/[0.14] text-white'
+                : 'text-white/50 hover:text-white hover:bg-white/[0.07]'
+              }`}
+          >
+            <div className="relative shrink-0 w-[18px] h-[18px] flex items-center justify-center">
+              <Icon size={17} />
+              {!isActive && badge > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 min-w-[14px] h-[14px] bg-red-500 rounded-full text-[9px] font-bold text-white flex items-center justify-center px-0.5 leading-none">
+                  {badge > 9 ? '9+' : badge}
+                </span>
+              )}
+            </div>
+            {!isSidebarCollapsed && (
+              <>
+                <span className="flex-1 truncate text-left">{meta.label}</span>
+                {!isActive && badge > 0 && (
+                  <span className="shrink-0 min-w-[20px] h-5 bg-red-500 text-white rounded-full text-[10px] font-bold flex items-center justify-center px-1.5">
+                    {badge > 9 ? '9+' : badge}
+                  </span>
+                )}
+              </>
+            )}
+          </button>
+        );
+      })}
+    </nav>
+
+    {/* Bottom */}
+    <div className="border-t border-white/10 p-2 space-y-1 shrink-0">
+      {!isSidebarCollapsed && (
+        <div className="px-3 py-2">
+          <p className="text-[11px] text-white/60 font-medium truncate">{user?.email}</p>
+          <p className="text-[10px] text-white/30">{roleTitle[user?.role as UserRole] ?? user?.role}</p>
+        </div>
+      )}
+      <button
+        onClick={onLogout}
+        className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-white/40 hover:text-white hover:bg-white/10 transition text-[13px]"
+        title={isSidebarCollapsed ? 'Cerrar sesión' : undefined}
+      >
+        <LogOut size={15} className="shrink-0" />
+        {!isSidebarCollapsed && 'Cerrar sesión'}
+      </button>
+      <button
+        onClick={onToggleCollapse}
+        className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-white/25 hover:text-white/60 transition"
+        title={isSidebarCollapsed ? 'Expandir' : 'Colapsar'}
+      >
+        <ChevronLeft size={15} className={`shrink-0 transition-transform duration-200 ${isSidebarCollapsed ? 'rotate-180' : ''}`} />
+        {!isSidebarCollapsed && <span className="text-[11px]">Colapsar</span>}
+      </button>
+    </div>
+  </>
+);
+
 const formatMoney = (amount: number) =>
   new Intl.NumberFormat('es-MX', {
     style: 'currency',
@@ -160,7 +263,11 @@ const statusPill = (status?: string) => {
 
 const parseMxDate = (value?: string) => {
   if (!value) return null;
-  const direct = new Date(value);
+  // Strings ISO de solo fecha ("YYYY-MM-DD") se parsean en UTC si no tienen hora,
+  // lo que puede mostrar el día anterior en zona horaria local. Forzamos hora local.
+  const direct = /^\d{4}-\d{2}-\d{2}$/.test(value)
+    ? new Date(`${value}T00:00:00`)
+    : new Date(value);
   if (!Number.isNaN(direct.getTime())) {
     return direct;
   }
@@ -237,6 +344,7 @@ export const Admin: React.FC = () => {
 
   // Intake approval
   const [isApprovingIntake, setIsApprovingIntake] = useState<string | null>(null);
+  const [intakeToApprove, setIntakeToApprove] = useState<string | null>(null);
   const [intakeToReject, setIntakeToReject] = useState<string | null>(null);
   const [intakeRejectReason, setIntakeRejectReason] = useState('');
 
@@ -279,6 +387,16 @@ export const Admin: React.FC = () => {
   const hasAccess = !!user && allowedRoles.includes(user.role);
   const canManageGoogleIntegration = user?.role === 'admin' || user?.role === 'system';
 
+  // Detecta desktop con resize listener para el marginLeft de la sidebar
+  const [isDesktop, setIsDesktop] = useState(() =>
+    typeof window !== 'undefined' && window.innerWidth >= 768
+  );
+  useEffect(() => {
+    const update = () => setIsDesktop(window.innerWidth >= 768);
+    window.addEventListener('resize', update);
+    return () => window.removeEventListener('resize', update);
+  }, []);
+
   const normalizeTreatmentDrafts = (items: AgendaTreatment[]) =>
     items.map((treatment) => ({
       ...treatment,
@@ -289,7 +407,6 @@ export const Admin: React.FC = () => {
 
   const loadData = async () => {
     setIsLoadingData(true);
-    setIsGoogleIntegrationLoading(true);
     setDataLoadError('');
     try {
       const [membersData, logsData, configData, dayData, integrationData] = await Promise.all([
@@ -331,12 +448,9 @@ export const Admin: React.FC = () => {
         setSelectedAgendaMemberId(membersData[0].id);
       }
     } catch (err: any) {
-      const msg = err?.message || 'No se pudo cargar los datos del panel.';
-      setDataLoadError(msg);
-      toast.error(msg);
+      setDataLoadError(err?.message || 'No se pudo cargar los datos del panel.');
     } finally {
       setIsLoadingData(false);
-      setIsGoogleIntegrationLoading(false);
     }
   };
 
@@ -582,6 +696,7 @@ export const Admin: React.FC = () => {
     setIsApprovingIntake(userId);
     try {
       await clinicalService.approveMedicalIntake(userId, approved, approved ? undefined : intakeRejectReason.trim());
+      setIntakeToApprove(null);
       setIntakeToReject(null);
       setIntakeRejectReason('');
       await loadData();
@@ -1497,7 +1612,7 @@ export const Admin: React.FC = () => {
     const mem = selectedMember;
     return (
       <>
-        <div className="fixed inset-0 bg-black/20 backdrop-blur-sm z-40" onClick={() => setSelectedMember(null)} />
+        <div className="fixed inset-0 bg-black/20 backdrop-blur-sm z-40" onClick={() => { setSelectedMember(null); setIntakeToApprove(null); }} />
         <div className="fixed right-0 top-0 h-full w-full max-w-md bg-white shadow-2xl z-50 flex flex-col overflow-hidden">
           {/* Header */}
           <div className="px-6 py-5 border-b border-velum-100 flex items-start justify-between">
@@ -1506,7 +1621,7 @@ export const Admin: React.FC = () => {
               <h2 className="font-serif text-xl text-velum-900 mt-1">{mem.name}</h2>
               <p className="text-xs text-velum-500 mt-0.5">{mem.email}</p>
             </div>
-            <button onClick={() => setSelectedMember(null)} className="p-2 rounded-xl hover:bg-velum-50 text-velum-400 hover:text-velum-700 transition"><X size={18} /></button>
+            <button onClick={() => { setSelectedMember(null); setIntakeToApprove(null); }} className="p-2 rounded-xl hover:bg-velum-50 text-velum-400 hover:text-velum-700 transition"><X size={18} /></button>
           </div>
           {/* Stats */}
           <div className="grid grid-cols-2 gap-3 p-4 border-b border-velum-100">
@@ -1577,11 +1692,23 @@ export const Admin: React.FC = () => {
                         className="px-3 py-2 rounded-xl border border-velum-200 text-sm text-velum-600 hover:bg-velum-50 transition">Cancelar</button>
                     </div>
                   </div>
+                ) : intakeToApprove === mem.id ? (
+                  <div className="space-y-2">
+                    <p className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-xl px-3 py-2">¿Confirmas que el expediente cumple los requisitos clínicos?</p>
+                    <div className="flex gap-2">
+                      <button onClick={() => { setIntakeToApprove(null); handleApproveIntake(mem.id, true); }} disabled={isApprovingIntake === mem.id}
+                        className="flex-1 bg-emerald-600 text-white rounded-xl py-2.5 text-sm font-medium hover:bg-emerald-700 transition disabled:opacity-50">
+                        {isApprovingIntake === mem.id ? 'Procesando...' : 'Confirmar aprobación'}
+                      </button>
+                      <button onClick={() => setIntakeToApprove(null)}
+                        className="px-3 py-2.5 rounded-xl border border-velum-200 text-sm text-velum-600 hover:bg-velum-50 transition">Cancelar</button>
+                    </div>
+                  </div>
                 ) : (
                   <div className="flex gap-2">
-                    <button onClick={() => handleApproveIntake(mem.id, true)} disabled={isApprovingIntake === mem.id}
-                      className="flex-1 bg-emerald-600 text-white rounded-xl py-2.5 text-sm font-medium hover:bg-emerald-700 transition disabled:opacity-50">
-                      {isApprovingIntake === mem.id ? 'Procesando...' : 'Aprobar'}
+                    <button onClick={() => setIntakeToApprove(mem.id)}
+                      className="flex-1 bg-emerald-600 text-white rounded-xl py-2.5 text-sm font-medium hover:bg-emerald-700 transition">
+                      Aprobar
                     </button>
                     <button onClick={() => setIntakeToReject(mem.id)}
                       className="flex-1 border border-red-200 text-red-600 bg-red-50 rounded-xl py-2.5 text-sm font-medium hover:bg-red-100 transition">Rechazar</button>
@@ -1654,7 +1781,7 @@ export const Admin: React.FC = () => {
 
   const renderPanel = () => {
     const todayLabel = new Date().toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' });
-    const userName = user?.email?.split('@')[0] ?? 'Admin';
+    const userName = user?.name || user?.email?.split('@')[0] || 'Admin';
     const actionAlerts = controlAlerts.filter((a) => a.level !== 'ok');
 
     return (
@@ -2690,7 +2817,7 @@ export const Admin: React.FC = () => {
           <h1 className="text-2xl font-serif text-velum-900">Cumplimiento</h1>
           <p className="text-sm text-velum-500 mt-1">Bitácora de auditoría y control de acceso</p>
         </div>
-        <button onClick={loadData} className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-velum-200 bg-white text-sm text-velum-600 hover:bg-velum-50 transition">
+        <button onClick={() => void loadData()} className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-velum-200 bg-white text-sm text-velum-600 hover:bg-velum-50 transition">
           <RefreshCw size={14} />Actualizar
         </button>
       </div>
@@ -3114,89 +3241,8 @@ export const Admin: React.FC = () => {
   const SIDEBAR_MINI = 64;
   const sidebarPx = isSidebarCollapsed ? SIDEBAR_MINI : SIDEBAR_FULL;
 
-  const SidebarContent = () => (
-    <>
-      {/* Logo */}
-      <div className="flex items-center gap-3 px-4 h-14 border-b border-white/10 shrink-0">
-        <VelumLogo className="h-5 w-auto shrink-0 brightness-0 invert" />
-        {!isSidebarCollapsed && (
-          <span className="text-white font-serif text-[15px] leading-tight truncate">
-            Velum <span className="text-white/40 font-sans text-[10px] uppercase tracking-widest">Admin</span>
-          </span>
-        )}
-      </div>
-
-      {/* Nav */}
-      <nav className="flex-1 overflow-y-auto py-4 px-2 space-y-1">
-        {NAV_SECTIONS.map((section) => {
-          const meta = sectionMeta[section];
-          const Icon = meta.icon;
-          const isActive = activeSection === section;
-          const badge =
-            section === 'expedientes' ? members.filter((m) => m.intakeStatus === 'submitted').length
-            : section === 'socias'    ? members.filter((m) => riskOfMember(m) !== 'ok').length
-            : 0;
-          return (
-            <button
-              key={section}
-              onClick={() => { setActiveSection(section); setSidebarOpen(false); }}
-              title={isSidebarCollapsed ? meta.label : undefined}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-medium transition-all duration-150
-                ${isActive
-                  ? 'bg-white/[0.14] text-white'
-                  : 'text-white/50 hover:text-white hover:bg-white/[0.07]'
-                }`}
-            >
-              <div className="relative shrink-0 w-[18px] h-[18px] flex items-center justify-center">
-                <Icon size={17} />
-                {!isActive && badge > 0 && (
-                  <span className="absolute -top-1.5 -right-1.5 min-w-[14px] h-[14px] bg-red-500 rounded-full text-[9px] font-bold text-white flex items-center justify-center px-0.5 leading-none">
-                    {badge > 9 ? '9+' : badge}
-                  </span>
-                )}
-              </div>
-              {!isSidebarCollapsed && (
-                <>
-                  <span className="flex-1 truncate text-left">{meta.label}</span>
-                  {!isActive && badge > 0 && (
-                    <span className="shrink-0 min-w-[20px] h-5 bg-red-500 text-white rounded-full text-[10px] font-bold flex items-center justify-center px-1.5">
-                      {badge > 9 ? '9+' : badge}
-                    </span>
-                  )}
-                </>
-              )}
-            </button>
-          );
-        })}
-      </nav>
-
-      {/* Bottom */}
-      <div className="border-t border-white/10 p-2 space-y-1 shrink-0">
-        {!isSidebarCollapsed && (
-          <div className="px-3 py-2">
-            <p className="text-[11px] text-white/60 font-medium truncate">{user?.email}</p>
-            <p className="text-[10px] text-white/30">{roleTitle[user?.role as UserRole] ?? user?.role}</p>
-          </div>
-        )}
-        <button
-          onClick={logout}
-          className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-white/40 hover:text-white hover:bg-white/10 transition text-[13px]"
-          title={isSidebarCollapsed ? 'Cerrar sesión' : undefined}
-        >
-          <LogOut size={15} className="shrink-0" />
-          {!isSidebarCollapsed && 'Cerrar sesión'}
-        </button>
-        <button
-          onClick={() => setIsSidebarCollapsed((v) => !v)}
-          className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-white/25 hover:text-white/60 transition"
-          title={isSidebarCollapsed ? 'Expandir' : 'Colapsar'}
-        >
-          <ChevronLeft size={15} className={`shrink-0 transition-transform duration-200 ${isSidebarCollapsed ? 'rotate-180' : ''}`} />
-          {!isSidebarCollapsed && <span className="text-[11px]">Colapsar</span>}
-        </button>
-      </div>
-    </>
-  );
+  // SidebarContent ahora es AdminSidebarContent (definido fuera del componente)
+  // para evitar que React lo trate como tipo nuevo en cada render.
 
   return (
     <div className="min-h-screen bg-velum-50 flex">
@@ -3206,7 +3252,15 @@ export const Admin: React.FC = () => {
         style={{ width: sidebarPx }}
         className="hidden md:flex flex-col fixed left-0 top-0 h-screen bg-velum-900 z-30 transition-[width] duration-200 overflow-hidden"
       >
-        <SidebarContent />
+        <AdminSidebarContent
+          isSidebarCollapsed={isSidebarCollapsed}
+          activeSection={activeSection}
+          members={members}
+          user={user}
+          onSectionChange={(section) => { setActiveSection(section); setSidebarOpen(false); }}
+          onToggleCollapse={() => setIsSidebarCollapsed((v) => !v)}
+          onLogout={logout}
+        />
       </aside>
 
       {/* ── Sidebar mobile (overlay, shown when sidebarOpen) ── */}
@@ -3221,13 +3275,21 @@ export const Admin: React.FC = () => {
           ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}
         style={{ width: SIDEBAR_FULL }}
       >
-        <SidebarContent />
+        <AdminSidebarContent
+          isSidebarCollapsed={isSidebarCollapsed}
+          activeSection={activeSection}
+          members={members}
+          user={user}
+          onSectionChange={(section) => { setActiveSection(section); setSidebarOpen(false); }}
+          onToggleCollapse={() => setIsSidebarCollapsed((v) => !v)}
+          onLogout={logout}
+        />
       </aside>
 
       {/* ── Main area ── */}
       <div
         className="flex-1 flex flex-col min-h-screen transition-all duration-200"
-        style={{ marginLeft: typeof window !== 'undefined' && window.innerWidth >= 768 ? sidebarPx : 0 }}
+        style={{ marginLeft: isDesktop ? sidebarPx : 0 }}
       >
         {/* Top bar */}
         <header className="sticky top-0 z-20 h-14 bg-white border-b border-velum-100 flex items-center justify-between px-5 shrink-0">

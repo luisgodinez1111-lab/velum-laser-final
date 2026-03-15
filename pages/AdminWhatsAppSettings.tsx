@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { Button } from "../components/Button";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
@@ -36,7 +36,6 @@ const api = async (path: string, init?: RequestInit) => {
 };
 
 export const AdminWhatsAppSettings: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
-  const navigate = useNavigate();
   const { isAuthenticated, isLoading, user } = useAuth();
   const toast = useToast();
 
@@ -58,11 +57,7 @@ export const AdminWhatsAppSettings: React.FC<{ embedded?: boolean }> = ({ embedd
 
   useEffect(() => {
     if (isLoading) return;
-    if (!embedded && !isAuthenticated) {
-      navigate("/agenda?mode=login", { replace: true });
-      return;
-    }
-    if (user?.role !== "admin" && user?.role !== "system") return;
+    if (!isAuthenticated || (user?.role !== "admin" && user?.role !== "system")) return;
 
     const load = async () => {
       try {
@@ -83,7 +78,7 @@ export const AdminWhatsAppSettings: React.FC<{ embedded?: boolean }> = ({ embedd
     };
 
     void load();
-  }, [isAuthenticated, isLoading, navigate, user?.role, embedded]);
+  }, [isAuthenticated, isLoading, user?.role, embedded]);
 
   const save = async () => {
     setIsSaving(true);
@@ -132,7 +127,10 @@ export const AdminWhatsAppSettings: React.FC<{ embedded?: boolean }> = ({ embedd
     }
   };
 
-  if (!embedded && isLoading) return <div className="max-w-5xl mx-auto px-4 py-10">Cargando...</div>;
+  if (isLoading) {
+    if (embedded) return <div className="space-y-4">{[1, 2].map((i) => <div key={i} className="h-24 bg-velum-100 rounded-2xl animate-pulse" />)}</div>;
+    return <div className="max-w-5xl mx-auto px-4 py-10">Cargando...</div>;
+  }
   if (!embedded && !isAuthenticated) return null;
 
   if (user?.role !== "admin" && user?.role !== "system") {
@@ -161,7 +159,7 @@ export const AdminWhatsAppSettings: React.FC<{ embedded?: boolean }> = ({ embedd
           <label className="mb-1 block text-xs uppercase tracking-wide text-velum-500">Access Token Meta</label>
           <input
             type="password"
-            className="w-full rounded-xl border border-velum-300 px-4 py-3 text-sm"
+            className="w-full rounded-xl border border-velum-200 px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-velum-900/20 focus:border-velum-700 transition"
             value={form.accessToken}
             onChange={(e) => setForm((p) => ({ ...p, accessToken: e.target.value }))}
             placeholder={tokenMasked ? "Dejar vacío para conservar token actual" : "Pega token Meta"}
@@ -171,7 +169,7 @@ export const AdminWhatsAppSettings: React.FC<{ embedded?: boolean }> = ({ embedd
         <div>
           <label className="mb-1 block text-xs uppercase tracking-wide text-velum-500">Phone Number ID</label>
           <input
-            className="w-full rounded-xl border border-velum-300 px-4 py-3 text-sm"
+            className="w-full rounded-xl border border-velum-200 px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-velum-900/20 focus:border-velum-700 transition"
             value={form.phoneNumberId}
             onChange={(e) => setForm((p) => ({ ...p, phoneNumberId: e.target.value }))}
             placeholder="1005308739334309"
@@ -182,7 +180,7 @@ export const AdminWhatsAppSettings: React.FC<{ embedded?: boolean }> = ({ embedd
           <div>
             <label className="mb-1 block text-xs uppercase tracking-wide text-velum-500">Template Name</label>
             <input
-              className="w-full rounded-xl border border-velum-300 px-4 py-3 text-sm"
+              className="w-full rounded-xl border border-velum-200 px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-velum-900/20 focus:border-velum-700 transition"
               value={form.templateName}
               onChange={(e) => setForm((p) => ({ ...p, templateName: e.target.value }))}
               placeholder="velum_otp_code"
@@ -191,7 +189,7 @@ export const AdminWhatsAppSettings: React.FC<{ embedded?: boolean }> = ({ embedd
           <div>
             <label className="mb-1 block text-xs uppercase tracking-wide text-velum-500">Template Lang</label>
             <input
-              className="w-full rounded-xl border border-velum-300 px-4 py-3 text-sm"
+              className="w-full rounded-xl border border-velum-200 px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-velum-900/20 focus:border-velum-700 transition"
               value={form.templateLang}
               onChange={(e) => setForm((p) => ({ ...p, templateLang: e.target.value }))}
               placeholder="es_MX"
@@ -224,7 +222,7 @@ export const AdminWhatsAppSettings: React.FC<{ embedded?: boolean }> = ({ embedd
           <div>
             <label className="mb-1 block text-xs uppercase tracking-wide text-velum-500">Teléfono destino</label>
             <input
-              className="w-full rounded-xl border border-velum-300 px-4 py-3 text-sm"
+              className="w-full rounded-xl border border-velum-200 px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-velum-900/20 focus:border-velum-700 transition"
               value={testPhone}
               onChange={(e) => setTestPhone(e.target.value)}
               placeholder="+52 614 494 7274"
@@ -233,7 +231,7 @@ export const AdminWhatsAppSettings: React.FC<{ embedded?: boolean }> = ({ embedd
           <div>
             <label className="mb-1 block text-xs uppercase tracking-wide text-velum-500">Código de prueba</label>
             <input
-              className="w-full rounded-xl border border-velum-300 px-4 py-3 text-sm"
+              className="w-full rounded-xl border border-velum-200 px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-velum-900/20 focus:border-velum-700 transition"
               value={testCode}
               onChange={(e) => setTestCode(e.target.value)}
               placeholder="123456"

@@ -36,7 +36,9 @@ const mapMember = (user: any): Member => {
     email: user.email,
     role: user.role as UserRole,
     phone: user.profile?.phone,
-    plan: tier?.name ?? "Plan Velum",
+    plan: tier?.name ?? membership?.planCode ?? "Plan Velum",
+    // amount: fuente de verdad es el precio del tier local o el monto real del membership
+    amount: tier?.price ?? membership?.amount ?? undefined,
     subscriptionStatus: membership?.status ?? "inactive",
     nextBillingDate: membership?.currentPeriodEnd ? new Date(membership.currentPeriodEnd).toLocaleDateString("es-MX") : undefined,
     intakeStatus: user.medicalIntake?.status ?? "draft",
@@ -54,10 +56,9 @@ export const memberService = {
   },
 
   getById: async (id: string): Promise<Member | undefined> => {
-    const user = await apiFetch<any>("/me");
-    if (user.id !== id || user.role !== "member") {
-      return undefined;
-    }
+    const users = await apiFetch<any[]>("/admin/users");
+    const user = users.find((u) => u.id === id);
+    if (!user) return undefined;
     return mapMember(user);
   },
 
@@ -83,7 +84,7 @@ export const auditService = {
     const logs = await apiFetch<any[]>("/admin/audit-logs");
     return logs.map((log) => ({
       id: log.id,
-      timestamp: new Date(log.createdAt).toLocaleString("es-MX"),
+      timestamp: log.createdAt,
       user: log.actorUser?.email ?? log.user?.email ?? "system",
       role: (log.actorUser?.role ?? log.user?.role ?? "admin") as UserRole,
       action: log.action,

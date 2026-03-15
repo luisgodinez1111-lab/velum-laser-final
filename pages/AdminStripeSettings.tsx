@@ -15,6 +15,7 @@ import {
 type Props = { embedded?: boolean };
 
 type PlanRow = {
+  _key: string;
   planCode: string;
   name: string;
   amount: number;
@@ -22,6 +23,8 @@ type PlanRow = {
   stripePriceId: string;
   active: boolean;
 };
+
+const genKey = () => `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
 const api = async (url: string, init?: RequestInit) => {
   const res = await fetch(url, {
@@ -75,7 +78,7 @@ export const AdminStripeSettings: React.FC<Props> = ({ embedded = false }) => {
         publishableKeyMasked: cfg.publishableKeyMasked || "",
         webhookSecretMasked: cfg.webhookSecretMasked || "",
       });
-      setPlans(Array.isArray(pl?.plans) ? pl.plans : []);
+      setPlans(Array.isArray(pl?.plans) ? pl.plans.map((p: any) => ({ ...p, _key: genKey() })) : []);
     } catch (e: any) {
       setError(e?.message || "No se pudo cargar la configuración de Stripe");
     } finally {
@@ -86,7 +89,7 @@ export const AdminStripeSettings: React.FC<Props> = ({ embedded = false }) => {
   useEffect(() => { void load(); }, []);
 
   const saveConfig = async () => {
-    setError(""); setOk("");
+    setError(""); setOk(""); setTestResult(null);
     const payload: Record<string, string> = {};
     if (form.secretKey.trim()) payload.secretKey = form.secretKey.trim();
     if (form.publishableKey.trim()) payload.publishableKey = form.publishableKey.trim();
@@ -124,7 +127,7 @@ export const AdminStripeSettings: React.FC<Props> = ({ embedded = false }) => {
     }
   };
 
-  const addPlan = () => setPlans((p) => [...p, { planCode: "", name: "", amount: 0, interval: "month", stripePriceId: "", active: true }]);
+  const addPlan = () => setPlans((p) => [...p, { _key: genKey(), planCode: "", name: "", amount: 0, interval: "month", stripePriceId: "", active: true }]);
   const updatePlan = (idx: number, key: keyof PlanRow, value: any) =>
     setPlans((prev) => prev.map((p, i) => (i === idx ? { ...p, [key]: value } : p)));
   const removePlan = (idx: number) => setPlans((prev) => prev.filter((_, i) => i !== idx));
@@ -160,6 +163,20 @@ export const AdminStripeSettings: React.FC<Props> = ({ embedded = false }) => {
 
   const content = (
     <div className="space-y-5">
+      {/* Feedback — al tope para visibilidad inmediata */}
+      {error && (
+        <div className="flex items-center gap-2.5 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
+          <XCircle size={15} className="text-red-500 shrink-0" />
+          <p className="text-sm text-red-700">{error}</p>
+        </div>
+      )}
+      {ok && (
+        <div className="flex items-center gap-2.5 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3">
+          <CheckCircle2 size={15} className="text-emerald-600 shrink-0" />
+          <p className="text-sm text-emerald-700">{ok}</p>
+        </div>
+      )}
+
       {/* Status card */}
       <div className={`rounded-2xl border p-5 ${masked.configured ? "bg-emerald-50 border-emerald-200" : "bg-amber-50 border-amber-200"}`}>
         <div className="flex items-center justify-between">
@@ -261,7 +278,7 @@ export const AdminStripeSettings: React.FC<Props> = ({ embedded = false }) => {
             ) : (
               <div className="space-y-2">
                 {plans.map((p, idx) => (
-                  <div key={idx} className={`rounded-xl border p-4 space-y-3 transition ${p.active ? "border-velum-200" : "border-velum-100 bg-velum-50/50 opacity-60"}`}>
+                  <div key={p._key} className={`rounded-xl border p-4 space-y-3 transition ${p.active ? "border-velum-200" : "border-velum-100 bg-velum-50/50 opacity-60"}`}>
                     <div className="flex items-center justify-between gap-2">
                       <div className="flex items-center gap-2">
                         <StatusDot ok={p.active} />
@@ -326,18 +343,6 @@ export const AdminStripeSettings: React.FC<Props> = ({ embedded = false }) => {
         )}
       </div>
 
-      {error && (
-        <div className="flex items-center gap-2.5 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
-          <XCircle size={15} className="text-red-500 shrink-0" />
-          <p className="text-sm text-red-700">{error}</p>
-        </div>
-      )}
-      {ok && (
-        <div className="flex items-center gap-2.5 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3">
-          <CheckCircle2 size={15} className="text-emerald-600 shrink-0" />
-          <p className="text-sm text-emerald-700">{ok}</p>
-        </div>
-      )}
     </div>
   );
 
