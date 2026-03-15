@@ -1,4 +1,5 @@
 import { FormEvent, useMemo, useState } from "react";
+import { apiFetch } from "../services/apiClient";
 
 export type PhototypeCode = "I" | "II" | "III" | "IV" | "V" | "VI";
 
@@ -266,17 +267,11 @@ export default function PhototypeQuestionnaire({
       const payload = buildPhototypePayload(patientId, questions, selectedByQuestionId);
       const phototypeResult = getFototipo(payload.totalScore);
 
-      const response = await fetch(saveUrl, {
+      // saveUrl may be a full path like "/api/members/onboarding/p2" — strip the base prefix
+      await apiFetch(saveUrl.replace(/^\/api/, ""), {
         method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
       });
-
-      if (!response.ok) {
-        const body = await response.json().catch(() => ({}));
-        throw new Error(body?.message ?? "No se pudo guardar el cuestionario.");
-      }
 
       setResult({
         totalScore: payload.totalScore,

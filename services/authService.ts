@@ -15,8 +15,11 @@ const mapUser = (user: any): AuthUser => {
   const lastName = user?.profile?.lastName ?? "";
   const name = `${firstName} ${lastName}`.trim() || user.email;
   const rawBirthDate = user?.profile?.birthDate;
+  // If already YYYY-MM-DD, use as-is — parsing as Date causes UTC offset shift
   const birthDate = rawBirthDate
-    ? new Date(rawBirthDate).toISOString().split("T")[0]
+    ? (/^\d{4}-\d{2}-\d{2}$/.test(String(rawBirthDate))
+        ? String(rawBirthDate)
+        : new Date(rawBirthDate).toISOString().split("T")[0])
     : undefined;
   return {
     id: user.id,

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { apiFetch } from "../services/apiClient";
 import { Link } from "react-router-dom";
 import {
   CheckCircle2,
@@ -26,17 +27,8 @@ type PlanRow = {
 
 const genKey = () => `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
-const api = async (url: string, init?: RequestInit) => {
-  const res = await fetch(url, {
-    credentials: "include",
-    ...init,
-    headers: { "Content-Type": "application/json", ...(init?.headers || {}) },
-  });
-  let data: any = {};
-  try { data = await res.json(); } catch { data = {}; }
-  if (!res.ok) throw new Error(data?.detail || data?.message || `Error ${res.status}`);
-  return data;
-};
+const api = (path: string, init?: RequestInit) =>
+  apiFetch<any>(path.replace(/^\/api/, ""), init);
 
 const INTERVAL_LABELS: Record<string, string> = {
   day: "Día", week: "Semana", month: "Mes", year: "Año"

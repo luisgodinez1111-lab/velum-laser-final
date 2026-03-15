@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { apiFetch } from "../services/apiClient";
 import { Link } from "react-router-dom";
 import { Button } from "../components/Button";
 import { useAuth } from "../context/AuthContext";
@@ -14,26 +15,8 @@ type ConfigState = {
 
 const asString = (v: unknown, fallback = ""): string => (typeof v === "string" ? v : fallback);
 
-const api = async (path: string, init?: RequestInit) => {
-  const res = await fetch(path, {
-    credentials: "include",
-    ...init,
-    headers: {
-      "Content-Type": "application/json",
-      ...(init?.headers || {})
-    }
-  });
-
-  let body: any = {};
-  try {
-    body = await res.json();
-  } catch {
-    body = {};
-  }
-
-  if (!res.ok) throw new Error(asString(body?.message, `Error ${res.status}`));
-  return body;
-};
+const api = (path: string, init?: RequestInit) =>
+  apiFetch<any>(path.replace(/^\/api/, ""), init);
 
 export const AdminWhatsAppSettings: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
   const { isAuthenticated, isSessionLoading: isLoading, user } = useAuth();

@@ -39,6 +39,8 @@ import { useToast } from "../context/ToastContext";
 type TabKey = "overview" | "citas" | "profile" | "security" | "records" | "historial" | "billing" | "ayuda";
 type MeProfile = { fullName: string; email: string; phone: string };
 
+import { apiFetch } from "../services/apiClient";
+
 const asString = (v: unknown, fallback = ""): string => (typeof v === "string" ? v : fallback);
 
 // ── Design tokens ────────────────────────────────────────────────────────────
@@ -181,17 +183,6 @@ const getPasswordChecks = (value: string) => ({
   special: /[^A-Za-z0-9]/.test(value)
 });
 
-const api = async (path: string, init?: RequestInit) => {
-  const response = await fetch(path, {
-    credentials: "include",
-    ...init,
-    headers: { "Content-Type": "application/json", ...(init?.headers || {}) }
-  });
-  let body: any = {};
-  try { body = await response.json(); } catch { body = {}; }
-  if (!response.ok) throw new Error(asString(body?.message, `Error ${response.status}`));
-  return body;
-};
 
 // ── Dashboard ─────────────────────────────────────────────────────────────────
 export const Dashboard: React.FC = () => {
@@ -262,7 +253,7 @@ export const Dashboard: React.FC = () => {
       setIsLoadingData(true);
       try {
         if (user?.role === "member") { const d = await memberService.getById(user.id); setMemberData(d || null); }
-        const me = await api("/api/v1/users/me/profile");
+        const me = await apiFetch<any>("/v1/users/me/profile");
         setProfile({ fullName: asString(me?.fullName), email: asString(me?.email, asString(user?.email)), phone: asString(me?.phone) });
       } catch (e) { console.error(e); }
       finally { setIsLoadingData(false); }
@@ -346,7 +337,7 @@ export const Dashboard: React.FC = () => {
     if (!profile.fullName.trim() || !profile.email.trim() || !profile.phone.trim()) { toast.warning("Nombre, correo y teléfono son obligatorios."); return; }
     setIsSavingProfile(true);
     try {
-      const out = await api("/api/v1/users/me/profile", { method: "PUT", body: JSON.stringify({ fullName: profile.fullName.trim(), email: profile.email.trim(), phone: profile.phone.trim() }) });
+      const out = await apiFetch<any>("/v1/users/me/profile", { method: "PUT", body: JSON.stringify({ fullName: profile.fullName.trim(), email: profile.email.trim(), phone: profile.phone.trim() }) });
       setProfile(prev => ({ ...prev, fullName: asString(out?.profile?.fullName, prev.fullName), email: asString(out?.profile?.email, prev.email), phone: asString(out?.profile?.phone, prev.phone) }));
       toast.success(asString(out?.message, "Perfil actualizado."));
     } catch (err: any) { toast.error(asString(err?.message, "No se pudo actualizar.")); }
@@ -356,7 +347,7 @@ export const Dashboard: React.FC = () => {
   const handleRequestWhatsappCode = async () => {
     if (!profile.phone.trim()) { toast.warning("Primero registra tu teléfono en Perfil."); return; }
     setIsSendingCode(true);
-    try { const out = await api("/api/v1/users/me/password/request-whatsapp-code", { method: "POST", body: JSON.stringify({ phone: profile.phone.trim() }) }); toast.info(asString(out?.message, "Código enviado.")); }
+    try { const out = await apiFetch<any>("/v1/users/me/password/request-whatsapp-code", { method: "POST", body: JSON.stringify({ phone: profile.phone.trim() }) }); toast.info(asString(out?.message, "Código enviado.")); }
     catch (err: any) { toast.error(asString(err?.message, "No se pudo enviar.")); }
     finally { setIsSendingCode(false); }
   };
@@ -367,7 +358,7 @@ export const Dashboard: React.FC = () => {
     if (!Object.values(passwordChecks).every(Boolean)) { toast.warning("La contraseña no cumple la política de seguridad."); return; }
     setIsUpdatingPassword(true);
     try {
-      const out = await api("/api/v1/users/me/password", { method: "POST", body: JSON.stringify({ currentPassword, newPassword, whatsappCode }) });
+      const out = await apiFetch<any>("/v1/users/me/password", { method: "POST", body: JSON.stringify({ currentPassword, newPassword, whatsappCode }) });
       toast.success(asString(out?.message, "Contraseña actualizada.")); setCurrentPassword(""); setNewPassword(""); setConfirmPassword(""); setWhatsappCode("");
     } catch (err: any) { toast.error(asString(err?.message, "No se pudo actualizar.")); }
     finally { setIsUpdatingPassword(false); }
@@ -1313,7 +1304,13 @@ export const Dashboard: React.FC = () => {
       {/* ─── Signature Modal ───────────────────────────────────────────────── */}
       {showSignatureModal && currentDocToSign && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <SignaturePad title={`Firmar: ${currentDocToSign.title}`} onCancel={() => setShowSignatureModal(false)} onSave={handleSignatureSave} />
+          <SignaturePad
+            title={`Firmar: ${currentDocToSign.title}`}
+            signerName={user?.name || user?.email}
+            documentId={currentDocToSign.id}
+            onCancel={() => setShowSignatureModal(false)}
+            onSave={handleSignatureSave}
+          />
         </div>
       )}
 

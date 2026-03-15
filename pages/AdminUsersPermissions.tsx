@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import { apiFetch } from "../services/apiClient";
 import {
   CheckCircle2,
   XCircle,
@@ -24,17 +25,8 @@ type UserRow = {
 };
 type Props = { embedded?: boolean };
 
-const api = async (url: string, init?: RequestInit) => {
-  const res = await fetch(url, {
-    credentials: "include",
-    ...init,
-    headers: { "Content-Type": "application/json", ...(init?.headers || {}) },
-  });
-  let data: any = {};
-  try { data = await res.json(); } catch { data = {}; }
-  if (!res.ok) throw new Error(data?.message || `Error ${res.status}`);
-  return data;
-};
+const api = (path: string, init?: RequestInit) =>
+  apiFetch<any>(path.replace(/^\/api/, ""), init);
 
 const ROLE_CONFIG: Record<string, { label: string; cls: string }> = {
   admin:  { label: "Admin",   cls: "bg-velum-900 text-white" },

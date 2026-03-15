@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { Button } from "../components/Button";
+import { apiFetch, ApiError } from "../services/apiClient";
 
 type Row = {
   userId: string;
@@ -12,24 +13,14 @@ type Row = {
 const LIST_PATHS = ["/api/admin/members/onboarding", "/api/admin/member-onboarding"];
 const DETAIL_PATHS = (id: string) => [`/api/admin/members/onboarding/${id}`, `/api/admin/member-onboarding/${id}`];
 
-const requestWithFallback = async <T,>(paths: string[], init: RequestInit = {}): Promise<T> => {
-  const headers = new Headers(init.headers ?? {});
-  if (init.body && !(init.body instanceof FormData) && !headers.has("Content-Type")) {
-    headers.set("Content-Type", "application/json");
-  }
-
+const requestWithFallback = async <T,>(paths: string[], init?: RequestInit): Promise<T> => {
   let lastError = "Servicio no disponible.";
   for (const path of paths) {
     try {
-      const res = await fetch(path, { ...init, headers, credentials: "include" });
-      if (res.status === 404 || res.status === 405) continue;
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error((body as any)?.message ?? `Error ${res.status}`);
-      }
-      return (await res.json().catch(() => ({}))) as T;
-    } catch (e: any) {
-      lastError = e?.message ?? lastError;
+      return await apiFetch<T>(path.replace(/^\/api/, ""), init);
+    } catch (e) {
+      if (e instanceof ApiError && (e.status === 404 || e.status === 405)) continue;
+      lastError = e instanceof Error ? e.message : lastError;
     }
   }
   throw new Error(lastError);
