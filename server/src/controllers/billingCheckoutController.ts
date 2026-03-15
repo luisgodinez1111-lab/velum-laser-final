@@ -35,6 +35,32 @@ export const createBillingCheckout = async (req: AuthRequest, res: Response) => 
     });
     if (!me) return res.status(404).json({ message: "Usuario no encontrado" });
 
+    // Check for appointment deposit credit (200 MXN off first month)
+    const userFlags = await prisma.user.findUnique({
+      where: { id: req.user.id },
+      select: { appointmentDepositAvailable: true },
+    });
+    const hasDepositCredit = userFlags?.appointmentDepositAvailable === true;
+
+    let couponId: string | null = null;
+    if (hasDepositCredit) {
+      const couponParams = new URLSearchParams();
+      couponParams.set("amount_off", "20000");
+      couponParams.set("currency", "mxn");
+      couponParams.set("duration", "once");
+      couponParams.set("name", "Descuento depósito valoración");
+      couponParams.set("max_redemptions", "1");
+      const couponRsp = await fetch("https://api.stripe.com/v1/coupons", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${secret}`, "Content-Type": "application/x-www-form-urlencoded" },
+        body: couponParams.toString(),
+      });
+      const couponJson: any = await couponRsp.json().catch(() => ({}));
+      if (couponRsp.ok && couponJson?.id) {
+        couponId = couponJson.id;
+      }
+    }
+
     const base = resolveBaseUrl(req);
     const successUrl = `${base}/#/dashboard?checkout=success&plan=${encodeURIComponent(plan.planCode)}`;
     const cancelUrl = `${base}/#/dashboard?checkout=cancelled&plan=${encodeURIComponent(plan.planCode)}`;
@@ -50,6 +76,10 @@ export const createBillingCheckout = async (req: AuthRequest, res: Response) => 
     params.set("metadata[planCode]", plan.planCode);
     params.set("metadata[userId]", me.id);
     params.set("customer_email", me.email);
+    if (couponId) {
+      params.set("discounts[0][coupon]", couponId);
+      params.set("metadata[applyDepositDiscount]", "true");
+    }
 
     const rsp = await fetch("https://api.stripe.com/v1/checkout/sessions", {
       method: "POST",

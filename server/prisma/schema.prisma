@@ -85,6 +85,7 @@ model User {
   emailVerifications  EmailVerificationToken[]
   passwordResets      PasswordResetToken[]
   agendaBlocksCreated AgendaBlockedSlot[]     @relation("AgendaBlockedSlotCreator")
+  appointmentDepositAvailable Boolean @default(false)
 
   @@index([clinicId])
 }

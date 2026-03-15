@@ -6,6 +6,7 @@ import { useAuth } from "../context/AuthContext";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { clinicalService, MedicalIntake } from "../services/clinicalService";
 import { AuthUser, authService } from "../services/authService";
+import { stripeService } from "../services/stripeService";
 import { DEFAULT_PHOTOTYPE_QUESTIONS, getFototipo } from "../components/PhototypeQuestionnaire";
 import { useToast } from "../context/ToastContext";
 
@@ -478,32 +479,37 @@ export const Agenda: React.FC = () => {
 
   const handleSchedule = async () => {
     if (!selectedDate || !selectedSlot) return;
-
     setIsScheduling(true);
     setAppointmentMessage(null);
 
     try {
-      // Build startAt from dateKey + startMinute
       const [year, month, day] = selectedDate.split("-").map(Number);
       const startAt = new Date(year, month - 1, day, 0, selectedSlot.startMinute, 0, 0);
       const endAt = new Date(year, month - 1, day, 0, selectedSlot.endMinute, 0, 0);
 
-      await clinicalService.createAppointment({
+      const checkoutUrl = await stripeService.createAppointmentDeposit({
         startAt: startAt.toISOString(),
         endAt: endAt.toISOString(),
         reason: appointmentType === "valuation" ? "valuation" : "laser_session"
       });
 
-      toast.success("¡Cita agendada! Te esperamos el " + startAt.toLocaleDateString("es-MX", { weekday: "long", day: "numeric", month: "long" }) + " a las " + selectedSlot.label + ".");
-      setSelectedDate(null);
-      setSelectedSlot(null);
-      setDaySlots([]);
+      window.location.href = checkoutUrl;
     } catch (error: any) {
-      toast.error(error?.message ?? "No se pudo agendar la cita.");
-    } finally {
+      toast.error(error?.message ?? "No se pudo iniciar el pago. Intenta de nuevo.");
       setIsScheduling(false);
     }
   };
+
+  useEffect(() => {
+    const hash = window.location.hash;
+    const search = hash.includes("?") ? hash.split("?")[1] : "";
+    const params = new URLSearchParams(search);
+    if (params.get("booking") === "success" && isAuthenticated) {
+      toast.success("¡Cita reservada! Te confirmaremos los detalles pronto.");
+      // Clean up URL
+      window.history.replaceState(null, "", window.location.pathname + "#/agenda");
+    }
+  }, [isAuthenticated]);
 
     const __guestMode = typeof window !== "undefined"
     ? new URLSearchParams((window.location.hash.split("?")[1] ?? "")).get("mode")

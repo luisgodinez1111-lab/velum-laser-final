@@ -411,6 +411,40 @@ const getUserIdFromRow = (row: JsonObject | null): string | null => {
 const processCheckoutCompleted = async (event: Stripe.Event, stripe: Stripe): Promise<void> => {
   const session = event.data.object as Stripe.Checkout.Session;
   const metadata = asRecord(session.metadata ?? {});
+
+  // Handle appointment deposit payment
+  if (cleanString(metadata.type) === "appointment_deposit") {
+    const userId = cleanString(metadata.userId);
+    const startAt = cleanString(metadata.startAt);
+    const endAt = cleanString(metadata.endAt);
+    const reason = cleanString(metadata.reason) || "laser_session";
+    const cabinId = cleanString(metadata.cabinId) || null;
+    const treatmentId = cleanString(metadata.treatmentId) || null;
+
+    if (userId && startAt && endAt) {
+      // Create the appointment
+      await prisma.appointment.create({
+        data: {
+          userId,
+          startAt: new Date(startAt),
+          endAt: new Date(endAt),
+          reason,
+          ...(cabinId ? { cabinId } : {}),
+          ...(treatmentId ? { treatmentId } : {}),
+          createdByUserId: userId,
+          status: "scheduled",
+        },
+      }).catch((err: Error) => console.error("[stripe-webhook] Failed to create appointment from deposit:", err));
+
+      // Mark deposit credit as available for plan discount
+      await prisma.user.update({
+        where: { id: userId },
+        data: { appointmentDepositAvailable: true },
+      }).catch((err: Error) => console.error("[stripe-webhook] Failed to set deposit available:", err));
+    }
+    return;
+  }
+
   const requestedPlanCode = cleanString(metadata.planCode);
   const requestedUserId = cleanString(metadata.userId ?? session.client_reference_id);
   const requestedEmail = cleanString(metadata.userEmail ?? session.customer_details?.email ?? session.customer_email);
@@ -459,6 +493,15 @@ const processCheckoutCompleted = async (event: Stripe.Event, stripe: Stripe): Pr
     amount: centsToMajor(session.amount_total),
     currency: cleanString(session.currency) || null,
   });
+
+  // Clear deposit credit after it has been applied to a subscription checkout
+  const applyDepositDiscount = cleanString(metadata.applyDepositDiscount);
+  if (applyDepositDiscount === "true" && userId) {
+    await prisma.user.update({
+      where: { id: userId },
+      data: { appointmentDepositAvailable: false },
+    }).catch((err: Error) => console.error("[stripe-webhook] Failed to clear deposit:", err));
+  }
 
   console.info("[stripe-webhook] checkout.session.completed processed", {
     eventId: event.id,
