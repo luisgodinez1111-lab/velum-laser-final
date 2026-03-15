@@ -1,44 +1,54 @@
-import React, { useEffect } from "react";
+import React, { lazy, Suspense } from 'react';
 import { HashRouter as Router, Routes, Route } from 'react-router-dom';
 import { Layout } from './components/Layout';
-import { Home } from './pages/Home';
-import { Memberships } from './pages/Memberships';
-import { Agenda } from './pages/Agenda';
-import { Dashboard } from './pages/Dashboard';
-import { Admin } from './pages/Admin';
-import { AdminWhatsAppSettings } from "./pages/AdminWhatsAppSettings";
-import { AdminStripeSettings } from "./pages/AdminStripeSettings";
-import { AdminUsersPermissions } from "./pages/AdminUsersPermissions";
-import { AgendaIntegrations } from "./pages/settings/AgendaIntegrations";
-import { OnboardingAdmin } from "./pages/OnboardingAdmin";
 import { AuthProvider } from './context/AuthContext';
 import { ToastProvider } from './context/ToastContext';
 import { ToastContainer } from './components/ToastContainer';
+import { AppErrorBoundary } from './components/AppErrorBoundary';
+import { PageSkeleton } from './components/PageSkeleton';
 
-const App: React.FC = () => {
-  return (
-    <ToastProvider>
-      <AuthProvider>
-        <Router>
+// Eager — critical for first paint
+import { Home } from './pages/Home';
+
+// Lazy — loaded only when the route is visited
+const Memberships       = lazy(() => import('./pages/Memberships').then(m => ({ default: m.Memberships })));
+const Agenda            = lazy(() => import('./pages/Agenda').then(m => ({ default: m.Agenda })));
+const Dashboard         = lazy(() => import('./pages/Dashboard').then(m => ({ default: m.Dashboard })));
+const Admin             = lazy(() => import('./pages/Admin').then(m => ({ default: m.Admin })));
+const AdminWhatsApp     = lazy(() => import('./pages/AdminWhatsAppSettings').then(m => ({ default: m.AdminWhatsAppSettings })));
+const AdminStripe       = lazy(() => import('./pages/AdminStripeSettings').then(m => ({ default: m.AdminStripeSettings })));
+const AdminUsers        = lazy(() => import('./pages/AdminUsersPermissions').then(m => ({ default: m.AdminUsersPermissions })));
+const AgendaIntegrations = lazy(() => import('./pages/settings/AgendaIntegrations').then(m => ({ default: m.AgendaIntegrations })));
+const OnboardingAdmin   = lazy(() => import('./pages/OnboardingAdmin').then(m => ({ default: m.OnboardingAdmin })));
+const NotFound          = lazy(() => import('./pages/NotFound').then(m => ({ default: m.NotFound })));
+
+const App: React.FC = () => (
+  <ToastProvider>
+    <AuthProvider>
+      <Router>
+        <AppErrorBoundary>
           <Layout>
-            <Routes>
-              <Route path="/" element={<Home />} />
-              <Route path="/memberships" element={<Memberships />} />
-              <Route path="/agenda" element={<Agenda />} />
-              <Route path="/dashboard" element={<Dashboard />} />
-              <Route path="/admin" element={<Admin />} />
-              <Route path="/admin/whatsapp" element={<AdminWhatsAppSettings />} />
-              <Route path="/admin/stripe" element={<AdminStripeSettings />} />
-              <Route path="/admin/users-permissions" element={<AdminUsersPermissions />} />
-              <Route path="/settings/agenda-integrations" element={<AgendaIntegrations />} />
-              <Route path="/admin/onboarding" element={<OnboardingAdmin />} />
-            </Routes>
+            <Suspense fallback={<PageSkeleton />}>
+              <Routes>
+                <Route path="/"                              element={<Home />} />
+                <Route path="/memberships"                   element={<Memberships />} />
+                <Route path="/agenda"                        element={<Agenda />} />
+                <Route path="/dashboard"                     element={<Dashboard />} />
+                <Route path="/admin"                         element={<Admin />} />
+                <Route path="/admin/whatsapp"                element={<AdminWhatsApp />} />
+                <Route path="/admin/stripe"                  element={<AdminStripe />} />
+                <Route path="/admin/users-permissions"       element={<AdminUsers />} />
+                <Route path="/settings/agenda-integrations"  element={<AgendaIntegrations />} />
+                <Route path="/admin/onboarding"              element={<OnboardingAdmin />} />
+                <Route path="*"                              element={<NotFound />} />
+              </Routes>
+            </Suspense>
           </Layout>
-        </Router>
-        <ToastContainer />
-      </AuthProvider>
-    </ToastProvider>
-  );
-};
+        </AppErrorBoundary>
+      </Router>
+      <ToastContainer />
+    </AuthProvider>
+  </ToastProvider>
+);
 
 export default App;

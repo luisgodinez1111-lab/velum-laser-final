@@ -196,7 +196,7 @@ const api = async (path: string, init?: RequestInit) => {
 // ── Dashboard ─────────────────────────────────────────────────────────────────
 export const Dashboard: React.FC = () => {
   const navigate = useNavigate();
-  const { user, isAuthenticated, isLoading: isAuthLoading } = useAuth();
+  const { user, isAuthenticated, isSessionLoading: isAuthLoading } = useAuth();
   const toast = useToast();
 
   const [activeTab, setActiveTab] = useState<TabKey>("overview");

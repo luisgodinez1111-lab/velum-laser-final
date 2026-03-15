@@ -308,7 +308,7 @@ const riskOfMember = (member: Member): HealthFlag => {
 };
 
 export const Admin: React.FC = () => {
-  const { login, logout, user, isAuthenticated, isLoading: isAuthLoading } = useAuth();
+  const { login, logout, user, isAuthenticated, isSessionLoading: isAuthLoading, isActionLoading } = useAuth();
   const toast = useToast();
 
   const [email, setEmail] = useState('');
@@ -3225,9 +3225,9 @@ export const Admin: React.FC = () => {
               <PasswordInput value={password} onChange={(e) => setPassword(e.target.value)} required
                 className="w-full rounded-xl border border-velum-200 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-velum-900/20 focus:border-velum-900 transition" />
             </div>
-            <button type="submit" disabled={isAuthLoading}
+            <button type="submit" disabled={isActionLoading}
               className="w-full bg-velum-900 text-white rounded-xl py-3 text-sm font-medium hover:bg-velum-800 transition disabled:opacity-50">
-              {isAuthLoading ? 'Accediendo...' : 'Acceder al panel'}
+              {isActionLoading ? 'Accediendo...' : 'Acceder al panel'}
             </button>
           </form>
         </div>

@@ -55,8 +55,7 @@ const ToastItem: React.FC<{ toast: Toast }> = ({ toast }) => {
 
   return (
     <div
-      role="alert"
-      aria-live="polite"
+      role="status"
       className={`
         relative flex items-start gap-3 overflow-hidden rounded-2xl border shadow-lg
         px-4 py-3 pr-10 min-w-[280px] max-w-[360px]
@@ -101,23 +100,14 @@ export const ToastContainer: React.FC = () => {
   const { toasts } = useToast();
 
   return (
-    <>
-      {/* Keyframe CSS inyectado una sola vez */}
-      <style>{`
-        @keyframes toast-progress {
-          from { width: 100%; }
-          to   { width: 0%; }
-        }
-      `}</style>
-
-      <div
-        aria-label="Notificaciones"
-        className="fixed bottom-5 right-5 z-[9999] flex flex-col items-end gap-2"
-      >
-        {toasts.map((t) => (
-          <ToastItem key={t.id} toast={t} />
-        ))}
-      </div>
-    </>
+    <div
+      aria-label="Notificaciones"
+      aria-live="polite"
+      className="fixed bottom-5 right-5 z-[9999] flex flex-col items-end gap-2"
+    >
+      {toasts.map((t) => (
+        <ToastItem key={t.id} toast={t} />
+      ))}
+    </div>
   );
 };

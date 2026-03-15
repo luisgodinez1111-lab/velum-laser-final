@@ -36,7 +36,7 @@ const api = async (path: string, init?: RequestInit) => {
 };
 
 export const AdminWhatsAppSettings: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
-  const { isAuthenticated, isLoading, user } = useAuth();
+  const { isAuthenticated, isSessionLoading: isLoading, user } = useAuth();
   const toast = useToast();
 
   const [form, setForm] = useState<ConfigState>({
