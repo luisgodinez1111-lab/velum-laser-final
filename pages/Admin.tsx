@@ -1727,6 +1727,85 @@ export const Admin: React.FC = () => {
                   <XCircle size={14} />Cancelar membresía
                 </button>
               )}
+
+              {/* Separador zona de peligro */}
+              <div className="pt-2 border-t border-red-100 space-y-2">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-red-400">Zona de peligro</p>
+
+                {/* Desactivar */}
+                <button
+                  onClick={() => void handleDrawerDeactivate(mem.id)}
+                  disabled={drawerDeactivating}
+                  className="w-full flex items-center gap-2 px-4 py-2.5 border border-amber-300 text-amber-700 bg-amber-50 rounded-xl text-sm font-medium hover:bg-amber-100 transition disabled:opacity-50"
+                >
+                  <CircleAlert size={14} />
+                  {drawerDeactivating ? 'Desactivando...' : 'Desactivar y cancelar Stripe'}
+                </button>
+
+                {/* Eliminar — paso 1: botón inicial */}
+                {drawerDeleteStep === 'idle' && (
+                  <button
+                    onClick={() => setDrawerDeleteStep('otp-send')}
+                    className="w-full flex items-center gap-2 px-4 py-2.5 border border-red-300 text-red-600 bg-red-50 rounded-xl text-sm font-medium hover:bg-red-100 transition"
+                  >
+                    <Trash2 size={14} />
+                    Eliminar paciente permanentemente
+                  </button>
+                )}
+
+                {/* Paso 2: confirmación antes de enviar OTP */}
+                {drawerDeleteStep === 'otp-send' && (
+                  <div className="rounded-xl border border-red-200 bg-red-50 p-3 space-y-2">
+                    <p className="text-xs text-red-700 font-medium leading-relaxed">
+                      ¿Eliminar a <strong>{mem.email}</strong>?<br/>
+                      <span className="font-normal opacity-80">Se borrará: perfil, membresía, expediente, citas y pagos. Irreversible.</span>
+                    </p>
+                    {drawerDeleteMsg && <p className="text-xs text-red-600">{drawerDeleteMsg}</p>}
+                    <div className="flex gap-2">
+                      <button onClick={() => void handleDrawerRequestOtp(mem.id)} disabled={drawerDeleteSending}
+                        className="flex-1 bg-red-600 text-white rounded-xl py-2 text-xs font-bold hover:bg-red-700 transition disabled:opacity-50">
+                        {drawerDeleteSending ? 'Enviando...' : 'Enviar OTP por WhatsApp'}
+                      </button>
+                      <button onClick={() => { setDrawerDeleteStep('idle'); setDrawerDeleteMsg(''); }}
+                        className="px-3 rounded-xl border border-velum-200 text-xs text-velum-500 hover:bg-velum-50 transition">
+                        Cancelar
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Paso 3: ingresar código OTP */}
+                {drawerDeleteStep === 'otp-confirm' && (
+                  <div className="rounded-xl border border-red-200 bg-red-50 p-3 space-y-2">
+                    {drawerDeleteMsg && (
+                      <p className={`text-xs rounded-lg px-2 py-1 ${drawerDeleteMsg.toLowerCase().includes('enviado') || drawerDeleteMsg.toLowerCase().includes('whatsapp') ? 'text-emerald-700 bg-emerald-50 border border-emerald-100' : 'text-red-600'}`}>
+                        {drawerDeleteMsg}
+                      </p>
+                    )}
+                    <input
+                      ref={drawerOtpRef}
+                      type="text"
+                      inputMode="numeric"
+                      maxLength={6}
+                      placeholder="Código OTP (6 dígitos)"
+                      value={drawerDeleteOtp}
+                      onChange={(e) => setDrawerDeleteOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                      onKeyDown={(e) => { if (e.key === 'Enter' && drawerDeleteOtp.length === 6) void handleDrawerConfirmDelete(mem.id, mem.email); }}
+                      className="w-full rounded-xl border border-red-300 px-3 py-2 text-center text-lg font-bold tracking-[0.4em] focus:outline-none focus:ring-2 focus:ring-red-300 transition bg-white"
+                    />
+                    <div className="flex gap-2">
+                      <button onClick={() => void handleDrawerConfirmDelete(mem.id, mem.email)} disabled={drawerDeleting || drawerDeleteOtp.length !== 6}
+                        className="flex-1 bg-red-600 text-white rounded-xl py-2 text-xs font-bold hover:bg-red-700 transition disabled:opacity-50">
+                        {drawerDeleting ? 'Eliminando...' : 'Confirmar eliminación'}
+                      </button>
+                      <button onClick={() => { setDrawerDeleteStep('otp-send'); setDrawerDeleteOtp(''); setDrawerDeleteMsg(''); }}
+                        className="px-3 rounded-xl border border-red-200 text-xs text-red-500 hover:bg-red-100 transition">
+                        Reenviar
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
             {/* Expediente viewer button */}
             {selectedMember.intakeStatus && selectedMember.intakeStatus !== 'draft' && (
@@ -1835,79 +1914,6 @@ export const Admin: React.FC = () => {
               )}
             </div>
 
-            {/* ── Zona de peligro ─────────────────────────────────────────── */}
-            <div className="p-4 border-t border-red-100">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-red-400 mb-3">Zona de peligro</p>
-
-              {/* Desactivar */}
-              <button
-                onClick={() => void handleDrawerDeactivate(mem.id)}
-                disabled={drawerDeactivating}
-                className="w-full flex items-center gap-2 px-4 py-2.5 border border-amber-300 text-amber-700 bg-amber-50 rounded-xl text-sm font-medium hover:bg-amber-100 transition disabled:opacity-50 mb-2"
-              >
-                <CircleAlert size={14} />
-                {drawerDeactivating ? 'Desactivando...' : 'Desactivar y cancelar suscripción'}
-              </button>
-
-              {/* Eliminar con OTP */}
-              {drawerDeleteStep === 'idle' && (
-                <button
-                  onClick={() => setDrawerDeleteStep('otp-send')}
-                  className="w-full flex items-center gap-2 px-4 py-2.5 border border-red-200 text-red-600 bg-red-50 rounded-xl text-sm font-medium hover:bg-red-100 transition"
-                >
-                  <Trash2 size={14} />
-                  Eliminar paciente permanentemente
-                </button>
-              )}
-
-              {drawerDeleteStep === 'otp-send' && (
-                <div className="space-y-2 bg-red-50 border border-red-200 rounded-xl p-3">
-                  <p className="text-xs text-red-700 font-medium">¿Eliminar a <strong>{mem.email}</strong>? Esta acción es irreversible. Se borrará su perfil, membresía, expediente y pagos.</p>
-                  {drawerDeleteMsg && <p className="text-xs text-red-600">{drawerDeleteMsg}</p>}
-                  <div className="flex gap-2">
-                    <button onClick={() => void handleDrawerRequestOtp(mem.id)} disabled={drawerDeleteSending}
-                      className="flex-1 bg-red-600 text-white rounded-xl py-2 text-xs font-bold hover:bg-red-700 transition disabled:opacity-50">
-                      {drawerDeleteSending ? 'Enviando...' : 'Enviar OTP por WhatsApp'}
-                    </button>
-                    <button onClick={() => { setDrawerDeleteStep('idle'); setDrawerDeleteMsg(''); }}
-                      className="px-3 py-2 rounded-xl border border-red-200 text-xs text-red-500 hover:bg-red-100 transition">
-                      Cancelar
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {drawerDeleteStep === 'otp-confirm' && (
-                <div className="space-y-2 bg-red-50 border border-red-200 rounded-xl p-3">
-                  {drawerDeleteMsg && (
-                    <p className={`text-xs rounded-lg px-2 py-1 ${drawerDeleteMsg.toLowerCase().includes('enviado') || drawerDeleteMsg.toLowerCase().includes('whatsapp') ? 'text-emerald-700 bg-emerald-50' : 'text-red-600'}`}>
-                      {drawerDeleteMsg}
-                    </p>
-                  )}
-                  <input
-                    ref={drawerOtpRef}
-                    type="text"
-                    inputMode="numeric"
-                    maxLength={6}
-                    placeholder="Código OTP (6 dígitos)"
-                    value={drawerDeleteOtp}
-                    onChange={(e) => setDrawerDeleteOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                    onKeyDown={(e) => { if (e.key === 'Enter' && drawerDeleteOtp.length === 6) void handleDrawerConfirmDelete(mem.id, mem.email); }}
-                    className="w-full rounded-xl border border-red-300 px-3 py-2 text-center text-lg font-bold tracking-[0.4em] focus:outline-none focus:ring-2 focus:ring-red-300 transition bg-white"
-                  />
-                  <div className="flex gap-2">
-                    <button onClick={() => void handleDrawerConfirmDelete(mem.id, mem.email)} disabled={drawerDeleting || drawerDeleteOtp.length !== 6}
-                      className="flex-1 bg-red-600 text-white rounded-xl py-2 text-xs font-bold hover:bg-red-700 transition disabled:opacity-50">
-                      {drawerDeleting ? 'Eliminando...' : 'Confirmar eliminación'}
-                    </button>
-                    <button onClick={() => { setDrawerDeleteStep('otp-send'); setDrawerDeleteOtp(''); setDrawerDeleteMsg(''); }}
-                      className="px-3 py-2 rounded-xl border border-red-200 text-xs text-red-500 hover:bg-red-100 transition">
-                      Reenviar
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
           </div>
         </div>
       </>
