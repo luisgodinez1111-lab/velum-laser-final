@@ -1,5 +1,6 @@
 import { Response } from "express";
 import bcrypt from "bcryptjs";
+import crypto from "crypto";
 import { prisma } from "../db/prisma";
 import { AuthRequest } from "../middlewares/auth";
 import { createAuditLog } from "../services/auditService";
@@ -10,6 +11,24 @@ import {
   setUserPermissions,
   defaultPermissionsByRole,
 } from "../services/adminAccessService";
+import { sendWhatsappOtpCode, getEffectiveWhatsappMetaConfig, normalizePhone } from "../services/whatsappMetaService";
+
+// ── In-memory OTP store for user-deletion confirmation ─────────────────────
+// Key: actorUserId  Value: { otp, targetUserId, expiresAt }
+// TTL: 10 minutes — single-process safe, no DB migration required
+type DeleteOtpEntry = { otp: string; targetUserId: string; expiresAt: Date };
+const deleteOtpStore = new Map<string, DeleteOtpEntry>();
+
+function generateOtp(): string {
+  return String(100000 + (crypto.randomInt(900000)));
+}
+
+function pruneExpiredOtps(): void {
+  const now = new Date();
+  for (const [key, entry] of deleteOtpStore.entries()) {
+    if (entry.expiresAt < now) deleteOtpStore.delete(key);
+  }
+}
 
 const isAdminUser = (req: AuthRequest) => {
   const role = req.user?.role ?? "";
@@ -197,5 +216,142 @@ export const resetAdminAccessPassword = async (req: AuthRequest, res: Response) 
   } catch (error: any) {
     console.error("resetAdminAccessPassword error:", error);
     return res.status(500).json({ message: "Error al actualizar contraseña", detail: error?.message ?? "unknown" });
+  }
+};
+
+// ── OTP request for user deletion ──────────────────────────────────────────
+export const requestDeleteUserOtp = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!isAdminUser(req)) return res.status(403).json({ message: "No autorizado" });
+
+    const actorId = req.user!.id;
+    const targetUserId = clean(req.params.userId);
+
+    if (actorId === targetUserId) {
+      return res.status(400).json({ message: "No puedes eliminar tu propia cuenta" });
+    }
+
+    const target = await prisma.user.findUnique({
+      where: { id: targetUserId },
+      select: { id: true, email: true, role: true },
+    });
+    if (!target) return res.status(404).json({ message: "Usuario no encontrado" });
+
+    // Fetch actor profile to get phone for WhatsApp OTP
+    const actorProfile = await prisma.profile.findUnique({
+      where: { userId: actorId },
+      select: { phone: true },
+    });
+
+    const otp = generateOtp();
+    pruneExpiredOtps();
+
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 min
+    deleteOtpStore.set(actorId, { otp, targetUserId, expiresAt });
+
+    const cfg = await getEffectiveWhatsappMetaConfig();
+    const phone = actorProfile?.phone ? normalizePhone(actorProfile.phone) : "";
+
+    if (phone) {
+      await sendWhatsappOtpCode(phone, otp, cfg);
+    } else if (cfg.allowConsole) {
+      console.log(`[DELETE_USER_OTP] actor=${actorId} target=${targetUserId} otp=${otp}`);
+    } else {
+      deleteOtpStore.delete(actorId);
+      return res.status(400).json({
+        message: "No tienes un teléfono registrado en tu perfil para recibir el código OTP. Regístralo en tu perfil e intenta de nuevo.",
+      });
+    }
+
+    return res.json({
+      message: phone
+        ? `Código OTP enviado al número ${phone.slice(0, 4)}****${phone.slice(-4)} via WhatsApp`
+        : "Código OTP generado (modo desarrollo — revisa consola del servidor)",
+      targetEmail: target.email,
+      targetRole: target.role,
+      expiresInMinutes: 10,
+    });
+  } catch (error: any) {
+    console.error("requestDeleteUserOtp error:", error);
+    return res.status(500).json({ message: "Error al enviar OTP", detail: error?.message ?? "unknown" });
+  }
+};
+
+// ── Delete user with OTP verification ──────────────────────────────────────
+export const deleteUser = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!isAdminUser(req)) return res.status(403).json({ message: "No autorizado" });
+
+    const actorId = req.user!.id;
+    const targetUserId = clean(req.params.userId);
+    const otpInput = clean((req.body as any)?.otp);
+
+    if (actorId === targetUserId) {
+      return res.status(400).json({ message: "No puedes eliminar tu propia cuenta" });
+    }
+    if (!otpInput) return res.status(400).json({ message: "El código OTP es obligatorio" });
+
+    // Verify OTP
+    pruneExpiredOtps();
+    const entry = deleteOtpStore.get(actorId);
+    if (!entry) {
+      return res.status(400).json({ message: "No hay un código OTP activo. Solicita uno nuevo." });
+    }
+    if (entry.expiresAt < new Date()) {
+      deleteOtpStore.delete(actorId);
+      return res.status(400).json({ message: "El código OTP ha expirado. Solicita uno nuevo." });
+    }
+    if (entry.targetUserId !== targetUserId) {
+      return res.status(400).json({ message: "El OTP no corresponde al usuario seleccionado." });
+    }
+    if (entry.otp !== otpInput) {
+      return res.status(400).json({ message: "Código OTP incorrecto" });
+    }
+
+    // Confirm target still exists
+    const target = await prisma.user.findUnique({
+      where: { id: targetUserId },
+      select: { id: true, email: true, role: true },
+    });
+    if (!target) {
+      deleteOtpStore.delete(actorId);
+      return res.status(404).json({ message: "Usuario no encontrado" });
+    }
+
+    // Reassign Restrict FK relations to the acting admin before deleting
+    // (Appointment.createdByUserId and SessionTreatment.staffUserId have onDelete: Restrict)
+    await prisma.appointment.updateMany({
+      where: { createdByUserId: targetUserId },
+      data: { createdByUserId: actorId },
+    });
+    await prisma.sessionTreatment.updateMany({
+      where: { staffUserId: targetUserId },
+      data: { staffUserId: actorId },
+    });
+
+    // Delete the user (cascades: Membership, Document, MedicalIntake, Appointment as member,
+    // Payment, EmailVerificationToken, PasswordResetToken, Profile, etc.)
+    await prisma.user.delete({ where: { id: targetUserId } });
+
+    deleteOtpStore.delete(actorId);
+
+    await createAuditLog({
+      userId: actorId,
+      actorUserId: actorId,
+      action: "admin.user.delete",
+      resourceType: "user",
+      resourceId: targetUserId,
+      ip: req.ip,
+      metadata: {
+        deletedEmail: target.email,
+        deletedRole: target.role,
+        deletedBy: actorId,
+      },
+    });
+
+    return res.json({ message: `Usuario ${target.email} eliminado correctamente` });
+  } catch (error: any) {
+    console.error("deleteUser error:", error);
+    return res.status(500).json({ message: "Error al eliminar usuario", detail: error?.message ?? "unknown" });
   }
 };

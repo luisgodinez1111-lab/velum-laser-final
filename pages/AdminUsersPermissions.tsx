@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { apiFetch } from "../services/apiClient";
 import {
@@ -11,6 +11,8 @@ import {
   EyeOff,
   RefreshCw,
   Plus,
+  Trash2,
+  AlertTriangle,
 } from "lucide-react";
 
 type PermissionItem = { code: string; label: string; description: string };
@@ -57,6 +59,15 @@ export const AdminUsersPermissions: React.FC<Props> = ({ embedded = false }) => 
   const [createRole, setCreateRole] = useState<"admin" | "staff" | "member">("staff");
   const [isCreating, setIsCreating] = useState(false);
   const [createExpanded, setCreateExpanded] = useState(false);
+
+  // Delete + OTP state
+  const [deleteTarget, setDeleteTarget] = useState<UserRow | null>(null);
+  const [deleteOtpSent, setDeleteOtpSent] = useState(false);
+  const [deleteOtpCode, setDeleteOtpCode] = useState("");
+  const [deleteOtpMsg, setDeleteOtpMsg] = useState("");
+  const [isRequestingOtp, setIsRequestingOtp] = useState(false);
+  const [isDeletingUser, setIsDeletingUser] = useState(false);
+  const otpInputRef = useRef<HTMLInputElement>(null);
 
   // Per-user drafts
   const [roleDrafts, setRoleDrafts] = useState<Record<string, string>>({});
@@ -152,6 +163,58 @@ export const AdminUsersPermissions: React.FC<Props> = ({ embedded = false }) => 
       setError(e?.message || "No se pudo actualizar la contraseña");
     } finally {
       setResettingPwd(null);
+    }
+  };
+
+  const openDeleteModal = (u: UserRow) => {
+    setDeleteTarget(u);
+    setDeleteOtpSent(false);
+    setDeleteOtpCode("");
+    setDeleteOtpMsg("");
+  };
+
+  const closeDeleteModal = () => {
+    setDeleteTarget(null);
+    setDeleteOtpSent(false);
+    setDeleteOtpCode("");
+    setDeleteOtpMsg("");
+  };
+
+  const requestDeleteOtp = async () => {
+    if (!deleteTarget) return;
+    setIsRequestingOtp(true);
+    setDeleteOtpMsg("");
+    try {
+      const out = await api(`/api/v1/admin/access/users/${deleteTarget.id}/request-delete-otp`, {
+        method: "POST",
+      });
+      setDeleteOtpSent(true);
+      setDeleteOtpMsg(out?.message ?? "Código enviado");
+      setTimeout(() => otpInputRef.current?.focus(), 100);
+    } catch (e: any) {
+      setDeleteOtpMsg(e?.message ?? "No se pudo enviar el código OTP");
+    } finally {
+      setIsRequestingOtp(false);
+    }
+  };
+
+  const confirmDeleteUser = async () => {
+    if (!deleteTarget || !deleteOtpCode.trim()) return;
+    setIsDeletingUser(true);
+    setDeleteOtpMsg("");
+    try {
+      const out = await api(`/api/v1/admin/access/users/${deleteTarget.id}`, {
+        method: "DELETE",
+        body: JSON.stringify({ otp: deleteOtpCode.trim() }),
+      });
+      setMessage(out?.message ?? `Usuario eliminado`);
+      closeDeleteModal();
+      setExpandedUser(null);
+      await load();
+    } catch (e: any) {
+      setDeleteOtpMsg(e?.message ?? "No se pudo eliminar el usuario");
+    } finally {
+      setIsDeletingUser(false);
     }
   };
 
@@ -380,6 +443,18 @@ export const AdminUsersPermissions: React.FC<Props> = ({ embedded = false }) => 
                         </button>
                       </div>
                     </div>
+
+                    {/* Delete user */}
+                    <div className="pt-1 border-t border-red-100">
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-red-400 mb-2">Zona de peligro</p>
+                      <button
+                        onClick={() => openDeleteModal(u)}
+                        className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-red-200 text-sm text-red-600 hover:bg-red-50 hover:border-red-400 transition w-full"
+                      >
+                        <Trash2 size={14} />
+                        Eliminar usuario permanentemente
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
@@ -390,7 +465,106 @@ export const AdminUsersPermissions: React.FC<Props> = ({ embedded = false }) => 
     </div>
   );
 
-  if (embedded) return content;
+  // OTP Delete Modal
+  const deleteModal = deleteTarget && (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      {/* Backdrop */}
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={closeDeleteModal} />
+
+      {/* Dialog */}
+      <div className="relative bg-white rounded-2xl shadow-2xl border border-red-200 max-w-md w-full p-6 space-y-5">
+        {/* Header */}
+        <div className="flex items-start gap-3">
+          <div className="w-10 h-10 rounded-xl bg-red-100 flex items-center justify-center shrink-0">
+            <AlertTriangle size={18} className="text-red-600" />
+          </div>
+          <div>
+            <h3 className="text-base font-bold text-velum-900">Eliminar usuario</h3>
+            <p className="text-xs text-velum-500 mt-0.5">Esta acción es irreversible</p>
+          </div>
+        </div>
+
+        {/* Target info */}
+        <div className="bg-red-50 border border-red-100 rounded-xl p-4 space-y-1">
+          <p className="text-xs text-velum-500 uppercase tracking-widest font-bold">Usuario a eliminar</p>
+          <p className="text-sm font-semibold text-velum-900">{deleteTarget.email}</p>
+          <p className="text-xs text-velum-500">Rol: {ROLE_CONFIG[deleteTarget.role]?.label ?? deleteTarget.role}</p>
+          <p className="text-xs text-red-600 mt-2 font-medium">
+            Se eliminarán también: perfil, membresía, expediente clínico, citas, documentos y pagos.
+          </p>
+        </div>
+
+        {/* OTP section */}
+        {!deleteOtpSent ? (
+          <div className="space-y-3">
+            <p className="text-sm text-velum-700">
+              Para confirmar, enviaremos un código OTP de seguridad a tu número de WhatsApp registrado.
+            </p>
+            {deleteOtpMsg && (
+              <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-xl px-3 py-2">{deleteOtpMsg}</p>
+            )}
+            <button
+              onClick={requestDeleteOtp}
+              disabled={isRequestingOtp}
+              className="w-full py-2.5 rounded-xl bg-velum-900 text-white text-sm font-medium hover:bg-velum-800 transition disabled:opacity-50"
+            >
+              {isRequestingOtp ? "Enviando código..." : "Enviar código OTP por WhatsApp"}
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {deleteOtpMsg && (
+              <p className={`text-sm rounded-xl px-3 py-2 ${
+                deleteOtpMsg.toLowerCase().includes("error") || deleteOtpMsg.toLowerCase().includes("incorrecto") || deleteOtpMsg.toLowerCase().includes("expirado")
+                  ? "text-red-600 bg-red-50 border border-red-100"
+                  : "text-emerald-700 bg-emerald-50 border border-emerald-100"
+              }`}>{deleteOtpMsg}</p>
+            )}
+            <div>
+              <label className="block text-[10px] font-bold uppercase tracking-widest text-velum-400 mb-1.5">
+                Ingresa el código OTP (6 dígitos)
+              </label>
+              <input
+                ref={otpInputRef}
+                type="text"
+                inputMode="numeric"
+                maxLength={6}
+                className="w-full rounded-xl border border-velum-200 px-3.5 py-3 text-center text-xl font-bold tracking-[0.5em] focus:outline-none focus:ring-2 focus:ring-red-400/30 focus:border-red-400 transition"
+                placeholder="000000"
+                value={deleteOtpCode}
+                onChange={(e) => setDeleteOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                onKeyDown={(e) => { if (e.key === "Enter" && deleteOtpCode.length === 6) void confirmDeleteUser(); }}
+              />
+            </div>
+            <button
+              onClick={() => { setDeleteOtpSent(false); setDeleteOtpCode(""); setDeleteOtpMsg(""); }}
+              className="text-xs text-velum-400 hover:text-velum-700 transition underline"
+            >
+              Reenviar código
+            </button>
+            <button
+              onClick={confirmDeleteUser}
+              disabled={isDeletingUser || deleteOtpCode.length !== 6}
+              className="w-full py-2.5 rounded-xl bg-red-600 text-white text-sm font-bold hover:bg-red-700 transition disabled:opacity-50"
+            >
+              {isDeletingUser ? "Eliminando..." : "Confirmar eliminación"}
+            </button>
+          </div>
+        )}
+
+        {/* Cancel */}
+        <button
+          onClick={closeDeleteModal}
+          disabled={isDeletingUser}
+          className="w-full py-2.5 rounded-xl border border-velum-200 text-sm text-velum-600 hover:bg-velum-50 transition disabled:opacity-40"
+        >
+          Cancelar
+        </button>
+      </div>
+    </div>
+  );
+
+  if (embedded) return <>{content}{deleteModal}</>;
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-10">
@@ -404,6 +578,7 @@ export const AdminUsersPermissions: React.FC<Props> = ({ embedded = false }) => 
         </Link>
       </div>
       {content}
+      {deleteModal}
     </div>
   );
 };

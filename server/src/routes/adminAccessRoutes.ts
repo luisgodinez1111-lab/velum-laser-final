@@ -5,6 +5,8 @@ import {
   createAdminAccessUser,
   updateAdminAccessUser,
   resetAdminAccessPassword,
+  requestDeleteUserOtp,
+  deleteUser,
 } from "../controllers/adminAccessController";
 
 export const adminAccessRoutes = Router();
@@ -13,3 +15,5 @@ adminAccessRoutes.get("/api/v1/admin/access/users", requireAuth, requireRole(["a
 adminAccessRoutes.post("/api/v1/admin/access/users", requireAuth, requireRole(["admin", "system"]), createAdminAccessUser);
 adminAccessRoutes.patch("/api/v1/admin/access/users/:userId", requireAuth, requireRole(["admin", "system"]), updateAdminAccessUser);
 adminAccessRoutes.post("/api/v1/admin/access/users/:userId/reset-password", requireAuth, requireRole(["admin", "system"]), resetAdminAccessPassword);
+adminAccessRoutes.post("/api/v1/admin/access/users/:userId/request-delete-otp", requireAuth, requireRole(["admin", "system"]), requestDeleteUserOtp);
+adminAccessRoutes.delete("/api/v1/admin/access/users/:userId", requireAuth, requireRole(["admin", "system"]), deleteUser);
