@@ -104,6 +104,7 @@ export const Memberships: React.FC = () => {
               <img 
                 src="https://images.unsplash.com/photo-1512290923902-8a9f81dc236c?q=80&w=1974" 
                 alt="Zona I Identidad" 
+                loading="lazy"
                 className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105 grayscale hover:grayscale-0"
               />
               <div className="absolute top-4 left-4 bg-white/90 backdrop-blur px-3 py-1 text-[10px] uppercase font-bold tracking-widest">Zona I</div>
@@ -142,6 +143,7 @@ export const Memberships: React.FC = () => {
               <img 
                 src="https://images.unsplash.com/photo-1519681393784-d120267933ba?q=80&w=1974" 
                 alt="Zona II Presencia" 
+                loading="lazy"
                 className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105 grayscale hover:grayscale-0"
               />
               <div className="absolute top-4 right-4 bg-white/90 backdrop-blur px-3 py-1 text-[10px] uppercase font-bold tracking-widest">Zona II</div>
@@ -154,6 +156,7 @@ export const Memberships: React.FC = () => {
               <img 
                 src="https://images.unsplash.com/photo-1571019614242-c5c5dee9f50b?q=80&w=2070" 
                 alt="Zona III Equilibrio" 
+                loading="lazy"
                 className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105 grayscale hover:grayscale-0"
               />
               <div className="absolute top-4 left-4 bg-white/90 backdrop-blur px-3 py-1 text-[10px] uppercase font-bold tracking-widest">Zona III</div>
@@ -194,6 +197,7 @@ export const Memberships: React.FC = () => {
               <img 
                 src="https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?q=80&w=1961" 
                 alt="Zona IV Función" 
+                loading="lazy"
                 className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105 grayscale hover:grayscale-0"
               />
               <div className="absolute top-4 right-4 bg-white/90 backdrop-blur px-3 py-1 text-[10px] uppercase font-bold tracking-widest">Zona IV</div>
@@ -399,10 +403,11 @@ export const Memberships: React.FC = () => {
                </div>
 
                <div className="flex flex-col gap-4">
-                  <Button 
-                    className="w-full py-4 text-sm shadow-xl hover:shadow-2xl transition-shadow bg-[#635BFF] text-white hover:bg-[#534ac2]" 
+                  <Button
+                    className="w-full py-4 text-sm shadow-xl hover:shadow-2xl transition-shadow"
                     onClick={handleCheckout}
                     isLoading={isCheckingOut}
+                    loadingLabel="Redirigiendo a Stripe..."
                   >
                     Pagar y Activar Suscripción (Stripe)
                   </Button>

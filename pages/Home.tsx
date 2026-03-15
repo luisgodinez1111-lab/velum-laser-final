@@ -1,7 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Button } from '../components/Button';
-import { Sparkles, ShieldCheck, Clock, Heart, Zap, User } from 'lucide-react';
+import { Clock, Heart, Zap, User } from 'lucide-react';
 
 export const Home: React.FC = () => {
   return (
@@ -30,11 +29,12 @@ export const Home: React.FC = () => {
             <span className="text-sm mt-3 block font-bold tracking-widest uppercase opacity-80">VELUM no grita lujo. VELUM lo transmite.</span>
           </p>
           <div className="flex flex-col sm:flex-row gap-6 justify-center">
-             <Link to="/memberships">
-                <Button size="lg" className="min-w-[220px] shadow-2xl bg-velum-900 text-velum-50 hover:bg-velum-800 border-none">
-                  Ver Membresías
-                </Button>
-             </Link>
+            <Link
+              to="/memberships"
+              className="inline-flex items-center justify-center bg-velum-900 text-velum-50 hover:bg-velum-800 transition-colors duration-200 px-10 py-4 text-xs font-bold uppercase tracking-widest min-w-[220px] shadow-2xl"
+            >
+              Ver Membresías
+            </Link>
           </div>
         </div>
       </section>
@@ -150,10 +150,11 @@ export const Home: React.FC = () => {
               El cuerpo se divide en 4 zonas: Identidad, Presencia, Equilibrio y Función.
               Elige tu nivel de cuidado.
             </p>
-            <Link to="/memberships">
-              <Button variant="secondary" size="lg" className="min-w-[240px] border-none shadow-lg transform hover:scale-105 transition-transform">
-                Elegir Membresía
-              </Button>
+            <Link
+              to="/memberships"
+              className="inline-flex items-center justify-center bg-velum-200 text-velum-900 hover:bg-velum-300 transition-colors duration-200 px-10 py-4 text-xs font-bold uppercase tracking-widest min-w-[240px] shadow-lg hover:scale-105 transform"
+            >
+              Elegir Membresía
             </Link>
          </div>
       </section>
