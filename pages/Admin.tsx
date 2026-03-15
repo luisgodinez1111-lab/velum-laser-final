@@ -3110,98 +3110,160 @@ export const Admin: React.FC = () => {
 
   // ─── Main Admin Layout ─────────────────────────────────────────────────────
 
-  const sidebarW = isSidebarCollapsed ? 'w-[68px]' : 'w-[240px]';
-  const contentML = isSidebarCollapsed ? 'ml-[68px]' : 'ml-[240px]';
+  const SIDEBAR_FULL = 220;
+  const SIDEBAR_MINI = 64;
+  const sidebarPx = isSidebarCollapsed ? SIDEBAR_MINI : SIDEBAR_FULL;
 
-  return (
-    <div className="min-h-screen bg-velum-50">
-      {/* Sidebar */}
-      <aside className={`fixed left-0 top-0 h-full ${sidebarW} bg-velum-900 flex flex-col z-30 transition-all duration-200`}>
-        {/* Logo */}
-        <div className="flex items-center gap-3 px-4 py-5 border-b border-white/10">
-          <VelumLogo className="h-6 w-auto shrink-0 brightness-0 invert" />
-          {!isSidebarCollapsed && <span className="text-white font-serif text-base leading-tight">Velum<br /><span className="text-[10px] font-sans uppercase tracking-widest text-white/50">Admin</span></span>}
-        </div>
-        {/* Nav */}
-        <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-0.5">
-          {NAV_SECTIONS.map((section) => {
-            const meta = sectionMeta[section];
-            const Icon = meta.icon;
-            const isActive = activeSection === section;
-            // Compute badges
-            const badge =
-              section === 'expedientes' ? members.filter((m) => m.intakeStatus === 'submitted').length
-              : section === 'socias' ? members.filter((m) => riskOfMember(m) !== 'ok').length
-              : 0;
-            return (
-              <button key={section} onClick={() => { setActiveSection(section); setSidebarOpen(false); }}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-all
-                  ${isActive ? 'bg-white/15 text-white font-medium' : 'text-white/50 hover:text-white hover:bg-white/8'}`}
-                title={isSidebarCollapsed ? meta.label : undefined}>
-                <div className="relative shrink-0">
-                  <Icon size={17} />
+  const SidebarContent = () => (
+    <>
+      {/* Logo */}
+      <div className="flex items-center gap-3 px-4 h-14 border-b border-white/10 shrink-0">
+        <VelumLogo className="h-5 w-auto shrink-0 brightness-0 invert" />
+        {!isSidebarCollapsed && (
+          <span className="text-white font-serif text-[15px] leading-tight truncate">
+            Velum <span className="text-white/40 font-sans text-[10px] uppercase tracking-widest">Admin</span>
+          </span>
+        )}
+      </div>
+
+      {/* Nav */}
+      <nav className="flex-1 overflow-y-auto py-4 px-2 space-y-1">
+        {NAV_SECTIONS.map((section) => {
+          const meta = sectionMeta[section];
+          const Icon = meta.icon;
+          const isActive = activeSection === section;
+          const badge =
+            section === 'expedientes' ? members.filter((m) => m.intakeStatus === 'submitted').length
+            : section === 'socias'    ? members.filter((m) => riskOfMember(m) !== 'ok').length
+            : 0;
+          return (
+            <button
+              key={section}
+              onClick={() => { setActiveSection(section); setSidebarOpen(false); }}
+              title={isSidebarCollapsed ? meta.label : undefined}
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-medium transition-all duration-150
+                ${isActive
+                  ? 'bg-white/[0.14] text-white'
+                  : 'text-white/50 hover:text-white hover:bg-white/[0.07]'
+                }`}
+            >
+              <div className="relative shrink-0 w-[18px] h-[18px] flex items-center justify-center">
+                <Icon size={17} />
+                {!isActive && badge > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 min-w-[14px] h-[14px] bg-red-500 rounded-full text-[9px] font-bold text-white flex items-center justify-center px-0.5 leading-none">
+                    {badge > 9 ? '9+' : badge}
+                  </span>
+                )}
+              </div>
+              {!isSidebarCollapsed && (
+                <>
+                  <span className="flex-1 truncate text-left">{meta.label}</span>
                   {!isActive && badge > 0 && (
-                    <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-red-500 rounded-full text-[8px] font-bold text-white flex items-center justify-center leading-none">
+                    <span className="shrink-0 min-w-[20px] h-5 bg-red-500 text-white rounded-full text-[10px] font-bold flex items-center justify-center px-1.5">
                       {badge > 9 ? '9+' : badge}
                     </span>
                   )}
-                </div>
-                {!isSidebarCollapsed && <span className="truncate flex-1">{meta.label}</span>}
-                {!isSidebarCollapsed && !isActive && badge > 0 && (
-                  <span className="shrink-0 text-[10px] font-bold bg-red-500 text-white rounded-full px-1.5 py-0.5 leading-none">{badge > 9 ? '9+' : badge}</span>
-                )}
-              </button>
-            );
-          })}
-        </nav>
-        {/* Bottom: user + collapse */}
-        <div className="border-t border-white/10 p-3 space-y-1">
-          {!isSidebarCollapsed && (
-            <div className="px-2 py-2">
-              <p className="text-[10px] text-white/30 truncate">{user?.email}</p>
-              <p className="text-[10px] text-white/50">{roleTitle[user?.role as UserRole] ?? user?.role}</p>
-            </div>
-          )}
-          <button onClick={logout} className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-white/40 hover:text-white hover:bg-white/10 transition text-sm">
-            <LogOut size={15} className="shrink-0" />
-            {!isSidebarCollapsed && 'Cerrar sesión'}
-          </button>
-          <button onClick={() => setIsSidebarCollapsed((v) => !v)} className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-white/30 hover:text-white/60 transition">
-            <ChevronLeft size={15} className={`shrink-0 transition-transform ${isSidebarCollapsed ? 'rotate-180' : ''}`} />
-            {!isSidebarCollapsed && <span className="text-xs">Colapsar</span>}
-          </button>
-        </div>
+                </>
+              )}
+            </button>
+          );
+        })}
+      </nav>
+
+      {/* Bottom */}
+      <div className="border-t border-white/10 p-2 space-y-1 shrink-0">
+        {!isSidebarCollapsed && (
+          <div className="px-3 py-2">
+            <p className="text-[11px] text-white/60 font-medium truncate">{user?.email}</p>
+            <p className="text-[10px] text-white/30">{roleTitle[user?.role as UserRole] ?? user?.role}</p>
+          </div>
+        )}
+        <button
+          onClick={logout}
+          className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-white/40 hover:text-white hover:bg-white/10 transition text-[13px]"
+          title={isSidebarCollapsed ? 'Cerrar sesión' : undefined}
+        >
+          <LogOut size={15} className="shrink-0" />
+          {!isSidebarCollapsed && 'Cerrar sesión'}
+        </button>
+        <button
+          onClick={() => setIsSidebarCollapsed((v) => !v)}
+          className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-white/25 hover:text-white/60 transition"
+          title={isSidebarCollapsed ? 'Expandir' : 'Colapsar'}
+        >
+          <ChevronLeft size={15} className={`shrink-0 transition-transform duration-200 ${isSidebarCollapsed ? 'rotate-180' : ''}`} />
+          {!isSidebarCollapsed && <span className="text-[11px]">Colapsar</span>}
+        </button>
+      </div>
+    </>
+  );
+
+  return (
+    <div className="min-h-screen bg-velum-50 flex">
+
+      {/* ── Sidebar desktop (always visible ≥ md) ── */}
+      <aside
+        style={{ width: sidebarPx }}
+        className="hidden md:flex flex-col fixed left-0 top-0 h-screen bg-velum-900 z-30 transition-[width] duration-200 overflow-hidden"
+      >
+        <SidebarContent />
       </aside>
 
-      {/* Top bar */}
-      <header className={`fixed top-0 right-0 ${contentML} h-14 bg-white border-b border-velum-100 z-20 flex items-center justify-between px-6 transition-all duration-200`}>
-        <div className="flex items-center gap-2 text-sm text-velum-700">
-          <span className="text-velum-400 text-xs font-medium uppercase tracking-widest">Admin</span>
-          <ChevronRight size={14} className="text-velum-300" />
-          <span className="font-medium text-velum-900">{sectionMeta[activeSection].label}</span>
-        </div>
-        <div className="flex items-center gap-3">
-          <button onClick={loadData} className="p-2 rounded-xl text-velum-400 hover:text-velum-700 hover:bg-velum-50 transition" title="Actualizar datos">
-            <RefreshCw size={15} className={isLoadingData ? 'animate-spin' : ''} />
-          </button>
-          <div className="w-8 h-8 rounded-full bg-velum-900 flex items-center justify-center text-white text-xs font-bold">
-            {user?.email?.[0]?.toUpperCase() ?? 'A'}
+      {/* ── Sidebar mobile (overlay, shown when sidebarOpen) ── */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40 md:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+      <aside
+        className={`flex flex-col fixed left-0 top-0 h-screen bg-velum-900 z-50 md:hidden transition-transform duration-200 overflow-hidden
+          ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}
+        style={{ width: SIDEBAR_FULL }}
+      >
+        <SidebarContent />
+      </aside>
+
+      {/* ── Main area ── */}
+      <div
+        className="flex-1 flex flex-col min-h-screen transition-all duration-200"
+        style={{ marginLeft: typeof window !== 'undefined' && window.innerWidth >= 768 ? sidebarPx : 0 }}
+      >
+        {/* Top bar */}
+        <header className="sticky top-0 z-20 h-14 bg-white border-b border-velum-100 flex items-center justify-between px-5 shrink-0">
+          <div className="flex items-center gap-2">
+            {/* Mobile hamburger */}
+            <button
+              onClick={() => setSidebarOpen((v) => !v)}
+              className="p-2 rounded-xl text-velum-400 hover:text-velum-700 hover:bg-velum-50 transition md:hidden"
+            >
+              <Menu size={18} />
+            </button>
+            <span className="text-velum-300 text-xs font-medium uppercase tracking-widest hidden sm:block">Admin</span>
+            <ChevronRight size={13} className="text-velum-200 hidden sm:block" />
+            <span className="text-sm font-semibold text-velum-900">{sectionMeta[activeSection].label}</span>
           </div>
-        </div>
-      </header>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => void loadData()}
+              className="p-2 rounded-xl text-velum-400 hover:text-velum-700 hover:bg-velum-50 transition"
+              title="Actualizar datos"
+            >
+              <RefreshCw size={15} className={isLoadingData ? 'animate-spin' : ''} />
+            </button>
+            <div className="w-8 h-8 rounded-full bg-velum-900 flex items-center justify-center text-white text-xs font-bold select-none">
+              {user?.email?.[0]?.toUpperCase() ?? 'A'}
+            </div>
+          </div>
+        </header>
 
-      {/* Content */}
-      <main className={`${contentML} pt-14 transition-all duration-200`}>
-        <div className="max-w-7xl mx-auto px-6 py-8">
-          {renderSection()}
-        </div>
-      </main>
-
-      {/* Mobile menu toggle */}
-      <button onClick={() => setSidebarOpen(!sidebarOpen)}
-        className="fixed bottom-4 right-4 z-40 md:hidden bg-velum-900 text-white p-3 rounded-full shadow-lg">
-        <Menu size={20} />
-      </button>
+        {/* Content */}
+        <main className="flex-1 overflow-y-auto">
+          <div className="max-w-6xl mx-auto px-5 py-7">
+            {renderSection()}
+          </div>
+        </main>
+      </div>
 
       {/* Modals */}
       {renderSessionModal()}
