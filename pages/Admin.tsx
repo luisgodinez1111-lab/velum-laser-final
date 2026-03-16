@@ -398,6 +398,8 @@ export const Admin: React.FC = () => {
   const [templateRangeEnd, setTemplateRangeEnd] = useState(() => toLocalDateKey(new Date()));
   const [templatePreset, setTemplatePreset] = useState<AgendaTemplatePreset>('weekly_copy');
   const [templateDaysOfWeek, setTemplateDaysOfWeek] = useState<number[]>([0, 1, 2, 3, 4, 5, 6]);
+  const [weekBulkStart, setWeekBulkStart] = useState(8);
+  const [weekBulkEnd, setWeekBulkEnd] = useState(20);
   const [isAgendaSaving, setIsAgendaSaving] = useState(false);
   const [isAgendaConfigSaving, setIsAgendaConfigSaving] = useState(false);
   const [agendaMessage, setAgendaMessage] = useState<{ type: 'ok' | 'error'; text: string } | null>(null);
@@ -1231,6 +1233,39 @@ export const Admin: React.FC = () => {
 
   const clearSpecialRuleForDate = () => {
     setAgendaSpecialDateRulesDraft((current) => current.filter((rule) => rule.dateKey !== agendaDate));
+  };
+
+  // ── Acciones rápidas por semana ────────────────────────────────────────
+  const applyWeekBulk = (action: 'open' | 'close') => {
+    // Calcular lunes de la semana que contiene agendaDate
+    const ref = new Date(agendaDate + 'T12:00:00');
+    const dow = ref.getDay(); // 0=Dom, 1=Lun...
+    const offsetToMonday = (dow === 0 ? -6 : 1 - dow);
+    const monday = plusDays(ref, offsetToMonday);
+
+    setAgendaSpecialDateRulesDraft((current) => {
+      const byDate = new Map(current.map((r) => [r.dateKey, r]));
+      for (let i = 0; i < 7; i++) {
+        const d = plusDays(monday, i);
+        const dateKey = toLocalDateKey(d);
+        const existing = byDate.get(dateKey);
+        byDate.set(dateKey, {
+          id: existing?.id ?? `draft-week-${dateKey}`,
+          dateKey,
+          isOpen: action === 'open',
+          startHour: action === 'open' ? weekBulkStart : null,
+          endHour: action === 'open' ? weekBulkEnd : null,
+          note: action === 'open' ? `Abierto ${weekBulkStart}:00–${weekBulkEnd}:00` : 'Semana cerrada'
+        });
+      }
+      return [...byDate.values()].sort((a, b) => a.dateKey.localeCompare(b.dateKey));
+    });
+
+    const weekLabel = toLocalDateKey(monday);
+    setAgendaMessage({
+      type: 'ok',
+      text: `Semana del ${weekLabel} marcada como ${action === 'open' ? `abierta (${weekBulkStart}:00–${weekBulkEnd}:00)` : 'cerrada'}. Guarda la configuración para aplicar.`
+    });
   };
 
   const saveAgendaConfiguration = async () => {
@@ -2693,6 +2728,42 @@ export const Admin: React.FC = () => {
           )}
         </div>
 
+        {/* Week bulk actions */}
+        <div className="bg-white rounded-2xl border border-velum-100 p-4">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-velum-400 mb-3">Acciones rápidas — semana completa</p>
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              onClick={() => applyWeekBulk('close')}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs font-semibold hover:bg-red-100 transition"
+            >
+              <span>✕</span> Cerrar semana
+            </button>
+            <div className="flex items-center gap-2">
+              <input
+                type="number" min="0" max="23" value={weekBulkStart}
+                onChange={(e) => setWeekBulkStart(Number(e.target.value))}
+                className="w-14 rounded-lg border border-velum-200 px-2 py-1.5 text-sm text-center focus:outline-none focus:border-velum-900 transition"
+              />
+              <span className="text-velum-400 text-xs">—</span>
+              <input
+                type="number" min="1" max="24" value={weekBulkEnd}
+                onChange={(e) => setWeekBulkEnd(Number(e.target.value))}
+                className="w-14 rounded-lg border border-velum-200 px-2 py-1.5 text-sm text-center focus:outline-none focus:border-velum-900 transition"
+              />
+              <span className="text-velum-400 text-xs">hrs</span>
+              <button
+                onClick={() => applyWeekBulk('open')}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-semibold hover:bg-emerald-100 transition"
+              >
+                <span>✓</span> Abrir semana
+              </button>
+            </div>
+            <p className="text-[11px] text-velum-400 w-full">
+              Aplica a los 7 días de la semana que contiene el día seleccionado. Después presiona <strong>Guardar configuración</strong> en Ajustes → Agenda.
+            </p>
+          </div>
+        </div>
+
         {/* Rule info */}
         {effectiveRule && (
           <div className={`flex items-center gap-3 p-3 rounded-xl text-xs ${effectiveRule.isOpen ? 'bg-emerald-50 border border-emerald-200 text-emerald-700' : 'bg-red-50 border border-red-200 text-red-700'}`}>
@@ -2859,6 +2930,15 @@ export const Admin: React.FC = () => {
             )}
           </div>
         </div>
+
+        {/* Save week config shortcut */}
+        <button
+          onClick={saveAgendaConfiguration}
+          disabled={isAgendaConfigSaving}
+          className="w-full bg-velum-900 text-white rounded-xl py-3 text-sm font-medium hover:bg-velum-800 transition disabled:opacity-50"
+        >
+          {isAgendaConfigSaving ? 'Guardando...' : 'Guardar configuración de agenda'}
+        </button>
       </div>
     );
   };
