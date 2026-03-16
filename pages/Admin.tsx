@@ -200,9 +200,10 @@ const AdminSidebarContent: React.FC<AdminSidebarProps> = ({
         </div>
       )}
       <button
-        onClick={onLogout}
+        onClick={() => { if (window.confirm('¿Cerrar sesión?')) onLogout(); }}
         className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-white/40 hover:text-white hover:bg-white/10 transition text-[13px]"
         title={isSidebarCollapsed ? 'Cerrar sesión' : undefined}
+        aria-label="Cerrar sesión"
       >
         <LogOut size={15} className="shrink-0" />
         {!isSidebarCollapsed && 'Cerrar sesión'}
@@ -241,7 +242,7 @@ const statusLabel = (status?: string) => {
     case 'inactive':
       return 'Inactivo';
     default:
-      return status ?? 'N/A';
+      return status ?? '—';
   }
 };
 
@@ -344,6 +345,7 @@ export const Admin: React.FC = () => {
   const [isLoadingMemberHistory, setIsLoadingMemberHistory] = useState(false);
 
   // Drawer: deactivate / delete with OTP
+  const [criticalActionsOpen, setCriticalActionsOpen] = useState(false);
   const [drawerDeactivating, setDrawerDeactivating] = useState(false);
   const [drawerDeleteStep, setDrawerDeleteStep] = useState<'idle' | 'otp-send' | 'otp-confirm'>('idle');
   const [drawerDeleteOtp, setDrawerDeleteOtp] = useState('');
@@ -351,6 +353,13 @@ export const Admin: React.FC = () => {
   const [drawerDeleteSending, setDrawerDeleteSending] = useState(false);
   const [drawerDeleting, setDrawerDeleting] = useState(false);
   const drawerOtpRef = useRef<HTMLInputElement>(null);
+
+  const closeCriticalActions = () => {
+    setCriticalActionsOpen(false);
+    setDrawerDeleteStep('idle');
+    setDrawerDeleteOtp('');
+    setDrawerDeleteMsg('');
+  };
 
   // Intake approval
   const [isApprovingIntake, setIsApprovingIntake] = useState<string | null>(null);
@@ -419,8 +428,8 @@ export const Admin: React.FC = () => {
     setIsLoadingData(true);
     setDataLoadError('');
     try {
-      const [membersData, logsData, configData, dayData, integrationData] = await Promise.all([
-        memberService.getAll(),
+      const [membersResult, logsData, configData, dayData, integrationData] = await Promise.all([
+        memberService.getAll({ limit: 100 }),
         user?.role === 'admin' || user?.role === 'system'
           ? auditService.getLogs().catch(() => [] as AuditLogEntry[])
           : Promise.resolve([] as AuditLogEntry[]),
@@ -430,7 +439,7 @@ export const Admin: React.FC = () => {
           ? googleCalendarIntegrationService.getStatus().catch(() => null)
           : Promise.resolve(null)
       ]);
-      setMembers(membersData);
+      setMembers(membersResult.members);
       setAuditLogs(logsData);
       setGoogleIntegrationStatus(integrationData);
       if (configData) {
@@ -680,6 +689,7 @@ export const Admin: React.FC = () => {
       });
       toast.success(out?.message ?? `${memberEmail} eliminado`);
       setSelectedMember(null);
+      setCriticalActionsOpen(false);
       setDrawerDeleteStep('idle');
       setDrawerDeleteOtp('');
       await loadData();
@@ -1606,7 +1616,7 @@ export const Admin: React.FC = () => {
               <p className="text-[10px] font-bold uppercase tracking-widest text-velum-500">Registro clínico</p>
               <h3 className="font-serif text-lg text-velum-900 mt-0.5">{sessionModalMember.name}</h3>
             </div>
-            <button onClick={() => setSessionModalMember(null)} className="text-velum-400 hover:text-velum-900 p-1 rounded-xl hover:bg-velum-50 transition"><X size={20} /></button>
+            <button onClick={() => setSessionModalMember(null)} aria-label="Cerrar registro clínico" className="text-velum-400 hover:text-velum-900 p-1 rounded-xl hover:bg-velum-50 transition"><X size={20} /></button>
           </div>
           <div className="p-6 space-y-5 overflow-y-auto">
             {memberAppointments.length > 0 && (
@@ -1684,14 +1694,14 @@ export const Admin: React.FC = () => {
               <h2 className="font-serif text-xl text-velum-900 mt-1">{mem.name}</h2>
               <p className="text-xs text-velum-500 mt-0.5">{mem.email}</p>
             </div>
-            <button onClick={() => { setSelectedMember(null); setIntakeToApprove(null); }} className="p-2 rounded-xl hover:bg-velum-50 text-velum-400 hover:text-velum-700 transition"><X size={18} /></button>
+            <button onClick={() => { setSelectedMember(null); setIntakeToApprove(null); }} aria-label="Cerrar perfil de paciente" className="p-2 rounded-xl hover:bg-velum-50 text-velum-400 hover:text-velum-700 transition"><X size={18} /></button>
           </div>
           {/* Stats */}
           <div className="grid grid-cols-2 gap-3 p-4 border-b border-velum-100">
             {[
-              { label: 'Plan', value: mem.plan ?? 'N/A' },
+              { label: 'Plan', value: mem.plan ?? '—' },
               { label: 'Estado', value: <Pill label={statusLabel(mem.subscriptionStatus)} cls={statusPill(mem.subscriptionStatus)} /> },
-              { label: 'Monto', value: mem.amount ? formatMoney(mem.amount) : 'N/A' },
+              { label: 'Cobro', value: mem.amount ? `${formatMoney(mem.amount)}${mem.interval === 'year' ? '/año' : mem.interval === 'week' ? '/sem' : '/mes'}` : '—' },
               { label: 'Expediente', value: <Pill label={intake.label} cls={intake.cls} /> }
             ].map(({ label, value }) => (
               <div key={label} className="bg-velum-50 rounded-xl p-3">
@@ -1728,84 +1738,117 @@ export const Admin: React.FC = () => {
                 </button>
               )}
 
-              {/* Separador zona de peligro */}
-              <div className="pt-2 border-t border-red-100 space-y-2">
-                <p className="text-[10px] font-bold uppercase tracking-widest text-red-400">Zona de peligro</p>
-
-                {/* Desactivar */}
+              {/* Acciones Críticas */}
+              <div className="pt-2 border-t border-red-100">
                 <button
-                  onClick={() => void handleDrawerDeactivate(mem.id)}
-                  disabled={drawerDeactivating}
-                  className="w-full flex items-center gap-2 px-4 py-2.5 border border-amber-300 text-amber-700 bg-amber-50 rounded-xl text-sm font-medium hover:bg-amber-100 transition disabled:opacity-50"
+                  onClick={() => setCriticalActionsOpen(true)}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-2.5 border border-red-300 text-red-600 bg-red-50 rounded-xl text-sm font-semibold hover:bg-red-100 transition"
                 >
                   <CircleAlert size={14} />
-                  {drawerDeactivating ? 'Desactivando...' : 'Desactivar y cancelar Stripe'}
+                  Acciones Críticas
                 </button>
-
-                {/* Eliminar — paso 1: botón inicial */}
-                {drawerDeleteStep === 'idle' && (
-                  <button
-                    onClick={() => setDrawerDeleteStep('otp-send')}
-                    className="w-full flex items-center gap-2 px-4 py-2.5 border border-red-300 text-red-600 bg-red-50 rounded-xl text-sm font-medium hover:bg-red-100 transition"
-                  >
-                    <Trash2 size={14} />
-                    Eliminar paciente permanentemente
-                  </button>
-                )}
-
-                {/* Paso 2: confirmación antes de enviar OTP */}
-                {drawerDeleteStep === 'otp-send' && (
-                  <div className="rounded-xl border border-red-200 bg-red-50 p-3 space-y-2">
-                    <p className="text-xs text-red-700 font-medium leading-relaxed">
-                      ¿Eliminar a <strong>{mem.email}</strong>?<br/>
-                      <span className="font-normal opacity-80">Se borrará: perfil, membresía, expediente, citas y pagos. Irreversible.</span>
-                    </p>
-                    {drawerDeleteMsg && <p className="text-xs text-red-600">{drawerDeleteMsg}</p>}
-                    <div className="flex gap-2">
-                      <button onClick={() => void handleDrawerRequestOtp(mem.id)} disabled={drawerDeleteSending}
-                        className="flex-1 bg-red-600 text-white rounded-xl py-2 text-xs font-bold hover:bg-red-700 transition disabled:opacity-50">
-                        {drawerDeleteSending ? 'Enviando...' : 'Enviar OTP por WhatsApp'}
-                      </button>
-                      <button onClick={() => { setDrawerDeleteStep('idle'); setDrawerDeleteMsg(''); }}
-                        className="px-3 rounded-xl border border-velum-200 text-xs text-velum-500 hover:bg-velum-50 transition">
-                        Cancelar
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {/* Paso 3: ingresar código OTP */}
-                {drawerDeleteStep === 'otp-confirm' && (
-                  <div className="rounded-xl border border-red-200 bg-red-50 p-3 space-y-2">
-                    {drawerDeleteMsg && (
-                      <p className={`text-xs rounded-lg px-2 py-1 ${drawerDeleteMsg.toLowerCase().includes('enviado') || drawerDeleteMsg.toLowerCase().includes('whatsapp') ? 'text-emerald-700 bg-emerald-50 border border-emerald-100' : 'text-red-600'}`}>
-                        {drawerDeleteMsg}
-                      </p>
-                    )}
-                    <input
-                      ref={drawerOtpRef}
-                      type="text"
-                      inputMode="numeric"
-                      maxLength={6}
-                      placeholder="Código OTP (6 dígitos)"
-                      value={drawerDeleteOtp}
-                      onChange={(e) => setDrawerDeleteOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                      onKeyDown={(e) => { if (e.key === 'Enter' && drawerDeleteOtp.length === 6) void handleDrawerConfirmDelete(mem.id, mem.email); }}
-                      className="w-full rounded-xl border border-red-300 px-3 py-2 text-center text-lg font-bold tracking-[0.4em] focus:outline-none focus:ring-2 focus:ring-red-300 transition bg-white"
-                    />
-                    <div className="flex gap-2">
-                      <button onClick={() => void handleDrawerConfirmDelete(mem.id, mem.email)} disabled={drawerDeleting || drawerDeleteOtp.length !== 6}
-                        className="flex-1 bg-red-600 text-white rounded-xl py-2 text-xs font-bold hover:bg-red-700 transition disabled:opacity-50">
-                        {drawerDeleting ? 'Eliminando...' : 'Confirmar eliminación'}
-                      </button>
-                      <button onClick={() => { setDrawerDeleteStep('otp-send'); setDrawerDeleteOtp(''); setDrawerDeleteMsg(''); }}
-                        className="px-3 rounded-xl border border-red-200 text-xs text-red-500 hover:bg-red-100 transition">
-                        Reenviar
-                      </button>
-                    </div>
-                  </div>
-                )}
               </div>
+
+              {/* Modal de Acciones Críticas */}
+              {criticalActionsOpen && (
+                <div className="fixed inset-0 z-[200] flex items-center justify-center p-4" onClick={closeCriticalActions}>
+                  <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
+                  <div
+                    className="relative w-full max-w-sm bg-white rounded-2xl shadow-2xl p-6 space-y-4"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    {/* Header */}
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-red-500">Zona de peligro</p>
+                        <p className="font-semibold text-velum-900 text-sm mt-0.5 truncate max-w-[220px]">{mem.email}</p>
+                      </div>
+                      <button onClick={closeCriticalActions} className="p-1.5 rounded-lg hover:bg-velum-100 text-velum-400 hover:text-velum-700 transition">
+                        <XCircle size={18} />
+                      </button>
+                    </div>
+
+                    {/* Desactivar */}
+                    <button
+                      onClick={async () => { await handleDrawerDeactivate(mem.id); closeCriticalActions(); }}
+                      disabled={drawerDeactivating}
+                      className="w-full flex items-center gap-3 px-4 py-3 border border-amber-300 text-amber-700 bg-amber-50 rounded-xl text-sm font-medium hover:bg-amber-100 transition disabled:opacity-50"
+                    >
+                      <CircleAlert size={15} className="shrink-0" />
+                      <span className="text-left">
+                        <span className="block font-semibold">{drawerDeactivating ? 'Desactivando...' : 'Desactivar y cancelar suscripción'}</span>
+                        <span className="block text-xs opacity-70 mt-0.5">Bloquea acceso y cancela cobro en Stripe</span>
+                      </span>
+                    </button>
+
+                    {/* Eliminar — paso 1: botón inicial */}
+                    {drawerDeleteStep === 'idle' && (
+                      <button
+                        onClick={() => setDrawerDeleteStep('otp-send')}
+                        className="w-full flex items-center gap-3 px-4 py-3 border border-red-300 text-red-600 bg-red-50 rounded-xl text-sm font-medium hover:bg-red-100 transition"
+                      >
+                        <Trash2 size={15} className="shrink-0" />
+                        <span className="text-left">
+                          <span className="block font-semibold">Eliminar paciente permanentemente</span>
+                          <span className="block text-xs opacity-70 mt-0.5">Borra perfil, expediente, citas y pagos. Irreversible.</span>
+                        </span>
+                      </button>
+                    )}
+
+                    {/* Paso 2: confirmación antes de enviar OTP */}
+                    {drawerDeleteStep === 'otp-send' && (
+                      <div className="rounded-xl border border-red-200 bg-red-50 p-4 space-y-3">
+                        <p className="text-xs text-red-700 font-medium leading-relaxed">
+                          Se enviará un código OTP a tu correo electrónico para confirmar la eliminación de <strong>{mem.email}</strong>.
+                        </p>
+                        {drawerDeleteMsg && <p className="text-xs text-red-600">{drawerDeleteMsg}</p>}
+                        <div className="flex gap-2">
+                          <button onClick={() => void handleDrawerRequestOtp(mem.id)} disabled={drawerDeleteSending}
+                            className="flex-1 bg-red-600 text-white rounded-xl py-2 text-xs font-bold hover:bg-red-700 transition disabled:opacity-50">
+                            {drawerDeleteSending ? 'Enviando...' : 'Enviar OTP por correo'}
+                          </button>
+                          <button onClick={() => { setDrawerDeleteStep('idle'); setDrawerDeleteMsg(''); }}
+                            className="px-3 rounded-xl border border-velum-200 text-xs text-velum-500 hover:bg-velum-50 transition">
+                            Cancelar
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Paso 3: ingresar código OTP */}
+                    {drawerDeleteStep === 'otp-confirm' && (
+                      <div className="rounded-xl border border-red-200 bg-red-50 p-4 space-y-3">
+                        {drawerDeleteMsg && (
+                          <p className={`text-xs rounded-lg px-2 py-1 ${drawerDeleteMsg.toLowerCase().includes('enviado') || drawerDeleteMsg.toLowerCase().includes('correo') ? 'text-emerald-700 bg-emerald-50 border border-emerald-100' : 'text-red-600'}`}>
+                            {drawerDeleteMsg}
+                          </p>
+                        )}
+                        <input
+                          ref={drawerOtpRef}
+                          type="text"
+                          inputMode="numeric"
+                          maxLength={6}
+                          placeholder="Código OTP (6 dígitos)"
+                          value={drawerDeleteOtp}
+                          onChange={(e) => setDrawerDeleteOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                          onKeyDown={(e) => { if (e.key === 'Enter' && drawerDeleteOtp.length === 6) void handleDrawerConfirmDelete(mem.id, mem.email); }}
+                          className="w-full rounded-xl border border-red-300 px-3 py-2.5 text-center text-lg font-bold tracking-[0.4em] focus:outline-none focus:ring-2 focus:ring-red-300 transition bg-white"
+                        />
+                        <div className="flex gap-2">
+                          <button onClick={() => void handleDrawerConfirmDelete(mem.id, mem.email)} disabled={drawerDeleting || drawerDeleteOtp.length !== 6}
+                            className="flex-1 bg-red-600 text-white rounded-xl py-2 text-xs font-bold hover:bg-red-700 transition disabled:opacity-50">
+                            {drawerDeleting ? 'Eliminando...' : 'Confirmar eliminación'}
+                          </button>
+                          <button onClick={() => { setDrawerDeleteStep('otp-send'); setDrawerDeleteOtp(''); setDrawerDeleteMsg(''); }}
+                            className="px-3 rounded-xl border border-red-200 text-xs text-red-500 hover:bg-red-100 transition">
+                            Reenviar
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
             {/* Expediente viewer button */}
             {selectedMember.intakeStatus && selectedMember.intakeStatus !== 'draft' && (
@@ -2615,12 +2658,12 @@ export const Admin: React.FC = () => {
         <div className="flex items-center gap-3 flex-wrap">
           <div className="flex items-center gap-1 bg-white border border-velum-200 rounded-xl overflow-hidden">
             <button onClick={() => setAgendaDate(toLocalDateKey(plusDays(new Date(agendaDate + 'T12:00:00'), -1)))}
-              className="p-2.5 hover:bg-velum-50 text-velum-600 transition"><ChevronLeft size={16} /></button>
+              aria-label="Día anterior" className="p-2.5 hover:bg-velum-50 text-velum-600 transition"><ChevronLeft size={16} /></button>
             <span className="px-3 py-2 text-sm font-medium text-velum-900 min-w-[140px] text-center">
               {new Date(agendaDate + 'T12:00:00').toLocaleDateString('es-MX', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' })}
             </span>
             <button onClick={() => setAgendaDate(toLocalDateKey(plusDays(new Date(agendaDate + 'T12:00:00'), 1)))}
-              className="p-2.5 hover:bg-velum-50 text-velum-600 transition"><ChevronRight size={16} /></button>
+              aria-label="Día siguiente" className="p-2.5 hover:bg-velum-50 text-velum-600 transition"><ChevronRight size={16} /></button>
           </div>
           <button onClick={() => setAgendaDate(toLocalDateKey(new Date()))}
             className="px-3 py-2.5 rounded-xl border border-velum-200 bg-white text-sm text-velum-600 hover:bg-velum-50 transition">Hoy</button>

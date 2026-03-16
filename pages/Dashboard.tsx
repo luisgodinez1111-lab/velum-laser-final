@@ -30,7 +30,8 @@ import {
 import { Button } from "../components/Button";
 import { SignaturePad } from "../components/SignaturePad";
 import { useAuth } from "../context/AuthContext";
-import { redirectToCustomerPortal } from "../services/stripeService";
+import { redirectToCustomerPortal, createSubscriptionCheckout } from "../services/stripeService";
+import { MEMBERSHIPS } from "../constants";
 import { documentService, memberService } from "../services/dataService";
 import { LegalDocument, Member } from "../types";
 import { clinicalService, Payment, SessionTreatment } from "../services/clinicalService";
@@ -225,6 +226,7 @@ export const Dashboard: React.FC = () => {
   const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
 
   const [rescheduleApptId, setRescheduleApptId] = useState<string | null>(null);
+  const [isActivatingPlan, setIsActivatingPlan] = useState(false);
   const [rescheduleDate, setRescheduleDate] = useState<string | null>(null);
   const [rescheduleSlots, setRescheduleSlots] = useState<Array<{label: string; startMinute: number; endMinute: number; available: boolean}>>([]);
   const [rescheduleSlot, setRescheduleSlot] = useState<{label: string; startMinute: number; endMinute: number; available: boolean} | null>(null);
@@ -463,6 +465,8 @@ export const Dashboard: React.FC = () => {
 
   const membership       = (memberData as any)?.membership;
   const membershipStatus = membership?.status ?? "inactive";
+  const interestedPlanCode = asString((memberData as any)?.interestedPlanCode ?? membership?.interestedPlanCode ?? "");
+  const hasDepositCredit   = !!((memberData as any)?.appointmentDepositAvailable ?? membership?.appointmentDepositAvailable);
   const statusStyles: Record<string, { label: string; cls: string }> = {
     active:   { label: "Activa",          cls: "bg-emerald-50 text-emerald-700 border-emerald-200" },
     inactive: { label: "Inactiva",        cls: "bg-velum-100 text-velum-600 border-velum-200"     },
@@ -472,7 +476,9 @@ export const Dashboard: React.FC = () => {
   };
   const { label: msLabel, cls: msCls } = statusStyles[membershipStatus] ?? statusStyles.inactive;
 
-  const planLabel = membership?.planId ? (() => {
+  // Use catalog name if available, otherwise fall back to planId pattern matching
+  const planDetails = membership?.planDetails as { amount?: number; interval?: string; planName?: string } | null | undefined;
+  const planLabel = planDetails?.planName ?? (membership?.planId ? (() => {
     const id = asString(membership.planId);
     if (id.includes("essential") || id === "price_1Ss9MjC79KgflLkOKahgvEtp") return "Essential";
     if (id.includes("select")    || id === "price_1T4OoEC79KgflLkO0yEIJAii") return "Select";
@@ -480,7 +486,9 @@ export const Dashboard: React.FC = () => {
     if (id.includes("progress")  || id === "price_1T4OmqC79KgflLkOc0birwNi") return "Progress";
     if (id.includes("signature") || id === "price_1T4OnTC79KgflLkOgKXHzWSq") return "Signature";
     return id;
-  })() : null;
+  })() : null);
+  const intervalLabel: Record<string, string> = { month: "/ mes", year: "/ año", week: "/ semana", day: "/ día" };
+  const planPrice = planDetails?.amount ? `$${planDetails.amount.toLocaleString("es-MX")} MXN ${intervalLabel[planDetails.interval ?? "month"] ?? "/ mes"}` : null;
 
   const intakeStatus  = asString(memberData?.intakeStatus);
   const hasAppointment = appointments.length > 0;
@@ -691,6 +699,44 @@ export const Dashboard: React.FC = () => {
                 </div>
               </div>
 
+              {/* Banner: plan pre-seleccionado sin membresía activa */}
+              {interestedPlanCode && (!membership || membershipStatus === "inactive" || membershipStatus === "canceled") && (() => {
+                const tier = MEMBERSHIPS.find((t) => t.stripePriceId === interestedPlanCode);
+                if (!tier) return null;
+                return (
+                  <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-700 mb-1">Plan pre-seleccionado</p>
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="font-semibold text-velum-900 text-sm">{tier.name}</p>
+                        <p className="text-xs text-velum-500 mt-0.5">${tier.price.toLocaleString("es-MX")}/mes{hasDepositCredit && " · $200 de depósito se descuenta"}</p>
+                      </div>
+                      <button
+                        type="button"
+                        disabled={isActivatingPlan}
+                        onClick={async () => {
+                          setIsActivatingPlan(true);
+                          try {
+                            await createSubscriptionCheckout(tier);
+                          } catch (e: unknown) {
+                            toast.error((e as { message?: string })?.message ?? "No se pudo iniciar el pago");
+                          } finally {
+                            setIsActivatingPlan(false);
+                          }
+                        }}
+                        className={`shrink-0 bg-velum-900 text-white text-xs font-bold px-4 py-2 rounded-xl hover:bg-velum-800 transition-colors disabled:opacity-60 disabled:cursor-not-allowed ${pressBtn}`}
+                        aria-label="Activar plan seleccionado"
+                      >
+                        {isActivatingPlan ? "Redirigiendo…" : "Activar ahora"}
+                      </button>
+                    </div>
+                    <p className="text-[11px] text-emerald-700 mt-2">
+                      Si quieres cambiar de plan, <Link to="/memberships" className="underline font-medium">selecciona otro aquí</Link>.
+                    </p>
+                  </div>
+                );
+              })()}
+
               {/* Membership card */}
               {membership && (
                 <div className="bg-velum-900 rounded-2xl p-5 sm:p-6 text-white relative overflow-hidden">
@@ -701,6 +747,9 @@ export const Dashboard: React.FC = () => {
                       <div>
                         <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-velum-400">Plan activo</p>
                         <p className="font-serif text-2xl italic text-white mt-1">{planLabel ?? "Plan Velum"}</p>
+                        {planPrice && (
+                          <p className="text-[12px] text-velum-300 mt-1 font-medium">{planPrice}</p>
+                        )}
                       </div>
                       <span className={`shrink-0 text-[10px] font-bold uppercase tracking-[0.1em] px-2.5 py-1.5 border rounded-full ${msCls}`}>{msLabel}</span>
                     </div>

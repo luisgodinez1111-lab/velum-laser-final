@@ -1,6 +1,7 @@
 import { Response } from "express";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
+import type { Role } from "@prisma/client";
 import { prisma } from "../db/prisma";
 import { AuthRequest } from "../middlewares/auth";
 import { createAuditLog } from "../services/auditService";
@@ -13,22 +14,17 @@ import {
 } from "../services/adminAccessService";
 import { sendWhatsappOtpCode, getEffectiveWhatsappMetaConfig, normalizePhone } from "../services/whatsappMetaService";
 import { stripe } from "../services/stripeService";
+import { sendDeleteUserOtpEmail } from "../services/emailService";
+import { logger } from "../utils/logger";
 
-// ── In-memory OTP store for user-deletion confirmation ─────────────────────
-// Key: actorUserId  Value: { otp, targetUserId, expiresAt }
-// TTL: 10 minutes — single-process safe, no DB migration required
-type DeleteOtpEntry = { otp: string; targetUserId: string; expiresAt: Date };
-const deleteOtpStore = new Map<string, DeleteOtpEntry>();
+const MAX_OTP_ATTEMPTS = 5;
 
 function generateOtp(): string {
-  return String(100000 + (crypto.randomInt(900000)));
+  return String(100000 + crypto.randomInt(900000));
 }
 
-function pruneExpiredOtps(): void {
-  const now = new Date();
-  for (const [key, entry] of deleteOtpStore.entries()) {
-    if (entry.expiresAt < now) deleteOtpStore.delete(key);
-  }
+async function pruneExpiredOtps(): Promise<void> {
+  await prisma.deleteOtp.deleteMany({ where: { expiresAt: { lt: new Date() } } });
 }
 
 const isAdminUser = (req: AuthRequest) => {
@@ -78,7 +74,7 @@ export const listAdminAccessUsers = async (req: AuthRequest, res: Response) => {
       permissionsCatalog: PERMISSIONS_CATALOG,
     });
   } catch (error: any) {
-    console.error("listAdminAccessUsers error:", error);
+    logger.error({ err: error }, "listAdminAccessUsers");
     return res.status(500).json({ message: "Error al listar usuarios", detail: error?.message ?? "unknown" });
   }
 };
@@ -114,7 +110,7 @@ export const createAdminAccessUser = async (req: AuthRequest, res: Response) => 
       data: {
         email,
         passwordHash,
-        role: role as any,
+        role: role as Role,
         clinicId,
         emailVerifiedAt: new Date(),
       },
@@ -133,7 +129,7 @@ export const createAdminAccessUser = async (req: AuthRequest, res: Response) => 
       user: created,
     });
   } catch (error: any) {
-    console.error("createAdminAccessUser error:", error);
+    logger.error({ err: error }, "createAdminAccessUser");
     return res.status(500).json({ message: "Error al crear usuario", detail: error?.message ?? "unknown" });
   }
 };
@@ -155,7 +151,7 @@ export const updateAdminAccessUser = async (req: AuthRequest, res: Response) => 
     let nextRole = current.role;
     if (nextRoleRaw) {
       if (!roleAllowed.has(nextRoleRaw)) return res.status(400).json({ message: "Rol inválido" });
-      nextRole = nextRoleRaw as any;
+      nextRole = nextRoleRaw as Role;
     }
 
     const updated = await prisma.user.update({
@@ -187,7 +183,7 @@ export const updateAdminAccessUser = async (req: AuthRequest, res: Response) => 
       user: updated,
     });
   } catch (error: any) {
-    console.error("updateAdminAccessUser error:", error);
+    logger.error({ err: error }, "updateAdminAccessUser");
     return res.status(500).json({ message: "Error al actualizar usuario", detail: error?.message ?? "unknown" });
   }
 };
@@ -221,7 +217,7 @@ export const resetAdminAccessPassword = async (req: AuthRequest, res: Response) 
 
     return res.json({ message: "Contraseña actualizada" });
   } catch (error: any) {
-    console.error("resetAdminAccessPassword error:", error);
+    logger.error({ err: error }, "resetAdminAccessPassword");
     return res.status(500).json({ message: "Error al actualizar contraseña", detail: error?.message ?? "unknown" });
   }
 };
@@ -254,7 +250,7 @@ export const deactivateUser = async (req: AuthRequest, res: Response) => {
         stripeCanceled = true;
       } catch (stripeErr: any) {
         if (stripeErr?.code !== "resource_missing") {
-          console.error("Stripe cancel on deactivate:", stripeErr?.message);
+          logger.warn({ err: stripeErr }, "Stripe cancel on deactivate");
         }
       }
     }
@@ -289,7 +285,7 @@ export const deactivateUser = async (req: AuthRequest, res: Response) => {
       stripeCanceled,
     });
   } catch (error: any) {
-    console.error("deactivateUser error:", error);
+    logger.error({ err: error }, "deactivateUser");
     return res.status(500).json({ message: "Error al desactivar usuario", detail: error?.message ?? "unknown" });
   }
 };
@@ -327,12 +323,12 @@ export const activateUser = async (req: AuthRequest, res: Response) => {
 
     return res.json({ message: `Usuario ${target.email} activado. Deberá iniciar sesión nuevamente.` });
   } catch (error: any) {
-    console.error("activateUser error:", error);
+    logger.error({ err: error }, "activateUser");
     return res.status(500).json({ message: "Error al activar usuario", detail: error?.message ?? "unknown" });
   }
 };
 
-// ── OTP request for user deletion ──────────────────────────────────────────
+// ── OTP request for user deletion (sent via email to the acting admin) ─────
 export const requestDeleteUserOtp = async (req: AuthRequest, res: Response) => {
   try {
     if (!isAdminUser(req)) return res.status(403).json({ message: "No autorizado" });
@@ -344,49 +340,49 @@ export const requestDeleteUserOtp = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ message: "No puedes eliminar tu propia cuenta" });
     }
 
-    const target = await prisma.user.findUnique({
-      where: { id: targetUserId },
-      select: { id: true, email: true, role: true },
-    });
-    if (!target) return res.status(404).json({ message: "Usuario no encontrado" });
+    const [target, actor] = await Promise.all([
+      prisma.user.findUnique({ where: { id: targetUserId }, select: { id: true, email: true, role: true } }),
+      prisma.user.findUnique({ where: { id: actorId }, select: { id: true, email: true } }),
+    ]);
 
-    // Fetch actor profile to get phone for WhatsApp OTP
-    const actorProfile = await prisma.profile.findUnique({
-      where: { userId: actorId },
-      select: { phone: true },
-    });
+    if (!target) return res.status(404).json({ message: "Usuario no encontrado" });
+    if (!actor)  return res.status(404).json({ message: "Admin no encontrado" });
 
     const otp = generateOtp();
-    pruneExpiredOtps();
-
+    const otpHash = await bcrypt.hash(otp, 10);
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 min
-    deleteOtpStore.set(actorId, { otp, targetUserId, expiresAt });
 
-    const cfg = await getEffectiveWhatsappMetaConfig();
-    const phone = actorProfile?.phone ? normalizePhone(actorProfile.phone) : "";
+    await pruneExpiredOtps();
 
-    if (phone) {
-      await sendWhatsappOtpCode(phone, otp, cfg);
-    } else if (cfg.allowConsole) {
-      console.log(`[DELETE_USER_OTP] actor=${actorId} target=${targetUserId} otp=${otp}`);
-    } else {
-      deleteOtpStore.delete(actorId);
-      return res.status(400).json({
-        message: "No tienes un teléfono registrado en tu perfil para recibir el código OTP. Regístralo en tu perfil e intenta de nuevo.",
+    // Upsert: one pending OTP per actor at a time, resets attempt counter
+    await prisma.deleteOtp.upsert({
+      where: { actorUserId: actorId },
+      create: { actorUserId: actorId, targetUserId, otpHash, expiresAt },
+      update: { targetUserId, otpHash, expiresAt, attempts: 0 },
+    });
+
+    try {
+      await sendDeleteUserOtpEmail(actor.email, {
+        adminEmail: actor.email,
+        targetEmail: target.email,
+        otp,
       });
+    } catch (emailErr: any) {
+      await prisma.deleteOtp.delete({ where: { actorUserId: actorId } }).catch(() => {});
+      return res.status(502).json({ message: "No se pudo enviar el correo de autorización. Verifica la configuración de Resend." });
     }
 
+    const [localPart, domain] = actor.email.split("@");
+    const maskedEmail = `${localPart.slice(0, 2)}***@${domain}`;
+
     return res.json({
-      message: phone
-        ? `Código OTP enviado al número ${phone.slice(0, 4)}****${phone.slice(-4)} via WhatsApp`
-        : "Código OTP generado (modo desarrollo — revisa consola del servidor)",
+      message: `Código de autorización enviado a ${maskedEmail}. Válido por 10 minutos.`,
       targetEmail: target.email,
       targetRole: target.role,
       expiresInMinutes: 10,
     });
   } catch (error: any) {
-    console.error("requestDeleteUserOtp error:", error);
-    return res.status(500).json({ message: "Error al enviar OTP", detail: error?.message ?? "unknown" });
+    return res.status(500).json({ message: "Error al enviar código de autorización", detail: error?.message ?? "unknown" });
   }
 };
 
@@ -404,34 +400,50 @@ export const deleteUser = async (req: AuthRequest, res: Response) => {
     }
     if (!otpInput) return res.status(400).json({ message: "El código OTP es obligatorio" });
 
-    // Verify OTP
-    pruneExpiredOtps();
-    const entry = deleteOtpStore.get(actorId);
+    await pruneExpiredOtps();
+
+    const entry = await prisma.deleteOtp.findUnique({ where: { actorUserId: actorId } });
     if (!entry) {
       return res.status(400).json({ message: "No hay un código OTP activo. Solicita uno nuevo." });
     }
     if (entry.expiresAt < new Date()) {
-      deleteOtpStore.delete(actorId);
+      await prisma.deleteOtp.delete({ where: { actorUserId: actorId } }).catch(() => {});
       return res.status(400).json({ message: "El código OTP ha expirado. Solicita uno nuevo." });
     }
     if (entry.targetUserId !== targetUserId) {
       return res.status(400).json({ message: "El OTP no corresponde al usuario seleccionado." });
     }
-    if (entry.otp !== otpInput) {
-      return res.status(400).json({ message: "Código OTP incorrecto" });
+
+    // Brute-force protection: max 5 attempts
+    if (entry.attempts >= MAX_OTP_ATTEMPTS) {
+      await prisma.deleteOtp.delete({ where: { actorUserId: actorId } }).catch(() => {});
+      return res.status(429).json({ message: "Demasiados intentos incorrectos. Solicita un nuevo código OTP." });
     }
 
-    // Confirm target still exists
+    const valid = await bcrypt.compare(otpInput, entry.otpHash);
+    if (!valid) {
+      await prisma.deleteOtp.update({
+        where: { actorUserId: actorId },
+        data: { attempts: { increment: 1 } },
+      });
+      const remaining = MAX_OTP_ATTEMPTS - (entry.attempts + 1);
+      return res.status(400).json({
+        message: remaining > 0
+          ? `Código OTP incorrecto. Intentos restantes: ${remaining}`
+          : "Código OTP incorrecto. Has agotado todos los intentos. Solicita uno nuevo.",
+      });
+    }
+
+    // OTP valid — consume it immediately
+    await prisma.deleteOtp.delete({ where: { actorUserId: actorId } }).catch(() => {});
+
     const target = await prisma.user.findUnique({
       where: { id: targetUserId },
       select: { id: true, email: true, role: true },
     });
-    if (!target) {
-      deleteOtpStore.delete(actorId);
-      return res.status(404).json({ message: "Usuario no encontrado" });
-    }
+    if (!target) return res.status(404).json({ message: "Usuario no encontrado" });
 
-    // Cancel Stripe subscription BEFORE deleting (avoids orphaned active subscriptions)
+    // Cancel Stripe subscription before deleting
     const membership = await prisma.membership.findUnique({
       where: { userId: targetUserId },
       select: { stripeSubscriptionId: true },
@@ -440,15 +452,13 @@ export const deleteUser = async (req: AuthRequest, res: Response) => {
       try {
         await stripe.subscriptions.cancel(membership.stripeSubscriptionId);
       } catch (stripeErr: any) {
-        // If already canceled or not found in Stripe, continue with DB deletion
         if (stripeErr?.code !== "resource_missing") {
-          console.error("Stripe cancel error on user delete:", stripeErr?.message);
+          // Log but don't block deletion
         }
       }
     }
 
-    // Reassign Restrict FK relations to the acting admin before deleting
-    // (Appointment.createdByUserId and SessionTreatment.staffUserId have onDelete: Restrict)
+    // Reassign Restrict FK relations before deleting
     await prisma.appointment.updateMany({
       where: { createdByUserId: targetUserId },
       data: { createdByUserId: actorId },
@@ -458,11 +468,7 @@ export const deleteUser = async (req: AuthRequest, res: Response) => {
       data: { staffUserId: actorId },
     });
 
-    // Delete the user (cascades: Membership, Document, MedicalIntake, Appointment as member,
-    // Payment, EmailVerificationToken, PasswordResetToken, Profile, etc.)
     await prisma.user.delete({ where: { id: targetUserId } });
-
-    deleteOtpStore.delete(actorId);
 
     await createAuditLog({
       userId: actorId,
@@ -480,7 +486,6 @@ export const deleteUser = async (req: AuthRequest, res: Response) => {
 
     return res.json({ message: `Usuario ${target.email} eliminado correctamente` });
   } catch (error: any) {
-    console.error("deleteUser error:", error);
     return res.status(500).json({ message: "Error al eliminar usuario", detail: error?.message ?? "unknown" });
   }
 };

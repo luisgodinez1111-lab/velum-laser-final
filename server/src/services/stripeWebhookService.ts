@@ -1,6 +1,7 @@
 import Stripe from "stripe";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../db/prisma";
+import { logger } from "../utils/logger";
 
 type JsonObject = Record<string, unknown>;
 type Delegate = {
@@ -420,9 +421,9 @@ const processCheckoutCompleted = async (event: Stripe.Event, stripe: Stripe): Pr
     const reason = cleanString(metadata.reason) || "laser_session";
     const cabinId = cleanString(metadata.cabinId) || null;
     const treatmentId = cleanString(metadata.treatmentId) || null;
+    const interestedPlanCode = cleanString(metadata.interestedPlanCode) || null;
 
     if (userId && startAt && endAt) {
-      // Create the appointment
       await prisma.appointment.create({
         data: {
           userId,
@@ -434,13 +435,16 @@ const processCheckoutCompleted = async (event: Stripe.Event, stripe: Stripe): Pr
           createdByUserId: userId,
           status: "scheduled",
         },
-      }).catch((err: Error) => console.error("[stripe-webhook] Failed to create appointment from deposit:", err));
+      }).catch((err: Error) => logger.error({ err }, "[stripe-webhook] Failed to create appointment from deposit"));
 
-      // Mark deposit credit as available for plan discount
+      // Mark deposit credit and save interested plan on the User record
       await prisma.user.update({
         where: { id: userId },
-        data: { appointmentDepositAvailable: true },
-      }).catch((err: Error) => console.error("[stripe-webhook] Failed to set deposit available:", err));
+        data: {
+          appointmentDepositAvailable: true,
+          ...(interestedPlanCode ? { interestedPlanCode } : {}),
+        },
+      }).catch((err: Error) => logger.error({ err }, "[stripe-webhook] Failed to set deposit available"));
     }
     return;
   }

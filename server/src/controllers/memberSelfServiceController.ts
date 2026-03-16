@@ -32,65 +32,22 @@ const isStrongPassword = (value: string): boolean => {
 
 const randomCode = (): string => `${Math.floor(100000 + Math.random() * 900000)}`;
 
-const getProfileRecord = async (userId: string): Promise<any | null> => {
-  const db: any = prisma as any;
-  const candidates = ["profile", "userProfile", "memberProfile"];
-
-  for (const name of candidates) {
-    if (!db?.[name]?.findUnique) continue;
-    try {
-      const row = await db[name].findUnique({ where: { userId } });
-      if (row) return row;
-    } catch {
-      // keep trying
-    }
-  }
-
-  return null;
-};
+const getProfileRecord = async (userId: string) =>
+  prisma.profile.findUnique({ where: { userId } });
 
 const upsertProfileRecord = async (
   userId: string,
-  email: string,
+  _email: string,
   fullName: string,
   phone: string
-): Promise<any | null> => {
-  const db: any = prisma as any;
-  const candidates = ["profile", "userProfile", "memberProfile"];
-
-  for (const name of candidates) {
-    const model = db?.[name];
-    if (!model) continue;
-
-    try {
-      if (model.upsert) {
-        return await model.upsert({
-          where: { userId },
-          update: { email, fullName, phone },
-          create: { userId, email, fullName, phone }
-        });
-      }
-
-      if (model.updateMany && model.create) {
-        const updated = await model.updateMany({
-          where: { userId },
-          data: { email, fullName, phone }
-        });
-
-        if (updated?.count > 0) {
-          return await model.findFirst({ where: { userId } });
-        }
-
-        return await model.create({
-          data: { userId, email, fullName, phone }
-        });
-      }
-    } catch {
-      // next model
-    }
-  }
-
-  return null;
+) => {
+  const [firstName, ...rest] = fullName.trim().split(/\s+/);
+  const lastName = rest.join(" ") || undefined;
+  return prisma.profile.upsert({
+    where: { userId },
+    update: { firstName: firstName ?? null, lastName: lastName ?? null, phone },
+    create: { userId, firstName: firstName ?? null, lastName: lastName ?? null, phone },
+  });
 };
 
 const getCurrentUser = async (userId: string) =>
@@ -120,8 +77,8 @@ export const getMyProfile = async (req: AuthRequest, res: Response) => {
     id: user.id,
     email: user.email,
     role: user.role,
-    fullName: asString(profile?.fullName ?? profile?.name ?? ""),
-    phone: asString(profile?.phone ?? ""),
+    fullName: [profile?.firstName, profile?.lastName].filter(Boolean).join(" "),
+    phone: profile?.phone ?? null,
     profile
   });
 };

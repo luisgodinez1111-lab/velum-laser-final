@@ -18,7 +18,7 @@ export const createAppointmentDepositCheckout = async (req: AuthRequest, res: Re
   try {
     if (!req.user?.id) return res.status(401).json({ message: "No autorizado" });
 
-    const { startAt, endAt, reason, cabinId, treatmentId } = req.body as any;
+    const { startAt, endAt, reason, cabinId, treatmentId, interestedPlanCode } = req.body as any;
     if (!startAt || !endAt) return res.status(400).json({ message: "startAt y endAt son obligatorios" });
 
     const stripe = await resolveStripeConfig();
@@ -49,6 +49,7 @@ export const createAppointmentDepositCheckout = async (req: AuthRequest, res: Re
     if (reason) params.set("metadata[reason]", reason);
     if (cabinId) params.set("metadata[cabinId]", cabinId);
     if (treatmentId) params.set("metadata[treatmentId]", treatmentId);
+    if (interestedPlanCode) params.set("metadata[interestedPlanCode]", interestedPlanCode);
 
     const rsp = await fetch("https://api.stripe.com/v1/checkout/sessions", {
       method: "POST",

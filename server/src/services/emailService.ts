@@ -10,6 +10,22 @@ const resendDocuments    = new Resend(process.env.RESEND_KEY_DOCUMENTS    ?? "")
 
 const FROM = `Velum Laser <${process.env.RESEND_FROM_EMAIL ?? "noreply@velumlaser.com"}>`;
 
+// ── Retry helper — exponential backoff, max 3 attempts ─────────────────────
+async function withRetry<T>(fn: () => Promise<T>, attempts = 3, baseDelayMs = 500): Promise<T> {
+  let lastErr: unknown;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastErr = err;
+      if (i < attempts - 1) {
+        await new Promise((r) => setTimeout(r, baseDelayMs * 2 ** i));
+      }
+    }
+  }
+  throw lastErr;
+}
+
 // ──────────────────────────────────────────────────────────────────────
 // Utilidad de layout base
 // ──────────────────────────────────────────────────────────────────────
@@ -87,12 +103,12 @@ export const sendEmailVerificationEmail = async (to: string, otp: string): Promi
     </p>
   `);
 
-  await resendVerification.emails.send({
+  await withRetry(() => resendVerification.emails.send({
     from: FROM,
     to,
     subject: "Tu código de verificación — Velum Laser",
     html
-  });
+  }));
 };
 
 // ──────────────────────────────────────────────────────────────────────
@@ -117,16 +133,81 @@ export const sendPasswordResetEmail = async (to: string, otp: string): Promise<v
     </p>
   `);
 
-  await resendReset.emails.send({
+  await withRetry(() => resendReset.emails.send({
     from: FROM,
     to,
     subject: "Código para restablecer contraseña — Velum Laser",
     html
-  });
+  }));
 };
 
 // ──────────────────────────────────────────────────────────────────────
-// 3. Recordatorio de cita (API key 3)
+// 3a. Recordatorio de cobro de membresía (API key 3)
+// ──────────────────────────────────────────────────────────────────────
+export const sendPaymentReminderEmail = async (
+  to: string,
+  params: {
+    name: string;
+    planName: string;
+    amount: string;
+    renewalDate: string;
+    daysLeft: number;
+  }
+): Promise<void> => {
+  const urgencyColor = params.daysLeft <= 1 ? "#c0392b" : "#b7860b";
+  const urgencyBg    = params.daysLeft <= 1 ? "#fdf2f2" : "#fffbeb";
+  const urgencyBorder= params.daysLeft <= 1 ? "#f5c6cb" : "#fde68a";
+  const urgencyLabel = params.daysLeft <= 1 ? "¡Mañana se realiza el cobro!" : `Tu membresía se renueva en ${params.daysLeft} días`;
+
+  const html = baseHtml(`
+    <p style="${headingStyle}">Recordatorio de pago de membresía</p>
+    <p style="${bodyStyle}">
+      Hola <strong>${params.name}</strong>, te recordamos que tu membresía Velum Laser se renovará pronto.
+    </p>
+    <div style="background:${urgencyBg};border:1px solid ${urgencyBorder};border-radius:12px;padding:16px 20px;margin:20px 0;">
+      <p style="margin:0;font-size:13px;font-weight:700;color:${urgencyColor};">${urgencyLabel}</p>
+    </div>
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:#f8f6f3;border-radius:12px;padding:20px;margin:20px 0;">
+      <tr>
+        <td style="padding:6px 0;">
+          <p style="margin:0;font-size:12px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#9b8d80;">Plan</p>
+          <p style="margin:2px 0 0;font-size:16px;font-weight:600;color:#1a1614;">${params.planName}</p>
+        </td>
+      </tr>
+      <tr>
+        <td style="padding:6px 0;">
+          <p style="margin:0;font-size:12px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#9b8d80;">Monto a cobrar</p>
+          <p style="margin:2px 0 0;font-size:16px;font-weight:600;color:#1a1614;">${params.amount}</p>
+        </td>
+      </tr>
+      <tr>
+        <td style="padding:6px 0;">
+          <p style="margin:0;font-size:12px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#9b8d80;">Fecha de renovación</p>
+          <p style="margin:2px 0 0;font-size:16px;font-weight:600;color:#1a1614;">${params.renewalDate}</p>
+        </td>
+      </tr>
+    </table>
+    <p style="${bodyStyle}">
+      El cargo se realizará automáticamente al método de pago registrado. Si necesitas actualizar tu tarjeta o cancelar, puedes hacerlo desde tu portal de cliente.
+    </p>
+    <div style="text-align:center;margin:28px 0;">
+      <a href="https://velumlaser.com/#/dashboard" style="${btnStyle}">Ir a mi cuenta</a>
+    </div>
+    <p style="${noteStyle}">
+      Si tienes alguna pregunta sobre tu membresía, contáctanos directamente. No respondas a este correo automático.
+    </p>
+  `);
+
+  await withRetry(() => resendReminders.emails.send({
+    from: FROM,
+    to,
+    subject: `Recordatorio: tu membresía Velum se renueva el ${params.renewalDate}`,
+    html,
+  }));
+};
+
+// ──────────────────────────────────────────────────────────────────────
+// 3b. Recordatorio de cita (API key 3)
 // ──────────────────────────────────────────────────────────────────────
 export const sendAppointmentReminderEmail = async (
   to: string,
@@ -169,12 +250,48 @@ export const sendAppointmentReminderEmail = async (
     </p>
   `);
 
-  await resendReminders.emails.send({
+  await withRetry(() => resendReminders.emails.send({
     from: FROM,
     to,
     subject: `Recordatorio: tu cita es el ${params.date} — Velum Laser`,
     html
-  });
+  }));
+};
+
+// ──────────────────────────────────────────────────────────────────────
+// 3b. OTP de autorización para eliminar paciente (API key 3 — reminders)
+// ──────────────────────────────────────────────────────────────────────
+export const sendDeleteUserOtpEmail = async (
+  to: string,
+  params: { adminEmail: string; targetEmail: string; otp: string }
+): Promise<void> => {
+  const html = baseHtml(`
+    <p style="${headingStyle}">Autorización requerida — Eliminación de paciente</p>
+    <p style="${bodyStyle}">
+      Se ha solicitado la <strong>eliminación permanente</strong> del paciente
+      <strong>${params.targetEmail}</strong> desde la cuenta administrativa
+      <strong>${params.adminEmail}</strong>.
+    </p>
+    <p style="${bodyStyle}">
+      Usa el siguiente código OTP para confirmar esta acción. Es válido por <strong>10 minutos</strong> y de un solo uso.
+    </p>
+    <div style="text-align:center;margin:28px 0;">
+      <span style="${otpBoxStyle}">${params.otp}</span>
+    </div>
+    <p style="margin:0 0 20px;font-size:13px;color:#c0392b;font-weight:600;background:#fdf2f2;border:1px solid #f5c6cb;border-radius:8px;padding:12px 16px;">
+      ⚠️ Esta acción eliminará de forma irreversible el perfil, expediente clínico, membresía, citas y pagos del paciente.
+    </p>
+    <p style="${noteStyle}">
+      Si no solicitaste esta acción, ignora este correo. Nadie podrá eliminar al paciente sin este código.
+    </p>
+  `);
+
+  await withRetry(() => resendReminders.emails.send({
+    from: FROM,
+    to,
+    subject: `⚠️ Código de autorización: eliminar paciente — Velum Laser`,
+    html
+  }));
 };
 
 // ──────────────────────────────────────────────────────────────────────
@@ -216,10 +333,10 @@ export const sendDocumentSignedEmail = async (
     </p>
   `);
 
-  await resendDocuments.emails.send({
+  await withRetry(() => resendDocuments.emails.send({
     from: FROM,
     to,
     subject: "Documento firmado — Velum Laser",
     html
-  });
+  }));
 };

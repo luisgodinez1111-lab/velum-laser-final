@@ -58,7 +58,7 @@ const dedupe = (plans: StripePlanMapping[]): StripePlanMapping[] => {
 };
 
 const getAppSettingModel = (): any | null => {
-  const model = (prisma as any)?.appSetting;
+  const model = prisma.appSetting;
   if (!model) return null;
   if (typeof model.findUnique !== "function" || typeof model.upsert !== "function") return null;
   return model;

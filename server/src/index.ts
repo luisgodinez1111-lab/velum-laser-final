@@ -26,6 +26,7 @@ import { adminStripeConfigRoutes } from "./routes/adminStripeConfigRoutes";
 import { billingCheckoutRoutes } from "./routes/billingCheckoutRoutes";
 import { stripeWebhookRouter } from "./routes/stripeWebhookRoutes";
 import { startIntegrationWorker } from "./services/integrationWorker";
+import { startPaymentReminderCron } from "./services/paymentReminderService";
 import { env } from "./utils/env";
 import { httpLogger, logger } from "./utils/logger";
 import { errorHandler } from "./middlewares/error";
@@ -63,6 +64,16 @@ app.use(
     "/api/integrations/google-calendar"
   ],
   rateLimit({ windowMs: 10 * 60 * 1000, limit: 60, standardHeaders: true, legacyHeaders: false })
+);
+// Documents/uploads: tighter limit to prevent abuse
+app.use(
+  ["/documents", "/api/v1/documents"],
+  rateLimit({ windowMs: 10 * 60 * 1000, limit: 30, standardHeaders: true, legacyHeaders: false })
+);
+// Google Calendar webhook: prevent replay floods
+app.use(
+  "/api/webhooks/google-calendar",
+  rateLimit({ windowMs: 60 * 1000, limit: 60, standardHeaders: true, legacyHeaders: false })
 );
 
 // ── Stripe webhook — raw body antes de express.json ──────────────────
@@ -105,8 +116,9 @@ app.use(errorHandler);
 
 // ── Servidor ─────────────────────────────────────────────────────────
 app.listen(env.port, () => {
-  console.log(`API running on :${env.port}`);
+  logger.info(`API running on :${env.port}`);
   void startIntegrationWorker().catch((error) => {
     logger.error({ err: error }, "Unable to start integration worker");
   });
+  startPaymentReminderCron();
 });

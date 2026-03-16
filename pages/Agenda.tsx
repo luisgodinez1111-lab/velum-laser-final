@@ -9,6 +9,7 @@ import { AuthUser, authService } from "../services/authService";
 import { stripeService } from "../services/stripeService";
 import { DEFAULT_PHOTOTYPE_QUESTIONS, getFototipo } from "../components/PhototypeQuestionnaire";
 import { useToast } from "../context/ToastContext";
+import { MEMBERSHIPS } from "../constants";
 
 type ViewState = "intro" | "login" | "register" | "intake" | "calendar" | "forgot" | "forgot-otp" | "email-verify";
 type AppointmentType = "standard" | "valuation";
@@ -118,6 +119,7 @@ export const Agenda: React.FC = () => {
 
   const [appointmentMessage, setAppointmentMessage] = useState<string | null>(null);
   const [isScheduling, setIsScheduling] = useState(false);
+  const [selectedPlanCode, setSelectedPlanCode] = useState<string | null>(null);
   // Previene que refreshIntake() sobreescriba "email-verify" al activarse isAuthenticated post-registro
   const [pendingEmailVerify, setPendingEmailVerify] = useState(false);
 
@@ -488,7 +490,8 @@ export const Agenda: React.FC = () => {
       const checkoutUrl = await stripeService.createAppointmentDeposit({
         startAt: startAt.toISOString(),
         endAt: endAt.toISOString(),
-        reason: appointmentType === "valuation" ? "valuation" : "laser_session"
+        reason: appointmentType === "valuation" ? "valuation" : "laser_session",
+        interestedPlanCode: selectedPlanCode ?? undefined,
       });
 
       window.location.href = checkoutUrl;
@@ -1560,6 +1563,36 @@ export const Agenda: React.FC = () => {
               </div>
             )}
 
+            {/* Plan de interés */}
+            {selectedSlot && (
+              <div className="mt-5 border-t border-velum-100 pt-5">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-velum-500 mb-3">
+                  Plan de interés <span className="text-velum-400 font-normal normal-case tracking-normal">(opcional)</span>
+                </p>
+                <div className="grid grid-cols-1 gap-1.5">
+                  {MEMBERSHIPS.map((tier) => (
+                    <button
+                      key={tier.stripePriceId}
+                      type="button"
+                      onClick={() => setSelectedPlanCode(
+                        selectedPlanCode === tier.stripePriceId ? null : tier.stripePriceId
+                      )}
+                      className={`flex items-center justify-between rounded-xl border px-3 py-2 text-left text-sm transition-all duration-150 ${
+                        selectedPlanCode === tier.stripePriceId
+                          ? "border-velum-900 bg-velum-900 text-white"
+                          : "border-velum-200 text-velum-800 hover:border-velum-400 hover:bg-velum-50"
+                      }`}
+                    >
+                      <span className="font-semibold">{tier.name}</span>
+                      <span className={`text-xs ${selectedPlanCode === tier.stripePriceId ? "text-velum-300" : "text-velum-500"}`}>
+                        ${tier.price.toLocaleString("es-MX")}/mes
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div className="mt-auto border-t border-velum-100 pt-5">
               {selectedSlot && (
                 <p className="mb-3 text-xs text-velum-600 text-center">
@@ -1571,10 +1604,14 @@ export const Agenda: React.FC = () => {
                 className="w-full rounded-2xl"
                 disabled={!selectedDate || !selectedSlot || isScheduling}
                 isLoading={isScheduling}
+                loadingLabel="Redirigiendo a pago..."
                 onClick={handleSchedule}
               >
-                Confirmar cita
+                Confirmar y pagar $200
               </Button>
+              <p className="mt-2 text-center text-[11px] text-velum-500">
+                El depósito se descuenta de tu primera mensualidad.
+              </p>
             </div>
           </div>
         </div>

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { MEMBERSHIPS, ZONES } from '../constants';
 import { MembershipTier, ZoneId } from '../types';
@@ -7,6 +7,7 @@ import { Check, Info, Star, ArrowDown, Sparkles, ShieldCheck } from 'lucide-reac
 import { createSubscriptionCheckout } from '../services/stripeService';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
+import { apiFetch } from '../services/apiClient';
 
 export const Memberships: React.FC = () => {
   const { isAuthenticated } = useAuth();
@@ -16,6 +17,20 @@ export const Memberships: React.FC = () => {
   const [selectedZones, setSelectedZones] = useState<ZoneId[]>([]);
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [isCheckingOut, setIsCheckingOut] = useState(false);
+
+  // Pre-select plan from appointment deposit if available
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    apiFetch<any>("/membership/status").then((data) => {
+      const code = data?.interestedPlanCode;
+      if (!code) return;
+      const tier = MEMBERSHIPS.find((t) => t.stripePriceId === code);
+      if (tier && !selectedTier) {
+        setSelectedTier(tier);
+        setStep(tier.isFullBody ? 3 : 2);
+      }
+    }).catch(() => {});
+  }, [isAuthenticated]);
 
   const handleTierSelect = (tier: MembershipTier) => {
     setSelectedTier(tier);

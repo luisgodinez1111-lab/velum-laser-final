@@ -8,13 +8,22 @@ const getHeaderValue = (req: Request, key: string) => {
 };
 
 export const receiveGoogleCalendarWebhook = async (req: Request, res: Response) => {
-  const channelId = getHeaderValue(req, "X-Goog-Channel-Id");
-  const resourceId = getHeaderValue(req, "X-Goog-Resource-Id");
-  const resourceState = getHeaderValue(req, "X-Goog-Resource-State");
+  const channelId    = getHeaderValue(req, "X-Goog-Channel-Id");
+  const resourceId   = getHeaderValue(req, "X-Goog-Resource-Id");
+  const resourceState= getHeaderValue(req, "X-Goog-Resource-State");
+  const channelToken = getHeaderValue(req, "X-Goog-Channel-Token");
 
+  // Always respond 200 immediately — Google requires a fast ack
   res.status(200).json({ ok: true });
 
   if (!channelId || !resourceId || !resourceState) {
+    return;
+  }
+
+  // Optional: reject if a token was registered but header is missing/wrong
+  // (Prevents unsolicited replays from external parties who guessed a channelId)
+  if (channelToken && channelToken !== process.env.GOOGLE_WEBHOOK_TOKEN) {
+    logger.warn({ channelId }, "Google Calendar webhook: invalid channel token — ignoring");
     return;
   }
 

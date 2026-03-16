@@ -24,9 +24,11 @@ export const ZONES: Zone[] = [
   { id: 'LOWER_LEGS', name: 'Pierna Baja', description: 'Pantorrilla y espinilla (Zona IV).' },
 ];
 
-// NOTA: stripePriceId aquí son solo referencias visuales / placeholders.
-// El sistema de cobro usa planCode = name.toLowerCase() (essential, select, advance, progress, signature).
-// Los Stripe Price IDs reales se configuran en Admin → Stripe → Planes (guardados en AppSetting).
+// ⚠️ IMPORTANTE — FUENTE DE VERDAD:
+// Los precios aquí son FALLBACKS VISUALES ÚNICAMENTE para cuando el catálogo del backend no está disponible.
+// La fuente de verdad real son los precios configurados en Admin → Stripe → Planes (guardados en AppSetting.stripePlanCatalog).
+// El sistema de cobro real usa el Stripe Price ID configurado en el admin, no el planCode.
+// Al cambiar precios, actualízalos en Admin → Stripe → Planes. Los valores aquí son solo presentación inicial.
 export const MEMBERSHIPS: MembershipTier[] = [
   {
     id: 1,

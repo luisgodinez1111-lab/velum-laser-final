@@ -1,6 +1,8 @@
 FROM node:20-alpine AS base
 WORKDIR /app
 COPY package.json package-lock.json* ./
+# --legacy-peer-deps: @typescript-eslint@7 declares peer eslint>=8 but npm@10
+# reports a false conflict. Remove when upgrading to @typescript-eslint@8.
 RUN npm install --legacy-peer-deps
 COPY . .
 RUN npm run prisma:generate

@@ -59,6 +59,7 @@ export interface Member {
   dob?: string;
   plan?: string;
   amount?: number;
+  interval?: string;
   subscriptionStatus?: string;
   nextBillingDate?: string;
   lastPaymentDate?: string;

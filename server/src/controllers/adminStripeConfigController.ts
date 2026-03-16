@@ -13,8 +13,8 @@ export const getAdminStripeConfig = async (req: AuthRequest, res: Response) => {
   try {
     if (!isAdmin(req)) return res.status(403).json({ message: "No autorizado" });
 
-    const out = await resolveStripeConfig();
-    return res.json(presentStripeConfig(out.source, out.config));
+    const config = await resolveStripeConfig();
+    return res.json(presentStripeConfig(config.source, config.config));
   } catch (error: any) {
     console.error("getAdminStripeConfig error:", error);
     return res.status(500).json({ message: "No se pudo obtener configuración Stripe" });
@@ -33,11 +33,11 @@ export const updateAdminStripeConfig = async (req: AuthRequest, res: Response) =
       return res.status(400).json({ message: "Proporciona al menos una clave para actualizar" });
     }
 
-    const out = await saveStripeConfig({ secretKey, publishableKey, webhookSecret });
+    const saved = await saveStripeConfig({ secretKey, publishableKey, webhookSecret });
 
     return res.json({
       message: "Configuración Stripe guardada",
-      ...presentStripeConfig(out.source, out.config),
+      ...presentStripeConfig(saved.source, saved.config),
     });
   } catch (error: any) {
     console.error("updateAdminStripeConfig error:", error);

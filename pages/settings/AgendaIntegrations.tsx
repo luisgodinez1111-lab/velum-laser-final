@@ -19,12 +19,12 @@ type Props = {
 
 const formatDateTime = (value: string | null) => {
   if (!value) {
-    return "N/A";
+    return "—";
   }
 
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) {
-    return "N/A";
+    return "—";
   }
 
   return parsed.toLocaleString("es-MX", {
@@ -92,7 +92,7 @@ export const AgendaIntegrations: React.FC<Props> = ({
         </div>
         <div className="border border-velum-200 px-3 py-2">
           <p className="text-[10px] uppercase tracking-widest text-velum-500">Cuenta</p>
-          <p className="mt-1 font-semibold text-velum-900">{status?.email ?? "N/A"}</p>
+          <p className="mt-1 font-semibold text-velum-900">{status?.email ?? "—"}</p>
         </div>
         <div className="border border-velum-200 px-3 py-2">
           <p className="text-[10px] uppercase tracking-widest text-velum-500">Última sincronización</p>

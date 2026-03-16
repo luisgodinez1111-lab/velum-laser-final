@@ -28,6 +28,7 @@ const mapDocuments = (documents: any[]): LegalDocument[] =>
 
 const mapMember = (user: any): Member => {
   const membership = user.memberships?.[0];
+  const catalog = membership?.catalogEntry; // enriched by listUsers endpoint
   const tier = MEMBERSHIPS.find((t) => t.stripePriceId === membership?.planId);
   const name = `${user.profile?.firstName ?? ""} ${user.profile?.lastName ?? ""}`.trim() || user.email;
   return {
@@ -36,9 +37,9 @@ const mapMember = (user: any): Member => {
     email: user.email,
     role: user.role as UserRole,
     phone: user.profile?.phone,
-    plan: tier?.name ?? membership?.planCode ?? "Plan Velum",
-    // amount: fuente de verdad es el precio del tier local o el monto real del membership
-    amount: tier?.price ?? membership?.amount ?? undefined,
+    plan: catalog?.name ?? tier?.name ?? membership?.planCode ?? "Plan Velum",
+    amount: catalog?.amount ?? tier?.price ?? membership?.amount ?? undefined,
+    interval: catalog?.interval ?? "month",
     subscriptionStatus: membership?.status ?? "inactive",
     nextBillingDate: membership?.currentPeriodEnd ? new Date(membership.currentPeriodEnd).toLocaleDateString("es-MX") : undefined,
     intakeStatus: user.medicalIntake?.status ?? "draft",
@@ -49,15 +50,35 @@ const mapMember = (user: any): Member => {
   };
 };
 
+// Unwrap paginated or legacy array response
+const extractUsers = (resp: any): any[] => {
+  if (Array.isArray(resp)) return resp;
+  if (resp && Array.isArray(resp.data)) return resp.data;
+  return [];
+};
+
 export const memberService = {
-  getAll: async (): Promise<Member[]> => {
-    const users = await apiFetch<any[]>("/admin/users");
-    return users.filter((user) => user.role === "member").map(mapMember);
+  getAll: async (params?: { page?: number; limit?: number; search?: string; role?: string; status?: string }): Promise<{ members: Member[]; total: number; pages: number }> => {
+    const qs = new URLSearchParams();
+    if (params?.page)   qs.set("page",   String(params.page));
+    if (params?.limit)  qs.set("limit",  String(params.limit));
+    if (params?.search) qs.set("search", params.search);
+    if (params?.role)   qs.set("role",   params.role);
+    if (params?.status) qs.set("status", params.status);
+    const query = qs.toString() ? `?${qs.toString()}` : "";
+    const resp = await apiFetch<any>(`/admin/users${query}`);
+    const users = extractUsers(resp);
+    return {
+      members: users.filter((u: any) => u.role === "member").map(mapMember),
+      total: resp?.total ?? users.length,
+      pages: resp?.pages ?? 1,
+    };
   },
 
   getById: async (id: string): Promise<Member | undefined> => {
-    const users = await apiFetch<any[]>("/admin/users");
-    const user = users.find((u) => u.id === id);
+    const resp = await apiFetch<any>("/admin/users");
+    const users = extractUsers(resp);
+    const user = users.find((u: any) => u.id === id);
     if (!user) return undefined;
     return mapMember(user);
   },
@@ -89,7 +110,7 @@ export const auditService = {
       role: (log.actorUser?.role ?? log.user?.role ?? "admin") as UserRole,
       action: log.action,
       resource: log.resourceId ?? log.resourceType ?? log.metadata?.targetUserId ?? log.metadata?.documentId ?? "-",
-      ip: log.ip ?? log.metadata?.ip ?? "N/A",
+      ip: log.ip ?? log.metadata?.ip ?? "—",
       status: (log.result ?? "success") as AuditLogEntry["status"]
     }));
   }

@@ -88,6 +88,7 @@ model User {
   passwordResets      PasswordResetToken[]
   agendaBlocksCreated AgendaBlockedSlot[]     @relation("AgendaBlockedSlotCreator")
   appointmentDepositAvailable Boolean @default(false)
+  interestedPlanCode          String?
 
   @@index([clinicId])
 }
@@ -114,6 +115,7 @@ model Membership {
   currentPeriodEnd     DateTime?
   gracePeriodEndsAt    DateTime?
   cancelAtPeriodEnd    Boolean          @default(false)
+  lastReminderSentAt   DateTime?
   createdAt            DateTime         @default(now())
   updatedAt            DateTime         @updatedAt
   user                 User             @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -276,6 +278,7 @@ model Appointment {
   @@index([cabinId, startAt, endAt])
   @@index([startAt, endAt])
   @@index([status])
+  @@index([status, startAt])
   @@index([googleEventId])
 }
 
@@ -490,6 +493,19 @@ model AppSetting {
   key       String   @id
   value     Json
   updatedAt DateTime @updatedAt
+}
+
+model DeleteOtp {
+  id           String   @id @default(cuid())
+  actorUserId  String   @unique
+  targetUserId String
+  otpHash      String
+  attempts     Int      @default(0)
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+
+  @@index([actorUserId])
+  @@index([expiresAt])
 }
 
 model IntegrationJob {

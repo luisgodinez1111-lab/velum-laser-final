@@ -35,6 +35,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
   }, [isUserMenuOpen]);
 
   const handleLogout = async () => {
+    if (!window.confirm('¿Cerrar sesión?')) return;
     setIsUserMenuOpen(false);
     setIsMenuOpen(false);
     await logout();

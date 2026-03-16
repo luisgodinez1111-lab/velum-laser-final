@@ -17,9 +17,9 @@ export class AppErrorBoundary extends React.Component<Props, State> {
     return { error };
   }
 
-  componentDidCatch(error: Error, info: React.ErrorInfo) {
-    // In production, send to error monitoring (e.g. Sentry)
-    console.error('[AppErrorBoundary]', error, info.componentStack);
+  componentDidCatch(_error: Error, _info: React.ErrorInfo) {
+    // Future: forward to error monitoring service (e.g. Sentry)
+    // Sentry.captureException(error, { extra: { componentStack: info.componentStack } });
   }
 
   render() {
