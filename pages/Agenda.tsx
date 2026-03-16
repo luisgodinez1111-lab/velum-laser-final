@@ -11,7 +11,7 @@ import { DEFAULT_PHOTOTYPE_QUESTIONS, getFototipo } from "../components/Phototyp
 import { useToast } from "../context/ToastContext";
 import { MEMBERSHIPS, APPOINTMENT_DEPOSIT_MXN } from "../constants";
 
-type ViewState = "intro" | "login" | "register" | "intake" | "calendar" | "forgot" | "forgot-otp" | "email-verify";
+type ViewState = "intro" | "login" | "register" | "intake" | "calendar" | "forgot" | "forgot-sent" | "email-verify";
 type AppointmentType = "standard" | "valuation";
 
 type IntakeDraft = {
@@ -328,18 +328,20 @@ export const Agenda: React.FC = () => {
     }
   };
 
-  // ── Olvidé mi contraseña: solicitar OTP ─────────────────────────────
+  // ── Olvidé mi contraseña: solicitar link ─────────────────────────────
   const handleForgotSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsOtpLoading(true);
     setOtpMessage(null);
     try {
       await authService.forgotPassword(otpEmail);
-      setOtpMessage("Si el correo existe, recibirás un código de 6 dígitos en tu bandeja.");
-      setOtpSuccess(false);
-      setViewState("forgot-otp");
-    } catch {
-      setOtpMessage("No se pudo enviar el código. Intenta de nuevo.");
+      setViewState("forgot-sent");
+    } catch (err: any) {
+      if (err?.status === 404) {
+        setOtpMessage("No encontramos una cuenta con ese correo electrónico.");
+      } else {
+        setOtpMessage("No se pudo enviar el enlace. Intenta de nuevo.");
+      }
     } finally {
       setIsOtpLoading(false);
     }
@@ -1014,7 +1016,7 @@ export const Agenda: React.FC = () => {
             <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-velum-500 mb-2">Recuperar acceso</p>
             <h2 className="font-serif text-[2.25rem] italic text-velum-900 mb-3 leading-tight">Restablecer contraseña</h2>
             <p className="text-[14px] text-velum-500 leading-relaxed">
-              Ingresa tu correo y te enviaremos un código de 6 dígitos para crear una nueva contraseña.
+              Ingresa tu correo y te enviaremos un enlace para crear una nueva contraseña.
             </p>
           </div>
           <form onSubmit={handleForgotSubmit} className="space-y-5">
@@ -1037,7 +1039,7 @@ export const Agenda: React.FC = () => {
               disabled={isOtpLoading}
               className="w-full rounded-2xl bg-velum-900 py-4 text-[15px] font-semibold text-white hover:bg-velum-800 disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.99] transition-all duration-200"
             >
-              {isOtpLoading ? "Enviando..." : "Enviar código"}
+              {isOtpLoading ? "Enviando..." : "Enviar enlace"}
             </button>
           </form>
           {otpMessage && (
@@ -1050,101 +1052,36 @@ export const Agenda: React.FC = () => {
     );
   }
 
-  // ── Olvidé mi contraseña: ingresar código OTP + nueva contraseña ───
-  if (!isAuthenticated && viewState === "forgot-otp") {
-    const newPasswordChecks = getPasswordChecks(newPassword);
-    const newPasswordScore = Object.values(newPasswordChecks).filter(Boolean).length;
-    const newPasswordStrength = newPasswordScore <= 2 ? "Débil" : newPasswordScore <= 4 ? "Media" : "Fuerte";
-    const newPasswordStrengthClass = newPasswordScore <= 2 ? "text-red-600" : newPasswordScore <= 4 ? "text-amber-600" : "text-green-700";
-
+  // ── Olvidé mi contraseña: confirmación de enlace enviado ───────────
+  if (!isAuthenticated && viewState === "forgot-sent") {
     return (
       <div className="min-h-[calc(100vh-7rem)] flex items-center justify-center bg-white px-6 py-12 animate-fade-in">
-        <div className="w-full max-w-sm">
+        <div className="w-full max-w-sm text-center">
+          <div className="w-16 h-16 rounded-2xl bg-green-50 border border-green-200 flex items-center justify-center mx-auto mb-6">
+            <Mail size={28} className="text-green-600" />
+          </div>
+          <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-velum-500 mb-2">Revisa tu correo</p>
+          <h2 className="font-serif text-[2.25rem] italic text-velum-900 mb-3 leading-tight">Enlace enviado</h2>
+          <p className="text-[14px] text-velum-500 leading-relaxed mb-2">
+            Enviamos un enlace a
+          </p>
+          <p className="text-[14px] font-semibold text-velum-900 mb-6">{otpEmail}</p>
+          <p className="text-[13px] text-velum-400 leading-relaxed mb-10">
+            Haz clic en el enlace del correo para crear tu nueva contraseña. Es válido por <strong>2 horas</strong>.
+          </p>
+          <button
+            type="button"
+            onClick={() => { setOtpMessage(null); setOtpEmail(""); setViewState("login"); }}
+            className="w-full rounded-2xl bg-velum-900 py-4 text-[15px] font-semibold text-white hover:bg-velum-800 active:scale-[0.99] transition-all duration-200"
+          >
+            Volver al inicio de sesión
+          </button>
           <button
             type="button"
             onClick={() => { setOtpMessage(null); setViewState("forgot"); }}
-            className="mb-10 inline-flex items-center gap-1.5 text-sm text-velum-400 hover:text-velum-900 transition-colors"
+            className="mt-4 w-full text-center text-[13px] text-velum-400 hover:text-velum-900 transition underline underline-offset-2"
           >
-            <ChevronLeft size={16} />
-            Atrás
-          </button>
-          <div className="mb-10">
-            <div className="w-14 h-14 rounded-2xl bg-velum-50 border border-velum-200 flex items-center justify-center mb-6">
-              <Mail size={24} className="text-velum-700" />
-            </div>
-            <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-velum-500 mb-1">Verificación</p>
-            <p className="text-[13px] text-velum-500 mb-3">{otpEmail}</p>
-            <h2 className="font-serif text-[2.25rem] italic text-velum-900 mb-3 leading-tight">Ingresa el código</h2>
-            <p className="text-[14px] text-velum-500">Revisa tu bandeja de entrada y escribe el código de 6 dígitos.</p>
-          </div>
-          <form onSubmit={handleResetPasswordSubmit} className="space-y-5">
-            <div>
-              <label className="mb-2 block text-[11px] font-bold uppercase tracking-[0.18em] text-velum-500">
-                Código de verificación
-              </label>
-              <input
-                type="text"
-                inputMode="numeric"
-                pattern="\d{6}"
-                maxLength={6}
-                value={otpCode}
-                onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                required
-                className="w-full rounded-2xl bg-velum-50 border border-velum-200/60 px-5 py-5 text-center text-[28px] font-bold tracking-[0.4em] text-velum-900 outline-none transition-all duration-200 focus:bg-white focus:border-velum-900 focus:ring-4 focus:ring-velum-900/[0.07]"
-                placeholder="000000"
-                autoFocus
-              />
-            </div>
-            <div>
-              <label className="mb-2 block text-[11px] font-bold uppercase tracking-[0.18em] text-velum-500">Nueva contraseña</label>
-              <PasswordInput
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                required
-                className="w-full rounded-2xl bg-velum-50 border border-velum-200/60 px-5 py-4 text-[15px] text-velum-900 placeholder:text-velum-400 outline-none transition-all duration-200 focus:bg-white focus:border-velum-900 focus:ring-4 focus:ring-velum-900/[0.07]"
-                placeholder="••••••••"
-              />
-              <div className="mt-3 rounded-2xl bg-velum-50 border border-velum-200/60 px-4 py-3">
-                <div className="flex items-center justify-between mb-2">
-                  <p className="text-[11px] uppercase tracking-[0.16em] text-velum-500">Fortaleza</p>
-                  <p className={`text-[11px] font-bold ${newPasswordStrengthClass}`}>{newPasswordStrength}</p>
-                </div>
-                <div className="flex gap-1">
-                  {[1,2,3,4,5].map((i) => (
-                    <div key={i} className={`h-1 flex-1 rounded-full transition-all duration-300 ${i <= newPasswordScore ? (newPasswordScore <= 2 ? "bg-red-400" : newPasswordScore <= 4 ? "bg-amber-400" : "bg-green-500") : "bg-velum-200"}`} />
-                  ))}
-                </div>
-              </div>
-            </div>
-            <div>
-              <label className="mb-2 block text-[11px] font-bold uppercase tracking-[0.18em] text-velum-500">Confirmar nueva contraseña</label>
-              <PasswordInput
-                value={confirmNewPassword}
-                onChange={(e) => setConfirmNewPassword(e.target.value)}
-                required
-                className="w-full rounded-2xl bg-velum-50 border border-velum-200/60 px-5 py-4 text-[15px] text-velum-900 placeholder:text-velum-400 outline-none transition-all duration-200 focus:bg-white focus:border-velum-900 focus:ring-4 focus:ring-velum-900/[0.07]"
-                placeholder="••••••••"
-              />
-            </div>
-            <button
-              type="submit"
-              disabled={isOtpLoading || otpSuccess}
-              className="w-full rounded-2xl bg-velum-900 py-4 text-[15px] font-semibold text-white hover:bg-velum-800 disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.99] transition-all duration-200"
-            >
-              {isOtpLoading ? "Verificando..." : "Actualizar contraseña"}
-            </button>
-          </form>
-          {otpMessage && (
-            <div className={`mt-5 rounded-2xl px-4 py-3 text-[13px] ${otpSuccess ? "bg-green-50 text-green-700" : "bg-red-50 text-red-600"}`}>
-              {otpMessage}
-            </div>
-          )}
-          <button
-            type="button"
-            onClick={() => { setOtpCode(""); setOtpMessage(null); setViewState("forgot"); }}
-            className="mt-6 w-full text-center text-[13px] text-velum-400 hover:text-velum-900 transition underline underline-offset-2"
-          >
-            Reenviar código
+            Usar otro correo
           </button>
         </div>
       </div>

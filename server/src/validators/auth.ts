@@ -18,10 +18,8 @@ export const forgotSchema = z.object({
   email: z.string().email()
 });
 
-// Ahora se usa OTP de 6 dígitos + email en lugar de token largo
 export const resetSchema = z.object({
-  email: z.string().email(),
-  otp: z.string().length(6).regex(/^\d{6}$/, "El código debe ser de 6 dígitos"),
+  token: z.string().min(32),
   password: z.string().min(12)
 });
 

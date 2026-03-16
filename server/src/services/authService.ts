@@ -1,4 +1,4 @@
-import { randomInt } from "crypto";
+import { randomInt, randomBytes } from "crypto";
 import { addHours } from "../utils/date";
 import { prisma } from "../db/prisma";
 
@@ -50,8 +50,7 @@ export const consumeEmailVerification = async (userId: string, otp: string) => {
 // Recuperación de contraseña
 // ──────────────────────────────────────────────────────────────────────
 export const createPasswordReset = async (userId: string) => {
-  const otp = generateOtp();
-  const token = buildToken(userId, otp);
+  const token = randomBytes(32).toString("hex");
 
   // Eliminar resets anteriores del mismo usuario
   await prisma.passwordResetToken.deleteMany({ where: { userId } });
@@ -64,11 +63,10 @@ export const createPasswordReset = async (userId: string) => {
     }
   });
 
-  return { ...record, otp };
+  return { ...record, token };
 };
 
-export const consumePasswordReset = async (userId: string, otp: string) => {
-  const token = buildToken(userId, otp);
+export const consumePasswordReset = async (token: string) => {
   const record = await prisma.passwordResetToken.findUnique({ where: { token } });
 
   if (!record || record.expiresAt < new Date()) {

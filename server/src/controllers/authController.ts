@@ -107,30 +107,26 @@ export const logout = async (_req: Request, res: Response) => {
 export const forgotPassword = async (req: Request, res: Response) => {
   const payload = forgotSchema.parse(req.body);
   const user = await getUserByEmail(payload.email);
-  // Respuesta genérica: no revelar si el email existe
+
   if (!user) {
-    return res.status(200).json({ message: "Si el correo existe, recibirás un código en tu bandeja" });
+    return res.status(404).json({ message: "No encontramos una cuenta con ese correo electrónico." });
   }
 
   const reset = await createPasswordReset(user.id);
-  sendPasswordResetEmail(user.email, reset.otp).catch((err: unknown) => {
+  const resetUrl = `${env.appUrl}/#/reset-password?token=${reset.token}`;
+  sendPasswordResetEmail(user.email, resetUrl).catch((err: unknown) => {
     logger.warn({ err, email: user.email }, "[auth] No se pudo enviar correo de recuperación");
   });
 
-  return res.json({ message: "Si el correo existe, recibirás un código en tu bandeja" });
+  return res.json({ message: "Te enviamos un enlace a tu correo para restablecer tu contraseña." });
 };
 
 export const resetPassword = async (req: Request, res: Response) => {
   const payload = resetSchema.parse(req.body);
 
-  const user = await getUserByEmail(payload.email);
-  if (!user) {
-    return res.status(400).json({ message: "Código inválido o expirado" });
-  }
-
-  const reset = await consumePasswordReset(user.id, payload.otp);
+  const reset = await consumePasswordReset(payload.token);
   if (!reset) {
-    return res.status(400).json({ message: "Código inválido o expirado" });
+    return res.status(400).json({ message: "El enlace es inválido o ya expiró." });
   }
 
   await prisma.user.update({
@@ -139,15 +135,15 @@ export const resetPassword = async (req: Request, res: Response) => {
   });
 
   await createAuditLog({
-    userId: user.id,
+    userId: reset.userId,
     action: "auth.password_reset",
     resourceType: "user",
-    resourceId: user.id,
+    resourceId: reset.userId,
     ip: req.ip,
-    metadata: { email: user.email }
+    metadata: {}
   });
 
-  return res.json({ message: "Contraseña actualizada correctamente" });
+  return res.json({ message: "Contraseña actualizada correctamente." });
 };
 
 export const verifyEmail = async (req: Request, res: Response) => {

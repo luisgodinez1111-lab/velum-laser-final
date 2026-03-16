@@ -22,6 +22,7 @@ const AdminStripe       = lazy(() => import('./pages/AdminStripeSettings').then(
 const AdminUsers        = lazy(() => import('./pages/AdminUsersPermissions').then(m => ({ default: m.AdminUsersPermissions })));
 const AgendaIntegrations = lazy(() => import('./pages/settings/AgendaIntegrations').then(m => ({ default: m.AgendaIntegrations })));
 const OnboardingAdmin   = lazy(() => import('./pages/OnboardingAdmin').then(m => ({ default: m.OnboardingAdmin })));
+const ResetPassword     = lazy(() => import('./pages/ResetPassword').then(m => ({ default: m.ResetPassword })));
 const NotFound          = lazy(() => import('./pages/NotFound').then(m => ({ default: m.NotFound })));
 
 const InnerApp: React.FC = () => {
@@ -43,6 +44,7 @@ const InnerApp: React.FC = () => {
                 <Route path="/admin/users-permissions"       element={<AdminUsers />} />
                 <Route path="/settings/agenda-integrations"  element={<AgendaIntegrations />} />
                 <Route path="/admin/onboarding"              element={<OnboardingAdmin />} />
+                <Route path="/reset-password"               element={<ResetPassword />} />
                 <Route path="*"                              element={<NotFound />} />
               </Routes>
             </Suspense>

@@ -115,29 +115,29 @@ export const sendEmailVerificationEmail = async (to: string, otp: string): Promi
 // ──────────────────────────────────────────────────────────────────────
 // 2. Recuperación de contraseña (API key 2)
 // ──────────────────────────────────────────────────────────────────────
-export const sendPasswordResetEmail = async (to: string, otp: string): Promise<void> => {
+export const sendPasswordResetEmail = async (to: string, resetUrl: string): Promise<void> => {
   const html = baseHtml(`
     <p style="${headingStyle}">Restablecer contraseña</p>
     <p style="${bodyStyle}">
       Recibimos una solicitud para restablecer la contraseña de tu cuenta Velum Laser.<br>
-      Ingresa el siguiente código para continuar:
+      Haz clic en el botón de abajo para crear una nueva contraseña:
     </p>
-    <div style="text-align:center;margin:28px 0;">
-      <span style="${otpBoxStyle}">${otp}</span>
+    <div style="text-align:center;margin:32px 0;">
+      <a href="${resetUrl}" style="${btnStyle}">Restablecer mi contraseña</a>
     </div>
     <p style="${bodyStyle}">
-      Este código es válido por <strong>2 horas</strong>. Solo funciona una vez.
+      Este enlace es válido por <strong>2 horas</strong> y solo funciona una vez.
     </p>
     <p style="${noteStyle}">
       Si no solicitaste este cambio, ignora este correo. Tu contraseña actual no se verá afectada.<br>
-      Por seguridad, nunca compartas este código con nadie, incluyendo el personal de Velum Laser.
+      Por seguridad, nunca compartas este enlace con nadie, incluyendo el personal de Velum Laser.
     </p>
   `);
 
   await withRetry(() => resendReset.emails.send({
     from: FROM,
     to,
-    subject: "Código para restablecer contraseña — Velum Laser",
+    subject: "Restablece tu contraseña — Velum Laser",
     html
   }));
 };
