@@ -260,8 +260,8 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
             <p className="text-sm mb-1.5">Av. Prol. Teófilo Borunda 11811, Int. 13-4,</p>
             <p className="text-sm mb-1.5">Plaza Travessía, Col. Labor de Terrazas,</p>
             <p className="text-sm mb-1.5">C.P. 31223, Chihuahua, Chih.</p>
-            <p className="text-sm mt-3">+52 55 1234 5678</p>
-            <p className="text-sm">concierge@velumlaser.com</p>
+            <p className="text-sm mt-3">+52 614 598 8130</p>
+            <p className="text-sm">velum.contacto@gmail.com</p>
           </div>
 
           <div className="flex flex-col items-start md:items-end">
