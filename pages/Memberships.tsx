@@ -417,63 +417,116 @@ export const Memberships: React.FC = () => {
             </div>
           )}
 
-          {/* Step 2: Zone Selection */}
+          {/* Step 2: Zone Selection — agrupado por Zona Maestra */}
           {step === 2 && selectedTier && (
             <div id="zone-selector" className="animate-fade-in">
-              <div className="max-w-5xl mx-auto">
-                 <div className="bg-velum-800 border border-velum-700 p-8 mb-8 text-center shadow-sm">
-                   <p className="font-serif text-2xl text-velum-50 mb-2">
-                     Personalizando: <span className="italic">{selectedTier.name}</span>
-                   </p>
-                   <p className="text-sm text-velum-400">
-                     Tienes <strong className="text-velum-200">{selectedTier.maxZones} crédito(s) de zona</strong>. &nbsp;
-                     Has seleccionado: <span className="font-bold text-velum-50">{selectedZones.length} / {selectedTier.maxZones}</span>
-                   </p>
-                 </div>
+              <div className="max-w-3xl mx-auto">
 
-                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                    {ZONES.map((zone) => {
-                      const isSelected = selectedZones.includes(zone.id);
-                      const isDisabled = !isSelected && selectedZones.length >= selectedTier.maxZones;
+                {/* Contador de créditos */}
+                <div className="bg-velum-800 border border-velum-700 rounded-sm p-6 mb-8 flex items-center justify-between">
+                  <div>
+                    <p className="text-velum-50 font-semibold text-sm">
+                      Plan <span className="font-serif italic">{selectedTier.name}</span>
+                    </p>
+                    <p className="text-velum-400 text-xs mt-0.5">
+                      Elige {selectedTier.maxZones === 1 ? '1 área' : `${selectedTier.maxZones} áreas`} del cuerpo para tratar
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <div className="flex gap-2 justify-end mb-1">
+                      {Array.from({ length: selectedTier.maxZones }).map((_, i) => (
+                        <div
+                          key={i}
+                          className={`w-4 h-4 rounded-full border-2 transition-all duration-200 ${i < selectedZones.length ? 'bg-velum-300 border-velum-300' : 'border-velum-600'}`}
+                        />
+                      ))}
+                    </div>
+                    <p className="text-velum-400 text-xs">
+                      {selectedZones.length} de {selectedTier.maxZones} seleccionadas
+                    </p>
+                  </div>
+                </div>
 
-                      return (
-                        <div 
-                          key={zone.id}
-                          onClick={() => !isDisabled && toggleZone(zone.id)}
-                          className={`
-                            flex flex-col p-5 border transition-all duration-300 cursor-pointer
-                            ${isSelected 
-                              ? 'border-velum-900 bg-velum-900 text-white shadow-lg transform -translate-y-1' 
-                              : 'border-white bg-white hover:border-velum-300 text-velum-900'}
-                            ${isDisabled ? 'opacity-40 grayscale cursor-not-allowed' : ''}
-                          `}
-                        >
-                          <div className="flex justify-between items-start mb-3">
-                            <h4 className={`font-bold text-xs uppercase tracking-wider ${isSelected ? 'text-white' : 'text-velum-900'}`}>
-                              {zone.name}
-                            </h4>
-                            {isSelected && <Check size={14} className="text-velum-200" />}
-                          </div>
-                          <p className={`text-[10px] mt-auto ${isSelected ? 'text-velum-200' : 'text-velum-500'}`}>
-                            {zone.description}
-                          </p>
-                        </div>
-                      )
-                    })}
-                 </div>
+                {/* Zonas agrupadas por Zona Maestra */}
+                {[
+                  {
+                    label: 'Zona I · Identidad',
+                    sub: 'Rostro y cuello — lo que el mundo ve primero',
+                    ids: ['FACE_FULL', 'NECK'] as ZoneId[],
+                  },
+                  {
+                    label: 'Zona II · Presencia',
+                    sub: 'Nuca y espalda alta — elegancia en el porte',
+                    ids: ['NAPE', 'UPPER_BACK'] as ZoneId[],
+                  },
+                  {
+                    label: 'Zona III · Equilibrio',
+                    sub: 'Torso y muslos — el núcleo del cuerpo',
+                    ids: ['ABDOMEN', 'LOWER_BACK', 'THIGHS'] as ZoneId[],
+                  },
+                  {
+                    label: 'Zona IV · Función',
+                    sub: 'Extremidades — comodidad en movimiento',
+                    ids: ['UNDERARMS', 'ARMS_FULL', 'BIKINI', 'GLUTEUS', 'LOWER_LEGS'] as ZoneId[],
+                  },
+                ].map((group) => (
+                  <div key={group.label} className="mb-4">
+                    {/* Header de grupo */}
+                    <div className="flex items-center gap-3 px-1 mb-3">
+                      <p className="text-velum-50 text-xs font-bold uppercase tracking-widest">{group.label}</p>
+                      <div className="flex-1 h-px bg-velum-800" />
+                      <p className="text-velum-600 text-xs">{group.sub}</p>
+                    </div>
 
-                 <div className="mt-12 flex justify-between items-center border-t border-velum-700 pt-8">
-                    <button onClick={() => setStep(1)} className="text-xs uppercase font-bold tracking-widest text-velum-500 hover:text-velum-200 transition-colors">
-                      ← Volver a Niveles
-                    </button>
-                    <Button
-                      disabled={!canProceed()}
-                      onClick={handleProceedToSummary}
-                      className="min-w-[200px]"
-                    >
-                      Continuar
-                    </Button>
-                 </div>
+                    {/* Áreas dentro del grupo */}
+                    <div className="flex flex-wrap gap-3">
+                      {group.ids.map((id) => {
+                        const zone = ZONES.find(z => z.id === id)!;
+                        const isSelected = selectedZones.includes(id);
+                        const isDisabled = !isSelected && selectedZones.length >= selectedTier.maxZones;
+
+                        return (
+                          <button
+                            key={id}
+                            type="button"
+                            disabled={isDisabled}
+                            onClick={() => !isDisabled && toggleZone(id)}
+                            className={`
+                              flex items-center gap-2 px-4 py-2.5 rounded-sm border text-sm font-medium transition-all duration-200
+                              ${isSelected
+                                ? 'bg-white text-velum-900 border-white shadow-md'
+                                : 'bg-transparent text-velum-300 border-velum-700 hover:border-velum-400 hover:text-velum-100'}
+                              ${isDisabled ? 'opacity-30 cursor-not-allowed' : 'cursor-pointer'}
+                            `}
+                          >
+                            {isSelected && <Check size={13} className="text-velum-500 flex-shrink-0" />}
+                            {zone.name}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+
+                {/* Mensaje cuando cupo lleno */}
+                {selectedZones.length >= selectedTier.maxZones && (
+                  <p className="text-velum-400 text-xs text-center mt-4 animate-fade-in">
+                    Llegaste al límite de tu plan. Deselecciona un área para cambiar tu elección.
+                  </p>
+                )}
+
+                <div className="mt-10 flex justify-between items-center border-t border-velum-800 pt-8">
+                  <button onClick={() => setStep(1)} className="text-xs uppercase font-bold tracking-widest text-velum-500 hover:text-velum-200 transition-colors">
+                    ← Volver
+                  </button>
+                  <Button
+                    disabled={!canProceed()}
+                    onClick={handleProceedToSummary}
+                    className="min-w-[200px]"
+                  >
+                    Continuar
+                  </Button>
+                </div>
               </div>
             </div>
           )}
