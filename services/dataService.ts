@@ -88,7 +88,50 @@ export const memberService = {
       method: "PATCH",
       body: JSON.stringify({ status })
     });
-  }
+  },
+
+  createPatient: async (payload: {
+    email: string;
+    firstName: string;
+    lastName: string;
+    phone?: string;
+    birthDate?: string;
+    intake?: {
+      personalJson?: Record<string, unknown>;
+      historyJson?: Record<string, unknown>;
+      phototype?: number;
+      consentAccepted?: boolean;
+      signatureKey?: string;
+    };
+    planCode?: string;
+    activateMembership?: boolean;
+    sendCredentials?: boolean;
+  }): Promise<{ message: string; patient: { id: string; email: string }; inviteEmailSent: boolean }> => {
+    return apiFetch('/admin/patients', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+  },
+
+  adminUpdatePatientIntake: async (userId: string, intake: {
+    personalJson?: Record<string, unknown>;
+    historyJson?: Record<string, unknown>;
+    phototype?: number;
+    consentAccepted?: boolean;
+    signatureKey?: string;
+  }): Promise<void> => {
+    await apiFetch(`/admin/patients/${userId}/intake`, {
+      method: 'PUT',
+      body: JSON.stringify(intake)
+    });
+  },
+
+  adminActivateMembership: async (userId: string, planCode: string): Promise<void> => {
+    await apiFetch(`/admin/patients/${userId}/activate-membership`, {
+      method: 'POST',
+      body: JSON.stringify({ planCode, status: 'active' })
+    });
+  },
 };
 
 export const documentService = {

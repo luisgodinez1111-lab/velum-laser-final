@@ -30,13 +30,15 @@ import {
   Trash2,
   Zap,
   CheckCheck,
-  XCircle
+  XCircle,
+  Plus
 } from 'lucide-react';
 import { AuditLogEntry, Member, UserRole } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { memberService, auditService } from '../services/dataService';
 import { SessionTreatment, SessionCreatePayload, MedicalIntake } from '../services/clinicalService';
 import { AdminUsersPermissions } from "./AdminUsersPermissions";
+import { AdminCreatePatientDrawer } from "../components/AdminCreatePatientDrawer";
 import { AdminStripeSettings } from "./AdminStripeSettings";
 import { AdminWhatsAppSettings } from "./AdminWhatsAppSettings";
 import { useToast } from "../context/ToastContext";
@@ -337,6 +339,7 @@ export const Admin: React.FC = () => {
   const [isSessionSaving, setIsSessionSaving] = useState(false);
   const [cancelConfirmApptId, setCancelConfirmApptId] = useState<string | null>(null);
   const [confirmCancelMemberId, setConfirmCancelMemberId] = useState<string | null>(null);
+  const [patientDrawerOpen, setPatientDrawerOpen] = useState(false);
 
   // Drawer history (shared between modal and drawer)
   const [memberSessions, setMemberSessions] = useState<SessionTreatment[]>([]);
@@ -2136,6 +2139,13 @@ export const Admin: React.FC = () => {
           <h1 className="text-2xl font-serif text-velum-900">Socias</h1>
           <p className="text-sm text-velum-500 mt-1">{members.length} pacientes registradas</p>
         </div>
+        <button
+          onClick={() => setPatientDrawerOpen(true)}
+          className="flex items-center gap-2 bg-velum-900 text-white rounded-xl px-4 py-2.5 text-sm font-semibold hover:bg-velum-800 transition"
+        >
+          <Plus size={15} />
+          Nuevo expediente
+        </button>
       </div>
       {/* Search + filters */}
       <div className="flex flex-col sm:flex-row gap-3">
@@ -3517,6 +3527,13 @@ export const Admin: React.FC = () => {
       {renderSessionModal()}
       {renderMemberDrawer()}
       {renderIntakeModal()}
+
+      <AdminCreatePatientDrawer
+        open={patientDrawerOpen}
+        onClose={() => setPatientDrawerOpen(false)}
+        onCreated={() => { setPatientDrawerOpen(false); void loadData(); }}
+        actorEmail={user?.email}
+      />
 
       {/* Cancel membership confirmation dialog */}
       {confirmCancelMemberId && (() => {

@@ -437,3 +437,62 @@ export const sendAdminInvitationEmail = async (
     html
   }));
 };
+
+// ──────────────────────────────────────────────────────────────────────
+// 6. Bienvenida a paciente — credenciales de acceso creadas por admin
+// ──────────────────────────────────────────────────────────────────────
+export const sendPatientWelcomeEmail = async (
+  to: string,
+  params: {
+    name: string;
+    tempPassword: string;
+    planName?: string;
+    createdBy: string;
+  }
+): Promise<void> => {
+  const html = baseHtml(`
+    <p style="${headingStyle}">Bienvenida a Velum Laser</p>
+    <p style="${bodyStyle}">
+      Hola <strong>${params.name}</strong>, el equipo de <strong>Velum Laser</strong>
+      ha creado tu cuenta y tu expediente clínico digital.
+      ${params.createdBy ? `Tu expediente fue preparado por <strong>${params.createdBy}</strong>.` : ''}
+    </p>
+    ${params.planName ? `
+    <div style="background:#f0faf4;border:1px solid #b7e4c7;border-radius:12px;padding:16px 20px;margin:20px 0;">
+      <p style="margin:0;font-size:11px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:#2d6a4f;">Plan activado</p>
+      <p style="margin:4px 0 0;font-size:17px;font-weight:700;color:#1a1614;">${params.planName}</p>
+    </div>` : ''}
+    <p style="${bodyStyle}">Usa las siguientes credenciales para acceder a tu cuenta:</p>
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:#f8f6f3;border-radius:12px;padding:20px;margin:20px 0;">
+      <tr>
+        <td style="padding:8px 0;">
+          <p style="margin:0;font-size:11px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:#9b8d80;">Correo electrónico</p>
+          <p style="margin:4px 0 0;font-size:15px;font-weight:600;color:#1a1614;font-family:'Courier New',monospace;">${to}</p>
+        </td>
+      </tr>
+      <tr>
+        <td style="padding:8px 0;border-top:1px solid #ede8e2;">
+          <p style="margin:0;font-size:11px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:#9b8d80;">Contraseña temporal</p>
+          <p style="margin:4px 0 0;font-size:15px;font-weight:700;color:#1a1614;font-family:'Courier New',monospace;letter-spacing:0.12em;">${params.tempPassword}</p>
+        </td>
+      </tr>
+    </table>
+    <div style="text-align:center;margin:28px 0;">
+      <a href="https://velumlaser.com/#/agenda" style="${btnStyle}">Acceder a mi cuenta</a>
+    </div>
+    <p style="margin:0 0 20px;font-size:13px;color:#7a6050;background:#fdf8f4;border:1px solid #e8ddd3;border-radius:8px;padding:12px 16px;line-height:1.6;">
+      <strong>Importante:</strong> Al iniciar sesión por primera vez se te pedirá establecer tu contraseña definitiva.
+      Guarda este mensaje en un lugar seguro.
+    </p>
+    <p style="${noteStyle}">
+      Si tienes dudas, contáctanos en <strong>velum.contacto@gmail.com</strong> o al <strong>+52 614 598 8130</strong>.
+    </p>
+  `);
+
+  await withRetry(() => resendAdminInvite.emails.send({
+    from: FROM,
+    to,
+    subject: `Bienvenida a Velum Laser — Tu cuenta está lista`,
+    html
+  }));
+};
