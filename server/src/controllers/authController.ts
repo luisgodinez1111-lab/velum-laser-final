@@ -232,3 +232,43 @@ export const verifyConsentOtp = async (req: AuthRequest, res: Response) => {
 
   return res.json({ signedAt });
 };
+
+// ── Cambio de contraseña inicial (primer inicio de sesión con contraseña temporal) ──
+export const changeInitialPassword = async (req: AuthRequest, res: Response) => {
+  const userId = req.user!.id;
+  const { newPassword } = req.body as { newPassword?: string };
+
+  if (!newPassword || newPassword.length < 8) {
+    return res.status(400).json({ message: "La contraseña debe tener al menos 8 caracteres" });
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { mustChangePassword: true }
+  });
+
+  if (!user?.mustChangePassword) {
+    return res.status(400).json({ message: "No hay contraseña temporal pendiente de cambio" });
+  }
+
+  const passwordHash = await hashPassword(newPassword);
+  await prisma.user.update({
+    where: { id: userId },
+    data: {
+      passwordHash,
+      mustChangePassword: false,
+      passwordChangedAt: new Date()
+    }
+  });
+
+  await createAuditLog({
+    userId,
+    action: "auth.initial_password_changed",
+    resourceType: "user",
+    resourceId: userId,
+    ip: req.ip,
+    metadata: {}
+  });
+
+  return res.json({ message: "Contraseña establecida correctamente" });
+};

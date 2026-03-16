@@ -119,16 +119,22 @@ export const AdminUsersPermissions: React.FC<Props> = ({ embedded = false }) => 
   const createUser = async () => {
     setError(""); setMessage("");
     if (!createEmail.trim()) { setError("El correo es obligatorio"); return; }
-    if (createPassword.length < 8) { setError("La contraseña debe tener al menos 8 caracteres"); return; }
+    if (createRole === "member" && createPassword.length < 8) { setError("La contraseña debe tener al menos 8 caracteres"); return; }
     setIsCreating(true);
     try {
+      const body: any = { email: createEmail.trim(), role: createRole };
+      if (createRole === "member") body.password = createPassword;
       await api("/api/v1/admin/access/users", {
         method: "POST",
-        body: JSON.stringify({ email: createEmail.trim(), password: createPassword, role: createRole }),
+        body: JSON.stringify(body),
       });
       setCreateEmail(""); setCreatePassword(""); setCreateRole("staff");
       setCreateExpanded(false);
-      setMessage("Usuario creado correctamente");
+      setMessage(
+        createRole === "admin" || createRole === "staff"
+          ? "Usuario creado. Se envió correo con credenciales temporales."
+          : "Usuario creado correctamente"
+      );
       await load();
     } catch (e: any) {
       setError(e?.message || "No se pudo crear el usuario");
@@ -307,18 +313,25 @@ export const AdminUsersPermissions: React.FC<Props> = ({ embedded = false }) => 
                 <input type="email" className="w-full rounded-xl border border-velum-200 px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-velum-900/20 focus:border-velum-700 transition"
                   placeholder="correo@dominio.com" value={createEmail} onChange={(e) => setCreateEmail(e.target.value)} />
               </div>
-              <div>
-                <label className="block text-[10px] font-bold uppercase tracking-widest text-velum-400 mb-1.5">Contraseña temporal</label>
-                <div className="relative">
-                  <input type={showCreatePwd ? "text" : "password"}
-                    className="w-full rounded-xl border border-velum-200 px-3.5 py-2.5 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-velum-900/20 focus:border-velum-700 transition"
-                    placeholder="Mín. 8 caracteres" value={createPassword} onChange={(e) => setCreatePassword(e.target.value)} />
-                  <button type="button" onClick={() => setShowCreatePwd((v) => !v)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-velum-400 hover:text-velum-700 transition">
-                    {showCreatePwd ? <EyeOff size={15} /> : <Eye size={15} />}
-                  </button>
+              {createRole === "member" ? (
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-widest text-velum-400 mb-1.5">Contraseña temporal</label>
+                  <div className="relative">
+                    <input type={showCreatePwd ? "text" : "password"}
+                      className="w-full rounded-xl border border-velum-200 px-3.5 py-2.5 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-velum-900/20 focus:border-velum-700 transition"
+                      placeholder="Mín. 8 caracteres" value={createPassword} onChange={(e) => setCreatePassword(e.target.value)} />
+                    <button type="button" onClick={() => setShowCreatePwd((v) => !v)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-velum-400 hover:text-velum-700 transition">
+                      {showCreatePwd ? <EyeOff size={15} /> : <Eye size={15} />}
+                    </button>
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <div className="flex items-center gap-2 rounded-xl bg-velum-50 border border-velum-100 px-3.5 py-3">
+                  <Shield size={13} className="text-velum-400 shrink-0" />
+                  <p className="text-xs text-velum-500">Se enviará contraseña temporal por correo electrónico al nuevo {createRole === "admin" ? "administrador" : "staff"}.</p>
+                </div>
+              )}
             </div>
             <div>
               <label className="block text-[10px] font-bold uppercase tracking-widest text-velum-400 mb-1.5">Rol</label>

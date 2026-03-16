@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { forgotPassword, login, logout, register, resendVerification, resetPassword, verifyEmail, sendConsentOtp, verifyConsentOtp } from "../controllers/authController";
+import { forgotPassword, login, logout, register, resendVerification, resetPassword, verifyEmail, sendConsentOtp, verifyConsentOtp, changeInitialPassword } from "../controllers/authController";
 import { requireAuth } from "../middlewares/auth";
 
 export const authRoutes = Router();
@@ -13,3 +13,4 @@ authRoutes.post("/verify-email", verifyEmail);
 authRoutes.post("/resend-verification", resendVerification);
 authRoutes.post("/send-consent-otp", requireAuth, sendConsentOtp);
 authRoutes.post("/verify-consent-otp", requireAuth, verifyConsentOtp);
+authRoutes.post("/change-initial-password", requireAuth, changeInitialPassword);

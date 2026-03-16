@@ -7,6 +7,7 @@ const resendVerification = new Resend(process.env.RESEND_KEY_VERIFICATION ?? "")
 const resendReset        = new Resend(process.env.RESEND_KEY_RESET        ?? "");
 const resendReminders    = new Resend(process.env.RESEND_KEY_REMINDERS    ?? "");
 const resendDocuments    = new Resend(process.env.RESEND_KEY_DOCUMENTS    ?? "");
+const resendAdminInvite  = new Resend(process.env.RESEND_KEY_ADMIN_INVITE ?? "");
 
 const FROM = `Velum Laser <${process.env.RESEND_FROM_EMAIL ?? "noreply@velumlaser.com"}>`;
 
@@ -377,6 +378,62 @@ export const sendDocumentSignedEmail = async (
     from: FROM,
     to,
     subject: "Documento firmado — Velum Laser",
+    html
+  }));
+};
+
+// ──────────────────────────────────────────────────────────────────────
+// 5. Invitación de administrador — credenciales de acceso inicial
+// ──────────────────────────────────────────────────────────────────────
+export const sendAdminInvitationEmail = async (
+  to: string,
+  params: {
+    invitedBy: string;
+    role: string;
+    tempPassword: string;
+  }
+): Promise<void> => {
+  const roleLabel = params.role === "admin" ? "Administrador" : "Staff";
+  const html = baseHtml(`
+    <p style="${headingStyle}">Bienvenido al panel de Velum Laser</p>
+    <p style="${bodyStyle}">
+      <strong>${params.invitedBy}</strong> te ha agregado al panel de administración de
+      <strong>Velum Laser</strong> con el rol de <strong>${roleLabel}</strong>.
+    </p>
+    <p style="${bodyStyle}">
+      Usa las siguientes credenciales para iniciar sesión. Al ingresar por primera vez,
+      el sistema te pedirá establecer tu contraseña definitiva.
+    </p>
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:#f8f6f3;border-radius:12px;padding:20px;margin:20px 0;">
+      <tr>
+        <td style="padding:8px 0;">
+          <p style="margin:0;font-size:11px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:#9b8d80;">Correo electrónico</p>
+          <p style="margin:4px 0 0;font-size:15px;font-weight:600;color:#1a1614;font-family:'Courier New',monospace;">${to}</p>
+        </td>
+      </tr>
+      <tr>
+        <td style="padding:8px 0;border-top:1px solid #ede8e2;">
+          <p style="margin:0;font-size:11px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:#9b8d80;">Contraseña temporal</p>
+          <p style="margin:4px 0 0;font-size:15px;font-weight:700;color:#1a1614;font-family:'Courier New',monospace;letter-spacing:0.12em;">${params.tempPassword}</p>
+        </td>
+      </tr>
+    </table>
+    <div style="text-align:center;margin:28px 0;">
+      <a href="https://velumlaser.com/#/admin" style="${btnStyle}">Acceder al panel</a>
+    </div>
+    <p style="margin:0 0 20px;font-size:13px;color:#7a6050;background:#fdf8f4;border:1px solid #e8ddd3;border-radius:8px;padding:12px 16px;line-height:1.6;">
+      <strong>Importante:</strong> Al iniciar sesión por primera vez deberás establecer tu propia contraseña.
+      Esta contraseña temporal es de un solo uso. No la compartas con nadie.
+    </p>
+    <p style="${noteStyle}">
+      Si no esperabas este mensaje, contáctanos en <strong>velum.contacto@gmail.com</strong>.
+    </p>
+  `);
+
+  await withRetry(() => resendAdminInvite.emails.send({
+    from: FROM,
+    to,
+    subject: `Acceso a Velum Admin — Tus credenciales de ingreso`,
     html
   }));
 };

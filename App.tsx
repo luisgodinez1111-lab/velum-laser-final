@@ -6,6 +6,8 @@ import { ToastProvider } from './context/ToastContext';
 import { ToastContainer } from './components/ToastContainer';
 import { AppErrorBoundary } from './components/AppErrorBoundary';
 import { PageSkeleton } from './components/PageSkeleton';
+import { ForcePasswordChange } from './components/ForcePasswordChange';
+import { useAuth } from './context/AuthContext';
 
 // Eager — critical for first paint
 import { Home } from './pages/Home';
@@ -22,9 +24,10 @@ const AgendaIntegrations = lazy(() => import('./pages/settings/AgendaIntegration
 const OnboardingAdmin   = lazy(() => import('./pages/OnboardingAdmin').then(m => ({ default: m.OnboardingAdmin })));
 const NotFound          = lazy(() => import('./pages/NotFound').then(m => ({ default: m.NotFound })));
 
-const App: React.FC = () => (
-  <ToastProvider>
-    <AuthProvider>
+const InnerApp: React.FC = () => {
+  const { mustChangePassword } = useAuth();
+  return (
+    <>
       <Router>
         <AppErrorBoundary>
           <Layout>
@@ -46,6 +49,15 @@ const App: React.FC = () => (
           </Layout>
         </AppErrorBoundary>
       </Router>
+      {mustChangePassword && <ForcePasswordChange />}
+    </>
+  );
+};
+
+const App: React.FC = () => (
+  <ToastProvider>
+    <AuthProvider>
+      <InnerApp />
       <ToastContainer />
     </AuthProvider>
   </ToastProvider>

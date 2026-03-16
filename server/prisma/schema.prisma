@@ -91,6 +91,7 @@ model User {
   appointmentDepositAvailable Boolean   @default(false)
   interestedPlanCode          String?
   passwordChangedAt           DateTime?
+  mustChangePassword          Boolean   @default(false)
 
   @@index([clinicId])
 }

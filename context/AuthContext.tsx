@@ -24,6 +24,8 @@ interface AuthContextType {
   register: (payload: RegisterPayload) => Promise<AuthUser>;
   logout: () => Promise<void>;
   hasRole: (roles: UserRole[]) => boolean;
+  mustChangePassword: boolean;
+  clearMustChangePassword: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -32,10 +34,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isSessionLoading, setIsSessionLoading] = useState(true);
   const [isActionLoading, setIsActionLoading] = useState(false);
+  const [mustChangePassword, setMustChangePassword] = useState(false);
 
   useEffect(() => {
     authService.verifySession()
-      .then((userData) => { if (userData) setUser(userData); })
+      .then((userData) => {
+        if (userData) {
+          setUser(userData);
+          setMustChangePassword(userData.mustChangePassword ?? false);
+        }
+      })
       .catch(() => { /* Session expired or network error — user is unauthenticated */ })
       .finally(() => setIsSessionLoading(false));
   }, []);
@@ -45,6 +53,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const userData = await authService.login(email, pass);
       setUser(userData);
+      setMustChangePassword(userData.mustChangePassword ?? false);
       return userData;
     } finally {
       setIsActionLoading(false);
@@ -77,6 +86,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     [user]
   );
 
+  const clearMustChangePassword = useCallback(() => setMustChangePassword(false), []);
+
   return (
     <AuthContext.Provider
       value={{
@@ -89,6 +100,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         register,
         logout,
         hasRole,
+        mustChangePassword,
+        clearMustChangePassword,
       }}
     >
       {children}

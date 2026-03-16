@@ -8,6 +8,7 @@ export interface AuthUser {
   role: UserRole;
   phone?: string;
   birthDate?: string; // YYYY-MM-DD
+  mustChangePassword?: boolean;
 }
 
 const mapUser = (user: any): AuthUser => {
@@ -27,7 +28,8 @@ const mapUser = (user: any): AuthUser => {
     email: user.email,
     role: user.role,
     phone: user?.profile?.phone ?? undefined,
-    birthDate
+    birthDate,
+    mustChangePassword: user?.mustChangePassword ?? false,
   };
 };
 
@@ -103,5 +105,12 @@ export const authService = {
       method: "POST",
       body: JSON.stringify({ otp })
     });
-  }
+  },
+
+  changeInitialPassword: async (newPassword: string): Promise<void> => {
+    await apiFetch("/auth/change-initial-password", {
+      method: "POST",
+      body: JSON.stringify({ newPassword })
+    });
+  },
 };

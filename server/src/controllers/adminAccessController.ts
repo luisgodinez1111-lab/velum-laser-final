@@ -14,13 +14,31 @@ import {
 } from "../services/adminAccessService";
 import { sendWhatsappOtpCode, getEffectiveWhatsappMetaConfig, normalizePhone } from "../services/whatsappMetaService";
 import { stripe } from "../services/stripeService";
-import { sendDeleteUserOtpEmail } from "../services/emailService";
+import { sendDeleteUserOtpEmail, sendAdminInvitationEmail } from "../services/emailService";
 import { logger } from "../utils/logger";
 
 const MAX_OTP_ATTEMPTS = 5;
 
 function generateOtp(): string {
   return String(100000 + crypto.randomInt(900000));
+}
+
+function generateTempPassword(): string {
+  const upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+  const lower = 'abcdefghjkmnpqrstuvwxyz';
+  const digits = '23456789';
+  const special = '@#$!';
+  const pool = upper + lower + digits + special;
+  const arr = Array.from({ length: 12 }, () => pool[crypto.randomInt(pool.length)]);
+  arr[0] = upper[crypto.randomInt(upper.length)];
+  arr[1] = lower[crypto.randomInt(lower.length)];
+  arr[2] = digits[crypto.randomInt(digits.length)];
+  arr[3] = special[crypto.randomInt(special.length)];
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = crypto.randomInt(i + 1);
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr.join('');
 }
 
 async function pruneExpiredOtps(): Promise<void> {
@@ -84,17 +102,29 @@ export const createAdminAccessUser = async (req: AuthRequest, res: Response) => 
     if (!isAdminUser(req)) return res.status(403).json({ message: "No autorizado" });
 
     const email = clean((req.body as any)?.email).toLowerCase();
-    const password = clean((req.body as any)?.password);
     const role = clean((req.body as any)?.role) || "staff";
     const incomingPerms = (req.body as any)?.permissions;
 
     if (!validEmail(email)) return res.status(400).json({ message: "Correo inválido" });
-    if (password.length < 8) return res.status(400).json({ message: "La contraseña debe tener al menos 8 caracteres" });
     if (!roleAllowed.has(role)) return res.status(400).json({ message: "Rol inválido" });
+
+    // For admin/staff: auto-generate temp password and send email
+    // For member: require password from form
+    const isAdminOrStaff = role === "admin" || role === "staff";
+    let password: string;
+    let mustChangePassword = false;
+
+    if (isAdminOrStaff) {
+      password = generateTempPassword();
+      mustChangePassword = true;
+    } else {
+      password = clean((req.body as any)?.password);
+      if (password.length < 8) return res.status(400).json({ message: "La contraseña debe tener al menos 8 caracteres" });
+    }
 
     const actor = await prisma.user.findUnique({
       where: { id: req.user!.id },
-      select: { clinicId: true },
+      select: { clinicId: true, email: true, profile: { select: { firstName: true, lastName: true } } },
     });
     const seed = await prisma.user.findFirst({ select: { clinicId: true } });
     const clinicId = actor?.clinicId || seed?.clinicId;
@@ -113,20 +143,46 @@ export const createAdminAccessUser = async (req: AuthRequest, res: Response) => 
         role: role as Role,
         clinicId,
         emailVerifiedAt: new Date(),
+        mustChangePassword,
       },
       select: { id: true, email: true, role: true, createdAt: true },
     });
 
-    if (role === "admin" || role === "staff") {
+    if (isAdminOrStaff) {
       const perms = Array.isArray(incomingPerms) && incomingPerms.length > 0
         ? incomingPerms
         : defaultPermissionsByRole(role);
       await setUserPermissions(created.id, perms);
+
+      const actorName = actor
+        ? [actor.profile?.firstName, actor.profile?.lastName].filter(Boolean).join(" ") || actor.email
+        : "El administrador";
+
+      sendAdminInvitationEmail(email, {
+        invitedBy: actorName,
+        role,
+        tempPassword: password,
+      }).catch((err: unknown) => {
+        logger.warn({ err, email }, "[admin] No se pudo enviar correo de invitación");
+      });
     }
 
+    await createAuditLog({
+      userId: req.user!.id,
+      targetUserId: created.id,
+      action: "admin.user.create",
+      resourceType: "user",
+      resourceId: created.id,
+      ip: req.ip,
+      metadata: { email, role, inviteEmailSent: isAdminOrStaff }
+    });
+
     return res.status(201).json({
-      message: "Usuario creado",
+      message: isAdminOrStaff
+        ? `Usuario creado. Se envió correo con credenciales a ${email}.`
+        : "Usuario creado",
       user: created,
+      inviteEmailSent: isAdminOrStaff,
     });
   } catch (error: any) {
     logger.error({ err: error }, "createAdminAccessUser");
