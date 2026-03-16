@@ -117,6 +117,13 @@ export const Agenda: React.FC = () => {
   const [otpMessage, setOtpMessage] = useState<string | null>(null);
   const [otpSuccess, setOtpSuccess] = useState(false);
 
+  // OTP de consentimiento informado
+  const [consentOtpSent, setConsentOtpSent] = useState(false);
+  const [consentOtpCode, setConsentOtpCode] = useState("");
+  const [consentOtpLoading, setConsentOtpLoading] = useState(false);
+  const [consentOtpMessage, setConsentOtpMessage] = useState<string | null>(null);
+  const [consentSignedAt, setConsentSignedAt] = useState<string | null>(null);
+
   const [appointmentMessage, setAppointmentMessage] = useState<string | null>(null);
   const [isScheduling, setIsScheduling] = useState(false);
   const [selectedPlanCode, setSelectedPlanCode] = useState<string | null>(null);
@@ -412,6 +419,43 @@ export const Agenda: React.FC = () => {
     }
   };
 
+  const handleSendConsentOtp = async () => {
+    setConsentOtpLoading(true);
+    setConsentOtpMessage(null);
+    try {
+      await authService.sendConsentOtp();
+      setConsentOtpSent(true);
+      setConsentOtpMessage("Código enviado. Revisa tu correo electrónico.");
+    } catch {
+      setConsentOtpMessage("No se pudo enviar el código. Intenta de nuevo.");
+    } finally {
+      setConsentOtpLoading(false);
+    }
+  };
+
+  const handleVerifyConsentOtp = async () => {
+    if (consentOtpCode.length !== 6) {
+      setConsentOtpMessage("Ingresa el código de 6 dígitos.");
+      return;
+    }
+    setConsentOtpLoading(true);
+    setConsentOtpMessage(null);
+    try {
+      const { signedAt } = await authService.verifyConsentOtp(consentOtpCode);
+      setConsentSignedAt(signedAt);
+      setIntakeDraft((prev) => ({
+        ...prev,
+        consentAccepted: true,
+        signatureKey: `otp:${signedAt}`
+      }));
+      setConsentOtpMessage(null);
+    } catch {
+      setConsentOtpMessage("Código incorrecto o expirado. Verifica e intenta de nuevo.");
+    } finally {
+      setConsentOtpLoading(false);
+    }
+  };
+
   const saveIntakeDraft = async (submit: boolean) => {
     setIsSavingIntake(true);
     setIntakeError(null);
@@ -465,8 +509,8 @@ export const Agenda: React.FC = () => {
   };
 
   const handleSubmitIntake = async () => {
-    if (!intakeDraft.consentAccepted) {
-      setIntakeError("Debes aceptar el consentimiento para enviar el expediente.");
+    if (!intakeDraft.consentAccepted || !consentSignedAt) {
+      setIntakeError("Debes firmar el consentimiento con el código OTP para continuar.");
       return;
     }
 
@@ -1375,28 +1419,141 @@ export const Agenda: React.FC = () => {
                 })()}
 
                 {intakeStep === 4 && (
-                  <div className="space-y-4">
-                    <h3 className="font-serif text-2xl text-velum-900">Consentimiento informado</h3>
-                    <div className="rounded-2xl border border-velum-200 bg-white p-4">
-                      <label className="flex items-start gap-3 text-sm text-velum-700">
-                        <input
-                          type="checkbox"
-                          checked={intakeDraft.consentAccepted}
-                          onChange={(e) => setIntakeDraft((prev) => ({ ...prev, consentAccepted: e.target.checked }))}
-                          className="mt-1 h-4 w-4 accent-velum-900"
-                        />
-                        <span>Declaro que la información es correcta y autorizo el tratamiento según valoración clínica.</span>
-                      </label>
-                    </div>
+                  <div className="space-y-5">
                     <div>
-                      <label className={labelClass}>Nombre para firma</label>
-                      <input
-                        className={fieldClass}
-                        placeholder="Nombre completo"
-                        value={intakeDraft.signatureKey ?? ""}
-                        onChange={(e) => setIntakeDraft((prev) => ({ ...prev, signatureKey: e.target.value }))}
-                      />
+                      <h3 className="font-serif text-2xl text-velum-900">Consentimiento Informado</h3>
+                      <p className="mt-1 text-sm text-velum-500">Lee con atención antes de firmar digitalmente.</p>
                     </div>
+
+                    {/* ── Documento de consentimiento ─────────────────── */}
+                    <div className="h-80 overflow-y-auto rounded-2xl border border-velum-200 bg-velum-50 p-5 text-[13px] leading-relaxed text-velum-800 space-y-4 scroll-smooth">
+
+                      <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-velum-400">Velum Laser · Chihuahua, México · Versión 1.0 — 2026</p>
+
+                      <p className="font-bold text-velum-900 text-[14px]">CONSENTIMIENTO INFORMADO PARA DEPILACIÓN CON LÁSER CUATRIODO</p>
+
+                      <p><strong>Establecimiento:</strong> Velum Laser · Av. Prol. Teófilo Borunda 11811, Int. 13-4, Plaza Travessía, Col. Labor de Terrazas, C.P. 31223, Chihuahua, Chih. México.</p>
+
+                      <p><strong>Fundamento legal:</strong> El presente consentimiento se emite de conformidad con la <em>Ley General de Salud</em> (Art. 29 y 51 Bis 1), la <em>NOM-010-SSA4-2017</em> (Protección de la dignidad del paciente), la <em>NOM-004-SSA3-2012</em> (Expediente clínico), la <em>Ley Federal de Protección de Datos Personales en Posesión de los Particulares</em> (LFPDPPP) y el <em>Reglamento de la Ley General de Salud en Materia de Prestación de Servicios de Atención Médica</em>.</p>
+
+                      <p className="font-semibold text-velum-900">1. DESCRIPCIÓN DEL PROCEDIMIENTO</p>
+                      <p>La depilación con láser cuatriodo utiliza energía lumínica pulsada de cuatro longitudes de onda simultáneas: <strong>755 nm</strong> (Alejandrita), <strong>808 nm</strong> (Diodo), <strong>980 nm</strong> (Infrarrojo cercano) y <strong>1064 nm</strong> (Nd:YAG). Esta combinación permite tratar de manera segura y eficaz todos los fototipos (I al VI según la escala de Fitzpatrick) y múltiples tipos de vello. La energía es absorbida selectivamente por la melanina del folículo piloso (fototermólisis selectiva), generando calor controlado que inhibe la regeneración del vello sin dañar el tejido circundante cuando se aplican los parámetros correctos.</p>
+
+                      <p className="font-semibold text-velum-900">2. BENEFICIOS ESPERADOS</p>
+                      <p>Reducción progresiva y permanente del vello en las zonas tratadas, disminución de la frecuencia de depilación convencional, mejora de la textura cutánea, y comodidad a largo plazo. Los resultados varían individualmente según fototipo, tipo y grosor del vello, etapa del ciclo capilar, balance hormonal y cumplimiento del protocolo de sesiones.</p>
+
+                      <p className="font-semibold text-velum-900">3. NÚMERO DE SESIONES Y RESULTADOS</p>
+                      <p>Se requieren en promedio <strong>6 a 12 sesiones</strong> con intervalos de 4 a 8 semanas según la zona corporal y características individuales. No existe garantía de eliminación total del 100 % del vello en todos los pacientes. Factores hormonales (síndrome de ovario poliquístico, hirsutismo, embarazo, menopausia) pueden influir en la respuesta al tratamiento y requerir sesiones de mantenimiento periódicas.</p>
+
+                      <p className="font-semibold text-velum-900">4. RIESGOS Y EFECTOS SECUNDARIOS POSIBLES</p>
+                      <p><strong>Comunes y transitorios (24–72 h):</strong> eritema (enrojecimiento), edema perifolicular, sensación de calor o escozor local, costras finas superficiales.<br/>
+                      <strong>Poco frecuentes:</strong> hiperpigmentación o hipopigmentación postinflamatoria (especialmente en fototipos IV-VI o con exposición solar reciente), ampollas, vesículas superficiales.<br/>
+                      <strong>Raros:</strong> cicatrización, quemadura de segundo grado (mayor riesgo en piel bronceada, uso previo de autobronceadores o fotosensibilizantes), infección secundaria por manipulación de lesiones.<br/>
+                      <strong>Muy raros:</strong> reacción alérgica a gel de contacto, cambios de textura cutánea permanentes.</p>
+
+                      <p className="font-semibold text-velum-900">5. CONTRAINDICACIONES ABSOLUTAS Y RELATIVAS</p>
+                      <p><strong>Absolutas:</strong> embarazo y lactancia activa, vitíligo activo en zona a tratar, lupus eritematoso sistémico activo, uso de isotretinoína oral en los 6 meses previos, fotosensibilidad de origen medicamentoso o patológico activa, piel bronceada o autobronceo en las 4 semanas previas.<br/>
+                      <strong>Relativas (requieren evaluación):</strong> diabetes mellitus descontrolada, uso de anticoagulantes, queloides o cicatrices hipertróficas previas, herpes activo en zona a tratar, tatuajes o micropigmentación en área de aplicación.</p>
+
+                      <p className="font-semibold text-velum-900">6. ALTERNATIVAS AL PROCEDIMIENTO</p>
+                      <p>Cera, rasurado, cremas depilatorias, luz pulsada intensa (IPL), electrólisis. El personal de Velum Laser ha explicado las diferencias en eficacia, permanencia y seguridad entre estas opciones y la depilación láser cuatriodo.</p>
+
+                      <p className="font-semibold text-velum-900">7. OBLIGACIONES DEL PACIENTE</p>
+                      <p>a) Evitar exposición solar directa sin protector solar FPS 50+ en zonas tratadas durante <strong>15 días</strong> antes y después de cada sesión.<br/>
+                      b) No aplicar autobronceadores en zonas a tratar durante las <strong>4 semanas</strong> previas.<br/>
+                      c) No depilar con cera, hilo o pinzas en los <strong>14 días</strong> previos; solo rasurado o crema depilatoria.<br/>
+                      d) Informar de inmediato al personal sobre cambios en medicación, embarazo, lactancia o enfermedades nuevas.<br/>
+                      e) No aplicar perfumes, cremas con retinol, ácidos o irritantes en la zona tratada durante <strong>48 horas</strong> post-sesión.<br/>
+                      f) Asistir a las sesiones programadas; cancelaciones con menos de <strong>24 horas</strong> de anticipación podrán generar cargo por reservación.</p>
+
+                      <p className="font-semibold text-velum-900">8. DESLINDE DE RESPONSABILIDAD Y LIMITACIÓN DE LIABILITY</p>
+                      <p>Velum Laser no será responsable por: (a) efectos adversos derivados del incumplimiento de las indicaciones pre y post-tratamiento descritas en este documento; (b) resultados subóptimos atribuibles a factores biológicos individuales no modificables (fototipo, balance hormonal, estadio de crecimiento del vello); (c) complicaciones derivadas de información clínica falsa, incompleta u omitida por el paciente al momento de la valoración; (d) cancelaciones o interrupciones del tratamiento derivadas de causas médicas sobrevenidas no imputables al establecimiento. La responsabilidad del establecimiento queda limitada al valor de las sesiones no realizadas en caso de imposibilidad de prestación del servicio por causas imputables al mismo.</p>
+
+                      <p className="font-semibold text-velum-900">9. PRIVACIDAD Y PROTECCIÓN DE DATOS (LFPDPPP)</p>
+                      <p>Los datos personales, de salud y clínicos recabados serán utilizados exclusivamente para la prestación del servicio médico-estético, seguimiento del expediente clínico y comunicaciones relacionadas con el tratamiento. No serán cedidos a terceros sin consentimiento expreso, salvo requerimiento de autoridad competente. El titular tiene derecho de acceso, rectificación, cancelación y oposición (ARCO). Aviso de privacidad completo disponible en el establecimiento y en <strong>velumlaser.com</strong>.</p>
+
+                      <p className="font-semibold text-velum-900">10. DECLARACIÓN DEL PACIENTE</p>
+                      <p>Declaro que: (a) he leído y comprendido íntegramente este consentimiento; (b) el personal de Velum Laser me ha explicado el procedimiento y ha respondido todas mis dudas; (c) la información clínica que proporcioné es verdadera y completa; (d) soy mayor de edad o cuento con el consentimiento de mi tutor legal; (e) otorgo libre y voluntariamente mi autorización para la realización del tratamiento de depilación con láser cuatriodo; (f) entiendo que puedo revocar este consentimiento antes del inicio de cada sesión sin perjuicio alguno.</p>
+
+                      <p className="font-semibold text-velum-900">11. FIRMA DIGITAL CON CÓDIGO OTP</p>
+                      <p>La firma de este consentimiento se realiza mediante un Código de Verificación de Un Solo Uso (OTP) enviado al correo electrónico registrado, conforme al <em>Código de Comercio</em> Art. 89 Bis y la <em>NOM-151-SCFI-2016</em> en materia de firma electrónica. El código OTP tiene validez de <strong>1 hora</strong> y su uso constituye firma electrónica con plena validez legal. La fecha, hora y hash de verificación quedarán registrados de manera permanente en el expediente clínico digital del paciente.</p>
+
+                    </div>
+
+                    {/* ── Estado de firma ─────────────────────────────── */}
+                    {consentSignedAt ? (
+                      <div className="rounded-2xl border border-green-200 bg-green-50 px-5 py-4 flex items-start gap-3">
+                        <CircleCheck className="mt-0.5 h-5 w-5 shrink-0 text-green-600" />
+                        <div>
+                          <p className="text-sm font-semibold text-green-800">Consentimiento firmado digitalmente</p>
+                          <p className="mt-0.5 text-xs text-green-700">
+                            Firma registrada el {new Date(consentSignedAt).toLocaleString("es-MX", {
+                              dateStyle: "long", timeStyle: "short"
+                            })} (hora local). El registro queda en tu expediente clínico.
+                          </p>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="rounded-2xl border border-velum-200 bg-white p-5 space-y-4">
+                        <div className="flex items-start gap-3">
+                          <Shield className="mt-0.5 h-5 w-5 shrink-0 text-velum-600" />
+                          <div>
+                            <p className="text-sm font-semibold text-velum-900">Firma digital con código OTP</p>
+                            <p className="mt-0.5 text-xs text-velum-500">
+                              Enviaremos un código de 6 dígitos a tu correo electrónico.
+                              Al ingresarlo confirmas que leíste y aceptas el consentimiento.
+                            </p>
+                          </div>
+                        </div>
+
+                        {!consentOtpSent ? (
+                          <Button
+                            className="w-full rounded-2xl"
+                            onClick={handleSendConsentOtp}
+                            isLoading={consentOtpLoading}
+                          >
+                            <Mail className="mr-2 h-4 w-4" />
+                            Enviar código OTP a mi correo
+                          </Button>
+                        ) : (
+                          <div className="space-y-3">
+                            <div>
+                              <label className={labelClass}>Código de verificación (6 dígitos)</label>
+                              <div className="flex gap-2">
+                                <input
+                                  className={`${fieldClass} text-center tracking-[0.4em] text-lg font-bold`}
+                                  placeholder="000000"
+                                  maxLength={6}
+                                  value={consentOtpCode}
+                                  onChange={(e) => setConsentOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                                />
+                                <Button
+                                  className="shrink-0 rounded-2xl px-5"
+                                  onClick={handleVerifyConsentOtp}
+                                  isLoading={consentOtpLoading}
+                                >
+                                  <KeyRound className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              className="text-xs text-velum-500 underline underline-offset-2 hover:text-velum-900"
+                              onClick={handleSendConsentOtp}
+                              disabled={consentOtpLoading}
+                            >
+                              Reenviar código
+                            </button>
+                          </div>
+                        )}
+
+                        {consentOtpMessage && (
+                          <p className={`text-xs ${consentOtpMessage.includes("enviado") ? "text-velum-600" : "text-red-600"}`}>
+                            {consentOtpMessage}
+                          </p>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

@@ -1,12 +1,13 @@
 import { Request, Response } from "express";
-import { registerSchema, loginSchema, forgotSchema, resetSchema, verifyEmailSchema } from "../validators/auth";
+import { AuthRequest } from "../middlewares/auth";
+import { registerSchema, loginSchema, forgotSchema, resetSchema, verifyEmailSchema, consentOtpVerifySchema } from "../validators/auth";
 import { createUser, getUserByEmail } from "../services/userService";
 import { hashPassword, signToken, verifyPassword } from "../utils/auth";
 import { env, isProduction } from "../utils/env";
-import { createEmailVerification, createPasswordReset, consumeEmailVerification, consumePasswordReset } from "../services/authService";
+import { createEmailVerification, createPasswordReset, consumeEmailVerification, consumePasswordReset, createConsentOtp, consumeConsentOtp } from "../services/authService";
 import { prisma } from "../db/prisma";
 import { createAuditLog } from "../services/auditService";
-import { sendPasswordResetEmail, sendEmailVerificationEmail } from "../services/emailService";
+import { sendPasswordResetEmail, sendEmailVerificationEmail, sendConsentOtpEmail } from "../services/emailService";
 import { logger } from "../utils/logger";
 
 const setAuthCookie = (res: Response, token: string) => {
@@ -186,4 +187,48 @@ export const resendVerification = async (req: Request, res: Response) => {
     logger.warn({ err, email: user.email }, "[auth] No se pudo reenviar correo de verificación");
   });
   return res.json({ message: "Código reenviado. Revisa tu bandeja de entrada." });
+};
+
+// ── OTP para firma de consentimiento informado ────────────────────────
+export const sendConsentOtp = async (req: AuthRequest, res: Response) => {
+  const userId = req.user!.id;
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { email: true, profile: { select: { firstName: true, lastName: true } } }
+  });
+  if (!user) {
+    return res.status(404).json({ message: "Usuario no encontrado" });
+  }
+
+  const consent = await createConsentOtp(userId);
+  const name = [user.profile?.firstName, user.profile?.lastName].filter(Boolean).join(" ") || user.email;
+
+  sendConsentOtpEmail(user.email, { name, otp: consent.otp }).catch((err: unknown) => {
+    logger.warn({ err, email: user.email }, "[auth] No se pudo enviar OTP de consentimiento");
+  });
+
+  return res.json({ message: "Código enviado a tu correo electrónico." });
+};
+
+export const verifyConsentOtp = async (req: AuthRequest, res: Response) => {
+  const userId = req.user!.id;
+  const payload = consentOtpVerifySchema.parse(req.body);
+
+  const record = await consumeConsentOtp(userId, payload.otp);
+  if (!record) {
+    return res.status(400).json({ message: "Código incorrecto o expirado." });
+  }
+
+  const signedAt = new Date().toISOString();
+
+  await createAuditLog({
+    userId,
+    action: "auth.consent_signed",
+    resourceType: "medicalIntake",
+    resourceId: userId,
+    ip: req.ip,
+    metadata: { signedAt }
+  });
+
+  return res.json({ signedAt });
 };

@@ -78,3 +78,36 @@ export const consumePasswordReset = async (userId: string, otp: string) => {
   await prisma.passwordResetToken.delete({ where: { token } });
   return record;
 };
+
+// ──────────────────────────────────────────────────────────────────────
+// OTP de firma de consentimiento informado
+// ──────────────────────────────────────────────────────────────────────
+export const createConsentOtp = async (userId: string) => {
+  const otp = generateOtp();
+  const token = buildToken(userId, otp);
+
+  // Eliminar OTPs anteriores del mismo usuario
+  await prisma.consentOtpToken.deleteMany({ where: { userId } });
+
+  const record = await prisma.consentOtpToken.create({
+    data: {
+      userId,
+      token,
+      expiresAt: addHours(1)
+    }
+  });
+
+  return { ...record, otp };
+};
+
+export const consumeConsentOtp = async (userId: string, otp: string) => {
+  const token = buildToken(userId, otp);
+  const record = await prisma.consentOtpToken.findUnique({ where: { token } });
+
+  if (!record || record.expiresAt < new Date()) {
+    return null;
+  }
+
+  await prisma.consentOtpToken.delete({ where: { token } });
+  return record;
+};

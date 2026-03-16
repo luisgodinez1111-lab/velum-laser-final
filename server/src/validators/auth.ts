@@ -29,3 +29,7 @@ export const verifyEmailSchema = z.object({
   email: z.string().email(),
   otp: z.string().length(6).regex(/^\d{6}$/, "El código debe ser de 6 dígitos")
 });
+
+export const consentOtpVerifySchema = z.object({
+  otp: z.string().length(6).regex(/^\d{6}$/, "El código debe ser de 6 dígitos")
+});

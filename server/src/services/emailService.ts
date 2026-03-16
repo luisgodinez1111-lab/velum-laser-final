@@ -295,6 +295,46 @@ export const sendDeleteUserOtpEmail = async (
 };
 
 // ──────────────────────────────────────────────────────────────────────
+// 3c. OTP de firma de consentimiento informado (API key 3)
+// ──────────────────────────────────────────────────────────────────────
+export const sendConsentOtpEmail = async (
+  to: string,
+  params: { name: string; otp: string }
+): Promise<void> => {
+  const html = baseHtml(`
+    <p style="${headingStyle}">Firma de Consentimiento Informado</p>
+    <p style="${bodyStyle}">
+      Hola <strong>${params.name}</strong>, para completar la firma digital de tu
+      <strong>Consentimiento Informado para Depilación Láser</strong>,
+      ingresa el siguiente código de verificación:
+    </p>
+    <div style="text-align:center;margin:28px 0;">
+      <span style="${otpBoxStyle}">${params.otp}</span>
+    </div>
+    <p style="${bodyStyle}">
+      Este código es válido por <strong>1 hora</strong> y de un solo uso.
+      Al ingresarlo confirmas que leíste y aceptas el consentimiento informado.
+    </p>
+    <p style="margin:0 0 20px;font-size:13px;color:#7a6050;background:#fdf8f4;border:1px solid #e8ddd3;border-radius:8px;padding:12px 16px;line-height:1.6;">
+      Tu firma quedará registrada en tu expediente clínico junto con la fecha y hora exactas.
+      Este consentimiento tiene plena validez legal conforme a la
+      <strong>NOM-010-SSA4-2017</strong> y la <strong>Ley General de Salud</strong>.
+    </p>
+    <p style="${noteStyle}">
+      Si no estás realizando este proceso, ignora este correo.
+      Nadie de Velum Laser te pedirá este código por teléfono o WhatsApp.
+    </p>
+  `);
+
+  await withRetry(() => resendReminders.emails.send({
+    from: FROM,
+    to,
+    subject: "Código para firmar tu consentimiento informado — Velum Laser",
+    html
+  }));
+};
+
+// ──────────────────────────────────────────────────────────────────────
 // 4. Notificación de firma de documento (API key 4)
 // ──────────────────────────────────────────────────────────────────────
 export const sendDocumentSignedEmail = async (

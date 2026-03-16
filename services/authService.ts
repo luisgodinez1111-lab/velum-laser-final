@@ -91,5 +91,17 @@ export const authService = {
       method: "POST",
       body: JSON.stringify({ email })
     });
+  },
+
+  // ── OTP para firma de consentimiento informado ─────────────────────
+  sendConsentOtp: async (): Promise<void> => {
+    await apiFetch("/auth/send-consent-otp", { method: "POST" });
+  },
+
+  verifyConsentOtp: async (otp: string): Promise<{ signedAt: string }> => {
+    return apiFetch<{ signedAt: string }>("/auth/verify-consent-otp", {
+      method: "POST",
+      body: JSON.stringify({ otp })
+    });
   }
 };
