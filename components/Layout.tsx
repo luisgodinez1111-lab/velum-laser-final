@@ -268,7 +268,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
             <h3 className="text-velum-50 text-xs uppercase tracking-widest mb-5">Síguenos</h3>
             <div className="flex space-x-5">
               <a
-                href="https://instagram.com/velumlaser"
+                href="https://www.instagram.com/velum.laser?igsh=MWFsYjJwa2xmbDQ1dw=="
                 target="_blank"
                 rel="noopener noreferrer"
                 aria-label="Instagram de Velum Laser"
