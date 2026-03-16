@@ -277,7 +277,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
                 <Instagram size={19} />
               </a>
               <a
-                href="https://facebook.com/velumlaser"
+                href="https://www.facebook.com/people/Velum-Laser/61584518590362/?sk=about"
                 target="_blank"
                 rel="noopener noreferrer"
                 aria-label="Facebook de Velum Laser"
