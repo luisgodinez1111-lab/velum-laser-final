@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { MEMBERSHIPS, ZONES } from '../constants';
+import { MEMBERSHIPS, ZONES, MASTER_ZONES, SMALL_ZONE_IDS, MEDIUM_ZONE_IDS, SELECT_MAX_SMALL, SELECT_MAX_MEDIUM } from '../constants';
 import { MembershipTier, ZoneId } from '../types';
 import { Button } from '../components/Button';
 import { Check, ArrowDown, Sparkles, ShieldCheck, UserPlus, FileText, CreditCard, ArrowRight } from 'lucide-react';
@@ -67,21 +67,32 @@ export const Memberships: React.FC = () => {
 
   const toggleZone = (zoneId: ZoneId) => {
     if (!selectedTier) return;
-    
     const isSelected = selectedZones.includes(zoneId);
-    
     if (isSelected) {
       setSelectedZones(prev => prev.filter(id => id !== zoneId));
-    } else {
-      if (selectedZones.length < selectedTier.maxZones) {
-        setSelectedZones(prev => [...prev, zoneId]);
-      }
+      return;
     }
+    if (selectedTier.selectionMode === 'custom') {
+      const isSmall = SMALL_ZONE_IDS.includes(zoneId);
+      const isMedium = MEDIUM_ZONE_IDS.includes(zoneId);
+      const currentSmall = selectedZones.filter(z => SMALL_ZONE_IDS.includes(z)).length;
+      const currentMedium = selectedZones.filter(z => MEDIUM_ZONE_IDS.includes(z)).length;
+      if (isSmall && currentSmall >= SELECT_MAX_SMALL) return;
+      if (isMedium && currentMedium >= SELECT_MAX_MEDIUM) return;
+    } else {
+      if (selectedZones.length >= selectedTier.maxZones) return;
+    }
+    setSelectedZones(prev => [...prev, zoneId]);
   };
 
   const canProceed = () => {
     if (!selectedTier) return false;
     if (selectedTier.isFullBody) return true;
+    if (selectedTier.selectionMode === 'custom') {
+      const small = selectedZones.filter(z => SMALL_ZONE_IDS.includes(z)).length;
+      const medium = selectedZones.filter(z => MEDIUM_ZONE_IDS.includes(z)).length;
+      return small === SELECT_MAX_SMALL && medium === SELECT_MAX_MEDIUM;
+    }
     return selectedZones.length === selectedTier.maxZones;
   };
 
@@ -417,102 +428,185 @@ export const Memberships: React.FC = () => {
             </div>
           )}
 
-          {/* Step 2: Zone Selection — agrupado por Zona Maestra */}
+          {/* Step 2: Zone Selection */}
           {step === 2 && selectedTier && (
             <div id="zone-selector" className="animate-fade-in">
               <div className="max-w-3xl mx-auto">
 
-                {/* Contador de créditos */}
-                <div className="bg-velum-800 border border-velum-700 rounded-sm p-6 mb-8 flex items-center justify-between">
-                  <div>
-                    <p className="text-velum-50 font-semibold text-sm">
-                      Plan <span className="font-serif italic">{selectedTier.name}</span>
-                    </p>
-                    <p className="text-velum-400 text-xs mt-0.5">
-                      Elige {selectedTier.maxZones === 1 ? '1 área' : `${selectedTier.maxZones} áreas`} del cuerpo para tratar
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <div className="flex gap-2 justify-end mb-1">
-                      {Array.from({ length: selectedTier.maxZones }).map((_, i) => (
-                        <div
-                          key={i}
-                          className={`w-4 h-4 rounded-full border-2 transition-all duration-200 ${i < selectedZones.length ? 'bg-velum-300 border-velum-300' : 'border-velum-600'}`}
-                        />
-                      ))}
-                    </div>
-                    <p className="text-velum-400 text-xs">
-                      {selectedZones.length} de {selectedTier.maxZones} seleccionadas
-                    </p>
-                  </div>
-                </div>
-
-                {/* Zonas agrupadas por Zona Maestra */}
-                {[
-                  {
-                    label: 'Zona I · Identidad',
-                    sub: 'Rostro y cuello — lo que el mundo ve primero',
-                    ids: ['FACE_FULL', 'NECK'] as ZoneId[],
-                  },
-                  {
-                    label: 'Zona II · Presencia',
-                    sub: 'Nuca y espalda alta — elegancia en el porte',
-                    ids: ['NAPE', 'UPPER_BACK'] as ZoneId[],
-                  },
-                  {
-                    label: 'Zona III · Equilibrio',
-                    sub: 'Torso y muslos — el núcleo del cuerpo',
-                    ids: ['ABDOMEN', 'LOWER_BACK', 'THIGHS'] as ZoneId[],
-                  },
-                  {
-                    label: 'Zona IV · Función',
-                    sub: 'Extremidades — comodidad en movimiento',
-                    ids: ['UNDERARMS', 'ARMS_FULL', 'BIKINI', 'GLUTEUS', 'LOWER_LEGS'] as ZoneId[],
-                  },
-                ].map((group) => (
-                  <div key={group.label} className="mb-4">
-                    {/* Header de grupo */}
-                    <div className="flex items-center gap-3 px-1 mb-3">
-                      <p className="text-velum-50 text-xs font-bold uppercase tracking-widest">{group.label}</p>
-                      <div className="flex-1 h-px bg-velum-800" />
-                      <p className="text-velum-600 text-xs">{group.sub}</p>
+                {/* ── MODO MASTER: elige N de las 4 Zonas VELUM ── */}
+                {selectedTier.selectionMode === 'master' && (
+                  <>
+                    <div className="text-center mb-10">
+                      <p className="text-velum-50 text-sm font-light mb-1">
+                        Plan <span className="font-serif italic font-normal">{selectedTier.name}</span>
+                        {' — '}elige{' '}
+                        <span className="font-bold text-velum-200">
+                          {selectedTier.maxZones} {selectedTier.maxZones === 1 ? 'Zona VELUM' : 'Zonas VELUM'}
+                        </span>
+                      </p>
+                      {/* Dots indicadores */}
+                      <div className="flex gap-2 justify-center mt-3">
+                        {Array.from({ length: selectedTier.maxZones }).map((_, i) => (
+                          <div
+                            key={i}
+                            className={`w-3 h-3 rounded-full border-2 transition-all duration-300 ${i < selectedZones.length ? 'bg-velum-300 border-velum-300' : 'border-velum-600'}`}
+                          />
+                        ))}
+                      </div>
                     </div>
 
-                    {/* Áreas dentro del grupo */}
-                    <div className="flex flex-wrap gap-3">
-                      {group.ids.map((id) => {
-                        const zone = ZONES.find(z => z.id === id)!;
-                        const isSelected = selectedZones.includes(id);
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      {MASTER_ZONES.map((zone) => {
+                        const isSelected = selectedZones.includes(zone.id);
                         const isDisabled = !isSelected && selectedZones.length >= selectedTier.maxZones;
-
                         return (
                           <button
-                            key={id}
+                            key={zone.id}
                             type="button"
                             disabled={isDisabled}
-                            onClick={() => !isDisabled && toggleZone(id)}
+                            onClick={() => !isDisabled && toggleZone(zone.id)}
                             className={`
-                              flex items-center gap-2 px-4 py-2.5 rounded-sm border text-sm font-medium transition-all duration-200
+                              text-left p-6 border rounded-sm transition-all duration-300 relative
                               ${isSelected
-                                ? 'bg-white text-velum-900 border-white shadow-md'
-                                : 'bg-transparent text-velum-300 border-velum-700 hover:border-velum-400 hover:text-velum-100'}
+                                ? 'bg-white border-white shadow-xl'
+                                : 'bg-velum-800/40 border-velum-700 hover:border-velum-400 hover:bg-velum-800'}
                               ${isDisabled ? 'opacity-30 cursor-not-allowed' : 'cursor-pointer'}
                             `}
                           >
-                            {isSelected && <Check size={13} className="text-velum-500 flex-shrink-0" />}
-                            {zone.name}
+                            {isSelected && (
+                              <div className="absolute top-4 right-4 w-6 h-6 rounded-full bg-velum-900 flex items-center justify-center">
+                                <Check size={13} className="text-white" />
+                              </div>
+                            )}
+                            <p className={`text-[10px] font-bold uppercase tracking-[0.2em] mb-1 ${isSelected ? 'text-velum-400' : 'text-velum-600'}`}>
+                              {zone.name}
+                            </p>
+                            <p className={`font-serif text-2xl italic mb-1 ${isSelected ? 'text-velum-900' : 'text-velum-50'}`}>
+                              {zone.label}
+                            </p>
+                            <p className={`text-xs mb-4 ${isSelected ? 'text-velum-500' : 'text-velum-500'}`}>
+                              {zone.tagline}
+                            </p>
+                            <div className="flex flex-wrap gap-1.5">
+                              {zone.areas.map(area => (
+                                <span
+                                  key={area}
+                                  className={`text-[10px] px-2 py-1 rounded-sm ${isSelected ? 'bg-velum-100 text-velum-700' : 'bg-velum-700/50 text-velum-400'}`}
+                                >
+                                  {area}
+                                </span>
+                              ))}
+                            </div>
                           </button>
                         );
                       })}
                     </div>
-                  </div>
-                ))}
 
-                {/* Mensaje cuando cupo lleno */}
-                {selectedZones.length >= selectedTier.maxZones && (
-                  <p className="text-velum-400 text-xs text-center mt-4 animate-fade-in">
-                    Llegaste al límite de tu plan. Deselecciona un área para cambiar tu elección.
-                  </p>
+                    {selectedZones.length >= selectedTier.maxZones && !canProceed() === false && (
+                      <p className="text-velum-500 text-xs text-center mt-5 animate-fade-in">
+                        Selección completa. Toca una zona para cambiarla.
+                      </p>
+                    )}
+                  </>
+                )}
+
+                {/* ── MODO CUSTOM (Select): 3 pequeñas + 2 medianas ── */}
+                {selectedTier.selectionMode === 'custom' && (
+                  <>
+                    {/* Contadores */}
+                    <div className="grid grid-cols-2 gap-4 mb-8">
+                      {[
+                        {
+                          label: 'Zonas pequeñas',
+                          current: selectedZones.filter(z => SMALL_ZONE_IDS.includes(z)).length,
+                          max: SELECT_MAX_SMALL,
+                        },
+                        {
+                          label: 'Zonas medianas',
+                          current: selectedZones.filter(z => MEDIUM_ZONE_IDS.includes(z)).length,
+                          max: SELECT_MAX_MEDIUM,
+                        },
+                      ].map(counter => (
+                        <div key={counter.label} className="bg-velum-800 border border-velum-700 rounded-sm p-5 text-center">
+                          <div className="flex gap-2 justify-center mb-2">
+                            {Array.from({ length: counter.max }).map((_, i) => (
+                              <div
+                                key={i}
+                                className={`w-3 h-3 rounded-full border-2 transition-all duration-300 ${i < counter.current ? 'bg-velum-300 border-velum-300' : 'border-velum-600'}`}
+                              />
+                            ))}
+                          </div>
+                          <p className={`text-xs font-bold ${counter.current === counter.max ? 'text-velum-200' : 'text-velum-400'}`}>
+                            {counter.current} / {counter.max} {counter.label}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Zonas pequeñas */}
+                    <div className="mb-6">
+                      <div className="flex items-center gap-3 mb-4">
+                        <p className="text-velum-50 text-xs font-bold uppercase tracking-widest">Zonas pequeñas</p>
+                        <div className="flex-1 h-px bg-velum-800" />
+                        <p className="text-velum-600 text-xs">Elige {SELECT_MAX_SMALL}</p>
+                      </div>
+                      <div className="flex flex-wrap gap-3">
+                        {SMALL_ZONE_IDS.map(id => {
+                          const zone = ZONES.find(z => z.id === id)!;
+                          if (!zone) return null;
+                          const isSelected = selectedZones.includes(id);
+                          const currentSmall = selectedZones.filter(z => SMALL_ZONE_IDS.includes(z)).length;
+                          const isDisabled = !isSelected && currentSmall >= SELECT_MAX_SMALL;
+                          return (
+                            <button
+                              key={id}
+                              type="button"
+                              disabled={isDisabled}
+                              onClick={() => toggleZone(id)}
+                              className={`flex items-center gap-2 px-4 py-2.5 border text-sm transition-all duration-200 rounded-sm
+                                ${isSelected ? 'bg-white text-velum-900 border-white shadow-md' : 'bg-transparent text-velum-300 border-velum-700 hover:border-velum-400 hover:text-velum-100'}
+                                ${isDisabled ? 'opacity-30 cursor-not-allowed' : 'cursor-pointer'}`}
+                            >
+                              {isSelected && <Check size={13} className="text-velum-500" />}
+                              {zone.name}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Zonas medianas */}
+                    <div className="mb-6">
+                      <div className="flex items-center gap-3 mb-4">
+                        <p className="text-velum-50 text-xs font-bold uppercase tracking-widest">Zonas medianas</p>
+                        <div className="flex-1 h-px bg-velum-800" />
+                        <p className="text-velum-600 text-xs">Elige {SELECT_MAX_MEDIUM}</p>
+                      </div>
+                      <div className="flex flex-wrap gap-3">
+                        {MEDIUM_ZONE_IDS.map(id => {
+                          const zone = ZONES.find(z => z.id === id)!;
+                          if (!zone) return null;
+                          const isSelected = selectedZones.includes(id);
+                          const currentMedium = selectedZones.filter(z => MEDIUM_ZONE_IDS.includes(z)).length;
+                          const isDisabled = !isSelected && currentMedium >= SELECT_MAX_MEDIUM;
+                          return (
+                            <button
+                              key={id}
+                              type="button"
+                              disabled={isDisabled}
+                              onClick={() => toggleZone(id)}
+                              className={`flex items-center gap-2 px-4 py-2.5 border text-sm transition-all duration-200 rounded-sm
+                                ${isSelected ? 'bg-white text-velum-900 border-white shadow-md' : 'bg-transparent text-velum-300 border-velum-700 hover:border-velum-400 hover:text-velum-100'}
+                                ${isDisabled ? 'opacity-30 cursor-not-allowed' : 'cursor-pointer'}`}
+                            >
+                              {isSelected && <Check size={13} className="text-velum-500" />}
+                              {zone.name}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </>
                 )}
 
                 <div className="mt-10 flex justify-between items-center border-t border-velum-800 pt-8">

@@ -10,10 +10,12 @@ export interface MembershipTier {
   id: number;
   name: string;
   price: number;
-  maxZones: number; 
+  maxZones: number;
   description: string;
   isFullBody: boolean;
   stripePriceId: string;
+  /** 'master' = elige N de 4 Zonas VELUM completas | 'custom' = elige zonas pequeñas + medianas */
+  selectionMode: 'master' | 'custom';
 }
 
 export interface UserSubscription {
