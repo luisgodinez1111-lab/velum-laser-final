@@ -257,8 +257,9 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
 
           <div>
             <h3 className="text-velum-50 text-xs uppercase tracking-widest mb-5">Contacto</h3>
-            <p className="text-sm mb-1.5">Av. Masaryk 400, Polanco</p>
-            <p className="text-sm mb-1.5">Ciudad de México, CDMX</p>
+            <p className="text-sm mb-1.5">Av. Prol. Teófilo Borunda 11811, Int. 13-4,</p>
+            <p className="text-sm mb-1.5">Plaza Travessía, Col. Labor de Terrazas,</p>
+            <p className="text-sm mb-1.5">C.P. 31223, Chihuahua, Chih.</p>
             <p className="text-sm mt-3">+52 55 1234 5678</p>
             <p className="text-sm">concierge@velumlaser.com</p>
           </div>
