@@ -1240,14 +1240,13 @@ export const Admin: React.FC = () => {
     setAgendaSpecialDateRulesDraft((current) => current.filter((rule) => rule.dateKey !== agendaDate));
   };
 
-  // ── Acciones masivas de agenda ─────────────────────────────────────────
-  const applyWeekBulk = () => {
+  // ── Acciones masivas de agenda — aplica Y guarda en una sola operación ──
+  const applyWeekBulk = async () => {
     const ref = new Date(agendaDate + 'T12:00:00');
     const dow = ref.getDay();
     const offsetToMonday = (dow === 0 ? -6 : 1 - dow);
     const monday = plusDays(ref, offsetToMonday);
 
-    // Determinar qué días aplicar según el scope
     let targetDays: number[];
     if (weekBulkScope === 'week') targetDays = [1,2,3,4,5,6,0];
     else if (weekBulkScope === 'workdays') targetDays = [1,2,3,4,5];
@@ -1258,33 +1257,82 @@ export const Admin: React.FC = () => {
       (weekBulkAction === 'open' ? `Abierto ${weekBulkStart}:00–${weekBulkEnd}:00` :
        weekBulkAction === 'close' ? 'Cerrado' : 'Horario base');
 
-    setAgendaSpecialDateRulesDraft((current) => {
-      const byDate = new Map(current.map((r) => [r.dateKey, r]));
-      for (let i = 0; i < 7; i++) {
-        const d = plusDays(monday, i);
-        const dayOfWeek = d.getDay();
-        if (!targetDays.includes(dayOfWeek)) continue;
-        const dateKey = toLocalDateKey(d);
-        if (weekBulkAction === 'clear') {
-          byDate.delete(dateKey);
-        } else {
-          const existing = byDate.get(dateKey);
-          byDate.set(dateKey, {
-            id: existing?.id ?? `draft-week-${dateKey}`,
-            dateKey,
-            isOpen: weekBulkAction === 'open',
-            startHour: weekBulkAction === 'open' ? weekBulkStart : null,
-            endHour: weekBulkAction === 'open' ? weekBulkEnd : null,
-            note
-          });
-        }
+    // Calcular nuevas reglas directamente (sin depender del estado stale)
+    const byDate = new Map(agendaSpecialDateRulesDraft.map((r) => [r.dateKey, r]));
+    for (let i = 0; i < 7; i++) {
+      const d = plusDays(monday, i);
+      const dayOfWeek = d.getDay();
+      if (!targetDays.includes(dayOfWeek)) continue;
+      const dateKey = toLocalDateKey(d);
+      if (weekBulkAction === 'clear') {
+        byDate.delete(dateKey);
+      } else {
+        const existing = byDate.get(dateKey);
+        byDate.set(dateKey, {
+          id: existing?.id ?? `draft-week-${dateKey}`,
+          dateKey,
+          isOpen: weekBulkAction === 'open',
+          startHour: weekBulkAction === 'open' ? weekBulkStart : null,
+          endHour: weekBulkAction === 'open' ? weekBulkEnd : null,
+          note
+        });
       }
-      return [...byDate.values()].sort((a, b) => a.dateKey.localeCompare(b.dateKey));
-    });
+    }
+    const newSpecialRules = [...byDate.values()].sort((a, b) => a.dateKey.localeCompare(b.dateKey));
+    setAgendaSpecialDateRulesDraft(newSpecialRules);
 
-    const scopeLabel = weekBulkScope === 'week' ? 'toda la semana' : weekBulkScope === 'workdays' ? 'Lun–Vie' : weekBulkScope === 'weekend' ? 'Sáb–Dom' : `${targetDays.length} días seleccionados`;
-    const actionLabel = weekBulkAction === 'open' ? `abierto (${weekBulkStart}:00–${weekBulkEnd}:00)` : weekBulkAction === 'close' ? 'cerrado' : 'restaurado al horario base';
-    setAgendaMessage({ type: 'ok', text: `Aplicado: ${scopeLabel} → ${actionLabel}. Guarda para confirmar.` });
+    // Guardar inmediatamente con las reglas recién calculadas
+    setIsAgendaConfigSaving(true);
+    setAgendaMessage(null);
+    try {
+      const payload = {
+        timezone: agendaPolicyDraft.timezone,
+        slotMinutes: agendaPolicyDraft.slotMinutes,
+        autoConfirmHours: agendaPolicyDraft.autoConfirmHours,
+        noShowGraceMinutes: agendaPolicyDraft.noShowGraceMinutes,
+        maxActiveAppointmentsPerWeek: agendaPolicyDraft.maxActiveAppointmentsPerWeek,
+        maxActiveAppointmentsPerMonth: agendaPolicyDraft.maxActiveAppointmentsPerMonth,
+        minAdvanceMinutes: agendaPolicyDraft.minAdvanceMinutes,
+        maxAdvanceDays: agendaPolicyDraft.maxAdvanceDays,
+        cabins: agendaCabinsDraft.map((c, i) => ({
+          id: c.id.startsWith('draft-') ? undefined : c.id,
+          name: c.name, isActive: c.isActive, sortOrder: c.sortOrder ?? i + 1
+        })),
+        treatments: agendaTreatmentsDraft.map((t, i) => ({
+          id: t.id.startsWith('draft-treatment-') ? undefined : t.id,
+          name: t.name.trim(), code: t.code.trim().toLowerCase(),
+          description: t.description ?? null,
+          durationMinutes: t.durationMinutes,
+          prepBufferMinutes: t.prepBufferMinutes ?? 0,
+          cleanupBufferMinutes: t.cleanupBufferMinutes ?? 0,
+          cabinId: (t.allowedCabinIds ?? [])[0] ?? t.cabinId ?? null,
+          allowedCabinIds: t.allowedCabinIds ?? [],
+          requiresSpecificCabin: t.requiresSpecificCabin,
+          isActive: t.isActive, sortOrder: t.sortOrder ?? i + 1
+        })),
+        weeklyRules: agendaWeeklyRulesDraft.map((r) => ({
+          dayOfWeek: r.dayOfWeek, isOpen: r.isOpen, startHour: r.startHour, endHour: r.endHour
+        })),
+        specialDateRules: newSpecialRules.map((r) => ({
+          dateKey: r.dateKey, isOpen: r.isOpen,
+          startHour: r.startHour ?? null, endHour: r.endHour ?? null, note: r.note ?? null
+        }))
+      };
+      const updatedConfig = await clinicalService.updateAdminAgendaConfig(payload);
+      setAgendaConfig(updatedConfig);
+      setAgendaWeeklyRulesDraft(updatedConfig.weeklyRules);
+      setAgendaSpecialDateRulesDraft(updatedConfig.specialDateRules);
+      const snapshot = await clinicalService.getAdminAgendaDay(agendaDate);
+      setAgendaSnapshot(snapshot);
+
+      const scopeLabel = weekBulkScope === 'week' ? 'toda la semana' : weekBulkScope === 'workdays' ? 'Lun–Vie' : weekBulkScope === 'weekend' ? 'Sáb–Dom' : `${targetDays.length} días`;
+      const actionLabel = weekBulkAction === 'open' ? `abierto ${weekBulkStart}:00–${weekBulkEnd}:00` : weekBulkAction === 'close' ? 'cerrado' : 'horario base restaurado';
+      setAgendaMessage({ type: 'ok', text: `✓ Guardado: ${scopeLabel} → ${actionLabel}` });
+    } catch (error: any) {
+      setAgendaMessage({ type: 'error', text: error?.message ?? 'No fue posible guardar la configuración.' });
+    } finally {
+      setIsAgendaConfigSaving(false);
+    }
   };
 
   const saveAgendaConfiguration = async () => {
@@ -3033,16 +3081,17 @@ export const Admin: React.FC = () => {
                   />
                 </div>
 
-                {/* Apply */}
-                <button onClick={applyWeekBulk}
-                  className={`w-full py-3 rounded-xl text-sm font-semibold transition ${
+                {/* Apply + Save */}
+                <button onClick={applyWeekBulk} disabled={isAgendaConfigSaving}
+                  className={`w-full py-3 rounded-xl text-sm font-semibold transition disabled:opacity-50 ${
                     weekBulkAction === 'open'  ? 'bg-emerald-600 text-white hover:bg-emerald-700' :
                     weekBulkAction === 'close' ? 'bg-red-600 text-white hover:bg-red-700' :
                     'bg-velum-900 text-white hover:bg-velum-800'
                   }`}>
-                  {weekBulkAction === 'open'  ? `Abrir días seleccionados (${weekBulkStart}:00–${weekBulkEnd}:00)` :
-                   weekBulkAction === 'close' ? 'Cerrar días seleccionados' :
-                   'Restaurar días al horario base'}
+                  {isAgendaConfigSaving ? 'Guardando...' :
+                   weekBulkAction === 'open'  ? `Aplicar y guardar — Abrir ${weekBulkStart}:00–${weekBulkEnd}:00` :
+                   weekBulkAction === 'close' ? 'Aplicar y guardar — Cerrar días' :
+                   'Aplicar y guardar — Restaurar horario base'}
                 </button>
               </div>
             </div>
