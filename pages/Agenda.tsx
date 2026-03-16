@@ -472,8 +472,14 @@ export const Agenda: React.FC = () => {
 
     const ok = await saveIntakeDraft(true);
     if (ok) {
-      setViewState("calendar");
-      setIntakeStep(1);
+      // Si el usuario vino desde /memberships, regresar allí
+      const pendingPlan = localStorage.getItem('velum_pending_plan');
+      if (pendingPlan) {
+        navigate('/memberships');
+      } else {
+        setViewState("calendar");
+        setIntakeStep(1);
+      }
     }
   };
 

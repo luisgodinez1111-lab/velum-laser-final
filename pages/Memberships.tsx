@@ -3,11 +3,13 @@ import { useNavigate } from 'react-router-dom';
 import { MEMBERSHIPS, ZONES } from '../constants';
 import { MembershipTier, ZoneId } from '../types';
 import { Button } from '../components/Button';
-import { Check, Info, Star, ArrowDown, Sparkles, ShieldCheck } from 'lucide-react';
+import { Check, ArrowDown, Sparkles, ShieldCheck, UserPlus, FileText, CreditCard, ArrowRight } from 'lucide-react';
 import { createSubscriptionCheckout } from '../services/stripeService';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { apiFetch } from '../services/apiClient';
+
+const PENDING_PLAN_KEY = 'velum_pending_plan';
 
 export const Memberships: React.FC = () => {
   const { isAuthenticated } = useAuth();
@@ -17,6 +19,23 @@ export const Memberships: React.FC = () => {
   const [selectedZones, setSelectedZones] = useState<ZoneId[]>([]);
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [isCheckingOut, setIsCheckingOut] = useState(false);
+
+  // Recuperar plan pendiente de localStorage (regreso desde registro/intake)
+  useEffect(() => {
+    const raw = localStorage.getItem(PENDING_PLAN_KEY);
+    if (!raw) return;
+    try {
+      const { tierId, zones } = JSON.parse(raw);
+      const tier = MEMBERSHIPS.find((t) => t.id === tierId);
+      if (tier && !selectedTier) {
+        setSelectedTier(tier);
+        setSelectedZones(zones ?? []);
+        setStep(3);
+        // Solo limpiar localStorage cuando el usuario es autenticado y está en pago
+        if (isAuthenticated) localStorage.removeItem(PENDING_PLAN_KEY);
+      }
+    } catch { /* ignore */ }
+  }, [isAuthenticated]);
 
   // Pre-select plan from appointment deposit if available
   useEffect(() => {
@@ -35,12 +54,15 @@ export const Memberships: React.FC = () => {
   const handleTierSelect = (tier: MembershipTier) => {
     setSelectedTier(tier);
     setSelectedZones([]);
-    setStep(tier.isFullBody ? 3 : 2); // Skip zone selection if full body
-    
-    // Smooth scroll to next step area
-    setTimeout(() => {
-      document.getElementById('zone-selector')?.scrollIntoView({ behavior: 'smooth' });
-    }, 100);
+    if (tier.isFullBody) {
+      localStorage.setItem(PENDING_PLAN_KEY, JSON.stringify({ tierId: tier.id, zones: [] }));
+      setStep(3);
+    } else {
+      setStep(2);
+      setTimeout(() => {
+        document.getElementById('zone-selector')?.scrollIntoView({ behavior: 'smooth' });
+      }, 100);
+    }
   };
 
   const toggleZone = (zoneId: ZoneId) => {
@@ -65,6 +87,16 @@ export const Memberships: React.FC = () => {
 
   const scrollToSelection = () => {
     document.getElementById('selection-tool')?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  const handleProceedToSummary = () => {
+    if (!selectedTier) return;
+    // Persist selection so it survives the registration flow
+    localStorage.setItem(PENDING_PLAN_KEY, JSON.stringify({
+      tierId: selectedTier.id,
+      zones: selectedZones,
+    }));
+    setStep(3);
   };
 
   const handleCheckout = async () => {
@@ -319,12 +351,14 @@ export const Memberships: React.FC = () => {
 
           {/* Progress Indicators */}
           <div className="flex justify-center mb-12">
-            <div className="flex items-center gap-4 text-xs tracking-widest uppercase">
-              <span className={`pb-1 border-b-2 transition-colors ${step >= 1 ? 'border-velum-300 text-velum-50 font-bold' : 'border-transparent text-velum-600'}`}>1. Nivel</span>
+            <div className="flex items-center gap-3 text-xs tracking-widest uppercase">
+              <span className={`pb-1 border-b-2 transition-colors ${step >= 1 ? 'border-velum-300 text-velum-50 font-bold' : 'border-transparent text-velum-600'}`}>1. Plan</span>
               <span className="text-velum-700">/</span>
               <span className={`pb-1 border-b-2 transition-colors ${step >= 2 ? 'border-velum-300 text-velum-50 font-bold' : 'border-transparent text-velum-600'}`}>2. Zonas</span>
               <span className="text-velum-700">/</span>
-              <span className={`pb-1 border-b-2 transition-colors ${step >= 3 ? 'border-velum-300 text-velum-50 font-bold' : 'border-transparent text-velum-600'}`}>3. Activar</span>
+              <span className={`pb-1 border-b-2 transition-colors ${step >= 3 ? 'border-velum-300 text-velum-50 font-bold' : 'border-transparent text-velum-600'}`}>3. Cuenta</span>
+              <span className="text-velum-700">/</span>
+              <span className={`pb-1 border-b-2 transition-colors ${step >= 3 && isAuthenticated ? 'border-velum-300 text-velum-50 font-bold' : 'border-transparent text-velum-600'}`}>4. Pagar</span>
             </div>
           </div>
 
@@ -432,88 +466,187 @@ export const Memberships: React.FC = () => {
                     <button onClick={() => setStep(1)} className="text-xs uppercase font-bold tracking-widest text-velum-500 hover:text-velum-200 transition-colors">
                       ← Volver a Niveles
                     </button>
-                    <Button 
-                      disabled={!canProceed()} 
-                      onClick={() => setStep(3)}
+                    <Button
+                      disabled={!canProceed()}
+                      onClick={handleProceedToSummary}
                       className="min-w-[200px]"
                     >
-                      Continuar al Resumen
+                      Continuar
                     </Button>
                  </div>
               </div>
             </div>
           )}
 
-          {/* Step 3: Checkout Stripe Integration */}
+          {/* Step 3: Registro o Checkout */}
           {step === 3 && selectedTier && (
-            <div className="animate-fade-in max-w-2xl mx-auto bg-white p-12 border border-velum-100 shadow-2xl relative">
-               {/* Decorative Element */}
-               <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-velum-200 via-velum-500 to-velum-200"></div>
+            <div className="animate-fade-in max-w-2xl mx-auto">
 
-               <div className="text-center mb-10">
-                 <span className="text-[10px] uppercase tracking-[0.2em] text-velum-400">Confirmación</span>
-                 <h3 className="font-serif text-4xl text-velum-900 mt-2 italic">Tu Membresía Velum</h3>
-               </div>
-               
-               <div className="space-y-6 mb-10">
-                 <div className="flex justify-between items-center pb-4 border-b border-velum-100">
-                   <span className="text-xs text-velum-500 uppercase tracking-widest">Nivel Seleccionado</span>
-                   <span className="font-bold text-velum-900 font-serif text-xl">{selectedTier.name}</span>
-                 </div>
-                 
-                 <div className="pb-4 border-b border-velum-100">
-                   <span className="text-xs text-velum-500 uppercase tracking-widest block mb-3">Zonas a Tratar</span>
-                   <div className="bg-velum-50 p-4 rounded-sm space-y-2">
-                     {selectedTier.isFullBody ? (
-                       <div className="flex items-center text-velum-900 font-bold">
-                         <Sparkles size={14} className="mr-2 text-velum-500"/> Experiencia Signature (Cuerpo Completo)
-                       </div>
-                     ) : (
-                       selectedZones.map(z => {
-                          const zName = ZONES.find(zone => zone.id === z)?.name;
-                          return (
-                            <div key={z} className="flex items-center text-sm text-velum-800">
-                              <div className="w-1.5 h-1.5 bg-velum-400 rounded-full mr-3"></div>
-                              {zName}
+              {/* ── NO autenticado: mostrar roadmap y redirigir a registro ── */}
+              {!isAuthenticated && (
+                <div className="bg-white border border-velum-100 shadow-2xl relative overflow-hidden">
+                  <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-velum-200 via-velum-500 to-velum-200" />
+
+                  {/* Resumen del plan elegido */}
+                  <div className="bg-velum-50 border-b border-velum-100 px-10 py-7 flex items-center justify-between">
+                    <div>
+                      <p className="text-[10px] uppercase tracking-widest text-velum-400 mb-1">Plan seleccionado</p>
+                      <p className="font-serif text-2xl text-velum-900 italic">{selectedTier.name}</p>
+                      {!selectedTier.isFullBody && selectedZones.length > 0 && (
+                        <p className="text-xs text-velum-500 mt-1">
+                          {selectedZones.map(z => ZONES.find(zone => zone.id === z)?.name).join(' · ')}
+                        </p>
+                      )}
+                    </div>
+                    <p className="font-serif text-3xl text-velum-900">${selectedTier.price}<span className="text-sm text-velum-400">/mes</span></p>
+                  </div>
+
+                  <div className="px-10 py-10">
+                    <h3 className="font-serif text-3xl text-velum-900 italic mb-2">Antes de activar tu plan</h3>
+                    <p className="text-velum-500 font-light text-sm mb-10 leading-relaxed">
+                      Por tu seguridad y la calidad del tratamiento, necesitamos conocerte primero.
+                      El proceso toma menos de 5 minutos.
+                    </p>
+
+                    {/* Roadmap de pasos */}
+                    <div className="space-y-0 mb-10">
+                      {[
+                        {
+                          num: '✓', done: true,
+                          icon: <Check size={16} />,
+                          label: 'Plan y zonas elegidas',
+                          desc: `${selectedTier.name}${!selectedTier.isFullBody && selectedZones.length > 0 ? ' · ' + selectedZones.map(z => ZONES.find(zone => zone.id === z)?.name).join(', ') : ''}`,
+                        },
+                        {
+                          num: '2', done: false,
+                          icon: <UserPlus size={16} />,
+                          label: 'Crear tu cuenta',
+                          desc: 'Nombre, teléfono, email y contraseña',
+                        },
+                        {
+                          num: '3', done: false,
+                          icon: <FileText size={16} />,
+                          label: 'Ficha clínica',
+                          desc: 'Historial médico, fototipo de piel y consentimiento informado',
+                        },
+                        {
+                          num: '4', done: false,
+                          icon: <CreditCard size={16} />,
+                          label: 'Pago y activación',
+                          desc: 'Pago seguro vía Stripe. Sin guardar datos de tarjeta.',
+                        },
+                      ].map((item, i) => (
+                        <div key={i} className="flex gap-4 items-start">
+                          <div className="flex flex-col items-center">
+                            <div className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold ${item.done ? 'bg-velum-900 text-white' : 'bg-velum-100 text-velum-400'}`}>
+                              {item.done ? <Check size={14} /> : item.num}
                             </div>
-                          )
-                       })
-                     )}
-                   </div>
-                 </div>
+                            {i < 3 && <div className="w-px h-8 bg-velum-100 mt-1" />}
+                          </div>
+                          <div className="pb-6">
+                            <p className={`text-sm font-bold ${item.done ? 'text-velum-900' : 'text-velum-400'}`}>{item.label}</p>
+                            <p className="text-xs text-velum-400 font-light mt-0.5">{item.desc}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
 
-                 <div className="flex justify-between items-center pt-2">
-                   <span className="text-xs text-velum-500 uppercase tracking-widest">Cargo Mensual Recurrente</span>
-                   <span className="font-serif text-3xl font-bold text-velum-900">${selectedTier.price}</span>
-                 </div>
-               </div>
+                    <div className="flex flex-col gap-3">
+                      <Button
+                        className="w-full py-4"
+                        onClick={() => navigate('/agenda?mode=register')}
+                      >
+                        Continuar — Crear mi cuenta
+                        <ArrowRight size={14} className="ml-2" />
+                      </Button>
+                      <button
+                        onClick={() => navigate('/agenda?mode=login')}
+                        className="text-xs text-velum-500 hover:text-velum-900 transition-colors text-center py-2"
+                      >
+                        Ya tengo cuenta — Iniciar sesión
+                      </button>
+                      <button
+                        onClick={() => setStep(selectedTier.isFullBody ? 1 : 2)}
+                        className="text-xs text-velum-400 hover:text-velum-600 transition-colors text-center"
+                      >
+                        ← Cambiar plan
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
 
-               <div className="bg-velum-50 p-6 border border-velum-100 mb-10 flex gap-4 items-start">
-                 <ShieldCheck size={20} className="text-green-700 flex-shrink-0 mt-0.5" />
-                 <div className="text-xs text-velum-600 leading-relaxed space-y-2">
-                   <p className="font-bold text-velum-800">Pago Seguro vía Stripe:</p>
-                   <p>Serás redirigido a una pasarela bancaria encriptada (SSL). Velum Laser no almacena los datos de tu tarjeta directamente.</p>
-                   <p>La suscripción se renovará automáticamente cada mes. Puedes cancelarla desde tu perfil.</p>
-                 </div>
-               </div>
+              {/* ── Autenticado: mostrar checkout ── */}
+              {isAuthenticated && (
+                <div className="bg-white p-12 border border-velum-100 shadow-2xl relative">
+                  <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-velum-200 via-velum-500 to-velum-200" />
 
-               <div className="flex flex-col gap-4">
-                  <Button
-                    className="w-full py-4 text-sm shadow-xl hover:shadow-2xl transition-shadow"
-                    onClick={handleCheckout}
-                    isLoading={isCheckingOut}
-                    loadingLabel="Redirigiendo a Stripe..."
-                  >
-                    Pagar y Activar Suscripción (Stripe)
-                  </Button>
-                  <button 
-                    onClick={() => setStep(selectedTier.isFullBody ? 1 : 2)}
-                    className="text-xs text-velum-500 hover:text-velum-900 underline text-center"
-                    disabled={isCheckingOut}
-                  >
-                    Modificar selección
-                  </button>
-               </div>
+                  <div className="text-center mb-10">
+                    <span className="text-[10px] uppercase tracking-[0.2em] text-velum-400">Confirmación</span>
+                    <h3 className="font-serif text-4xl text-velum-900 mt-2 italic">Tu Membresía Velum</h3>
+                  </div>
+
+                  <div className="space-y-6 mb-10">
+                    <div className="flex justify-between items-center pb-4 border-b border-velum-100">
+                      <span className="text-xs text-velum-500 uppercase tracking-widest">Nivel Seleccionado</span>
+                      <span className="font-bold text-velum-900 font-serif text-xl">{selectedTier.name}</span>
+                    </div>
+
+                    <div className="pb-4 border-b border-velum-100">
+                      <span className="text-xs text-velum-500 uppercase tracking-widest block mb-3">Zonas a Tratar</span>
+                      <div className="bg-velum-50 p-4 rounded-sm space-y-2">
+                        {selectedTier.isFullBody ? (
+                          <div className="flex items-center text-velum-900 font-bold">
+                            <Sparkles size={14} className="mr-2 text-velum-500" /> Experiencia Signature (Cuerpo Completo)
+                          </div>
+                        ) : (
+                          selectedZones.map(z => {
+                            const zName = ZONES.find(zone => zone.id === z)?.name;
+                            return (
+                              <div key={z} className="flex items-center text-sm text-velum-800">
+                                <div className="w-1.5 h-1.5 bg-velum-400 rounded-full mr-3" />
+                                {zName}
+                              </div>
+                            );
+                          })
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex justify-between items-center pt-2">
+                      <span className="text-xs text-velum-500 uppercase tracking-widest">Cargo Mensual Recurrente</span>
+                      <span className="font-serif text-3xl font-bold text-velum-900">${selectedTier.price}</span>
+                    </div>
+                  </div>
+
+                  <div className="bg-velum-50 p-6 border border-velum-100 mb-10 flex gap-4 items-start">
+                    <ShieldCheck size={20} className="text-green-700 flex-shrink-0 mt-0.5" />
+                    <div className="text-xs text-velum-600 leading-relaxed space-y-2">
+                      <p className="font-bold text-velum-800">Pago Seguro vía Stripe:</p>
+                      <p>Serás redirigido a una pasarela bancaria encriptada (SSL). Velum Laser no almacena los datos de tu tarjeta directamente.</p>
+                      <p>La suscripción se renovará automáticamente cada mes. Puedes cancelarla desde tu perfil.</p>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col gap-4">
+                    <Button
+                      className="w-full py-4 text-sm shadow-xl hover:shadow-2xl transition-shadow"
+                      onClick={handleCheckout}
+                      isLoading={isCheckingOut}
+                      loadingLabel="Redirigiendo a Stripe..."
+                    >
+                      Pagar y Activar Suscripción (Stripe)
+                    </Button>
+                    <button
+                      onClick={() => setStep(selectedTier.isFullBody ? 1 : 2)}
+                      className="text-xs text-velum-500 hover:text-velum-900 underline text-center"
+                      disabled={isCheckingOut}
+                    >
+                      Modificar selección
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
