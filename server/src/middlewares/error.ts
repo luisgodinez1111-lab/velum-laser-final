@@ -4,7 +4,9 @@ import { ZodError } from "zod";
 
 export const errorHandler = (err: Error, _req: Request, res: Response, _next: NextFunction) => {
   if (err instanceof ZodError) {
-    return res.status(400).json({ message: "Datos inválidos", issues: err.issues });
+    // Return only field names and human-readable messages — never expose internal schema paths
+    const fields = err.issues.map((i) => ({ field: i.path.join("."), message: i.message }));
+    return res.status(400).json({ message: "Datos inválidos", fields });
   }
 
   const status = (err as Error & { status?: number }).status;

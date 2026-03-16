@@ -9,7 +9,7 @@ import { AuthUser, authService } from "../services/authService";
 import { stripeService } from "../services/stripeService";
 import { DEFAULT_PHOTOTYPE_QUESTIONS, getFototipo } from "../components/PhototypeQuestionnaire";
 import { useToast } from "../context/ToastContext";
-import { MEMBERSHIPS } from "../constants";
+import { MEMBERSHIPS, APPOINTMENT_DEPOSIT_MXN } from "../constants";
 
 type ViewState = "intro" | "login" | "register" | "intake" | "calendar" | "forgot" | "forgot-otp" | "email-verify";
 type AppointmentType = "standard" | "valuation";
@@ -1607,7 +1607,7 @@ export const Agenda: React.FC = () => {
                 loadingLabel="Redirigiendo a pago..."
                 onClick={handleSchedule}
               >
-                Confirmar y pagar $200
+                Confirmar y pagar ${APPOINTMENT_DEPOSIT_MXN}
               </Button>
               <p className="mt-2 text-center text-[11px] text-velum-500">
                 El depósito se descuenta de tu primera mensualidad.

@@ -24,6 +24,9 @@ export const ZONES: Zone[] = [
   { id: 'LOWER_LEGS', name: 'Pierna Baja', description: 'Pantorrilla y espinilla (Zona IV).' },
 ];
 
+// Depósito de reserva de cita (MXN). Debe coincidir con DEPOSIT_AMOUNT_CENTS/100 en el backend.
+export const APPOINTMENT_DEPOSIT_MXN = 200;
+
 // ⚠️ IMPORTANTE — FUENTE DE VERDAD:
 // Los precios aquí son FALLBACKS VISUALES ÚNICAMENTE para cuando el catálogo del backend no está disponible.
 // La fuente de verdad real son los precios configurados en Admin → Stripe → Planes (guardados en AppSetting.stripePlanCatalog).

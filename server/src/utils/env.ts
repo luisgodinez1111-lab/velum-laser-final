@@ -24,12 +24,20 @@ function requireSecret(name: string, minLength = 32): string {
   return value;
 }
 
+function requireEnv(name: string): string {
+  const value = process.env[name] ?? "";
+  if (!value) {
+    throw new Error(`[env] La variable de entorno "${name}" es obligatoria y está vacía.`);
+  }
+  return value;
+}
+
 export const env = {
   port: Number(process.env.PORT ?? 4000),
   nodeEnv: process.env.NODE_ENV ?? "development",
   appUrl: process.env.APP_URL ?? "http://localhost:5173",
   apiUrl: process.env.API_URL ?? "http://localhost:4000",
-  databaseUrl: process.env.DATABASE_URL ?? "",
+  databaseUrl: requireEnv("DATABASE_URL"),
   jwtSecret: requireSecret("JWT_SECRET", 32),
   jwtExpiresIn: process.env.JWT_EXPIRES_IN ?? "1d",
   cookieName: process.env.COOKIE_NAME ?? "velum_token",

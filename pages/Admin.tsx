@@ -463,8 +463,8 @@ export const Admin: React.FC = () => {
         setAgendaSnapshot(dayData);
       }
 
-      if (!selectedAgendaMemberId && membersData.length > 0) {
-        setSelectedAgendaMemberId(membersData[0].id);
+      if (!selectedAgendaMemberId && membersResult.members.length > 0) {
+        setSelectedAgendaMemberId(membersResult.members[0].id);
       }
     } catch (err: any) {
       setDataLoadError(err?.message || 'No se pudo cargar los datos del panel.');

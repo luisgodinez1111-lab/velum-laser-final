@@ -24,11 +24,12 @@ export const createAuditLog = async ({
   ip?: string;
   metadata?: Prisma.InputJsonValue;
 }) => {
+  // actor = who performed the action; userId = subject of the action (defaults to actor)
   const actor = actorUserId ?? userId;
 
   return prisma.auditLog.create({
     data: {
-      userId: userId ?? actor,
+      userId: userId ?? actorUserId,
       actorUserId: actor,
       targetUserId,
       action,

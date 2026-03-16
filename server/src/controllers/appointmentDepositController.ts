@@ -5,37 +5,63 @@ import { resolveStripeConfig } from "../services/stripeConfigService";
 
 const asString = (v: unknown): string => (typeof v === "string" ? v.trim() : "");
 
-const resolveBaseUrl = (req: AuthRequest): string => {
+// Configurable via env — default $200 MXN = 20000 centavos
+const DEPOSIT_AMOUNT_CENTS = Number(process.env.DEPOSIT_AMOUNT_CENTS ?? 20000);
+
+// SSRF-safe: only reads from environment, never from request headers
+const resolveBaseUrl = (): string => {
   const fromEnv = asString(process.env.STRIPE_CHECKOUT_BASE_URL);
   if (fromEnv) return fromEnv.replace(/\/+$/, "");
-  const proto = asString(req.headers["x-forwarded-proto"]) || req.protocol || "https";
-  const host = asString(req.headers["x-forwarded-host"]) || asString(req.headers.host);
-  if (host) return `${proto}://${host}`.replace(/\/+$/, "");
   return "https://velumlaser.com";
 };
+
+interface DepositBody {
+  startAt?: unknown;
+  endAt?: unknown;
+  reason?: unknown;
+  cabinId?: unknown;
+  treatmentId?: unknown;
+  interestedPlanCode?: unknown;
+}
+
+const isValidIsoDate = (v: unknown): v is string =>
+  typeof v === "string" && v.length > 0 && !isNaN(Date.parse(v));
 
 export const createAppointmentDepositCheckout = async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user?.id) return res.status(401).json({ message: "No autorizado" });
 
-    const { startAt, endAt, reason, cabinId, treatmentId, interestedPlanCode } = req.body as any;
-    if (!startAt || !endAt) return res.status(400).json({ message: "startAt y endAt son obligatorios" });
+    const body = req.body as DepositBody;
+    const startAt = asString(body.startAt);
+    const endAt = asString(body.endAt);
+
+    if (!isValidIsoDate(startAt) || !isValidIsoDate(endAt)) {
+      return res.status(400).json({ message: "startAt y endAt deben ser fechas ISO válidas" });
+    }
+    if (new Date(startAt) >= new Date(endAt)) {
+      return res.status(400).json({ message: "startAt debe ser anterior a endAt" });
+    }
 
     const stripe = await resolveStripeConfig();
     const secret = stripe.config.secretKey;
     if (!secret) return res.status(400).json({ message: "Stripe no configurado" });
 
-    const base = resolveBaseUrl(req);
+    const base = resolveBaseUrl();
     const successUrl = `${base}/#/agenda?booking=success`;
     const cancelUrl = `${base}/#/agenda`;
 
     const me = await prisma.user.findUnique({ where: { id: req.user.id }, select: { email: true } });
     if (!me) return res.status(404).json({ message: "Usuario no encontrado" });
 
+    const reason = asString(body.reason);
+    const cabinId = asString(body.cabinId);
+    const treatmentId = asString(body.treatmentId);
+    const interestedPlanCode = asString(body.interestedPlanCode);
+
     const params = new URLSearchParams();
     params.set("mode", "payment");
     params.set("line_items[0][price_data][currency]", "mxn");
-    params.set("line_items[0][price_data][unit_amount]", "20000");
+    params.set("line_items[0][price_data][unit_amount]", String(DEPOSIT_AMOUNT_CENTS));
     params.set("line_items[0][price_data][product_data][name]", "Valoración Velum Laser");
     params.set("line_items[0][price_data][product_data][description]", "Depósito de reserva de cita — se descontará del primer mes de membresía");
     params.set("line_items[0][quantity]", "1");
@@ -57,13 +83,15 @@ export const createAppointmentDepositCheckout = async (req: AuthRequest, res: Re
       body: params.toString(),
     });
 
-    const json: any = await rsp.json().catch(() => ({}));
+    const json: { url?: string; error?: { message?: string } } = await rsp.json().catch(() => ({}));
     if (!rsp.ok) {
-      return res.status(502).json({ message: "No se pudo crear el checkout", detail: json?.error?.message });
+      // 422: client-facing Stripe error (bad params, card issues, etc.)
+      return res.status(422).json({ message: "No se pudo crear el checkout", detail: json?.error?.message });
     }
 
     return res.json({ checkoutUrl: json?.url || "" });
-  } catch (error: any) {
-    return res.status(500).json({ message: "Error creando checkout de depósito", detail: error?.message ?? "unknown" });
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : "unknown";
+    return res.status(500).json({ message: "Error creando checkout de depósito", detail: msg });
   }
 };

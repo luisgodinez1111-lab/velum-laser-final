@@ -7,12 +7,13 @@ import { createEmailVerification, createPasswordReset, consumeEmailVerification,
 import { prisma } from "../db/prisma";
 import { createAuditLog } from "../services/auditService";
 import { sendPasswordResetEmail, sendEmailVerificationEmail } from "../services/emailService";
+import { logger } from "../utils/logger";
 
 const setAuthCookie = (res: Response, token: string) => {
   res.cookie(env.cookieName, token, {
     httpOnly: true,
     secure: isProduction,
-    sameSite: "lax",
+    sameSite: "strict",
     maxAge: 1000 * 60 * 60 * 24
   });
 };
@@ -51,10 +52,8 @@ export const register = async (req: Request, res: Response) => {
 
   // Enviar OTP de verificación de correo
   const verification = await createEmailVerification(user.id);
-  sendEmailVerificationEmail(user.email, verification.otp).catch(() => {
-    if (!isProduction) {
-      console.log(`[auth] VERIFY OTP para ${user.email}: ${verification.otp}`);
-    }
+  sendEmailVerificationEmail(user.email, verification.otp).catch((err: unknown) => {
+    logger.warn({ err, email: user.email }, "[auth] No se pudo enviar correo de verificación");
   });
 
   const token = signToken({ sub: user.id, role: user.role });
@@ -113,10 +112,8 @@ export const forgotPassword = async (req: Request, res: Response) => {
   }
 
   const reset = await createPasswordReset(user.id);
-  sendPasswordResetEmail(user.email, reset.otp).catch(() => {
-    if (!isProduction) {
-      console.log(`[auth] RESET OTP para ${user.email}: ${reset.otp}`);
-    }
+  sendPasswordResetEmail(user.email, reset.otp).catch((err: unknown) => {
+    logger.warn({ err, email: user.email }, "[auth] No se pudo enviar correo de recuperación");
   });
 
   return res.json({ message: "Si el correo existe, recibirás un código en tu bandeja" });
@@ -185,10 +182,8 @@ export const resendVerification = async (req: Request, res: Response) => {
     return res.json({ message: "Si el correo existe, recibirás un nuevo código" });
   }
   const verification = await createEmailVerification(user.id);
-  sendEmailVerificationEmail(user.email, verification.otp).catch(() => {
-    if (!isProduction) {
-      console.log(`[auth] RESEND VERIFY OTP para ${user.email}: ${verification.otp}`);
-    }
+  sendEmailVerificationEmail(user.email, verification.otp).catch((err: unknown) => {
+    logger.warn({ err, email: user.email }, "[auth] No se pudo reenviar correo de verificación");
   });
   return res.json({ message: "Código reenviado. Revisa tu bandeja de entrada." });
 };
