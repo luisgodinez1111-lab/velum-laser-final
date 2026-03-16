@@ -11,4 +11,5 @@ export const signToken = (payload: object) =>
 export const verifyToken = (token: string) => jwt.verify(token, env.jwtSecret) as {
   sub: string;
   role: string;
+  iat: number;
 };

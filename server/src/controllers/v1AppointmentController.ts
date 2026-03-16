@@ -178,21 +178,30 @@ const enforceActiveAppointmentLimits = async ({
   excludeAppointmentId?: string;
 }) => {
   const { policy } = await getAgendaConfig();
+
+  const candidateParts = zonedDateParts(candidateStartAt, policy.timezone);
+  const candidateWeekKey = isoWeekKey(candidateParts);
+  const candidateMonthKey = `${candidateParts.year}-${String(candidateParts.month).padStart(2, "0")}`;
+
+  // Compute tight date bounds so we only fetch appointments in the relevant week/month window
+  const monthStart = new Date(Date.UTC(candidateParts.year, candidateParts.month - 1, 1));
+  const monthEnd = new Date(Date.UTC(candidateParts.year, candidateParts.month, 0, 23, 59, 59, 999));
+  const candidateUtcDate = new Date(Date.UTC(candidateParts.year, candidateParts.month - 1, candidateParts.day));
+  const dayNum = (candidateUtcDate.getUTCDay() + 6) % 7;
+  const weekStart = new Date(candidateUtcDate);
+  weekStart.setUTCDate(weekStart.getUTCDate() - dayNum);
+  const queryFrom = weekStart < monthStart ? weekStart : monthStart;
+
   const upcomingAppointments = await prisma.appointment.findMany({
     where: {
       clinicId,
       userId,
       status: { in: ["scheduled", "confirmed"] },
-      startAt: { gte: new Date() },
+      startAt: { gte: queryFrom, lte: monthEnd },
       ...(excludeAppointmentId ? { id: { not: excludeAppointmentId } } : {})
     },
     select: { startAt: true },
-    take: 1000
   });
-
-  const candidateParts = zonedDateParts(candidateStartAt, policy.timezone);
-  const candidateWeekKey = isoWeekKey(candidateParts);
-  const candidateMonthKey = `${candidateParts.year}-${String(candidateParts.month).padStart(2, "0")}`;
 
   let countWeek = 0;
   let countMonth = 0;
@@ -230,8 +239,8 @@ const respondIfAgendaError = (error: unknown, res: Response) => {
 
 export const createAppointment = async (req: AuthRequest, res: Response) => {
   // phase1 onboarding gate
-  if ((req as any)?.user?.role === "member") {
-    const memberId = (req as any).user.id as string;
+  if (req.user?.role === "member") {
+    const memberId = req.user.id;
 
     const tableExists = async (tableName: string) => {
       const rows = await prisma.$queryRawUnsafe<Array<{ exists: boolean }>>(
@@ -940,7 +949,7 @@ export const getMemberAgendaPolicy = async (_req: AuthRequest, res: Response) =>
 };
 
 export const getMemberAvailableSlots = async (req: AuthRequest, res: Response) => {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(req.params.dateKey)) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(req.params.dateKey) || isNaN(Date.parse(req.params.dateKey))) {
     return res.status(400).json({ message: "Formato de fecha inválido. Use YYYY-MM-DD" });
   }
   const params = agendaDateParamSchema.parse(req.params);

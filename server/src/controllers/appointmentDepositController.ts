@@ -24,8 +24,10 @@ interface DepositBody {
   interestedPlanCode?: unknown;
 }
 
+// Requires full ISO-8601 datetime: "YYYY-MM-DDTHH:mm:ss..." — rejects partial strings like "2025-1-1"
+const ISO_DATETIME_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/;
 const isValidIsoDate = (v: unknown): v is string =>
-  typeof v === "string" && v.length > 0 && !isNaN(Date.parse(v));
+  typeof v === "string" && ISO_DATETIME_RE.test(v) && !isNaN(Date.parse(v));
 
 export const createAppointmentDepositCheckout = async (req: AuthRequest, res: Response) => {
   try {
@@ -50,7 +52,7 @@ export const createAppointmentDepositCheckout = async (req: AuthRequest, res: Re
     const successUrl = `${base}/#/agenda?booking=success`;
     const cancelUrl = `${base}/#/agenda`;
 
-    const me = await prisma.user.findUnique({ where: { id: req.user.id }, select: { email: true } });
+    const me = await prisma.user.findUnique({ where: { id: req.user.id }, select: { email: true, clinicId: true } });
     if (!me) return res.status(404).json({ message: "Usuario no encontrado" });
 
     const reason = asString(body.reason);
@@ -70,6 +72,7 @@ export const createAppointmentDepositCheckout = async (req: AuthRequest, res: Re
     params.set("customer_email", me.email);
     params.set("metadata[type]", "appointment_deposit");
     params.set("metadata[userId]", req.user.id);
+    params.set("metadata[clinicId]", me.clinicId ?? "default");
     params.set("metadata[startAt]", startAt);
     params.set("metadata[endAt]", endAt);
     if (reason) params.set("metadata[reason]", reason);

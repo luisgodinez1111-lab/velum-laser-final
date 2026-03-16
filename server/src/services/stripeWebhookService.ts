@@ -266,7 +266,7 @@ const findUserBySignals = async (
       if (row) return row;
     }
   } catch (error) {
-    console.error("[stripe-webhook] user lookup failed", error);
+    logger.error({ err: error }, "[stripe-webhook] user lookup failed");
   }
 
   return null;
@@ -285,7 +285,7 @@ const toMembershipStatus = (stripeStatus: string | null | undefined): string => 
 const upsertMembership = async (input: MembershipUpsertInput): Promise<void> => {
   const delegateName = pickDelegateName(["membership", "userMembership", "subscription", "subscriptions"]);
   if (!delegateName) {
-    console.warn("[stripe-webhook] no membership model delegate found");
+    logger.warn("[stripe-webhook] no membership model delegate found");
     return;
   }
 
@@ -314,7 +314,7 @@ const upsertMembership = async (input: MembershipUpsertInput): Promise<void> => 
       })) as JsonObject | null;
     }
   } catch (error) {
-    console.error("[stripe-webhook] membership lookup failed", error);
+    logger.error({ err: error }, "[stripe-webhook] membership lookup failed");
   }
 
   const data: JsonObject = {
@@ -338,7 +338,7 @@ const upsertMembership = async (input: MembershipUpsertInput): Promise<void> => 
   const filtered = filterDataByFields(delegateName, data);
   const hasAnyField = Object.keys(filtered).length > 0;
   if (!hasAnyField) {
-    console.warn("[stripe-webhook] filtered membership payload is empty");
+    logger.warn("[stripe-webhook] filtered membership payload is empty");
     return;
   }
 
@@ -353,7 +353,7 @@ const upsertMembership = async (input: MembershipUpsertInput): Promise<void> => 
     }
 
     if (fields.has("userId") && !cleanString(filtered.userId)) {
-      console.warn("[stripe-webhook] membership create skipped: missing userId");
+      logger.warn("[stripe-webhook] membership create skipped: missing userId");
       return;
     }
 
@@ -361,7 +361,7 @@ const upsertMembership = async (input: MembershipUpsertInput): Promise<void> => 
       await delegate.create({ data: filtered });
     }
   } catch (error) {
-    console.error("[stripe-webhook] membership upsert failed", error);
+    logger.error({ err: error }, "[stripe-webhook] membership upsert failed");
   }
 };
 
@@ -398,7 +398,7 @@ const loadSubscriptionContext = async (
       cancelAtPeriodEnd: typeof sub.cancel_at_period_end === "boolean" ? sub.cancel_at_period_end : null,
     };
   } catch (error) {
-    console.error("[stripe-webhook] subscription retrieve failed", error);
+    logger.error({ err: error }, "[stripe-webhook] subscription retrieve failed");
     return null;
   }
 };
@@ -424,8 +424,16 @@ const processCheckoutCompleted = async (event: Stripe.Event, stripe: Stripe): Pr
     const interestedPlanCode = cleanString(metadata.interestedPlanCode) || null;
 
     if (userId && startAt && endAt) {
+      // Resolve the user's clinicId so the appointment is correctly scoped
+      const userRecord = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { clinicId: true },
+      }).catch(() => null);
+      const clinicIdResolved = userRecord?.clinicId || cleanString(metadata.clinicId) || "default";
+
       await prisma.appointment.create({
         data: {
+          clinicId: clinicIdResolved,
           userId,
           startAt: new Date(startAt),
           endAt: new Date(endAt),
@@ -457,7 +465,7 @@ const processCheckoutCompleted = async (event: Stripe.Event, stripe: Stripe): Pr
   const stripeCustomerId = extractExpandableId(session.customer);
 
   if (!subscriptionId) {
-    console.info("[stripe-webhook] checkout completed without subscription", { eventId: event.id });
+    logger.info({ eventId: event.id }, "[stripe-webhook] checkout completed without subscription");
     return;
   }
 
@@ -478,7 +486,7 @@ const processCheckoutCompleted = async (event: Stripe.Event, stripe: Stripe): Pr
           await userDelegate.update({ where: { id: userId }, data: { stripeCustomerId: resolvedCustomerId } });
         }
       } catch (error) {
-        console.warn("[stripe-webhook] could not update user.stripeCustomerId", error);
+        logger.warn({ err: error }, "[stripe-webhook] could not update user.stripeCustomerId");
       }
     }
   }
@@ -498,20 +506,22 @@ const processCheckoutCompleted = async (event: Stripe.Event, stripe: Stripe): Pr
     currency: cleanString(session.currency) || null,
   });
 
-  // Clear deposit credit after it has been applied to a subscription checkout
+  // Atomically consume deposit credit — updateMany with condition prevents double-spend
   const applyDepositDiscount = cleanString(metadata.applyDepositDiscount);
   if (applyDepositDiscount === "true" && userId) {
-    await prisma.user.update({
-      where: { id: userId },
+    const result = await prisma.user.updateMany({
+      where: { id: userId, appointmentDepositAvailable: true },
       data: { appointmentDepositAvailable: false },
-    }).catch((err: Error) => console.error("[stripe-webhook] Failed to clear deposit:", err));
+    }).catch((err: Error) => {
+      logger.error({ err }, "[stripe-webhook] Failed to clear deposit");
+      return { count: 0 };
+    });
+    if (result.count === 0) {
+      logger.warn({ userId, eventId: event.id }, "[stripe-webhook] deposit already consumed or not available");
+    }
   }
 
-  console.info("[stripe-webhook] checkout.session.completed processed", {
-    eventId: event.id,
-    subscriptionId,
-    userId,
-  });
+  logger.info({ eventId: event.id, subscriptionId, userId }, "[stripe-webhook] checkout.session.completed processed");
 };
 
 const processInvoiceEvent = async (event: Stripe.Event, stripe: Stripe, success: boolean): Promise<void> => {
@@ -520,7 +530,7 @@ const processInvoiceEvent = async (event: Stripe.Event, stripe: Stripe, success:
   const stripeCustomerId = extractExpandableId(invoice.customer);
 
   if (!subscriptionId) {
-    console.info("[stripe-webhook] invoice event without subscription", { eventId: event.id });
+    logger.info({ eventId: event.id }, "[stripe-webhook] invoice event without subscription");
     return;
   }
 
@@ -544,12 +554,7 @@ const processInvoiceEvent = async (event: Stripe.Event, stripe: Stripe, success:
     currency: cleanString(invoice.currency) || null,
   });
 
-  console.info("[stripe-webhook] invoice processed", {
-    eventId: event.id,
-    success,
-    subscriptionId,
-    userId,
-  });
+  logger.info({ eventId: event.id, success, subscriptionId, userId }, "[stripe-webhook] invoice processed");
 };
 
 const processSubscriptionEvent = async (event: Stripe.Event): Promise<void> => {
@@ -578,11 +583,7 @@ const processSubscriptionEvent = async (event: Stripe.Event): Promise<void> => {
     currency: cleanString(sub.currency) || null,
   });
 
-  console.info("[stripe-webhook] subscription event processed", {
-    eventId: event.id,
-    type: event.type,
-    subscriptionId: stripeSubscriptionId,
-  });
+  logger.info({ eventId: event.id, type: event.type, subscriptionId: stripeSubscriptionId }, "[stripe-webhook] subscription event processed");
 };
 
 export const handleBusinessStripeEvent = async (event: Stripe.Event, stripe: Stripe): Promise<void> => {
@@ -602,6 +603,6 @@ export const handleBusinessStripeEvent = async (event: Stripe.Event, stripe: Str
       await processSubscriptionEvent(event);
       return;
     default:
-      console.info("[stripe-webhook] ignored", { eventId: event.id, type: event.type });
+      logger.info({ eventId: event.id, type: event.type }, "[stripe-webhook] ignored");
   }
 };

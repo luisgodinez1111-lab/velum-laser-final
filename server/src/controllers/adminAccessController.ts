@@ -203,7 +203,7 @@ export const resetAdminAccessPassword = async (req: AuthRequest, res: Response) 
     if (!found) return res.status(404).json({ message: "Usuario no encontrado" });
 
     const passwordHash = await bcrypt.hash(newPassword, 10);
-    await prisma.user.update({ where: { id: userId }, data: { passwordHash } });
+    await prisma.user.update({ where: { id: userId }, data: { passwordHash, passwordChangedAt: new Date() } });
 
     await createAuditLog({
       userId: req.user!.id,

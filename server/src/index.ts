@@ -31,6 +31,7 @@ import { env } from "./utils/env";
 import { httpLogger, logger } from "./utils/logger";
 import { errorHandler } from "./middlewares/error";
 import { openApiSpec } from "./openapi";
+import { prisma } from "./db/prisma";
 
 if (!env.jwtSecret) {
   throw new Error("JWT_SECRET is required");
@@ -40,8 +41,16 @@ const app = express();
 app.set("json replacer", (key: string, value: unknown) => (key === "passwordHash" ? undefined : value));
 
 // ── Health checks ────────────────────────────────────────────────────
-app.get("/health", (_req, res) => res.status(200).json({ ok: true, service: "api" }));
-app.get("/api/health", (_req, res) => res.status(200).json({ ok: true, service: "api" }));
+const healthHandler = async (_req: express.Request, res: express.Response) => {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    return res.status(200).json({ ok: true, service: "api", db: "ok" });
+  } catch {
+    return res.status(503).json({ ok: false, service: "api", db: "error" });
+  }
+};
+app.get("/health", healthHandler);
+app.get("/api/health", healthHandler);
 
 app.set("trust proxy", 1);
 app.use(httpLogger);

@@ -87,8 +87,9 @@ model User {
   emailVerifications  EmailVerificationToken[]
   passwordResets      PasswordResetToken[]
   agendaBlocksCreated AgendaBlockedSlot[]     @relation("AgendaBlockedSlotCreator")
-  appointmentDepositAvailable Boolean @default(false)
+  appointmentDepositAvailable Boolean   @default(false)
   interestedPlanCode          String?
+  passwordChangedAt           DateTime?
 
   @@index([clinicId])
 }
@@ -112,6 +113,14 @@ model Membership {
   status               MembershipStatus @default(inactive)
   planId               String?
   stripeSubscriptionId String?          @unique
+  stripePriceId        String?
+  stripeCustomerId     String?
+  planCode             String?
+  amount               Float?
+  currency             String?
+  lastStripeEventId    String?
+  lastStripeEventType  String?
+  source               String?
   currentPeriodEnd     DateTime?
   gracePeriodEndsAt    DateTime?
   cancelAtPeriodEnd    Boolean          @default(false)
@@ -122,6 +131,9 @@ model Membership {
   payments             Payment[]
 
   @@index([userId])
+  @@index([status])
+  @@index([currentPeriodEnd])
+  @@index([stripeCustomerId])
 }
 
 model Document {
@@ -505,6 +517,19 @@ model DeleteOtp {
   createdAt    DateTime @default(now())
 
   @@index([actorUserId])
+  @@index([expiresAt])
+}
+
+model WhatsappOtp {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  codeHash  String
+  phone     String
+  attempts  Int      @default(0)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
   @@index([expiresAt])
 }
 

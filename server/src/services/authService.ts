@@ -1,9 +1,10 @@
+import { randomInt } from "crypto";
 import { addHours } from "../utils/date";
 import { prisma } from "../db/prisma";
 
-// Genera un OTP de 6 dígitos numéricos
+// Genera un OTP de 6 dígitos numéricos usando CSPRNG (no Math.random)
 function generateOtp(): string {
-  return String(Math.floor(100000 + Math.random() * 900000));
+  return String(100000 + randomInt(900000));
 }
 
 // El token almacenado en DB combina userId + OTP para garantizar unicidad

@@ -1,19 +1,12 @@
 import { Response } from "express";
 import bcrypt from "bcryptjs";
+import crypto from "crypto";
 import { prisma } from "../db/prisma";
 import { AuthRequest } from "../middlewares/auth";
 import { normalizePhone, sendWhatsappOtpCode } from "../services/whatsappMetaService";
 
-type OtpEntry = {
-  codeHash: string;
-  expiresAt: number;
-  attempts: number;
-  phone: string;
-};
-
 const OTP_TTL_MS = 10 * 60 * 1000;
 const OTP_MAX_ATTEMPTS = 5;
-const otpByUserId = new Map<string, OtpEntry>();
 
 const asString = (v: unknown): string => (typeof v === "string" ? v.trim() : "");
 
@@ -30,7 +23,7 @@ const isStrongPassword = (value: string): boolean => {
   return c.length && c.upper && c.lower && c.number && c.special;
 };
 
-const randomCode = (): string => `${Math.floor(100000 + Math.random() * 900000)}`;
+const randomCode = (): string => String(100000 + crypto.randomInt(900000));
 
 const getProfileRecord = async (userId: string) =>
   prisma.profile.findUnique({ where: { userId } });
@@ -125,18 +118,18 @@ export const requestMyPasswordWhatsappCode = async (req: AuthRequest, res: Respo
 
   const code = randomCode();
   const codeHash = await bcrypt.hash(code, 10);
+  const expiresAt = new Date(Date.now() + OTP_TTL_MS);
 
-  otpByUserId.set(userId, {
-    codeHash,
-    expiresAt: Date.now() + OTP_TTL_MS,
-    attempts: 0,
-    phone
+  await prisma.whatsappOtp.upsert({
+    where: { userId },
+    create: { userId, codeHash, phone, expiresAt, attempts: 0 },
+    update: { codeHash, phone, expiresAt, attempts: 0 },
   });
 
   try {
     await sendWhatsappOtpCode(phone, code);
   } catch (error: any) {
-    otpByUserId.delete(userId);
+    await prisma.whatsappOtp.delete({ where: { userId } }).catch(() => {});
     return res.status(500).json({
       message: "No se pudo enviar el codigo por WhatsApp",
       detail: asString(error?.message || "")
@@ -177,31 +170,37 @@ export const changeMyPassword = async (req: AuthRequest, res: Response) => {
     return res.status(400).json({ message: "La contrasena actual es incorrecta" });
   }
 
-  const otp = otpByUserId.get(userId);
-  if (!otp || otp.expiresAt < Date.now()) {
-    otpByUserId.delete(userId);
+  // Purge expired OTPs before lookup
+  await prisma.whatsappOtp.deleteMany({ where: { expiresAt: { lt: new Date() } } });
+
+  const otp = await prisma.whatsappOtp.findUnique({ where: { userId } });
+  if (!otp || otp.expiresAt < new Date()) {
+    if (otp) await prisma.whatsappOtp.delete({ where: { userId } }).catch(() => {});
     return res.status(400).json({ message: "Codigo de WhatsApp expirado o no solicitado" });
   }
 
   if (otp.attempts >= OTP_MAX_ATTEMPTS) {
-    otpByUserId.delete(userId);
+    await prisma.whatsappOtp.delete({ where: { userId } }).catch(() => {});
     return res.status(429).json({ message: "Demasiados intentos de codigo, solicita uno nuevo" });
   }
 
   const codeOk = await bcrypt.compare(whatsappCode, otp.codeHash);
   if (!codeOk) {
-    otp.attempts += 1;
-    otpByUserId.set(userId, otp);
+    await prisma.whatsappOtp.update({
+      where: { userId },
+      data: { attempts: { increment: 1 } },
+    });
     return res.status(400).json({ message: "Codigo de WhatsApp invalido" });
   }
+
+  // Consume OTP before updating password (prevent replay)
+  await prisma.whatsappOtp.delete({ where: { userId } }).catch(() => {});
 
   const passwordHash = await bcrypt.hash(newPassword, 12);
   await prisma.user.update({
     where: { id: userId },
-    data: { passwordHash }
+    data: { passwordHash, passwordChangedAt: new Date() }
   });
-
-  otpByUserId.delete(userId);
 
   return res.json({ message: "Contrasena actualizada correctamente" });
 };
