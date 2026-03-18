@@ -496,3 +496,75 @@ export const sendPatientWelcomeEmail = async (
     html
   }));
 };
+
+// ──────────────────────────────────────────────────────────────────────
+// 6. Cobro personalizado con OTP de autorización (API key 3)
+// ──────────────────────────────────────────────────────────────────────
+export const sendCustomChargeOtpEmail = async (
+  to: string,
+  params: {
+    name: string;
+    otp: string;
+    chargeId: string;
+    title: string;
+    description?: string;
+    amountFormatted: string;
+    type: "ONE_TIME" | "RECURRING";
+    intervalLabel?: string;
+    appBaseUrl: string;
+  }
+): Promise<void> => {
+  const chargeUrl = `${params.appBaseUrl}/#/custom-charge/${params.chargeId}`;
+  const typeLabel = params.type === "RECURRING"
+    ? `Cobro recurrente${params.intervalLabel ? ` — ${params.intervalLabel}` : ""}`
+    : "Pago único";
+
+  const html = baseHtml(`
+    <p style="${headingStyle}">Autorización de cobro personalizado</p>
+    <p style="${bodyStyle}">
+      Hola <strong>${params.name}</strong>, el equipo de Velum Laser ha preparado un cobro personalizado para ti.
+      Revisa los detalles y autorízalo con tu código de verificación.
+    </p>
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:#f8f6f3;border-radius:12px;padding:20px;margin:20px 0;">
+      <tr>
+        <td style="padding:6px 0;border-bottom:1px solid #ede8e2;">
+          <p style="margin:0;font-size:11px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#9b8d80;">Concepto</p>
+          <p style="margin:4px 0 0;font-size:16px;font-weight:600;color:#1a1614;">${params.title}</p>
+          ${params.description ? `<p style="margin:4px 0 0;font-size:13px;color:#6b5e53;">${params.description}</p>` : ""}
+        </td>
+      </tr>
+      <tr>
+        <td style="padding:6px 0;border-bottom:1px solid #ede8e2;">
+          <p style="margin:0;font-size:11px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#9b8d80;">Monto</p>
+          <p style="margin:4px 0 0;font-size:22px;font-weight:700;color:#1a1614;">${params.amountFormatted}</p>
+        </td>
+      </tr>
+      <tr>
+        <td style="padding:6px 0;">
+          <p style="margin:0;font-size:11px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#9b8d80;">Tipo</p>
+          <p style="margin:4px 0 0;font-size:14px;color:#1a1614;">${typeLabel}</p>
+        </td>
+      </tr>
+    </table>
+    <p style="${bodyStyle}">
+      Para autorizar este cobro, ingresa el siguiente código de verificación en la página de pago:
+    </p>
+    <div style="text-align:center;margin:28px 0;">
+      <span style="${otpBoxStyle}">${params.otp}</span>
+    </div>
+    <div style="text-align:center;margin:24px 0;">
+      <a href="${chargeUrl}" style="${btnStyle}">Ir a la página de pago</a>
+    </div>
+    <p style="${noteStyle}">
+      Este código es válido por <strong>24 horas</strong> y es de un solo uso.<br>
+      Si no esperabas este cobro, ignora este correo o contáctanos.
+    </p>
+  `);
+
+  await withRetry(() => resendReminders.emails.send({
+    from: FROM,
+    to,
+    subject: `Autoriza tu cobro personalizado — Velum Laser`,
+    html
+  }));
+};

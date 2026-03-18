@@ -23,6 +23,7 @@ const AdminUsers        = lazy(() => import('./pages/AdminUsersPermissions').the
 const AgendaIntegrations = lazy(() => import('./pages/settings/AgendaIntegrations').then(m => ({ default: m.AgendaIntegrations })));
 const OnboardingAdmin   = lazy(() => import('./pages/OnboardingAdmin').then(m => ({ default: m.OnboardingAdmin })));
 const ResetPassword     = lazy(() => import('./pages/ResetPassword').then(m => ({ default: m.ResetPassword })));
+const CustomCharge      = lazy(() => import('./pages/CustomChargePage').then(m => ({ default: m.CustomChargePage })));
 const NotFound          = lazy(() => import('./pages/NotFound').then(m => ({ default: m.NotFound })));
 
 const InnerApp: React.FC = () => {
@@ -45,6 +46,7 @@ const InnerApp: React.FC = () => {
                 <Route path="/settings/agenda-integrations"  element={<AgendaIntegrations />} />
                 <Route path="/admin/onboarding"              element={<OnboardingAdmin />} />
                 <Route path="/reset-password"               element={<ResetPassword />} />
+                <Route path="/custom-charge/:id"            element={<CustomCharge />} />
                 <Route path="*"                              element={<NotFound />} />
               </Routes>
             </Suspense>

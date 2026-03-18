@@ -42,7 +42,7 @@ type MembershipUpsertInput = {
   currency: string | null;
 };
 
-const STRIPE_CONFIG_KEY = "stripe_config_v1";
+const STRIPE_CONFIG_KEY = "stripe_config";
 const STRIPE_PLAN_CATALOG_KEY = "stripe_plan_catalog_v1";
 const PLACEHOLDER_RE = /(REEMPLAZA|CHANGE_ME|EXAMPLE|YOUR_|_HERE)/i;
 
@@ -412,6 +412,26 @@ const getUserIdFromRow = (row: JsonObject | null): string | null => {
 const processCheckoutCompleted = async (event: Stripe.Event, stripe: Stripe): Promise<void> => {
   const session = event.data.object as Stripe.Checkout.Session;
   const metadata = asRecord(session.metadata ?? {});
+
+  // Handle custom charge payment
+  if (cleanString(metadata.type) === "custom_charge") {
+    const customChargeId = cleanString(metadata.customChargeId);
+    if (customChargeId) {
+      const paymentIntentId = extractExpandableId(session.payment_intent);
+      const subscriptionId = extractExpandableId(session.subscription);
+      await prisma.customCharge.update({
+        where: { id: customChargeId },
+        data: {
+          status: "PAID",
+          paidAt: new Date(),
+          stripeSessionId: session.id,
+          ...(paymentIntentId ? { stripePaymentIntentId: paymentIntentId } : {}),
+          ...(subscriptionId ? { stripeSubscriptionId: subscriptionId } : {}),
+        },
+      }).catch((err: Error) => logger.error({ err }, "[stripe-webhook] Failed to mark custom charge as paid"));
+    }
+    return;
+  }
 
   // Handle appointment deposit payment
   if (cleanString(metadata.type) === "appointment_deposit") {

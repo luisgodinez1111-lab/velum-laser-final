@@ -11,6 +11,11 @@ import {
   Zap,
   ChevronDown,
   ChevronUp,
+  Send,
+  Ban,
+  CreditCard,
+  Clock,
+  RotateCcw,
 } from "lucide-react";
 
 type Props = { embedded?: boolean };
@@ -23,6 +28,33 @@ type PlanRow = {
   interval: "day" | "week" | "month" | "year";
   stripePriceId: string;
   active: boolean;
+};
+
+type UserOption = { id: string; email: string; firstName?: string; lastName?: string };
+
+type CustomCharge = {
+  id: string;
+  title: string;
+  description?: string;
+  amount: number;
+  currency: string;
+  type: "ONE_TIME" | "RECURRING";
+  interval?: string;
+  status: "PENDING_ACCEPTANCE" | "ACCEPTED" | "PAID" | "EXPIRED" | "CANCELLED";
+  acceptedAt?: string;
+  paidAt?: string;
+  createdAt: string;
+  user: { id: string; email: string; profile?: { firstName?: string; lastName?: string } };
+};
+
+type NewChargeForm = {
+  userId: string;
+  title: string;
+  description: string;
+  amount: string;
+  currency: string;
+  type: "ONE_TIME" | "RECURRING";
+  interval: "day" | "week" | "month" | "year";
 };
 
 const genKey = () => `${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -43,6 +75,18 @@ export const AdminStripeSettings: React.FC<Props> = ({ embedded = false }) => {
   const [error, setError] = useState("");
   const [ok, setOk] = useState("");
   const [plansExpanded, setPlansExpanded] = useState(true);
+  const [chargesExpanded, setChargesExpanded] = useState(false);
+  const [charges, setCharges] = useState<CustomCharge[]>([]);
+  const [chargesLoading, setChargesLoading] = useState(false);
+  const [chargeFormVisible, setChargeFormVisible] = useState(false);
+  const [chargeError, setChargeError] = useState("");
+  const [chargeOk, setChargeOk] = useState("");
+  const [savingCharge, setSavingCharge] = useState(false);
+  const [users, setUsers] = useState<UserOption[]>([]);
+  const [newCharge, setNewCharge] = useState<NewChargeForm>({
+    userId: "", title: "", description: "", amount: "", currency: "mxn",
+    type: "ONE_TIME", interval: "month",
+  });
 
   const [masked, setMasked] = useState({
     source: "env",
@@ -148,6 +192,91 @@ export const AdminStripeSettings: React.FC<Props> = ({ embedded = false }) => {
       setSavingPlans(false);
     }
   };
+
+  const loadCharges = async () => {
+    setChargesLoading(true);
+    try {
+      const out = await api("/api/v1/admin/custom-charges");
+      setCharges(Array.isArray(out?.charges) ? out.charges : []);
+    } catch { /* silent */ } finally { setChargesLoading(false); }
+  };
+
+  const loadUsers = async () => {
+    try {
+      const out = await api("/admin/users");
+      const list = Array.isArray(out?.users) ? out.users : Array.isArray(out) ? out : [];
+      setUsers(list.map((u: any) => ({
+        id: u.id,
+        email: u.email,
+        firstName: u.profile?.firstName,
+        lastName: u.profile?.lastName,
+      })));
+    } catch { /* silent */ }
+  };
+
+  const openChargesSection = async () => {
+    const next = !chargesExpanded;
+    setChargesExpanded(next);
+    if (next && charges.length === 0) {
+      await Promise.all([loadCharges(), loadUsers()]);
+    }
+  };
+
+  const submitNewCharge = async () => {
+    setChargeError(""); setChargeOk("");
+    if (!newCharge.userId) { setChargeError("Selecciona un cliente"); return; }
+    if (!newCharge.title.trim()) { setChargeError("El concepto es obligatorio"); return; }
+    if (!newCharge.amount || Number(newCharge.amount) <= 0) { setChargeError("El monto debe ser mayor a 0"); return; }
+    setSavingCharge(true);
+    try {
+      await api("/api/v1/admin/custom-charges", {
+        method: "POST",
+        body: JSON.stringify({
+          userId: newCharge.userId,
+          title: newCharge.title.trim(),
+          description: newCharge.description.trim() || undefined,
+          amount: Number(newCharge.amount),
+          currency: newCharge.currency,
+          type: newCharge.type,
+          interval: newCharge.interval,
+        }),
+      });
+      setChargeOk("Cobro creado y OTP enviado al cliente por correo");
+      setNewCharge({ userId: "", title: "", description: "", amount: "", currency: "mxn", type: "ONE_TIME", interval: "month" });
+      setChargeFormVisible(false);
+      await loadCharges();
+    } catch (e: any) {
+      setChargeError(e?.message || "No se pudo crear el cobro");
+    } finally { setSavingCharge(false); }
+  };
+
+  const handleCancelCharge = async (id: string) => {
+    if (!confirm("¿Cancelar este cobro? El cliente ya no podrá pagarlo.")) return;
+    try {
+      await api(`/api/v1/admin/custom-charges/${id}`, { method: "DELETE" });
+      setCharges((prev) => prev.map((c) => c.id === id ? { ...c, status: "CANCELLED" } : c));
+    } catch (e: any) { setChargeError(e?.message || "No se pudo cancelar el cobro"); }
+  };
+
+  const handleResendOtp = async (id: string) => {
+    try {
+      await api(`/api/v1/admin/custom-charges/${id}/resend`, { method: "POST" });
+      setChargeOk("OTP reenviado al cliente");
+    } catch (e: any) { setChargeError(e?.message || "No se pudo reenviar el OTP"); }
+  };
+
+  const chargeStatusLabel: Record<string, { label: string; cls: string }> = {
+    PENDING_ACCEPTANCE: { label: "Pendiente", cls: "text-amber-700 bg-amber-50 border-amber-200" },
+    ACCEPTED:           { label: "Aceptado",  cls: "text-blue-700 bg-blue-50 border-blue-200" },
+    PAID:               { label: "Pagado",    cls: "text-emerald-700 bg-emerald-50 border-emerald-200" },
+    EXPIRED:            { label: "Expirado",  cls: "text-gray-500 bg-gray-50 border-gray-200" },
+    CANCELLED:          { label: "Cancelado", cls: "text-red-600 bg-red-50 border-red-200" },
+  };
+
+  const formatAmount = (cents: number, currency: string) =>
+    new Intl.NumberFormat("es-MX", { style: "currency", currency: currency.toUpperCase() }).format(cents / 100);
+
+  const INTERVAL_LABELS: Record<string, string> = { day: "Diario", week: "Semanal", month: "Mensual", year: "Anual" };
 
   const StatusDot = ({ ok }: { ok: boolean }) => (
     <span className={`w-2 h-2 rounded-full shrink-0 ${ok ? "bg-emerald-500" : "bg-amber-400"}`} />
@@ -331,6 +460,210 @@ export const AdminStripeSettings: React.FC<Props> = ({ embedded = false }) => {
                 {savingPlans ? "Guardando..." : "Guardar planes"}
               </button>
             </div>
+          </div>
+        )}
+      </div>
+
+      {/* Custom Charges */}
+      <div className="bg-white rounded-2xl border border-velum-100 overflow-hidden">
+        <button onClick={openChargesSection}
+          className="w-full flex items-center justify-between px-5 py-4 hover:bg-velum-50 transition">
+          <div className="flex items-center gap-3">
+            <CreditCard size={16} className="text-velum-500" />
+            <p className="text-sm font-semibold text-velum-900">Cobros personalizados</p>
+            <span className="text-[10px] font-bold uppercase tracking-widest text-velum-400 bg-velum-100 px-2 py-0.5 rounded-full">
+              {charges.filter((c) => c.status === "PENDING_ACCEPTANCE").length} pendientes
+            </span>
+          </div>
+          {chargesExpanded ? <ChevronUp size={16} className="text-velum-400" /> : <ChevronDown size={16} className="text-velum-400" />}
+        </button>
+
+        {chargesExpanded && (
+          <div className="px-5 pb-5 border-t border-velum-50 space-y-4">
+            <p className="text-xs text-velum-400 pt-3">
+              Crea cobros personalizados para clientes. El cliente recibirá un correo con un código OTP para autorizar el pago.
+            </p>
+
+            {/* Feedback */}
+            {chargeError && (
+              <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
+                <XCircle size={14} className="text-red-500 shrink-0" />
+                <p className="text-sm text-red-700">{chargeError}</p>
+              </div>
+            )}
+            {chargeOk && (
+              <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3">
+                <CheckCircle2 size={14} className="text-emerald-600 shrink-0" />
+                <p className="text-sm text-emerald-700">{chargeOk}</p>
+              </div>
+            )}
+
+            {/* New charge form */}
+            {chargeFormVisible && (
+              <div className="bg-velum-50 rounded-2xl border border-velum-200 p-4 space-y-3">
+                <p className="text-xs font-bold uppercase tracking-widest text-velum-500">Nuevo cobro</p>
+
+                {/* Client selector */}
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-widest text-velum-400 mb-1">Cliente</label>
+                  <select className="w-full rounded-lg border border-velum-200 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-velum-900/20 focus:border-velum-700 bg-white"
+                    value={newCharge.userId}
+                    onChange={(e) => setNewCharge((p) => ({ ...p, userId: e.target.value }))}>
+                    <option value="">Selecciona un cliente...</option>
+                    {users.map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {[u.firstName, u.lastName].filter(Boolean).join(" ") || u.email} — {u.email}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {/* Title */}
+                  <div className="sm:col-span-2">
+                    <label className="block text-[10px] font-bold uppercase tracking-widest text-velum-400 mb-1">Concepto / Título</label>
+                    <input className="w-full rounded-lg border border-velum-200 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-velum-900/20 focus:border-velum-700"
+                      placeholder="Ej: Sesión adicional zona especial"
+                      value={newCharge.title}
+                      onChange={(e) => setNewCharge((p) => ({ ...p, title: e.target.value }))} />
+                  </div>
+
+                  {/* Description */}
+                  <div className="sm:col-span-2">
+                    <label className="block text-[10px] font-bold uppercase tracking-widest text-velum-400 mb-1">Descripción (opcional)</label>
+                    <input className="w-full rounded-lg border border-velum-200 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-velum-900/20 focus:border-velum-700"
+                      placeholder="Detalles adicionales del cobro"
+                      value={newCharge.description}
+                      onChange={(e) => setNewCharge((p) => ({ ...p, description: e.target.value }))} />
+                  </div>
+
+                  {/* Amount */}
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase tracking-widest text-velum-400 mb-1">Monto (pesos)</label>
+                    <input type="number" min="1"
+                      className="w-full rounded-lg border border-velum-200 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-velum-900/20 focus:border-velum-700"
+                      placeholder="1500"
+                      value={newCharge.amount}
+                      onChange={(e) => setNewCharge((p) => ({ ...p, amount: e.target.value }))} />
+                  </div>
+
+                  {/* Currency */}
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase tracking-widest text-velum-400 mb-1">Moneda</label>
+                    <select className="w-full rounded-lg border border-velum-200 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-velum-900/20 focus:border-velum-700 bg-white"
+                      value={newCharge.currency}
+                      onChange={(e) => setNewCharge((p) => ({ ...p, currency: e.target.value }))}>
+                      <option value="mxn">MXN — Peso mexicano</option>
+                      <option value="usd">USD — Dólar americano</option>
+                    </select>
+                  </div>
+
+                  {/* Type */}
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase tracking-widest text-velum-400 mb-1">Tipo de cobro</label>
+                    <select className="w-full rounded-lg border border-velum-200 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-velum-900/20 focus:border-velum-700 bg-white"
+                      value={newCharge.type}
+                      onChange={(e) => setNewCharge((p) => ({ ...p, type: e.target.value as "ONE_TIME" | "RECURRING" }))}>
+                      <option value="ONE_TIME">Pago único</option>
+                      <option value="RECURRING">Recurrente (suscripción)</option>
+                    </select>
+                  </div>
+
+                  {/* Interval (only for RECURRING) */}
+                  {newCharge.type === "RECURRING" && (
+                    <div>
+                      <label className="block text-[10px] font-bold uppercase tracking-widest text-velum-400 mb-1">Ciclo de cobro</label>
+                      <select className="w-full rounded-lg border border-velum-200 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-velum-900/20 focus:border-velum-700 bg-white"
+                        value={newCharge.interval}
+                        onChange={(e) => setNewCharge((p) => ({ ...p, interval: e.target.value as any }))}>
+                        <option value="day">Diario</option>
+                        <option value="week">Semanal</option>
+                        <option value="month">Mensual</option>
+                        <option value="year">Anual</option>
+                      </select>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex gap-2 pt-1">
+                  <button onClick={() => { setChargeFormVisible(false); setChargeError(""); setChargeOk(""); }}
+                    className="px-4 py-2 rounded-xl border border-velum-200 text-sm text-velum-600 hover:bg-velum-100 transition">
+                    Cancelar
+                  </button>
+                  <button onClick={submitNewCharge} disabled={savingCharge}
+                    className="flex-1 flex items-center justify-center gap-2 bg-velum-900 text-white rounded-xl py-2 text-sm font-medium hover:bg-velum-800 transition disabled:opacity-50">
+                    <Send size={14} />
+                    {savingCharge ? "Enviando..." : "Crear cobro y enviar OTP"}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Charges list */}
+            {chargesLoading ? (
+              <div className="space-y-2">
+                {[1, 2].map((i) => <div key={i} className="h-16 bg-velum-100 rounded-xl animate-pulse" />)}
+              </div>
+            ) : charges.length === 0 ? (
+              <div className="py-8 text-center">
+                <p className="text-sm text-velum-400">Sin cobros personalizados.</p>
+                <p className="text-xs text-velum-300 mt-1">Crea el primero con el botón de abajo.</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {charges.map((c) => {
+                  const st = chargeStatusLabel[c.status] ?? { label: c.status, cls: "text-velum-500 bg-velum-50 border-velum-200" };
+                  const clientName = [c.user.profile?.firstName, c.user.profile?.lastName].filter(Boolean).join(" ") || c.user.email;
+                  return (
+                    <div key={c.id} className="rounded-xl border border-velum-100 p-4 bg-white">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p className="text-sm font-semibold text-velum-900 truncate">{c.title}</p>
+                            <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border ${st.cls}`}>
+                              {st.label}
+                            </span>
+                          </div>
+                          <p className="text-xs text-velum-500 mt-0.5">{clientName} · {c.user.email}</p>
+                          {c.description && <p className="text-xs text-velum-400 mt-0.5 truncate">{c.description}</p>}
+                          <div className="flex items-center gap-3 mt-1.5 flex-wrap">
+                            <span className="text-xs font-bold text-velum-800">{formatAmount(c.amount, c.currency)}</span>
+                            <span className="text-[10px] text-velum-400">
+                              {c.type === "RECURRING" ? `Recurrente · ${INTERVAL_LABELS[c.interval ?? "month"]}` : "Pago único"}
+                            </span>
+                            <span className="text-[10px] text-velum-300 flex items-center gap-1">
+                              <Clock size={10} />
+                              {new Date(c.createdAt).toLocaleDateString("es-MX")}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          {c.status === "PENDING_ACCEPTANCE" && (
+                            <>
+                              <button onClick={() => handleResendOtp(c.id)} title="Reenviar OTP"
+                                className="p-1.5 rounded-lg text-velum-400 hover:text-blue-600 hover:bg-blue-50 transition">
+                                <RotateCcw size={13} />
+                              </button>
+                              <button onClick={() => handleCancelCharge(c.id)} title="Cancelar cobro"
+                                className="p-1.5 rounded-lg text-velum-400 hover:text-red-500 hover:bg-red-50 transition">
+                                <Ban size={13} />
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {!chargeFormVisible && (
+              <button onClick={() => { setChargeFormVisible(true); setChargeError(""); setChargeOk(""); if (users.length === 0) loadUsers(); }}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-velum-200 text-xs font-medium text-velum-700 hover:bg-velum-50 transition">
+                <Plus size={13} />Nuevo cobro personalizado
+              </button>
+            )}
           </div>
         )}
       </div>
