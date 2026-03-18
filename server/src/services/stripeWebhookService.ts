@@ -2,6 +2,11 @@ import Stripe from "stripe";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../db/prisma";
 import { logger } from "../utils/logger";
+import {
+  onCustomChargePaid,
+  onAppointmentDepositPaid,
+  onMembershipActivated,
+} from "./notificationService";
 
 type JsonObject = Record<string, unknown>;
 type Delegate = {
@@ -419,7 +424,7 @@ const processCheckoutCompleted = async (event: Stripe.Event, stripe: Stripe): Pr
     if (customChargeId) {
       const paymentIntentId = extractExpandableId(session.payment_intent);
       const subscriptionId = extractExpandableId(session.subscription);
-      await prisma.customCharge.update({
+      const updatedCharge = await prisma.customCharge.update({
         where: { id: customChargeId },
         data: {
           status: "PAID",
@@ -428,7 +433,30 @@ const processCheckoutCompleted = async (event: Stripe.Event, stripe: Stripe): Pr
           ...(paymentIntentId ? { stripePaymentIntentId: paymentIntentId } : {}),
           ...(subscriptionId ? { stripeSubscriptionId: subscriptionId } : {}),
         },
-      }).catch((err: Error) => logger.error({ err }, "[stripe-webhook] Failed to mark custom charge as paid"));
+        include: {
+          user: { select: { id: true, email: true, profile: { select: { firstName: true, lastName: true } } } },
+        },
+      }).catch((err: Error) => {
+        logger.error({ err }, "[stripe-webhook] Failed to mark custom charge as paid");
+        return null;
+      });
+
+      if (updatedCharge) {
+        const u = updatedCharge.user;
+        const userName = [u.profile?.firstName, u.profile?.lastName].filter(Boolean).join(" ") || u.email;
+        const amountFormatted = new Intl.NumberFormat("es-MX", {
+          style: "currency",
+          currency: (updatedCharge.currency ?? "mxn").toUpperCase(),
+        }).format(updatedCharge.amount / 100);
+        onCustomChargePaid({
+          userId: u.id,
+          userEmail: u.email,
+          userName,
+          chargeId: updatedCharge.id,
+          chargeTitle: updatedCharge.title,
+          amountFormatted,
+        }).catch((err) => logger.error({ err }, "[stripe-webhook] custom_charge_paid notification failed"));
+      }
     }
     return;
   }
@@ -473,6 +501,21 @@ const processCheckoutCompleted = async (event: Stripe.Event, stripe: Stripe): Pr
           ...(interestedPlanCode ? { interestedPlanCode } : {}),
         },
       }).catch((err: Error) => logger.error({ err }, "[stripe-webhook] Failed to set deposit available"));
+
+      // Notify admins about the new appointment deposit
+      const depositUser = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { email: true, profile: { select: { firstName: true, lastName: true } } },
+      }).catch(() => null);
+      if (depositUser) {
+        const depositName = [depositUser.profile?.firstName, depositUser.profile?.lastName].filter(Boolean).join(" ") || depositUser.email;
+        onAppointmentDepositPaid({
+          userId,
+          userEmail: depositUser.email,
+          userName: depositName,
+          startAt,
+        }).catch((err) => logger.error({ err }, "[stripe-webhook] deposit_paid notification failed"));
+      }
     }
     return;
   }
@@ -541,6 +584,24 @@ const processCheckoutCompleted = async (event: Stripe.Event, stripe: Stripe): Pr
     }
   }
 
+  // Notify user + admins about membership activation
+  if (userId && subCtx.status === "active") {
+    const memberUser = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { email: true, profile: { select: { firstName: true, lastName: true } } },
+    }).catch(() => null);
+    if (memberUser) {
+      const memberName = [memberUser.profile?.firstName, memberUser.profile?.lastName].filter(Boolean).join(" ") || memberUser.email;
+      onMembershipActivated({
+        userId,
+        userEmail: memberUser.email,
+        userName: memberName,
+        planCode: requestedPlanCode || subCtx.planCode,
+        isRenewal: false,
+      }).catch((err) => logger.error({ err }, "[stripe-webhook] membership_activated notification failed"));
+    }
+  }
+
   logger.info({ eventId: event.id, subscriptionId, userId }, "[stripe-webhook] checkout.session.completed processed");
 };
 
@@ -573,6 +634,24 @@ const processInvoiceEvent = async (event: Stripe.Event, stripe: Stripe, success:
     amount: centsToMajor(success ? invoice.amount_paid : invoice.amount_due),
     currency: cleanString(invoice.currency) || null,
   });
+
+  // Notify user + admins on invoice paid (renewal)
+  if (success && userId) {
+    const invoiceUser = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { email: true, profile: { select: { firstName: true, lastName: true } } },
+    }).catch(() => null);
+    if (invoiceUser) {
+      const invoiceName = [invoiceUser.profile?.firstName, invoiceUser.profile?.lastName].filter(Boolean).join(" ") || invoiceUser.email;
+      onMembershipActivated({
+        userId,
+        userEmail: invoiceUser.email,
+        userName: invoiceName,
+        planCode: subCtx?.planCode,
+        isRenewal: true,
+      }).catch((err) => logger.error({ err }, "[stripe-webhook] membership_renewed notification failed"));
+    }
+  }
 
   logger.info({ eventId: event.id, success, subscriptionId, userId }, "[stripe-webhook] invoice processed");
 };

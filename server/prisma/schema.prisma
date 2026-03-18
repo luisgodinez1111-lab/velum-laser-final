@@ -106,6 +106,7 @@ model User {
   passwordChangedAt           DateTime?
   mustChangePassword          Boolean   @default(false)
   customCharges               CustomCharge[]
+  notifications               Notification[]
 
   @@index([clinicId])
 }
@@ -523,6 +524,22 @@ model CustomCharge {
   @@index([userId])
   @@index([status])
   @@index([createdAt])
+}
+
+model Notification {
+  id        String    @id @default(cuid())
+  userId    String
+  type      String    // e.g. "custom_charge_created", "custom_charge_paid", "membership_activated"
+  title     String
+  body      String?
+  data      Json?
+  read      Boolean   @default(false)
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, read])
+  @@index([userId, createdAt])
 }
 
 model WebhookEvent {

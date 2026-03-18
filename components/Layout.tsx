@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Menu, X, Instagram, Facebook, LogOut, User, ChevronDown, Settings } from 'lucide-react';
 import { VelumLogo } from './VelumLogo';
 import { useAuth } from '../context/AuthContext';
+import { NotificationBell } from './NotificationBell';
 
 const NAV_LINKS = [
   { name: 'Inicio',     path: '/' },
@@ -80,6 +81,8 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
               ))}
 
               {isAuthenticated ? (
+                <div className="flex items-center gap-2">
+                <NotificationBell />
                 <div className="relative" ref={userMenuRef}>
                   <button
                     id="user-menu-button"
@@ -147,6 +150,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
                       </div>
                     </div>
                   )}
+                </div>
                 </div>
               ) : (
                 <Link

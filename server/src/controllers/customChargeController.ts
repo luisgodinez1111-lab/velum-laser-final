@@ -10,6 +10,10 @@ import {
 } from "../services/customChargeService";
 import { sendCustomChargeOtpEmail } from "../services/emailService";
 import { logger } from "../utils/logger";
+import {
+  onCustomChargeCreated,
+  onCustomChargeAccepted,
+} from "../services/notificationService";
 
 const asString = (v: unknown): string => (typeof v === "string" ? v.trim() : "");
 
@@ -102,6 +106,16 @@ export const createCharge = async (req: AuthRequest, res: Response) => {
   } catch (err) {
     logger.error({ err }, "[custom-charge] Failed to send OTP email");
   }
+
+  // Trigger in-app + email notification for the user
+  onCustomChargeCreated({
+    userId,
+    userEmail: user.email,
+    userName: name,
+    chargeId: charge.id,
+    chargeTitle: title,
+    amountFormatted: formatAmount(amountCents, currency),
+  }).catch((err) => logger.error({ err }, "[custom-charge] notification failed"));
 
   return res.status(201).json({
     message: "Cobro creado y OTP enviado al cliente",
@@ -279,6 +293,14 @@ export const verifyOtpAndCheckout = async (req: Request, res: Response) => {
     where: { id },
     data: { stripeSessionId: json.id, stripeSessionUrl: json.url },
   });
+
+  // Notify admins that the user accepted the charge (OTP verified)
+  onCustomChargeAccepted({
+    chargeId: id,
+    chargeTitle: charge.title,
+    amountFormatted: formatAmount(charge.amount, charge.currency),
+    clientName: charge.user.email,
+  }).catch((err) => logger.error({ err }, "[custom-charge] accepted notification failed"));
 
   return res.json({
     message: "OTP verificado correctamente",

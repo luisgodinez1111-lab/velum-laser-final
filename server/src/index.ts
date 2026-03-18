@@ -25,6 +25,7 @@ import { adminAccessRoutes } from "./routes/adminAccessRoutes";
 import { adminStripeConfigRoutes } from "./routes/adminStripeConfigRoutes";
 import { billingCheckoutRoutes } from "./routes/billingCheckoutRoutes";
 import { customChargeRoutes } from "./routes/customChargeRoutes";
+import { notificationRoutes } from "./routes/notificationRoutes";
 import { stripeWebhookRouter } from "./routes/stripeWebhookRoutes";
 import { startIntegrationWorker } from "./services/integrationWorker";
 import { startPaymentReminderCron } from "./services/paymentReminderService";
@@ -118,6 +119,7 @@ app.use(adminAccessRoutes);
 app.use(adminStripeConfigRoutes);
 app.use(billingCheckoutRoutes);
 app.use(customChargeRoutes);
+app.use(notificationRoutes);
 
 // ── Stripe legacy (mantenido por compatibilidad con webhooks existentes)
 app.use(stripeRoutes);
