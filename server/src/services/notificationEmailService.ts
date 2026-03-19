@@ -2,7 +2,14 @@ import { Resend } from "resend";
 import { logger } from "../utils/logger";
 
 // Dedicated Resend client exclusively for in-app notifications
-const resendNotifications = new Resend(process.env.RESEND_KEY_NOTIFICATIONS ?? "");
+// Initialized lazily to avoid crash on startup when key is not set
+let _resendNotifications: Resend | null = null;
+const getResend = (): Resend | null => {
+  const key = process.env.RESEND_KEY_NOTIFICATIONS ?? "";
+  if (!key) return null;
+  if (!_resendNotifications) _resendNotifications = new Resend(key);
+  return _resendNotifications;
+};
 
 const FROM = `Velum Laser <${process.env.RESEND_FROM_EMAIL ?? "noreply@velumlaser.com"}>`;
 
@@ -83,8 +90,10 @@ export const sendNotificationEmail = async (
       : ""}
   `);
 
+  const client = getResend();
+  if (!client) { logger.warn("[notifications] RESEND_KEY_NOTIFICATIONS not set — skipping user email"); return; }
   await withRetry(() =>
-    resendNotifications.emails.send({ from: FROM, to, subject: params.subject, html })
+    client.emails.send({ from: FROM, to, subject: params.subject, html })
   );
 };
 
@@ -108,8 +117,10 @@ export const sendAdminNotificationEmail = async (params: {
     </p>
   `);
 
+  const client = getResend();
+  if (!client) { logger.warn("[notifications] RESEND_KEY_NOTIFICATIONS not set — skipping admin email"); return; }
   await withRetry(() =>
-    resendNotifications.emails.send({
+    client.emails.send({
       from: FROM,
       to: adminEmail,
       subject: `[Admin] ${params.subject}`,
