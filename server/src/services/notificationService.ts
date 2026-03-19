@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { prisma } from "../db/prisma";
 import { logger } from "../utils/logger";
 import { sendNotificationEmail, sendAdminNotificationEmail } from "./notificationEmailService";
@@ -16,7 +17,7 @@ export interface CreateNotificationParams {
   type: NotificationType;
   title: string;
   body?: string;
-  data?: Record<string, unknown>;
+  data?: Record<string, unknown> | null;
 }
 
 // ── Create a single in-app notification ──────────────────────────────
@@ -28,7 +29,7 @@ export const createNotification = async (params: CreateNotificationParams) => {
         type: params.type,
         title: params.title,
         body: params.body,
-        data: params.data ?? {},
+        data: (params.data ?? {}) as Prisma.InputJsonValue,
       },
     });
   } catch (err) {
@@ -56,7 +57,7 @@ export const notifyAdmins = async (
         type,
         title,
         body,
-        data: data ?? {},
+        data: (data ?? {}) as Prisma.InputJsonValue,
       })),
     });
   } catch (err) {
