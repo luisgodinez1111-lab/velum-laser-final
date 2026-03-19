@@ -204,7 +204,7 @@ export const AdminStripeSettings: React.FC<Props> = ({ embedded = false }) => {
   const loadUsers = async () => {
     try {
       const out = await api("/admin/users");
-      const list = Array.isArray(out?.users) ? out.users : Array.isArray(out) ? out : [];
+      const list = Array.isArray(out?.data) ? out.data : Array.isArray(out?.users) ? out.users : Array.isArray(out) ? out : [];
       setUsers(list.map((u: any) => ({
         id: u.id,
         email: u.email,
