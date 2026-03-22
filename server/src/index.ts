@@ -92,6 +92,11 @@ app.use(
   "/api/v1/custom-charges",
   rateLimit({ windowMs: 10 * 60 * 1000, limit: 15, standardHeaders: true, legacyHeaders: false })
 );
+// Notifications — authenticated but still rate-limited
+app.use(
+  "/api/v1/notifications",
+  rateLimit({ windowMs: 10 * 60 * 1000, limit: 120, standardHeaders: true, legacyHeaders: false })
+);
 
 // ── Stripe webhook — raw body antes de express.json ──────────────────
 // Solo un webhook activo: la versión v1

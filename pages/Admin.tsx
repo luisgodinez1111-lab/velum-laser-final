@@ -46,6 +46,8 @@ import { AdminUsersPermissions } from "./AdminUsersPermissions";
 import { AdminCreatePatientDrawer } from "../components/AdminCreatePatientDrawer";
 import { AdminStripeSettings } from "./AdminStripeSettings";
 import { AdminWhatsAppSettings } from "./AdminWhatsAppSettings";
+import { AdminRiesgosSection } from "./AdminRiesgosSection";
+import { AdminCumplimientoSection } from "./AdminCumplimientoSection";
 import { useToast } from "../context/ToastContext";
 import { apiFetch } from "../services/apiClient";
 import {
@@ -314,6 +316,26 @@ const weekDayForDateKey = (dateKey: string) => {
   return date.getDay();
 };
 
+const intakeStatusLabel = (status?: string) => {
+  switch (status) {
+    case 'approved': return { label: 'Aprobado', cls: 'text-emerald-700 bg-emerald-50 border-emerald-200' };
+    case 'submitted': return { label: 'Pendiente revisión', cls: 'text-amber-700 bg-amber-50 border-amber-200' };
+    case 'rejected': return { label: 'Rechazado', cls: 'text-red-700 bg-red-50 border-red-200' };
+    default: return { label: 'Borrador', cls: 'text-zinc-500 bg-zinc-50 border-zinc-200' };
+  }
+};
+
+const apptStatusLabel = (status?: string) => {
+  switch (status) {
+    case 'scheduled': return { label: 'Agendada', cls: 'bg-blue-50 text-blue-700 border-blue-200' };
+    case 'confirmed': return { label: 'Confirmada', cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' };
+    case 'completed': return { label: 'Completada', cls: 'bg-velum-100 text-velum-700 border-velum-200' };
+    case 'canceled': return { label: 'Cancelada', cls: 'bg-zinc-100 text-zinc-500 border-zinc-200' };
+    case 'no_show': return { label: 'No show', cls: 'bg-red-50 text-red-600 border-red-200' };
+    default: return { label: status ?? '—', cls: 'bg-zinc-100 text-zinc-500 border-zinc-200' };
+  }
+};
+
 const riskOfMember = (member: Member): HealthFlag => {
   const status = member.subscriptionStatus;
   const consent = !!member.clinical?.consentFormSigned;
@@ -336,6 +358,36 @@ const KpiCard: React.FC<{ icon: React.ReactNode; label: string; value: string | 
     {sub && <p className="text-xs text-velum-400">{sub}</p>}
   </div>
 );
+
+class AdminErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { hasError: boolean; error?: Error }
+> {
+  state = { hasError: false, error: undefined as Error | undefined };
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="flex flex-col items-center justify-center h-full min-h-[40vh] p-8 text-center">
+          <AlertTriangle size={40} className="text-red-400 mb-4" />
+          <h2 className="font-serif text-xl text-velum-900 mb-2">Algo salió mal</h2>
+          <p className="text-sm text-velum-500 mb-6">{this.state.error?.message ?? 'Error inesperado en el panel'}</p>
+          <button
+            onClick={() => this.setState({ hasError: false, error: undefined })}
+            className="px-4 py-2 rounded-xl bg-velum-900 text-white text-sm font-medium hover:bg-velum-800 transition"
+          >
+            Intentar de nuevo
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 export const Admin: React.FC = () => {
   const { login, logout, user, isAuthenticated, isSessionLoading: isAuthLoading, isActionLoading } = useAuth();
@@ -1821,28 +1873,6 @@ export const Admin: React.FC = () => {
       });
     } finally {
       setIsGoogleIntegrationSaving(false);
-    }
-  };
-
-  // ─── Helper UI ────────────────────────────────────────────────────────────
-
-  const intakeStatusLabel = (status?: string) => {
-    switch (status) {
-      case 'approved': return { label: 'Aprobado', cls: 'text-emerald-700 bg-emerald-50 border-emerald-200' };
-      case 'submitted': return { label: 'Pendiente revisión', cls: 'text-amber-700 bg-amber-50 border-amber-200' };
-      case 'rejected': return { label: 'Rechazado', cls: 'text-red-700 bg-red-50 border-red-200' };
-      default: return { label: 'Borrador', cls: 'text-zinc-500 bg-zinc-50 border-zinc-200' };
-    }
-  };
-
-  const apptStatusLabel = (status?: string) => {
-    switch (status) {
-      case 'scheduled': return { label: 'Agendada', cls: 'bg-blue-50 text-blue-700 border-blue-200' };
-      case 'confirmed': return { label: 'Confirmada', cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' };
-      case 'completed': return { label: 'Completada', cls: 'bg-velum-100 text-velum-700 border-velum-200' };
-      case 'canceled': return { label: 'Cancelada', cls: 'bg-zinc-100 text-zinc-500 border-zinc-200' };
-      case 'no_show': return { label: 'No show', cls: 'bg-red-50 text-red-600 border-red-200' };
-      default: return { label: status ?? '—', cls: 'bg-zinc-100 text-zinc-500 border-zinc-200' };
     }
   };
 
@@ -3544,136 +3574,7 @@ export const Admin: React.FC = () => {
     );
   };
 
-  // ─── Section: Riesgos ─────────────────────────────────────────────────────
-
-  const renderRiesgos = () => {
-    const critical = members.filter((m) => riskOfMember(m) === 'critical');
-    const warning = members.filter((m) => riskOfMember(m) === 'warning');
-    return (
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-2xl font-serif text-velum-900">Riesgos</h1>
-          <p className="text-sm text-velum-500 mt-1">Monitoreo de exposición operativa y clínica</p>
-        </div>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <KpiCard icon={<AlertTriangle size={18} />} label="Críticos" value={critical.length} accent={critical.length > 0 ? 'text-red-600' : 'text-velum-900'} />
-          <KpiCard icon={<CircleAlert size={18} />} label="En atención" value={warning.length} accent={warning.length > 0 ? 'text-amber-600' : 'text-velum-900'} />
-          <KpiCard icon={<ShieldCheck size={18} />} label="Sin consentimiento" value={members.filter((m) => !m.clinical?.consentFormSigned).length} />
-          <KpiCard icon={<Activity size={18} />} label="Eventos fallidos" value={analytics.failedAudits} accent={analytics.failedAudits > 0 ? 'text-red-600' : 'text-velum-900'} />
-        </div>
-        <div className="bg-white rounded-2xl border border-velum-100 overflow-hidden">
-          {critical.length === 0 && warning.length === 0 ? (
-            <div className="py-16 text-center">
-              <ShieldCheck size={32} className="mx-auto text-emerald-300 mb-3" />
-              <p className="text-sm text-velum-400">No hay socios en situación de riesgo</p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-velum-100 bg-velum-50/50">
-                    {['Socio', 'Estado', 'Consentimiento', 'Expediente', 'Nivel', 'Acciones'].map((h) => (
-                      <th key={h} className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-widest text-velum-400">{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {[...critical, ...warning].map((m, i) => {
-                    const risk = riskOfMember(m);
-                    const intake = intakeStatusLabel(m.intakeStatus);
-                    return (
-                      <tr key={m.id} className={`hover:bg-velum-50 transition ${i < critical.length + warning.length - 1 ? 'border-b border-velum-50' : ''} ${risk === 'critical' ? 'bg-red-50/30' : ''}`}>
-                        <td className="px-4 py-3">
-                          <p className="font-medium text-velum-900">{m.name}</p>
-                          <p className="text-xs text-velum-400">{m.email}</p>
-                        </td>
-                        <td className="px-4 py-3"><Pill label={statusLabel(m.subscriptionStatus)} cls={statusPill(m.subscriptionStatus)} /></td>
-                        <td className="px-4 py-3">
-                          <span className={`text-xs font-medium ${m.clinical?.consentFormSigned ? 'text-emerald-600' : 'text-red-500'}`}>
-                            {m.clinical?.consentFormSigned ? 'Firmado' : 'Sin firma'}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3"><Pill label={intake.label} cls={intake.cls} /></td>
-                        <td className="px-4 py-3">
-                          <span className={`inline-flex items-center gap-1.5 text-xs font-bold ${risk === 'critical' ? 'text-red-600' : 'text-amber-600'}`}>
-                            <span className={`w-2 h-2 rounded-full ${risk === 'critical' ? 'bg-red-500' : 'bg-amber-400'}`} />
-                            {risk === 'critical' ? 'Crítico' : 'Atención'}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3">
-                          <button onClick={() => handleOpenMemberDrawer(m)} className="text-xs text-velum-600 hover:text-velum-900 transition font-medium">Ver perfil</button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  };
-
-  // ─── Section: Cumplimiento ────────────────────────────────────────────────
-
-  const renderCumplimiento = () => (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-serif text-velum-900">Cumplimiento</h1>
-          <p className="text-sm text-velum-500 mt-1">Bitácora de auditoría y control de acceso</p>
-        </div>
-        <button onClick={() => void loadData()} className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-velum-200 bg-white text-sm text-velum-600 hover:bg-velum-50 transition">
-          <RefreshCw size={14} />Actualizar
-        </button>
-      </div>
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <KpiCard icon={<CheckCheck size={18} />} label="Firmas de consentimiento" value={analytics.expedientesFirmados} accent="text-emerald-700" />
-        <KpiCard icon={<AlertTriangle size={18} />} label="Eventos fallidos" value={analytics.failedAudits} accent={analytics.failedAudits > 0 ? 'text-red-600' : 'text-velum-900'} />
-        <KpiCard icon={<Activity size={18} />} label="Eventos sensibles" value={analytics.sensitiveEvents} />
-        <KpiCard icon={<Users size={18} />} label="Usuarios con acceso" value={members.filter((m) => m.role !== 'member').length + 1} />
-      </div>
-      <div className="bg-white rounded-2xl border border-velum-100 overflow-hidden">
-        <div className="px-5 py-4 border-b border-velum-100">
-          <p className="text-xs font-bold uppercase tracking-widest text-velum-500">Bitácora de auditoría</p>
-        </div>
-        {auditLogs.length === 0 ? (
-          <div className="py-12 text-center text-xs text-velum-400">Sin registros de auditoría disponibles</div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="border-b border-velum-100 bg-velum-50/50">
-                  {['Timestamp', 'Usuario', 'Acción', 'IP', 'Estado'].map((h) => (
-                    <th key={h} className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-widest text-velum-400">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {auditLogs.map((log, i) => (
-                  <tr key={log.id ?? i} className={`hover:bg-velum-50 transition ${i < auditLogs.length - 1 ? 'border-b border-velum-50' : ''}`}>
-                    <td className="px-4 py-3 text-velum-400 whitespace-nowrap font-mono">
-                      {new Date(log.timestamp).toLocaleString('es-MX', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
-                    </td>
-                    <td className="px-4 py-3 text-velum-700 max-w-[140px] truncate">{log.user ?? '—'}</td>
-                    <td className="px-4 py-3 text-velum-500 font-mono max-w-[200px] truncate">{log.action}</td>
-                    <td className="px-4 py-3 text-velum-400 font-mono">{log.ip ?? '—'}</td>
-                    <td className="px-4 py-3">
-                      <span className={`inline-flex items-center gap-1 text-xs font-medium ${log.status === 'success' ? 'text-emerald-600' : 'text-red-600'}`}>
-                        <span className={`w-1.5 h-1.5 rounded-full ${log.status === 'success' ? 'bg-emerald-500' : 'bg-red-500'}`} />
-                        {log.status === 'success' ? 'OK' : 'ERROR'}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-    </div>
-  );
+  // renderRiesgos y renderCumplimiento → AdminRiesgosSection / AdminCumplimientoSection
 
   // ─── Section: Configuraciones ─────────────────────────────────────────────
 
@@ -4122,8 +4023,23 @@ export const Admin: React.FC = () => {
       case 'pagos':        return renderPagos();
       case 'kpis':         return renderKPIs();
       case 'finanzas':     return renderFinanzas();
-      case 'riesgos':      return renderRiesgos();
-      case 'cumplimiento': return renderCumplimiento();
+      case 'riesgos':      return (
+        <AdminRiesgosSection
+          members={members}
+          failedAudits={analytics.failedAudits}
+          onOpenMember={handleOpenMemberDrawer}
+        />
+      );
+      case 'cumplimiento': return (
+        <AdminCumplimientoSection
+          expedientesFirmados={analytics.expedientesFirmados}
+          failedAudits={analytics.failedAudits}
+          sensitiveEvents={analytics.sensitiveEvents}
+          staffCount={members.filter((m) => m.role !== 'member').length + 1}
+          auditLogs={auditLogs}
+          onRefresh={() => void loadData()}
+        />
+      );
       case 'ajustes':      return renderConfiguraciones();
       default:             return null;
     }
@@ -4260,7 +4176,9 @@ export const Admin: React.FC = () => {
         {/* Content */}
         <main className="flex-1 overflow-y-auto">
           <div className="max-w-6xl mx-auto px-5 py-7">
-            {renderSection()}
+            <AdminErrorBoundary>
+              {renderSection()}
+            </AdminErrorBoundary>
           </div>
         </main>
       </div>

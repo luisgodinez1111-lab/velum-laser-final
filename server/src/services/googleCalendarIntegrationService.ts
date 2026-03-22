@@ -721,7 +721,13 @@ export const ensureGoogleCalendarWatches = async () => {
     try {
       await registerGoogleCalendarWatch(integration.id);
     } catch (error) {
-      logger.error({ integrationId: integration.id, err: error }, "Failed to refresh Google watch channel");
+      const msg = error instanceof Error ? error.message : String(error);
+      const isConfigError = msg.includes("env vars are missing") || msg.includes("placeholders");
+      if (isConfigError) {
+        logger.warn({ integrationId: integration.id }, "Google Calendar not configured — skipping watch refresh");
+      } else {
+        logger.error({ integrationId: integration.id, err: error }, "Failed to refresh Google watch channel");
+      }
     }
   }
 };

@@ -15,6 +15,12 @@ const getGoogleOAuthRuntimeConfig = () => {
 
 const isPlaceholderValue = (value: string) => value.trim().startsWith("REEMPLAZA_");
 
+export const isGoogleCalendarConfigured = (config = getGoogleOAuthRuntimeConfig()): boolean => {
+  const { clientId, clientSecret, redirectUri } = config;
+  return !!(clientId && clientSecret && redirectUri &&
+    !isPlaceholderValue(clientId) && !isPlaceholderValue(clientSecret));
+};
+
 export const assertGoogleCalendarEnv = (config = getGoogleOAuthRuntimeConfig()) => {
   const { clientId, clientSecret, redirectUri } = config;
   if (
