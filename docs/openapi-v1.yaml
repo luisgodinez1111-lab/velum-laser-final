@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: VELUM API v1
-  version: 1.2.0
+  version: 1.3.0
 servers:
   - url: /api
 components:
@@ -16,6 +16,15 @@ components:
       properties:
         message:
           type: string
+    Notification:
+      type: object
+      properties:
+        id:        { type: string }
+        type:      { type: string, description: Tipo de notificación }
+        title:     { type: string }
+        body:      { type: string, nullable: true }
+        read:      { type: boolean }
+        createdAt: { type: string, format: date-time }
     LeadCreate:
       type: object
       required: [name, email, phone, consent]
@@ -440,6 +449,358 @@ paths:
       responses:
         '200': { description: Contraseña actualizada }
         '400': { description: Código inválido o expirado }
+
+  # ── Notificaciones ──────────────────────────────────────────────────────
+  /v1/notifications:
+    get:
+      summary: Listar notificaciones del usuario autenticado
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - { name: limit, in: query, schema: { type: integer, default: 30 } }
+        - { name: skip,  in: query, schema: { type: integer, default: 0  } }
+      responses:
+        '200':
+          description: Lista de notificaciones
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/Notification' } }
+                  total: { type: integer }
+                  unread: { type: integer }
+        '401': { description: No autenticado }
+
+  /v1/notifications/unread-count:
+    get:
+      summary: Conteo de notificaciones no leídas
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200':
+          description: Conteo
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  count: { type: integer }
+        '401': { description: No autenticado }
+
+  /v1/notifications/stream:
+    get:
+      summary: Stream de notificaciones en tiempo real (Server-Sent Events)
+      description: Abre una conexión SSE persistente. El servidor emite un evento `data` por cada notificación nueva. Emite comentarios de heartbeat cada 25 segundos para mantener la conexión viva.
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200':
+          description: Stream text/event-stream activo
+          content:
+            text/event-stream:
+              schema:
+                type: string
+                example: "data: {\"id\":\"notif_1\",\"type\":\"new_member\",\"title\":\"Nueva socia\"}\n\n"
+        '401': { description: No autenticado }
+
+  /v1/notifications/read-all:
+    post:
+      summary: Marcar todas las notificaciones como leídas
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200': { description: Todas marcadas como leídas }
+        '401': { description: No autenticado }
+
+  /v1/notifications/{id}/read:
+    post:
+      summary: Marcar una notificación como leída
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: Notificación marcada como leída }
+        '401': { description: No autenticado }
+        '404': { description: Notificación no encontrada }
+
+  # ── Custom Charges (Admin) ───────────────────────────────────────────────────
+  /v1/admin/custom-charges:
+    get:
+      summary: Listar cobros personalizados
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200': { description: Lista de cobros }
+        '401': { description: No autenticado }
+    post:
+      summary: Crear cobro personalizado con envío de OTP al cliente
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [userId, title, amount, type]
+              properties:
+                userId:       { type: string }
+                title:        { type: string }
+                description:  { type: string }
+                amount:       { type: integer, description: En centavos }
+                currency:     { type: string, default: mxn }
+                type:         { type: string, enum: [ONE_TIME, RECURRING] }
+                interval:     { type: string, enum: [day, week, month, year, once] }
+                expiresInHours: { type: integer, default: 72 }
+      responses:
+        '201': { description: Cobro creado y OTP enviado }
+        '400': { description: Datos inválidos }
+        '401': { description: No autenticado }
+
+  /v1/admin/custom-charges/{id}:
+    delete:
+      summary: Cancelar cobro personalizado
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: Cobro cancelado }
+        '401': { description: No autenticado }
+        '404': { description: Cobro no encontrado }
+
+  /v1/admin/custom-charges/{id}/resend:
+    post:
+      summary: Reenviar OTP del cobro personalizado al cliente
+      description: Rate limited — máximo 3 solicitudes por IP cada 15 minutos.
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: OTP reenviado }
+        '400': { description: Cobro no en estado válido para reenvío }
+        '429': { description: Demasiadas solicitudes de OTP }
+
+  # ── Custom Charges (Público) ─────────────────────────────────────────────────
+  /v1/custom-charges/{id}:
+    get:
+      summary: Obtener detalle público de un cobro (sin autenticación)
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: Detalle del cobro }
+        '404': { description: Cobro no encontrado }
+
+  /v1/custom-charges/{id}/verify:
+    post:
+      summary: Verificar OTP y obtener URL de checkout Stripe
+      description: Endpoint público. Rate limited — máximo 15 req/10 min por IP.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [otp]
+              properties:
+                otp: { type: string, pattern: '^[A-Z0-9]{6}$', description: 6 caracteres alfanuméricos }
+      responses:
+        '200':
+          description: OTP válido — URL de checkout generada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  checkoutUrl: { type: string, format: uri }
+                  sessionId:   { type: string }
+        '400': { description: OTP inválido, expirado o cobro en estado incorrecto }
+        '404': { description: Cobro no encontrado }
+        '502': { description: Error al crear sesión en Stripe }
+
+  # ── Admin Access (endpoints adicionales) ────────────────────────────────────
+  /v1/admin/access/users/{userId}/deactivate:
+    patch:
+      summary: Desactivar usuario
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - { name: userId, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: Usuario desactivado }
+        '401': { description: No autenticado }
+        '404': { description: Usuario no encontrado }
+
+  /v1/admin/access/users/{userId}/activate:
+    patch:
+      summary: Reactivar usuario
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - { name: userId, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: Usuario reactivado }
+        '401': { description: No autenticado }
+
+  /v1/admin/access/users/{userId}/request-delete-otp:
+    post:
+      summary: Solicitar OTP para confirmar eliminación de usuario
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - { name: userId, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: OTP enviado al administrador }
+        '401': { description: No autenticado }
+
+  /v1/admin/access/users/{userId}/delete:
+    delete:
+      summary: Eliminar usuario permanentemente (requiere OTP)
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - { name: userId, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [otp]
+              properties:
+                otp: { type: string }
+      responses:
+        '200': { description: Usuario eliminado }
+        '400': { description: OTP inválido }
+        '401': { description: No autenticado }
+
+  # ── Agenda (pública) ─────────────────────────────────────────────────────────
+  /v1/agenda/public/policy:
+    get:
+      summary: Política de agenda pública (horarios, slots, restricciones)
+      responses:
+        '200': { description: Política de agenda }
+
+  /v1/agenda/public/slots/{dateKey}:
+    get:
+      summary: Slots disponibles para una fecha
+      parameters:
+        - { name: dateKey, in: path, required: true, schema: { type: string, pattern: '^\d{4}-\d{2}-\d{2}$' }, example: '2026-04-15' }
+        - { name: treatmentId, in: query, schema: { type: string } }
+        - { name: cabinId, in: query, schema: { type: string } }
+      responses:
+        '200': { description: Lista de slots disponibles con startAt/endAt }
+
+  # ── Agenda (admin) ───────────────────────────────────────────────────────────
+  /v1/agenda/admin/config:
+    get:
+      summary: Obtener configuración completa de agenda
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200': { description: Política, cabinas, tratamientos y reglas semanales }
+    put:
+      summary: Actualizar configuración de agenda
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200': { description: Configuración actualizada }
+
+  /v1/agenda/admin/day/{dateKey}:
+    get:
+      summary: Vista de día para administración de agenda
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - { name: dateKey, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: Citas y bloques del día }
+
+  /v1/agenda/admin/blocks:
+    post:
+      summary: Crear bloqueo de slot o período
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [startAt, endAt]
+              properties:
+                startAt: { type: string, format: date-time }
+                endAt:   { type: string, format: date-time }
+                reason:  { type: string }
+                cabinId: { type: string }
+      responses:
+        '201': { description: Bloqueo creado }
+
+  /v1/agenda/admin/blocks/{blockId}:
+    delete:
+      summary: Eliminar bloqueo de agenda
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - { name: blockId, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: Bloqueo eliminado }
+
+  # ── Google Calendar Integration ──────────────────────────────────────────────
+  /integrations/google-calendar/status:
+    get:
+      summary: Estado de la integración con Google Calendar
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200': { description: Estado de la integración y configuración }
+
+  /integrations/google-calendar/connect:
+    post:
+      summary: Iniciar flujo OAuth para conectar Google Calendar
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200':
+          description: URL de autorización OAuth
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  authUrl: { type: string, format: uri }
+
+  /integrations/google-calendar/callback:
+    get:
+      summary: Callback OAuth de Google Calendar
+      parameters:
+        - { name: code,  in: query, required: true,  schema: { type: string } }
+        - { name: state, in: query, required: false, schema: { type: string } }
+      responses:
+        '302': { description: Redirección al frontend tras autenticación exitosa }
+
+  /integrations/google-calendar/disconnect:
+    post:
+      summary: Desconectar integración de Google Calendar
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200': { description: Integración desconectada }
+
+  /integrations/google-calendar/settings:
+    patch:
+      summary: Actualizar configuración de sincronización con Google Calendar
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                syncEnabled: { type: boolean }
+                calendarId:  { type: string }
+      responses:
+        '200': { description: Configuración actualizada }
+
+  # ── Google Calendar Webhook ──────────────────────────────────────────────────
+  /webhooks/google-calendar:
+    post:
+      summary: Webhook de notificaciones push de Google Calendar
+      description: Recibe notificaciones de cambios en eventos del calendario sincronizado. Validado por X-Goog-Channel-Token.
+      responses:
+        '200': { description: Notificación recibida y procesada }
+        '403': { description: Token inválido }
 
   # ── Stripe Webhook ──────────────────────────────────────────────────────
   /v1/stripe/webhook:
