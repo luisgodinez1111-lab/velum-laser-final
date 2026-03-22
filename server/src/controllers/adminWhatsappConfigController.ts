@@ -34,6 +34,7 @@ export const getAdminWhatsappConfig = async (_req: AuthRequest, res: Response) =
     configured: Boolean(effective.accessToken && effective.phoneNumberId && effective.templateName),
     phoneNumberId: effective.phoneNumberId,
     templateName: effective.templateName,
+    reminderTemplateName: effective.reminderTemplateName,
     templateLang: effective.templateLang || "es_MX",
     allowConsole: effective.allowConsole,
     accessTokenMasked: maskToken(effective.accessToken)
@@ -47,6 +48,7 @@ export const putAdminWhatsappConfig = async (req: AuthRequest, res: Response) =>
     accessToken: asString(body.accessToken),
     phoneNumberId: asString(body.phoneNumberId),
     templateName: asString(body.templateName),
+    reminderTemplateName: asString(body.reminderTemplateName),
     templateLang: asString(body.templateLang || "es_MX"),
     allowConsole: asBoolean(body.allowConsole, false)
   });
@@ -62,6 +64,7 @@ export const putAdminWhatsappConfig = async (req: AuthRequest, res: Response) =>
     configured: true,
     phoneNumberId: saved.phoneNumberId,
     templateName: saved.templateName,
+    reminderTemplateName: saved.reminderTemplateName,
     templateLang: saved.templateLang,
     allowConsole: saved.allowConsole,
     accessTokenMasked: maskToken(saved.accessToken)

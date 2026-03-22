@@ -84,7 +84,7 @@ export const getEffectiveWhatsappMetaConfig = async (): Promise<WhatsappMetaConf
     accessToken: asString(db?.accessToken || process.env.META_WA_ACCESS_TOKEN || ""),
     phoneNumberId: asString(db?.phoneNumberId || process.env.META_WA_PHONE_NUMBER_ID || ""),
     templateName: asString(db?.templateName || process.env.META_WA_TEMPLATE_NAME || ""),
-    reminderTemplateName: asString((db as any)?.reminderTemplateName || process.env.META_WA_REMINDER_TEMPLATE_NAME || ""),
+    reminderTemplateName: asString(db?.reminderTemplateName || process.env.META_WA_REMINDER_TEMPLATE_NAME || ""),
     templateLang: asString(db?.templateLang || process.env.META_WA_TEMPLATE_LANG || "es_MX"),
     allowConsole:
       typeof db?.allowConsole === "boolean"
