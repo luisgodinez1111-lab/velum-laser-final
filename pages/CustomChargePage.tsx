@@ -42,6 +42,7 @@ export const CustomChargePage: React.FC = () => {
   const [otp, setOtp] = useState(["", "", "", "", "", ""]);
   const [verifying, setVerifying] = useState(false);
   const [verifyError, setVerifyError] = useState("");
+  const [otpBlocked, setOtpBlocked] = useState(false);
 
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
@@ -89,7 +90,11 @@ export const CustomChargePage: React.FC = () => {
         window.location.href = data.checkoutUrl;
       }
     } catch (e: any) {
-      setVerifyError(e.message || "Código incorrecto o expirado");
+      const msg: string = e.message || "Código incorrecto o expirado";
+      const isTerminal = msg.toLowerCase().includes("demasiados intentos") ||
+                         msg.toLowerCase().includes("too many");
+      if (isTerminal) setOtpBlocked(true);
+      setVerifyError(msg);
       setVerifying(false);
     }
   };
@@ -159,6 +164,22 @@ export const CustomChargePage: React.FC = () => {
           </div>
           <h1 className="text-2xl font-serif text-velum-900">Ya pagado</h1>
           <p className="text-sm text-velum-500">Este cobro ya fue liquidado. Gracias.</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (charge.status === "ACCEPTED") {
+    return (
+      <div className="min-h-screen bg-[#f8f6f3] flex items-center justify-center px-4">
+        <div className="bg-white rounded-3xl shadow-lg p-10 max-w-sm w-full text-center space-y-4">
+          <div className="w-16 h-16 bg-amber-50 rounded-full flex items-center justify-center mx-auto">
+            <CheckCircle2 size={32} className="text-amber-500" />
+          </div>
+          <h1 className="text-xl font-serif text-velum-900">Cobro autorizado</h1>
+          <p className="text-sm text-velum-500">
+            Tu autorización fue recibida. Si no fuiste redirigida al pago, contacta al equipo de Velum Laser.
+          </p>
         </div>
       </div>
     );
@@ -235,22 +256,30 @@ export const CustomChargePage: React.FC = () => {
                   inputMode="numeric"
                   maxLength={1}
                   value={digit}
+                  disabled={otpBlocked}
                   onChange={(e) => handleOtpChange(i, e.target.value)}
                   onKeyDown={(e) => handleOtpKeyDown(i, e)}
-                  className="w-11 h-14 text-center text-xl font-bold text-velum-900 border-2 border-velum-200 rounded-xl
-                    focus:outline-none focus:border-velum-700 focus:ring-2 focus:ring-velum-900/10 transition bg-[#f8f6f3]"
+                  className={`w-11 h-14 text-center text-xl font-bold text-velum-900 border-2 rounded-xl
+                    focus:outline-none focus:border-velum-700 focus:ring-2 focus:ring-velum-900/10 transition
+                    ${otpBlocked
+                      ? "bg-velum-100 border-velum-100 opacity-50 cursor-not-allowed"
+                      : "border-velum-200 bg-[#f8f6f3]"}`}
                 />
               ))}
             </div>
 
             {verifyError && (
-              <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
-                <XCircle size={14} className="text-red-500 shrink-0" />
-                <p className="text-sm text-red-700">{verifyError}</p>
+              <div className={`flex items-center gap-2 rounded-xl px-4 py-3 border ${
+                otpBlocked
+                  ? "bg-amber-50 border-amber-200"
+                  : "bg-red-50 border-red-200"
+              }`}>
+                <XCircle size={14} className={`shrink-0 ${otpBlocked ? "text-amber-500" : "text-red-500"}`} />
+                <p className={`text-sm ${otpBlocked ? "text-amber-700" : "text-red-700"}`}>{verifyError}</p>
               </div>
             )}
 
-            <button onClick={handleVerify} disabled={verifying || otp.join("").length !== 6}
+            <button onClick={handleVerify} disabled={verifying || otp.join("").length !== 6 || otpBlocked}
               className="w-full flex items-center justify-center gap-2 bg-[#1a1614] text-white rounded-xl py-3.5 text-sm font-semibold
                 hover:bg-velum-800 transition disabled:opacity-40">
               {verifying

@@ -2,6 +2,9 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Bell, Check, CheckCheck, Loader2 } from "lucide-react";
 import { apiFetch } from "../services/apiClient";
 
+const SSE_BACKOFF_INITIAL_MS = 1_000;
+const SSE_BACKOFF_MAX_MS = 30_000;
+
 type Notification = {
   id: string;
   type: string;
@@ -45,6 +48,13 @@ export const NotificationBell: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
 
+  // SSE reconnection state
+  const esRef             = useRef<EventSource | null>(null);
+  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const backoffRef        = useRef(SSE_BACKOFF_INITIAL_MS);
+  const lastNotifAtRef    = useRef<string | null>(null);
+  const unmountedRef      = useRef(false);
+
   // Poll unread count
   const fetchCount = useCallback(async () => {
     try {
@@ -53,29 +63,57 @@ export const NotificationBell: React.FC = () => {
     } catch { /* silent */ }
   }, []);
 
-  useEffect(() => {
-    // Initial count fetch
-    void fetchCount();
+  const connectSSE = useCallback(() => {
+    if (unmountedRef.current) return;
 
-    // SSE — real-time push; EventSource auto-reconnects on network drops
-    const es = new EventSource(`${API_BASE}/v1/notifications/stream`, { withCredentials: true });
+    // Build URL with ?since= for catch-up on reconnect
+    const since = lastNotifAtRef.current;
+    const url = since
+      ? `${API_BASE}/v1/notifications/stream?since=${encodeURIComponent(since)}`
+      : `${API_BASE}/v1/notifications/stream`;
+
+    const es = new EventSource(url, { withCredentials: true });
+    esRef.current = es;
+
+    es.onopen = () => {
+      // Connection established — reset backoff
+      backoffRef.current = SSE_BACKOFF_INITIAL_MS;
+    };
 
     es.onmessage = (event) => {
       try {
         const notification: Notification = JSON.parse(event.data as string);
+        lastNotifAtRef.current = notification.createdAt;
         setItems((prev) => [notification, ...prev]);
         setCount((c) => c + 1);
       } catch {
-        // heartbeat or ping comment line — ignore
+        // heartbeat or SSE comment line — ignore
       }
     };
 
     es.onerror = () => {
-      // EventSource handles reconnection automatically — no action needed
+      // Close the broken connection and schedule reconnect with exponential backoff
+      es.close();
+      esRef.current = null;
+      if (unmountedRef.current) return;
+      const delay = backoffRef.current;
+      console.warn(`[NotificationBell] SSE desconectado — reintentando en ${delay / 1000}s`);
+      backoffRef.current = Math.min(delay * 2, SSE_BACKOFF_MAX_MS);
+      reconnectTimerRef.current = setTimeout(connectSSE, delay);
     };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-    return () => es.close();
-  }, [fetchCount]);
+  useEffect(() => {
+    unmountedRef.current = false;
+    void fetchCount();
+    connectSSE();
+
+    return () => {
+      unmountedRef.current = true;
+      if (reconnectTimerRef.current !== null) clearTimeout(reconnectTimerRef.current);
+      esRef.current?.close();
+    };
+  }, [fetchCount, connectSSE]);
 
   // Close on Escape
   useEffect(() => {
