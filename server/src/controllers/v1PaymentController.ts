@@ -14,11 +14,19 @@ export const getMyPayments = async (req: AuthRequest, res: Response) => {
 export const listPaymentsAdmin = async (req: AuthRequest, res: Response) => {
   const userId = typeof req.query.userId === "string" ? req.query.userId : undefined;
   const status = typeof req.query.status === "string" ? req.query.status : undefined;
+  const dateFrom = typeof req.query.dateFrom === "string" ? new Date(req.query.dateFrom) : undefined;
+  const dateTo = typeof req.query.dateTo === "string" ? new Date(req.query.dateTo) : undefined;
 
   const payments = await prisma.payment.findMany({
     where: {
       ...(userId ? { userId } : {}),
-      ...(status ? { status: status as "pending" | "paid" | "failed" | "refunded" } : {})
+      ...(status ? { status: status as "pending" | "paid" | "failed" | "refunded" } : {}),
+      ...(dateFrom || dateTo ? {
+        createdAt: {
+          ...(dateFrom ? { gte: dateFrom } : {}),
+          ...(dateTo ? { lte: dateTo } : {})
+        }
+      } : {})
     },
     include: {
       user: {

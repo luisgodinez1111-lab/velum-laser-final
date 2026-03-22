@@ -364,6 +364,29 @@ export const Admin: React.FC = () => {
   const [isLoadingMemberHistory, setIsLoadingMemberHistory] = useState(false);
   const [serverReports, setServerReports] = useState<{ users: number; activeMemberships: number; pastDueMemberships: number; pendingDocuments: number } | null>(null);
 
+  // Payment history with filters
+  const [histPayments, setHistPayments] = useState<any[]>([]);
+  const [histLoading, setHistLoading] = useState(false);
+  const [histDateFrom, setHistDateFrom] = useState('');
+  const [histDateTo, setHistDateTo] = useState('');
+  const [histStatus, setHistStatus] = useState('');
+  const [histLoaded, setHistLoaded] = useState(false);
+
+  const loadHistPayments = async () => {
+    setHistLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (histDateFrom) params.set('dateFrom', histDateFrom);
+      if (histDateTo) params.set('dateTo', histDateTo);
+      if (histStatus) params.set('status', histStatus);
+      const data = await apiFetch<any[]>(`/v1/payments?${params.toString()}`);
+      setHistPayments(data ?? []);
+      setHistLoaded(true);
+    } catch { /* ignore */ } finally {
+      setHistLoading(false);
+    }
+  };
+
   // Drawer: deactivate / delete with OTP
   const [criticalActionsOpen, setCriticalActionsOpen] = useState(false);
   const [drawerDeactivating, setDrawerDeactivating] = useState(false);
@@ -3353,6 +3376,82 @@ export const Admin: React.FC = () => {
               </table>
             </div>
           )}
+        </div>
+
+        {/* ── Historial de pagos ─────────────────────────────── */}
+        <div>
+          <p className="text-[10px] font-bold uppercase tracking-widest text-velum-400 mb-3 flex items-center gap-2">
+            <Wallet size={11} /> Historial de pagos
+          </p>
+          <div className="bg-white rounded-2xl border border-velum-100 p-4 space-y-3">
+            <div className="flex flex-wrap gap-2 items-end">
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] font-semibold text-velum-400 uppercase tracking-widest">Desde</label>
+                <input type="date" value={histDateFrom} onChange={e => setHistDateFrom(e.target.value)}
+                  className="rounded-xl border border-velum-200 px-3 py-1.5 text-sm text-velum-800 focus:outline-none focus:border-velum-400" />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] font-semibold text-velum-400 uppercase tracking-widest">Hasta</label>
+                <input type="date" value={histDateTo} onChange={e => setHistDateTo(e.target.value)}
+                  className="rounded-xl border border-velum-200 px-3 py-1.5 text-sm text-velum-800 focus:outline-none focus:border-velum-400" />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] font-semibold text-velum-400 uppercase tracking-widest">Estado</label>
+                <select value={histStatus} onChange={e => setHistStatus(e.target.value)}
+                  className="rounded-xl border border-velum-200 px-3 py-1.5 text-sm text-velum-800 focus:outline-none focus:border-velum-400">
+                  <option value="">Todos</option>
+                  <option value="paid">Pagado</option>
+                  <option value="pending">Pendiente</option>
+                  <option value="failed">Fallido</option>
+                  <option value="refunded">Reembolsado</option>
+                </select>
+              </div>
+              <button onClick={() => void loadHistPayments()} disabled={histLoading}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-velum-900 text-white text-xs font-semibold hover:bg-velum-800 transition disabled:opacity-50">
+                {histLoading ? <Loader2 size={13} className="animate-spin" /> : <Search size={13} />}
+                Buscar
+              </button>
+            </div>
+            {!histLoaded ? (
+              <p className="text-center text-sm text-velum-400 py-6">Aplica filtros y presiona Buscar</p>
+            ) : histPayments.length === 0 ? (
+              <p className="text-center text-sm text-velum-400 py-6">Sin pagos en el rango seleccionado</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-velum-100 bg-velum-50/50">
+                      {['Fecha', 'Usuario', 'Monto', 'Divisa', 'Estado', 'Pagado en'].map(h => (
+                        <th key={h} className="px-3 py-2.5 text-left text-[10px] font-bold uppercase tracking-widest text-velum-400">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {histPayments.map((p: any, i: number) => (
+                      <tr key={p.id} className={`hover:bg-velum-50 transition ${i < histPayments.length - 1 ? 'border-b border-velum-50' : ''}`}>
+                        <td className="px-3 py-2.5 text-velum-500 text-xs">{new Date(p.createdAt).toLocaleDateString('es-MX')}</td>
+                        <td className="px-3 py-2.5">
+                          <p className="font-medium text-velum-900 text-xs">{p.user?.email ?? '—'}</p>
+                        </td>
+                        <td className="px-3 py-2.5 font-semibold text-velum-900">{p.amount != null ? formatMoney(p.amount) : '—'}</td>
+                        <td className="px-3 py-2.5 text-velum-500 uppercase text-xs">{p.currency ?? '—'}</td>
+                        <td className="px-3 py-2.5">
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                            p.status === 'paid' ? 'bg-emerald-50 text-emerald-700' :
+                            p.status === 'failed' ? 'bg-red-50 text-red-600' :
+                            p.status === 'refunded' ? 'bg-blue-50 text-blue-600' :
+                            'bg-amber-50 text-amber-700'
+                          }`}>{p.status}</span>
+                        </td>
+                        <td className="px-3 py-2.5 text-velum-500 text-xs">{p.paidAt ? new Date(p.paidAt).toLocaleDateString('es-MX') : '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <p className="text-[11px] text-velum-400 text-right mt-2 pr-1">{histPayments.length} registro{histPayments.length !== 1 ? 's' : ''}</p>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     );
