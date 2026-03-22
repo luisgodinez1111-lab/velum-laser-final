@@ -6,6 +6,7 @@ export type WhatsappMetaConfig = {
   phoneNumberId: string;
   templateName: string;
   reminderTemplateName: string;
+  paymentReminderTemplateName: string;
   templateLang: string;
   allowConsole: boolean;
 };
@@ -72,6 +73,7 @@ export const getStoredWhatsappMetaConfig = async (): Promise<WhatsappMetaConfig 
     phoneNumberId: asString(raw.phoneNumberId),
     templateName: asString(raw.templateName),
     reminderTemplateName: asString(raw.reminderTemplateName),
+    paymentReminderTemplateName: asString(raw.paymentReminderTemplateName),
     templateLang: asString(raw.templateLang || "es_MX"),
     allowConsole: asBoolean(raw.allowConsole, false)
   };
@@ -85,6 +87,7 @@ export const getEffectiveWhatsappMetaConfig = async (): Promise<WhatsappMetaConf
     phoneNumberId: asString(db?.phoneNumberId || process.env.META_WA_PHONE_NUMBER_ID || ""),
     templateName: asString(db?.templateName || process.env.META_WA_TEMPLATE_NAME || ""),
     reminderTemplateName: asString(db?.reminderTemplateName || process.env.META_WA_REMINDER_TEMPLATE_NAME || ""),
+    paymentReminderTemplateName: asString(db?.paymentReminderTemplateName || process.env.META_WA_PAYMENT_REMINDER_TEMPLATE_NAME || ""),
     templateLang: asString(db?.templateLang || process.env.META_WA_TEMPLATE_LANG || "es_MX"),
     allowConsole:
       typeof db?.allowConsole === "boolean"
@@ -103,6 +106,7 @@ export const saveWhatsappMetaConfig = async (
     phoneNumberId: asString(process.env.META_WA_PHONE_NUMBER_ID || ""),
     templateName: asString(process.env.META_WA_TEMPLATE_NAME || ""),
     reminderTemplateName: asString(process.env.META_WA_REMINDER_TEMPLATE_NAME || ""),
+    paymentReminderTemplateName: asString(process.env.META_WA_PAYMENT_REMINDER_TEMPLATE_NAME || ""),
     templateLang: asString(process.env.META_WA_TEMPLATE_LANG || "es_MX"),
     allowConsole: asBoolean(process.env.WHATSAPP_OTP_ALLOW_CONSOLE, false)
   };
@@ -112,6 +116,7 @@ export const saveWhatsappMetaConfig = async (
     phoneNumberId: asString(incoming.phoneNumberId) || current.phoneNumberId,
     templateName: asString(incoming.templateName) || current.templateName,
     reminderTemplateName: asString(incoming.reminderTemplateName) || current.reminderTemplateName || "",
+    paymentReminderTemplateName: asString(incoming.paymentReminderTemplateName) || current.paymentReminderTemplateName || "",
     templateLang: asString(incoming.templateLang) || current.templateLang || "es_MX",
     allowConsole:
       typeof incoming.allowConsole === "boolean" ? incoming.allowConsole : current.allowConsole
@@ -270,5 +275,52 @@ export const sendWhatsappAppointmentReminder = async (
 
   if (resp.status < 200 || resp.status >= 300) {
     throw new Error(`Meta WhatsApp reminder ${resp.status}: ${resp.body}`);
+  }
+};
+
+/**
+ * Send payment renewal reminder via WhatsApp template.
+ * Template must accept 3 parameters: name, amount, renewalDate.
+ * Silently skips if paymentReminderTemplateName is not configured.
+ */
+export const sendWhatsappPaymentReminder = async (
+  phone: string,
+  params: { name: string; amount: string; renewalDate: string; daysLeft: number }
+): Promise<void> => {
+  const cfg = await getEffectiveWhatsappMetaConfig();
+  if (!cfg.paymentReminderTemplateName || !cfg.accessToken || !cfg.phoneNumberId) return;
+
+  const normalized = normalizePhone(phone);
+  const toDigits = normalized.replace(/\D/g, "");
+  if (!toDigits) return;
+
+  const payload = {
+    messaging_product: "whatsapp",
+    to: toDigits,
+    type: "template",
+    template: {
+      name: cfg.paymentReminderTemplateName,
+      language: { code: cfg.templateLang || "es_MX" },
+      components: [
+        {
+          type: "body",
+          parameters: [
+            { type: "text", text: params.name },
+            { type: "text", text: params.amount },
+            { type: "text", text: params.renewalDate },
+          ],
+        },
+      ],
+    },
+  };
+
+  const resp = await postJson(
+    `https://graph.facebook.com/v25.0/${cfg.phoneNumberId}/messages`,
+    cfg.accessToken,
+    payload
+  );
+
+  if (resp.status < 200 || resp.status >= 300) {
+    throw new Error(`Meta WhatsApp payment reminder ${resp.status}: ${resp.body}`);
   }
 };

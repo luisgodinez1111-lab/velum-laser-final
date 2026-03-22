@@ -9,6 +9,7 @@ type ConfigState = {
   phoneNumberId: string;
   templateName: string;
   reminderTemplateName: string;
+  paymentReminderTemplateName: string;
   templateLang: string;
   allowConsole: boolean;
   accessToken: string;
@@ -27,6 +28,7 @@ export const AdminWhatsAppSettings: React.FC<{ embedded?: boolean }> = ({ embedd
     phoneNumberId: "",
     templateName: "velum_otp_code",
     reminderTemplateName: "",
+    paymentReminderTemplateName: "",
     templateLang: "es_MX",
     allowConsole: false,
     accessToken: ""
@@ -54,6 +56,7 @@ export const AdminWhatsAppSettings: React.FC<{ embedded?: boolean }> = ({ embedd
           phoneNumberId: asString(out?.phoneNumberId),
           templateName: asString(out?.templateName, "velum_otp_code"),
           reminderTemplateName: asString(out?.reminderTemplateName, ""),
+          paymentReminderTemplateName: asString(out?.paymentReminderTemplateName, ""),
           templateLang: asString(out?.templateLang, "es_MX"),
           allowConsole: Boolean(out?.allowConsole),
           accessToken: ""
@@ -73,6 +76,7 @@ export const AdminWhatsAppSettings: React.FC<{ embedded?: boolean }> = ({ embedd
         phoneNumberId: form.phoneNumberId,
         templateName: form.templateName,
         reminderTemplateName: form.reminderTemplateName,
+        paymentReminderTemplateName: form.paymentReminderTemplateName,
         templateLang: form.templateLang,
         allowConsole: form.allowConsole
       };
@@ -182,6 +186,16 @@ export const AdminWhatsAppSettings: React.FC<{ embedded?: boolean }> = ({ embedd
               placeholder="velum_appointment_reminder"
             />
             <p className="text-[10px] text-velum-400 mt-1">Parámetros: nombre, fecha, hora, tratamiento (opcional)</p>
+          </div>
+          <div>
+            <label className="mb-1 block text-xs uppercase tracking-wide text-velum-500">Template recordatorio de pago</label>
+            <input
+              className="w-full rounded-xl border border-velum-200 px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-velum-900/20 focus:border-velum-700 transition"
+              value={form.paymentReminderTemplateName}
+              onChange={(e) => setForm((p) => ({ ...p, paymentReminderTemplateName: e.target.value }))}
+              placeholder="velum_payment_reminder"
+            />
+            <p className="text-[10px] text-velum-400 mt-1">Parámetros: nombre, monto, fecha de renovación</p>
           </div>
           <div>
             <label className="mb-1 block text-xs uppercase tracking-wide text-velum-500">Template Lang</label>

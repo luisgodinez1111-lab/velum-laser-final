@@ -2,6 +2,7 @@ import cron from "node-cron";
 import { prisma } from "../db/prisma";
 import { sendPaymentReminderEmail } from "./emailService";
 import { readStripePlanCatalog } from "./stripePlanCatalogService";
+import { sendWhatsappPaymentReminder } from "./whatsappMetaService";
 import { logger } from "../utils/logger";
 
 // Days before renewal to send reminders
@@ -82,7 +83,7 @@ export const runPaymentReminders = async (): Promise<void> => {
             select: {
               id: true,
               email: true,
-              profile: { select: { firstName: true, lastName: true } },
+              profile: { select: { firstName: true, lastName: true, phone: true } },
             },
           },
         },
@@ -103,13 +104,25 @@ export const runPaymentReminders = async (): Promise<void> => {
             ? formatMoney(catalogEntry.amount)
             : "Tu plan mensual";
 
+          const renewalDate = ms.currentPeriodEnd ? formatDate(ms.currentPeriodEnd) : "próximamente";
+
           await sendPaymentReminderEmail(ms.user.email, {
             name,
             planName,
             amount,
-            renewalDate: ms.currentPeriodEnd ? formatDate(ms.currentPeriodEnd) : "próximamente",
+            renewalDate,
             daysLeft,
           });
+
+          const phone = ms.user.profile?.phone;
+          if (phone) {
+            try {
+              await sendWhatsappPaymentReminder(phone, { name, amount, renewalDate, daysLeft });
+              logger.info({ email: ms.user.email, daysLeft }, "[payment-reminder] WhatsApp reminder sent");
+            } catch (waErr) {
+              logger.warn({ err: waErr, email: ms.user.email }, "[payment-reminder] WhatsApp reminder failed (non-fatal)");
+            }
+          }
 
           await prisma.membership.update({
             where: { id: ms.id },
