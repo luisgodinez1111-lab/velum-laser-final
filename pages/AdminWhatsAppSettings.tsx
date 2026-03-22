@@ -8,6 +8,7 @@ import { useToast } from "../context/ToastContext";
 type ConfigState = {
   phoneNumberId: string;
   templateName: string;
+  reminderTemplateName: string;
   templateLang: string;
   allowConsole: boolean;
   accessToken: string;
@@ -25,6 +26,7 @@ export const AdminWhatsAppSettings: React.FC<{ embedded?: boolean }> = ({ embedd
   const [form, setForm] = useState<ConfigState>({
     phoneNumberId: "",
     templateName: "velum_otp_code",
+    reminderTemplateName: "",
     templateLang: "es_MX",
     allowConsole: false,
     accessToken: ""
@@ -51,6 +53,7 @@ export const AdminWhatsAppSettings: React.FC<{ embedded?: boolean }> = ({ embedd
           ...prev,
           phoneNumberId: asString(out?.phoneNumberId),
           templateName: asString(out?.templateName, "velum_otp_code"),
+          reminderTemplateName: asString(out?.reminderTemplateName, ""),
           templateLang: asString(out?.templateLang, "es_MX"),
           allowConsole: Boolean(out?.allowConsole),
           accessToken: ""
@@ -69,6 +72,7 @@ export const AdminWhatsAppSettings: React.FC<{ embedded?: boolean }> = ({ embedd
       const payload: any = {
         phoneNumberId: form.phoneNumberId,
         templateName: form.templateName,
+        reminderTemplateName: form.reminderTemplateName,
         templateLang: form.templateLang,
         allowConsole: form.allowConsole
       };
@@ -161,13 +165,23 @@ export const AdminWhatsAppSettings: React.FC<{ embedded?: boolean }> = ({ embedd
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label className="mb-1 block text-xs uppercase tracking-wide text-velum-500">Template Name</label>
+            <label className="mb-1 block text-xs uppercase tracking-wide text-velum-500">Template OTP (código de acceso)</label>
             <input
               className="w-full rounded-xl border border-velum-200 px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-velum-900/20 focus:border-velum-700 transition"
               value={form.templateName}
               onChange={(e) => setForm((p) => ({ ...p, templateName: e.target.value }))}
               placeholder="velum_otp_code"
             />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs uppercase tracking-wide text-velum-500">Template recordatorio de cita</label>
+            <input
+              className="w-full rounded-xl border border-velum-200 px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-velum-900/20 focus:border-velum-700 transition"
+              value={form.reminderTemplateName}
+              onChange={(e) => setForm((p) => ({ ...p, reminderTemplateName: e.target.value }))}
+              placeholder="velum_appointment_reminder"
+            />
+            <p className="text-[10px] text-velum-400 mt-1">Parámetros: nombre, fecha, hora, tratamiento (opcional)</p>
           </div>
           <div>
             <label className="mb-1 block text-xs uppercase tracking-wide text-velum-500">Template Lang</label>

@@ -87,6 +87,11 @@ app.use(
   "/api/webhooks/google-calendar",
   rateLimit({ windowMs: 60 * 1000, limit: 60, standardHeaders: true, legacyHeaders: false })
 );
+// Custom charges OTP — public endpoint, stricter limit
+app.use(
+  "/api/v1/custom-charges",
+  rateLimit({ windowMs: 10 * 60 * 1000, limit: 15, standardHeaders: true, legacyHeaders: false })
+);
 
 // ── Stripe webhook — raw body antes de express.json ──────────────────
 // Solo un webhook activo: la versión v1

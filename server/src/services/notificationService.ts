@@ -3,6 +3,7 @@ import { prisma } from "../db/prisma";
 import { logger } from "../utils/logger";
 import { sendNotificationEmail, sendAdminNotificationEmail } from "./notificationEmailService";
 import { sendAppointmentBookingEmail, sendAppointmentCancellationEmail } from "./emailService";
+import { generateAppointmentConfirmToken } from "../utils/appointmentToken";
 
 export type NotificationType =
   | "custom_charge_created"
@@ -223,8 +224,9 @@ export const onAppointmentDepositPaid = async (params: {
   }).catch((err) => logger.error({ err }, "[notifications] email appointment_deposit_paid (admin) failed"));
 };
 
-/** Appointment created → notify patient (in-app + email) */
+/** Appointment created → notify patient (in-app + email) + notify admins with 1-click confirm */
 export const onAppointmentBooked = async (params: {
+  appointmentId: string;
   userId: string;
   userEmail: string;
   userName: string;
@@ -247,6 +249,24 @@ export const onAppointmentBooked = async (params: {
     treatment: params.treatment,
     cabin: params.cabin,
   }).catch((err) => logger.error({ err }, "[notifications] email appointment_booked failed"));
+
+  // Notify admins (in-app + email with 1-click confirm link)
+  await notifyAdmins(
+    "appointment_booked",
+    `Nueva cita: ${params.userName}`,
+    `${params.date} a las ${params.time}${params.treatment ? ` · ${params.treatment}` : ""}`,
+    { userId: params.userId, appointmentId: params.appointmentId }
+  );
+
+  const confirmToken = generateAppointmentConfirmToken(params.appointmentId);
+  const confirmUrl = `${process.env.APP_URL ?? ""}/#/admin?section=agenda`;
+  const directConfirmUrl = `${process.env.API_URL ?? ""}/api/v1/appointments/confirm?token=${confirmToken}`;
+
+  sendAdminNotificationEmail({
+    subject: `Nueva cita: ${params.userName} — ${params.date}`,
+    title: "Nueva cita agendada",
+    body: `<strong>${params.userName}</strong> (${params.userEmail}) agendó una cita para el <strong>${params.date}</strong> a las <strong>${params.time}</strong>${params.treatment ? ` · ${params.treatment}` : ""}${params.cabin ? ` · Cabina ${params.cabin}` : ""}.<br><br><a href="${directConfirmUrl}" style="display:inline-block;background:#1a1614;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:bold;">Confirmar cita (1 clic)</a>&nbsp;&nbsp;<a href="${confirmUrl}" style="color:#544538;">Ver en agenda</a>`,
+  }).catch((err) => logger.error({ err }, "[notifications] email appointment_booked (admin) failed"));
 };
 
 /** Staff confirms appointment → notify patient (in-app only) */

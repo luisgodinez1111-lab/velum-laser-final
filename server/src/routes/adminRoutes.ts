@@ -1,12 +1,13 @@
 import { Router } from "express";
 import { requireAuth, requireRole } from "../middlewares/auth";
-import { listAuditLogs, listDocumentsAdmin, listMemberships, listUsers, reports, updateMembershipStatus, createPatient, adminUpdatePatientIntake, adminActivateMembership } from "../controllers/adminController";
+import { listAuditLogs, listDocumentsAdmin, listMemberships, listUsers, reports, updateMembershipStatus, createPatient, adminUpdatePatientIntake, adminActivateMembership, exportUsers } from "../controllers/adminController";
 
 export const adminRoutes = Router();
 
 adminRoutes.use("/admin", requireAuth, requireRole(["staff", "admin", "system"]));
 
 adminRoutes.get("/admin/users", listUsers);
+adminRoutes.get("/admin/users/export", exportUsers);
 adminRoutes.get("/admin/memberships", listMemberships);
 adminRoutes.get("/admin/documents", listDocumentsAdmin);
 adminRoutes.get("/admin/reports", reports);

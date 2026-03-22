@@ -132,6 +132,30 @@ export const reports = async (req: AuthRequest, res: Response) => {
   return res.json({ users, activeMemberships: active, pastDueMemberships: pastDue, pendingDocuments: documents });
 };
 
+export const exportUsers = async (req: AuthRequest, res: Response) => {
+  const users = await prisma.user.findMany({
+    where: { role: "member" },
+    include: { profile: true, memberships: true },
+    orderBy: { createdAt: "desc" },
+  });
+
+  const bom = "\uFEFF";
+  const header = "Nombre,Email,Teléfono,Plan,Estado membresía,Registrada\n";
+  const rows = users.map((u) => {
+    const ms = u.memberships[0];
+    const name = [u.profile?.firstName, u.profile?.lastName].filter(Boolean).join(" ") || "";
+    const phone = u.profile?.phone ?? "";
+    const plan = ms?.planId ?? "";
+    const status = ms?.status ?? "inactive";
+    const created = u.createdAt.toISOString().slice(0, 10);
+    return [name, u.email, phone, plan, status, created].map((v) => `"${String(v).replace(/"/g, '""')}"`).join(",");
+  });
+
+  res.setHeader("Content-Type", "text/csv; charset=utf-8");
+  res.setHeader("Content-Disposition", `attachment; filename="velum-pacientes-${new Date().toISOString().slice(0, 10)}.csv"`);
+  return res.send(bom + header + rows.join("\n"));
+};
+
 export const listAuditLogs = async (req: AuthRequest, res: Response) => {
   const page  = Math.max(1, parseInt(String(req.query.page  ?? "1"), 10));
   const limit = Math.min(200, Math.max(1, parseInt(String(req.query.limit ?? "100"), 10)));

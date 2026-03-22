@@ -196,6 +196,7 @@ export const Dashboard: React.FC = () => {
   const [showMoreSheet, setShowMoreSheet] = useState(false);
 
   const [memberData, setMemberData] = useState<Member | null>(null);
+  const [membershipData, setMembershipData] = useState<any>(null);
   const [isLoadingData, setIsLoadingData] = useState(true);
   const [sessions, setSessions] = useState<SessionTreatment[]>([]);
   const [isLoadingSessions, setIsLoadingSessions] = useState(false);
@@ -254,7 +255,14 @@ export const Dashboard: React.FC = () => {
     const load = async () => {
       setIsLoadingData(true);
       try {
-        if (user?.role === "member") { const d = await memberService.getById(user.id); setMemberData(d || null); }
+        if (user?.role === "member") {
+          const [d, ms] = await Promise.all([
+            memberService.getById(user.id),
+            apiFetch<any>("/membership/status").catch(() => null),
+          ]);
+          setMemberData(d || null);
+          setMembershipData(ms || null);
+        }
         const me = await apiFetch<any>("/v1/users/me/profile");
         setProfile({ fullName: asString(me?.fullName), email: asString(me?.email, asString(user?.email)), phone: asString(me?.phone) });
       } catch (e) { console.error(e); }
@@ -463,10 +471,10 @@ export const Dashboard: React.FC = () => {
       ((a.status === "scheduled" || a.status === "confirmed") && new Date(a.startAt) < new Date())
   ).sort((a, b) => new Date(b.startAt).getTime() - new Date(a.startAt).getTime());
 
-  const membership       = (memberData as any)?.membership;
+  const membership       = membershipData;
   const membershipStatus = membership?.status ?? "inactive";
-  const interestedPlanCode = asString((memberData as any)?.interestedPlanCode ?? membership?.interestedPlanCode ?? "");
-  const hasDepositCredit   = !!((memberData as any)?.appointmentDepositAvailable ?? membership?.appointmentDepositAvailable);
+  const interestedPlanCode = asString(membershipData?.interestedPlanCode ?? "");
+  const hasDepositCredit   = !!(membershipData?.appointmentDepositAvailable);
   const statusStyles: Record<string, { label: string; cls: string }> = {
     active:   { label: "Activa",          cls: "bg-emerald-50 text-emerald-700 border-emerald-200" },
     inactive: { label: "Inactiva",        cls: "bg-velum-100 text-velum-600 border-velum-200"     },
@@ -1132,6 +1140,38 @@ export const Dashboard: React.FC = () => {
           {/* ══ BILLING ══════════════════════════════════════════════════════ */}
           {activeTab === "billing" && (
             <div className="space-y-4">
+
+              {/* Failed payment alert */}
+              {membershipStatus === "past_due" && (
+                <div className="rounded-2xl border border-red-200 bg-red-50 p-4 flex items-start gap-3">
+                  <AlertTriangle size={18} className="text-red-500 shrink-0 mt-0.5" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-red-800">Pago pendiente</p>
+                    <p className="text-xs text-red-600 mt-0.5">No se procesó tu último pago. Actualiza tu método de pago para mantener tu membresía activa.</p>
+                  </div>
+                  <button type="button" onClick={async () => { try { await redirectToCustomerPortal(); } catch (err: any) { toast.error(asString(err?.message, "")); } }}
+                    className={`shrink-0 bg-red-600 text-white text-xs font-bold px-3 py-1.5 rounded-xl hover:bg-red-700 transition ${pressBtn}`}>
+                    Actualizar
+                  </button>
+                </div>
+              )}
+
+              {/* Next payment info */}
+              {membership && membershipStatus === "active" && membership.currentPeriodEnd && (
+                <div className="rounded-2xl border border-velum-100 bg-velum-50 p-4 flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-velum-400">Próximo cargo</p>
+                    <p className="text-[15px] font-semibold text-velum-900 mt-1">
+                      {planDetails?.amount ? new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", maximumFractionDigits: 0 }).format(planDetails.amount) : "—"}
+                      <span className="text-[12px] font-normal text-velum-500 ml-1">
+                        el {new Date(membership.currentPeriodEnd).toLocaleDateString("es-MX", { day: "numeric", month: "long" })}
+                      </span>
+                    </p>
+                  </div>
+                  <CreditCard size={18} className="text-velum-400 shrink-0" />
+                </div>
+              )}
+
               <div className="bg-velum-900 rounded-2xl p-5 sm:p-6 text-white relative overflow-hidden">
                 <div className="absolute -right-8 -top-8 w-32 h-32 rounded-full bg-velum-800/40 pointer-events-none" />
                 <div className="relative">
@@ -1165,7 +1205,7 @@ export const Dashboard: React.FC = () => {
                         <div key={payment.id} className="flex items-center justify-between rounded-2xl border border-velum-100 px-4 py-4 hover:border-velum-200 transition-colors">
                           <div>
                             <p className="text-[15px] font-semibold text-velum-900">{new Intl.NumberFormat("es-MX",{style:"currency",currency:(payment.currency||"mxn").toUpperCase(),maximumFractionDigits:0}).format(payment.amount)}</p>
-                            <p className="text-[12px] text-velum-400 mt-0.5">{dateStr}</p>
+                            <p className="text-[12px] text-velum-400 mt-0.5">{dateStr}{planLabel ? ` · ${planLabel}` : ""}</p>
                           </div>
                           <span className={`text-[10px] font-bold uppercase tracking-[0.1em] px-2.5 py-1 border rounded-full ${sc}`}>{sl}</span>
                         </div>

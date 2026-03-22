@@ -14,7 +14,9 @@ import {
   syncAppointmentWorkflow,
   updateAgendaConfig
 } from "../services/agendaService";
+import { Request } from "express";
 import { env } from "../utils/env";
+import { generateAppointmentConfirmToken as _genToken, verifyAppointmentConfirmToken } from "../utils/appointmentToken";
 import { getClinicIdByUserId } from "../utils/clinic";
 import { logger } from "../utils/logger";
 import { onAppointmentBooked, onAppointmentConfirmed, onAppointmentCancelledByClinic, onAppointmentCancelledByPatient } from "../services/notificationService";
@@ -481,9 +483,10 @@ export const createAppointment = async (req: AuthRequest, res: Response) => {
     }
   });
 
-  const TIMEZONE = "America/Chihuahua";
+  const TIMEZONE = "America/Mexico_City";
   const userName = [appointment.user.profile?.firstName, appointment.user.profile?.lastName].filter(Boolean).join(" ") || appointment.user.email;
   onAppointmentBooked({
+    appointmentId: appointment.id,
     userId: appointment.user.id,
     userEmail: appointment.user.email,
     userName,
@@ -981,6 +984,30 @@ export const deleteAdminAgendaBlock = async (req: AuthRequest, res: Response) =>
   });
 
   return res.status(204).send();
+};
+
+export const generateAppointmentConfirmToken = _genToken;
+
+export const confirmAppointmentByToken = async (req: Request, res: Response) => {
+  const token = String(req.query.token ?? "");
+  const appointmentId = verifyAppointmentConfirmToken(token);
+  if (!appointmentId) {
+    return res.status(400).json({ message: "Token inválido o expirado" });
+  }
+
+  const appt = await prisma.appointment.findUnique({ where: { id: appointmentId } });
+  if (!appt) return res.status(404).json({ message: "Cita no encontrada" });
+  if (appt.status === "confirmed") {
+    return res.json({ ok: true, message: "La cita ya estaba confirmada", appointmentId });
+  }
+  if (appt.status !== "scheduled") {
+    return res.status(409).json({ message: `No se puede confirmar una cita con estado "${appt.status}"` });
+  }
+
+  await prisma.appointment.update({ where: { id: appointmentId }, data: { status: "confirmed" } });
+
+  logger.info({ appointmentId }, "[confirm-token] Appointment confirmed via email link");
+  return res.json({ ok: true, message: "Cita confirmada correctamente", appointmentId });
 };
 
 export const getAdminAgendaReport = async (req: AuthRequest, res: Response) => {

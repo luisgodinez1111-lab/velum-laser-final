@@ -1,11 +1,12 @@
 import cron from "node-cron";
 import { prisma } from "../db/prisma";
 import { sendAppointmentReminderEmail } from "./emailService";
+import { sendWhatsappAppointmentReminder } from "./whatsappMetaService";
 import { logger } from "../utils/logger";
 
 const LOCK_KEY = "appointment_reminder_lock";
 const LOCK_TTL_MINUTES = 30;
-const TIMEZONE = "America/Chihuahua";
+const TIMEZONE = "America/Mexico_City";
 
 // ── Distributed lock via AppSetting ──────────────────────────────────────────
 async function acquireLock(): Promise<boolean> {
@@ -72,7 +73,7 @@ export const runAppointmentReminders = async (): Promise<void> => {
         user: {
           select: {
             email: true,
-            profile: { select: { firstName: true, lastName: true } },
+            profile: { select: { firstName: true, lastName: true, phone: true } },
           },
         },
         treatment: { select: { name: true } },
@@ -88,13 +89,29 @@ export const runAppointmentReminders = async (): Promise<void> => {
         const lastName  = appt.user.profile?.lastName  ?? "";
         const name      = `${firstName} ${lastName}`.trim() || appt.user.email;
 
+        const date = formatDate(appt.startAt);
+        const time = formatTime(appt.startAt);
+
         await sendAppointmentReminderEmail(appt.user.email, {
           name,
-          date:      formatDate(appt.startAt),
-          time:      formatTime(appt.startAt),
+          date,
+          time,
           treatment: appt.treatment?.name,
           cabin:     appt.cabin?.name,
         });
+
+        // WhatsApp reminder — only if phone is available and template is configured
+        const phone = appt.user.profile?.phone;
+        if (phone) {
+          await sendWhatsappAppointmentReminder(phone, {
+            name,
+            date,
+            time,
+            treatment: appt.treatment?.name,
+          }).catch((err) =>
+            logger.warn({ err, appointmentId: appt.id }, "[appointment-reminder] WhatsApp send failed (non-critical)")
+          );
+        }
 
         await prisma.appointment.update({
           where: { id: appt.id },
@@ -119,5 +136,5 @@ export const startAppointmentReminderCron = (): void => {
     void runAppointmentReminders();
   }, { timezone: TIMEZONE });
 
-  logger.info("[appointment-reminder] Cron scheduled — daily at 08:00 AM Chihuahua time");
+  logger.info("[appointment-reminder] Cron scheduled — daily at 08:00 AM Mexico City time");
 };

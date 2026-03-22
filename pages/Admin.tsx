@@ -335,6 +335,11 @@ export const Admin: React.FC = () => {
 
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'issue'>('all');
+  const [tablePage, setTablePage] = useState(1);
+  const [membersTotal, setMembersTotal] = useState(0);
+  const [serverSearchResults, setServerSearchResults] = useState<Member[] | null>(null);
+  const [isSearchingServer, setIsSearchingServer] = useState(false);
+  const [auditStatusFilter, setAuditStatusFilter] = useState<'all' | 'success' | 'failed'>('all');
   const [selectedMember, setSelectedMember] = useState<Member | null>(null);
 
   // Session registration
@@ -445,7 +450,7 @@ export const Admin: React.FC = () => {
     setDataLoadError('');
     try {
       const [membersResult, logsData, configData, dayData, integrationData, reportsData] = await Promise.all([
-        memberService.getAll({ limit: 100 }),
+        memberService.getAll({ limit: 200 }),
         user?.role === 'admin' || user?.role === 'system'
           ? auditService.getLogs().catch(() => [] as AuditLogEntry[])
           : Promise.resolve([] as AuditLogEntry[]),
@@ -457,6 +462,7 @@ export const Admin: React.FC = () => {
         apiFetch<any>('/admin/reports').catch(() => null),
       ]);
       setMembers(membersResult.members);
+      setMembersTotal(membersResult.total);
       setAuditLogs(logsData);
       setGoogleIntegrationStatus(integrationData);
       if (reportsData) setServerReports(reportsData);
@@ -496,6 +502,26 @@ export const Admin: React.FC = () => {
       loadData();
     }
   }, [isAuthenticated, hasAccess, user?.id, user?.role]);
+
+  // Server-side search: debounce 400 ms, fires when search > 1 char
+  useEffect(() => {
+    if (!searchTerm || searchTerm.length < 2) {
+      setServerSearchResults(null);
+      setTablePage(1);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      setIsSearchingServer(true);
+      try {
+        const result = await memberService.getAll({ search: searchTerm, limit: 100 });
+        setServerSearchResults(result.members);
+      } catch { setServerSearchResults(null); }
+      finally { setIsSearchingServer(false); }
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
+  useEffect(() => { setTablePage(1); }, [statusFilter, searchTerm]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -931,20 +957,32 @@ export const Admin: React.FC = () => {
 
   const filteredMembers = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
-    return members.filter((member) => {
-      const matchesSearch =
-        member.name.toLowerCase().includes(term) || member.email.toLowerCase().includes(term);
-
+    const base = serverSearchResults !== null ? serverSearchResults : members;
+    return base.filter((member) => {
+      const matchesSearch = serverSearchResults !== null
+        ? true
+        : (!term || member.name.toLowerCase().includes(term) || member.email.toLowerCase().includes(term));
       const matchesStatus =
         statusFilter === 'all'
           ? true
           : statusFilter === 'active'
             ? member.subscriptionStatus === 'active'
             : member.subscriptionStatus !== 'active';
-
       return matchesSearch && matchesStatus;
     });
-  }, [members, searchTerm, statusFilter]);
+  }, [members, serverSearchResults, searchTerm, statusFilter]);
+
+  const TABLE_PAGE_SIZE = 50;
+  const displayedMembers = useMemo(
+    () => filteredMembers.slice((tablePage - 1) * TABLE_PAGE_SIZE, tablePage * TABLE_PAGE_SIZE),
+    [filteredMembers, tablePage]
+  );
+  const tablePageCount = Math.ceil(filteredMembers.length / TABLE_PAGE_SIZE);
+
+  const filteredAuditLogs = useMemo(
+    () => auditStatusFilter === 'all' ? auditLogs : auditLogs.filter((l) => l.status === auditStatusFilter),
+    [auditLogs, auditStatusFilter]
+  );
 
   const memberById = useMemo(() => {
     return new Map(members.map((member) => [member.id, member]));
@@ -2291,15 +2329,25 @@ export const Admin: React.FC = () => {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-serif text-velum-900">Socias</h1>
-          <p className="text-sm text-velum-500 mt-1">{members.length} pacientes registradas</p>
+          <p className="text-sm text-velum-500 mt-1">{membersTotal || members.length} pacientes registradas</p>
         </div>
-        <button
-          onClick={() => setPatientDrawerOpen(true)}
-          className="flex items-center gap-2 bg-velum-900 text-white rounded-xl px-4 py-2.5 text-sm font-semibold hover:bg-velum-800 transition"
-        >
-          <Plus size={15} />
-          Nuevo expediente
-        </button>
+        <div className="flex items-center gap-2">
+          <a
+            href="/api/admin/users/export"
+            download
+            className="flex items-center gap-2 border border-velum-200 text-velum-700 rounded-xl px-4 py-2.5 text-sm font-semibold hover:bg-velum-50 transition"
+          >
+            <Download size={15} />
+            Exportar CSV
+          </a>
+          <button
+            onClick={() => setPatientDrawerOpen(true)}
+            className="flex items-center gap-2 bg-velum-900 text-white rounded-xl px-4 py-2.5 text-sm font-semibold hover:bg-velum-800 transition"
+          >
+            <Plus size={15} />
+            Nuevo expediente
+          </button>
+        </div>
       </div>
       {/* Search + filters */}
       <div className="flex flex-col sm:flex-row gap-3">
@@ -2307,6 +2355,7 @@ export const Admin: React.FC = () => {
           <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-velum-400" />
           <input value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Buscar por nombre o correo..."
             className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-velum-200 text-sm focus:outline-none focus:ring-2 focus:ring-velum-900/20 focus:border-velum-900 transition bg-white" />
+          {isSearchingServer && <RefreshCw size={13} className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-velum-400" />}
         </div>
         <div className="flex gap-2 flex-wrap">
           {(['all', 'active', 'issue'] as const).map((f) => (
@@ -2319,7 +2368,7 @@ export const Admin: React.FC = () => {
       </div>
       {/* Table */}
       <div className="bg-white rounded-2xl border border-velum-100 overflow-hidden">
-        {filteredMembers.length === 0 ? (
+        {displayedMembers.length === 0 ? (
           <div className="py-16 text-center">
             <Users size={32} className="mx-auto text-velum-200 mb-3" />
             <p className="text-sm text-velum-400">No hay socios que coincidan con tu búsqueda</p>
@@ -2335,11 +2384,11 @@ export const Admin: React.FC = () => {
                 </tr>
               </thead>
               <tbody>
-                {filteredMembers.map((m, i) => {
+                {displayedMembers.map((m, i) => {
                   const risk = riskOfMember(m);
                   const intake = intakeStatusLabel(m.intakeStatus);
                   return (
-                    <tr key={m.id} className={`border-b border-velum-50 hover:bg-velum-50/60 transition cursor-pointer ${i === filteredMembers.length - 1 ? 'border-b-0' : ''}`}
+                    <tr key={m.id} className={`border-b border-velum-50 hover:bg-velum-50/60 transition cursor-pointer ${i === displayedMembers.length - 1 ? 'border-b-0' : ''}`}
                       onClick={() => handleOpenMemberDrawer(m)}>
                       <td className="px-4 py-3">
                         <p className="font-medium text-velum-900">{m.name}</p>
@@ -2365,6 +2414,32 @@ export const Admin: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* Pagination */}
+      {tablePageCount > 1 && (
+        <div className="flex items-center justify-between">
+          <p className="text-xs text-velum-400">
+            {(tablePage - 1) * TABLE_PAGE_SIZE + 1}–{Math.min(tablePage * TABLE_PAGE_SIZE, filteredMembers.length)} de {filteredMembers.length}
+          </p>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setTablePage((p) => Math.max(1, p - 1))}
+              disabled={tablePage === 1}
+              className="flex items-center gap-1 px-3 py-1.5 rounded-xl border border-velum-200 text-sm text-velum-700 hover:bg-velum-50 disabled:opacity-40 disabled:cursor-not-allowed transition"
+            >
+              <ChevronLeft size={14} /> Anterior
+            </button>
+            <span className="text-xs text-velum-500 px-1">{tablePage} / {tablePageCount}</span>
+            <button
+              onClick={() => setTablePage((p) => Math.min(tablePageCount, p + 1))}
+              disabled={tablePage === tablePageCount}
+              className="flex items-center gap-1 px-3 py-1.5 rounded-xl border border-velum-200 text-sm text-velum-700 hover:bg-velum-50 disabled:opacity-40 disabled:cursor-not-allowed transition"
+            >
+              Siguiente <ChevronRight size={14} />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 
@@ -3638,6 +3713,18 @@ export const Admin: React.FC = () => {
               <RefreshCw size={12} className={isLoadingData ? 'animate-spin' : ''} />Actualizar
             </button>
           </div>
+          {/* Audit filter */}
+          <div className="flex gap-2">
+            {(['all', 'success', 'failed'] as const).map((f) => (
+              <button key={f} onClick={() => setAuditStatusFilter(f)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-medium transition ${auditStatusFilter === f ? 'bg-velum-900 text-white' : 'bg-white border border-velum-200 text-velum-600 hover:bg-velum-50'}`}>
+                {f === 'all' ? 'Todos' : f === 'success' ? 'Exitosos' : 'Fallidos'}
+              </button>
+            ))}
+            {auditStatusFilter !== 'all' && (
+              <span className="ml-2 text-xs text-velum-400 self-center">{filteredAuditLogs.length} registros</span>
+            )}
+          </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-2">
             {[
               { label: 'Firmas de consentimiento', value: analytics.expedientesFirmados, cls: 'text-emerald-700' },
@@ -3652,7 +3739,7 @@ export const Admin: React.FC = () => {
             ))}
           </div>
           <div className="bg-white rounded-2xl border border-velum-100 overflow-hidden">
-            {auditLogs.length === 0 ? (
+            {filteredAuditLogs.length === 0 ? (
               <div className="py-12 text-center">
                 <Shield size={28} className="mx-auto text-velum-200 mb-3" />
                 <p className="text-sm text-velum-400">Sin registros de auditoría</p>
@@ -3668,8 +3755,8 @@ export const Admin: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {auditLogs.map((log, i) => (
-                      <tr key={log.id ?? i} className={`${i < auditLogs.length - 1 ? 'border-b border-velum-50' : ''} hover:bg-velum-50/50 transition`}>
+                    {filteredAuditLogs.map((log, i) => (
+                      <tr key={log.id ?? i} className={`${i < filteredAuditLogs.length - 1 ? 'border-b border-velum-50' : ''} hover:bg-velum-50/50 transition`}>
                         <td className="px-4 py-2.5 text-velum-400 whitespace-nowrap">
                           {new Date(log.timestamp).toLocaleString('es-MX', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
                         </td>

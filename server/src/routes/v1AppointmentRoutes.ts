@@ -1,5 +1,6 @@
 import { Router } from "express";
 import {
+  confirmAppointmentByToken,
   createAppointment,
   deleteAdminAgendaBlock,
   getAdminAgendaConfig,
@@ -30,3 +31,6 @@ v1AppointmentRoutes.get("/api/v1/agenda/admin/day/:dateKey", requireAuth, requir
 v1AppointmentRoutes.get("/api/v1/agenda/admin/report/:dateKey", requireAuth, requireRole(["staff", "admin", "system"]), getAdminAgendaReport);
 v1AppointmentRoutes.post("/api/v1/agenda/admin/blocks", requireAuth, requireRole(["staff", "admin", "system"]), postAdminAgendaBlock);
 v1AppointmentRoutes.delete("/api/v1/agenda/admin/blocks/:blockId", requireAuth, requireRole(["staff", "admin", "system"]), deleteAdminAgendaBlock);
+
+// Public token-based confirmation (no auth required — HMAC-signed token)
+v1AppointmentRoutes.get("/api/v1/appointments/confirm", confirmAppointmentByToken);
