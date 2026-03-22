@@ -1,0 +1,19 @@
+# Dependencies — installed fresh inside the container
+node_modules
+
+# Local build output — rebuilt inside the container
+dist
+
+# Environment secrets — injected via docker-compose env_file
+.env
+.env.*
+
+# Test files — not needed in production image
+tests
+coverage
+*.test.ts
+*.spec.ts
+
+# Editor and OS artifacts
+.DS_Store
+*.log
