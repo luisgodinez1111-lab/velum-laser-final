@@ -213,7 +213,7 @@ const trackConversionEvent = async ({
     data: {
       metaStatus: metaResult.status,
       metaError: metaResult.error,
-      responseSummary: metaResult.responseSummary,
+      responseSummary: (metaResult.responseSummary ?? null) as any,
       sentAt: metaResult.status === "sent" ? new Date() : null
     }
   });

@@ -8,6 +8,19 @@ export default defineConfig(({ mode }) => {
       server: {
         port: 3000,
         host: '0.0.0.0',
+        proxy: {
+          // Legacy endpoints: /api/auth/* → /auth/*, /api/users/* → /users/*, etc.
+          '^/api/(auth|users|admin|membership|documents|me)(/.*)?$': {
+            target: 'http://localhost:4000',
+            changeOrigin: true,
+            rewrite: (path) => path.replace(/^\/api/, '')
+          },
+          // v1 API y resto: /api/* → pasa directo al backend
+          '/api': {
+            target: 'http://localhost:4000',
+            changeOrigin: true
+          }
+        }
       },
       plugins: [react()],
       define: {

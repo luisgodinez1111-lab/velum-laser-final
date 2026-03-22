@@ -7,17 +7,25 @@ import {
   listUsers,
   reports,
   updateMembershipStatus,
-  updateUserRole
+  updateUserRole,
+  createPatient,
+  adminUpdatePatientIntake,
+  adminActivateMembership,
+  exportUsers
 } from "../controllers/adminController";
 
 export const adminRoutes = Router();
 
-adminRoutes.use(requireAuth, requireRole(["staff", "admin", "system"]));
+adminRoutes.use("/admin", requireAuth, requireRole(["staff", "admin", "system"]));
 
 adminRoutes.get("/admin/users", listUsers);
+adminRoutes.get("/admin/users/export", exportUsers);
 adminRoutes.get("/admin/memberships", listMemberships);
 adminRoutes.get("/admin/documents", listDocumentsAdmin);
 adminRoutes.get("/admin/reports", reports);
 adminRoutes.get("/admin/audit-logs", requireRole(["admin", "system"]), listAuditLogs);
 adminRoutes.patch("/admin/users/:userId/membership", updateMembershipStatus);
 adminRoutes.patch("/admin/users/:userId/role", requireRole(["admin", "system"]), updateUserRole);
+adminRoutes.post("/admin/patients", createPatient);
+adminRoutes.put("/admin/patients/:userId/intake", adminUpdatePatientIntake);
+adminRoutes.post("/admin/patients/:userId/activate-membership", adminActivateMembership);

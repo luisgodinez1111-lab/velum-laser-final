@@ -5,10 +5,29 @@ import { changePlanSchema } from "../validators/membership";
 import { createCheckoutSession, createCustomerPortal, ensureCustomer } from "../services/stripeService";
 import { env } from "../utils/env";
 import { createAuditLog } from "../services/auditService";
+import { readStripePlanCatalog } from "../services/stripePlanCatalogService";
 
 export const getMembershipStatus = async (req: AuthRequest, res: Response) => {
-  const membership = await prisma.membership.findFirst({ where: { userId: req.user!.id } });
-  return res.json(membership);
+  const [membership, user] = await Promise.all([
+    prisma.membership.findFirst({ where: { userId: req.user!.id } }),
+    prisma.user.findUnique({ where: { id: req.user!.id }, select: { interestedPlanCode: true, appointmentDepositAvailable: true } }),
+  ]);
+  if (!membership) return res.json({ interestedPlanCode: user?.interestedPlanCode ?? null, appointmentDepositAvailable: user?.appointmentDepositAvailable ?? false });
+
+  // Enrich with plan details from catalog (price, interval, display name)
+  let planDetails: { amount: number; interval: string; planName: string } | null = null;
+  try {
+    const plans = await readStripePlanCatalog();
+    const planCode = (membership.planId ?? "").toLowerCase();
+    const match = plans.find(
+      (p) => p.planCode === planCode || p.stripePriceId === membership.planId
+    );
+    if (match) {
+      planDetails = { amount: match.amount, interval: match.interval, planName: match.name };
+    }
+  } catch { /* ignore catalog errors */ }
+
+  return res.json({ ...membership, planDetails, interestedPlanCode: user?.interestedPlanCode ?? null, appointmentDepositAvailable: user?.appointmentDepositAvailable ?? false });
 };
 
 export const changePlan = async (req: AuthRequest, res: Response) => {

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: VELUM API v1
-  version: 1.1.0
+  version: 1.2.0
 servers:
   - url: /api
 components:
@@ -163,3 +163,296 @@ paths:
       security: [{ cookieAuth: [] }]
       responses:
         '200': { description: OK }
+
+  # ── Billing ────────────────────────────────────────────────────────────
+  /v1/billing/checkout:
+    post:
+      summary: Crear sesión de checkout en Stripe
+      description: Crea una sesión de Stripe Checkout para suscribirse a un plan. El planCode debe estar configurado en Admin → Stripe → Planes.
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [planCode]
+              properties:
+                planCode:
+                  type: string
+                  example: essential
+      responses:
+        '200':
+          description: URL de checkout generada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  checkoutUrl: { type: string }
+                  sessionId: { type: string }
+                  planCode: { type: string }
+        '400': { description: planCode faltante o Stripe no configurado }
+        '404': { description: Plan no encontrado o inactivo }
+        '502': { description: Error en API de Stripe }
+  /v1/billing/portal:
+    post:
+      summary: Abrir portal de facturación de Stripe (cancelar/cambiar plan)
+      description: Redirige al usuario al Stripe Customer Portal. Requiere que el usuario tenga un stripeCustomerId (se asigna al completar el primer checkout).
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200':
+          description: URL del portal
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  url: { type: string }
+        '400': { description: Sin suscripción activa o Stripe no configurado }
+        '502': { description: Error en API de Stripe }
+
+  # ── Admin — Stripe Config ───────────────────────────────────────────────
+  /v1/admin/integrations/stripe:
+    get:
+      summary: Obtener configuración de Stripe (admin)
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200':
+          description: Configuración actual (keys enmascaradas)
+        '403': { description: No autorizado }
+    put:
+      summary: Guardar configuración de Stripe (admin)
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                secretKey: { type: string }
+                publishableKey: { type: string }
+                webhookSecret: { type: string }
+      responses:
+        '200': { description: Configuración guardada }
+        '403': { description: No autorizado }
+  /v1/admin/integrations/stripe/test:
+    post:
+      summary: Probar conexión con Stripe (admin)
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200': { description: Conexión exitosa }
+        '400': { description: Error de conexión }
+  /v1/admin/integrations/stripe/plans:
+    get:
+      summary: Obtener catálogo de planes Stripe (admin)
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200':
+          description: Lista de planes configurados
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  plans:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        planCode: { type: string }
+                        name: { type: string }
+                        amount: { type: number }
+                        interval: { type: string, enum: [day, week, month, year] }
+                        stripePriceId: { type: string }
+                        active: { type: boolean }
+    put:
+      summary: Guardar catálogo de planes Stripe (admin)
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                plans:
+                  type: array
+                  items:
+                    type: object
+      responses:
+        '200': { description: Planes guardados }
+        '403': { description: No autorizado }
+
+  # ── Admin — WhatsApp Config ─────────────────────────────────────────────
+  /v1/admin/integrations/whatsapp:
+    get:
+      summary: Obtener configuración de WhatsApp/Meta (admin)
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200': { description: Configuración actual }
+        '403': { description: No autorizado }
+    put:
+      summary: Guardar configuración de WhatsApp/Meta (admin)
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                accessToken: { type: string }
+                phoneNumberId: { type: string }
+                businessAccountId: { type: string }
+                webhookVerifyToken: { type: string }
+      responses:
+        '200': { description: Configuración guardada }
+
+  # ── Admin — Acceso y Usuarios ───────────────────────────────────────────
+  /v1/admin/access/users:
+    get:
+      summary: Listar usuarios con roles y permisos (admin)
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200':
+          description: Lista de usuarios
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  users:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: string }
+                        email: { type: string }
+                        role: { type: string }
+                        kind: { type: string }
+                        permissions: { type: array, items: { type: string } }
+        '403': { description: No autorizado }
+    post:
+      summary: Crear usuario administrativo (admin)
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password, role]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string }
+                role: { type: string, enum: [admin, staff, member] }
+      responses:
+        '201': { description: Usuario creado }
+        '400': { description: Datos inválidos o email duplicado }
+        '403': { description: No autorizado }
+  /v1/admin/access/users/{userId}:
+    patch:
+      summary: Cambiar rol o permisos de un usuario (admin)
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                role: { type: string }
+                permissions: { type: array, items: { type: string } }
+      responses:
+        '200': { description: Actualizado }
+        '403': { description: No autorizado }
+  /v1/admin/access/users/{userId}/reset-password:
+    post:
+      summary: Resetear contraseña de un usuario (admin)
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [newPassword]
+              properties:
+                newPassword: { type: string }
+      responses:
+        '200': { description: Contraseña actualizada }
+        '403': { description: No autorizado }
+
+  # ── Member Self-Service ─────────────────────────────────────────────────
+  /v1/users/me/profile:
+    get:
+      summary: Obtener perfil propio
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200': { description: Perfil del usuario }
+    put:
+      summary: Actualizar perfil propio (nombre, teléfono)
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                fullName: { type: string }
+                phone: { type: string }
+      responses:
+        '200': { description: Perfil actualizado }
+  /v1/users/me/password/request-whatsapp-code:
+    post:
+      summary: Solicitar código OTP por WhatsApp para cambio de contraseña
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200': { description: Código enviado }
+        '400': { description: Teléfono no registrado o WhatsApp no configurado }
+  /v1/users/me/password:
+    post:
+      summary: Cambiar contraseña con código OTP de WhatsApp
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code, newPassword]
+              properties:
+                code: { type: string, description: Código OTP de 6 dígitos }
+                newPassword: { type: string }
+      responses:
+        '200': { description: Contraseña actualizada }
+        '400': { description: Código inválido o expirado }
+
+  # ── Stripe Webhook ──────────────────────────────────────────────────────
+  /v1/stripe/webhook:
+    post:
+      summary: Endpoint de webhooks de Stripe
+      description: Recibe eventos de Stripe (checkout.session.completed, invoice.payment_succeeded, etc.). Requiere header stripe-signature y body raw.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200': { description: Evento procesado }
+        '400': { description: Firma inválida }
+        '500': { description: Error procesando evento }

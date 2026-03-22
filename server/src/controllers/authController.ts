@@ -1,17 +1,21 @@
 import { Request, Response } from "express";
-import { registerSchema, loginSchema, forgotSchema, resetSchema, verifyEmailSchema } from "../validators/auth";
+import { AuthRequest } from "../middlewares/auth";
+import { registerSchema, loginSchema, forgotSchema, resetSchema, verifyEmailSchema, consentOtpVerifySchema } from "../validators/auth";
 import { createUser, getUserByEmail } from "../services/userService";
 import { hashPassword, signToken, verifyPassword } from "../utils/auth";
 import { env, isProduction } from "../utils/env";
-import { createEmailVerification, createPasswordReset, consumeEmailVerification, consumePasswordReset } from "../services/authService";
+import { createEmailVerification, createPasswordReset, consumeEmailVerification, consumePasswordReset, createConsentOtp, consumeConsentOtp } from "../services/authService";
 import { prisma } from "../db/prisma";
 import { createAuditLog } from "../services/auditService";
+import { sendPasswordResetEmail, sendEmailVerificationEmail, sendConsentOtpEmail } from "../services/emailService";
+import { onNewMember } from "../services/notificationService";
+import { logger } from "../utils/logger";
 
 const setAuthCookie = (res: Response, token: string) => {
   res.cookie(env.cookieName, token, {
     httpOnly: true,
     secure: isProduction,
-    sameSite: "lax",
+    sameSite: "strict",
     maxAge: 1000 * 60 * 60 * 24
   });
 };
@@ -26,7 +30,9 @@ export const register = async (req: Request, res: Response) => {
     email: payload.email,
     passwordHash: await hashPassword(payload.password),
     firstName: payload.firstName,
-    lastName: payload.lastName
+    lastName: payload.lastName,
+    phone: payload.phone,
+    birthDate: payload.birthDate
   });
 
   const latestLead = await prisma.lead.findFirst({
@@ -46,7 +52,18 @@ export const register = async (req: Request, res: Response) => {
     });
   }
 
+  // Enviar OTP de verificación de correo
   const verification = await createEmailVerification(user.id);
+  sendEmailVerificationEmail(user.email, verification.otp).catch((err: unknown) => {
+    logger.warn({ err, email: user.email }, "[auth] No se pudo enviar correo de verificación");
+  });
+
+  onNewMember({
+    userId: user.id,
+    userEmail: user.email,
+    userName: [user.profile?.firstName, user.profile?.lastName].filter(Boolean).join(" ") || user.email,
+  }).catch((err: unknown) => logger.warn({ err }, "[auth] new_member notification failed"));
+
   const token = signToken({ sub: user.id, role: user.role });
   setAuthCookie(res, token);
   await createAuditLog({
@@ -59,7 +76,7 @@ export const register = async (req: Request, res: Response) => {
   });
   return res.status(201).json({
     user: { id: user.id, email: user.email, role: user.role },
-    verificationToken: verification.token
+    requiresEmailVerification: true
   });
 };
 
@@ -72,6 +89,9 @@ export const login = async (req: Request, res: Response) => {
   const valid = await verifyPassword(payload.password, user.passwordHash);
   if (!valid) {
     return res.status(401).json({ message: "Credenciales inválidas" });
+  }
+  if (user.isActive === false) {
+    return res.status(403).json({ message: "Tu cuenta ha sido desactivada. Contacta a la clínica para más información." });
   }
   const token = signToken({ sub: user.id, role: user.role });
   setAuthCookie(res, token);
@@ -94,31 +114,164 @@ export const logout = async (_req: Request, res: Response) => {
 export const forgotPassword = async (req: Request, res: Response) => {
   const payload = forgotSchema.parse(req.body);
   const user = await getUserByEmail(payload.email);
+
   if (!user) {
-    return res.status(200).json({ message: "Si el correo existe, se enviará un enlace" });
+    return res.status(404).json({ message: "No encontramos una cuenta con ese correo electrónico." });
   }
+
   const reset = await createPasswordReset(user.id);
-  return res.json({ resetToken: reset.token });
+  const resetUrl = `${env.appUrl}/#/reset-password?token=${reset.token}`;
+  sendPasswordResetEmail(user.email, resetUrl).catch((err: unknown) => {
+    logger.warn({ err, email: user.email }, "[auth] No se pudo enviar correo de recuperación");
+  });
+
+  return res.json({ message: "Te enviamos un enlace a tu correo para restablecer tu contraseña." });
 };
 
 export const resetPassword = async (req: Request, res: Response) => {
   const payload = resetSchema.parse(req.body);
+
   const reset = await consumePasswordReset(payload.token);
   if (!reset) {
-    return res.status(400).json({ message: "Token inválido" });
+    return res.status(400).json({ message: "El enlace es inválido o ya expiró." });
   }
+
   await prisma.user.update({
     where: { id: reset.userId },
-    data: { passwordHash: await hashPassword(payload.password) }
+    data: { passwordHash: await hashPassword(payload.password), passwordChangedAt: new Date() }
   });
-  return res.json({ message: "Contraseña actualizada" });
+
+  await createAuditLog({
+    userId: reset.userId,
+    action: "auth.password_reset",
+    resourceType: "user",
+    resourceId: reset.userId,
+    ip: req.ip,
+    metadata: {}
+  });
+
+  return res.json({ message: "Contraseña actualizada correctamente." });
 };
 
 export const verifyEmail = async (req: Request, res: Response) => {
   const payload = verifyEmailSchema.parse(req.body);
-  const verification = await consumeEmailVerification(payload.token);
-  if (!verification) {
-    return res.status(400).json({ message: "Token inválido" });
+
+  const user = await getUserByEmail(payload.email);
+  if (!user) {
+    return res.status(400).json({ message: "Código inválido o expirado" });
   }
-  return res.json({ message: "Correo verificado" });
+
+  const verification = await consumeEmailVerification(user.id, payload.otp);
+  if (!verification) {
+    return res.status(400).json({ message: "Código inválido o expirado" });
+  }
+
+  await createAuditLog({
+    userId: user.id,
+    action: "auth.email_verified",
+    resourceType: "user",
+    resourceId: user.id,
+    ip: req.ip,
+    metadata: { email: user.email }
+  });
+
+  return res.json({ message: "Correo verificado correctamente" });
+};
+
+export const resendVerification = async (req: Request, res: Response) => {
+  const { email } = forgotSchema.parse(req.body); // mismo shape: { email }
+  const user = await getUserByEmail(email);
+  // Respuesta genérica para no revelar si el email existe
+  if (!user) {
+    return res.json({ message: "Si el correo existe, recibirás un nuevo código" });
+  }
+  const verification = await createEmailVerification(user.id);
+  sendEmailVerificationEmail(user.email, verification.otp).catch((err: unknown) => {
+    logger.warn({ err, email: user.email }, "[auth] No se pudo reenviar correo de verificación");
+  });
+  return res.json({ message: "Código reenviado. Revisa tu bandeja de entrada." });
+};
+
+// ── OTP para firma de consentimiento informado ────────────────────────
+export const sendConsentOtp = async (req: AuthRequest, res: Response) => {
+  const userId = req.user!.id;
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { email: true, profile: { select: { firstName: true, lastName: true } } }
+  });
+  if (!user) {
+    return res.status(404).json({ message: "Usuario no encontrado" });
+  }
+
+  const consent = await createConsentOtp(userId);
+  const name = [user.profile?.firstName, user.profile?.lastName].filter(Boolean).join(" ") || user.email;
+
+  sendConsentOtpEmail(user.email, { name, otp: consent.otp }).catch((err: unknown) => {
+    logger.warn({ err, email: user.email }, "[auth] No se pudo enviar OTP de consentimiento");
+  });
+
+  return res.json({ message: "Código enviado a tu correo electrónico." });
+};
+
+export const verifyConsentOtp = async (req: AuthRequest, res: Response) => {
+  const userId = req.user!.id;
+  const payload = consentOtpVerifySchema.parse(req.body);
+
+  const record = await consumeConsentOtp(userId, payload.otp);
+  if (!record) {
+    return res.status(400).json({ message: "Código incorrecto o expirado." });
+  }
+
+  const signedAt = new Date().toISOString();
+
+  await createAuditLog({
+    userId,
+    action: "auth.consent_signed",
+    resourceType: "medicalIntake",
+    resourceId: userId,
+    ip: req.ip,
+    metadata: { signedAt }
+  });
+
+  return res.json({ signedAt });
+};
+
+// ── Cambio de contraseña inicial (primer inicio de sesión con contraseña temporal) ──
+export const changeInitialPassword = async (req: AuthRequest, res: Response) => {
+  const userId = req.user!.id;
+  const { newPassword } = req.body as { newPassword?: string };
+
+  if (!newPassword || newPassword.length < 8) {
+    return res.status(400).json({ message: "La contraseña debe tener al menos 8 caracteres" });
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { mustChangePassword: true }
+  });
+
+  if (!user?.mustChangePassword) {
+    return res.status(400).json({ message: "No hay contraseña temporal pendiente de cambio" });
+  }
+
+  const passwordHash = await hashPassword(newPassword);
+  await prisma.user.update({
+    where: { id: userId },
+    data: {
+      passwordHash,
+      mustChangePassword: false,
+      passwordChangedAt: new Date()
+    }
+  });
+
+  await createAuditLog({
+    userId,
+    action: "auth.initial_password_changed",
+    resourceType: "user",
+    resourceId: userId,
+    ip: req.ip,
+    metadata: {}
+  });
+
+  return res.json({ message: "Contraseña establecida correctamente" });
 };

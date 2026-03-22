@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 
 interface LogoProps {
   className?: string;
@@ -6,6 +6,29 @@ interface LogoProps {
 }
 
 export const VelumLogo: React.FC<LogoProps> = ({ className = "h-12 w-auto", color = "currentColor" }) => {
+  const [imageIndex, setImageIndex] = useState(0);
+  const imageCandidates = [
+    "/logo pagina web final.jpeg",
+    "/logo-pagina-web-final.jpeg",
+    "/logo_pagina_web_final.jpeg",
+    "/logo final.jpeg",
+    "/nuevo.jpeg",
+    "/nuevo.jpg",
+    "/nuevo.png"
+  ];
+  const imagePath = imageCandidates[imageIndex];
+
+  if (imagePath) {
+    return (
+      <img
+        src={encodeURI(imagePath)}
+        alt="VELUM LASER Logo"
+        className={className}
+        onError={() => setImageIndex((prev) => prev + 1)}
+      />
+    );
+  }
+
   return (
     <svg 
       viewBox="0 -5 340 125" 

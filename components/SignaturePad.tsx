@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from './Button';
 import { Eraser, Check } from 'lucide-react';
 
@@ -6,69 +6,94 @@ interface SignaturePadProps {
   onSave: (signatureDataUrl: string) => void;
   onCancel: () => void;
   title?: string;
+  signerName?: string;
+  documentId?: string;
 }
 
-export const SignaturePad: React.FC<SignaturePadProps> = ({ onSave, onCancel, title = "Firma Digital" }) => {
+export const SignaturePad: React.FC<SignaturePadProps> = ({
+  onSave,
+  onCancel,
+  title = 'Firma Digital',
+  signerName,
+  documentId,
+}) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [isDrawing, setIsDrawing] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const isDrawingRef = useRef(false);
   const [hasSignature, setHasSignature] = useState(false);
+  const signedAt = useRef(new Date().toISOString());
 
-  useEffect(() => {
+  // Initialize and re-initialize canvas on container resize (handles rotation + resize)
+  const initCanvas = useCallback(() => {
     const canvas = canvasRef.current;
-    if (canvas) {
-      canvas.width = canvas.parentElement?.clientWidth || 500;
-      canvas.height = 200;
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        ctx.strokeStyle = '#000';
-        ctx.lineWidth = 2;
-        ctx.lineCap = 'round';
-      }
+    const container = containerRef.current;
+    if (!canvas || !container) return;
+
+    const dpr = window.devicePixelRatio || 1;
+    const w = container.clientWidth;
+    const h = 200;
+
+    canvas.width = w * dpr;
+    canvas.height = h * dpr;
+    canvas.style.width = `${w}px`;
+    canvas.style.height = `${h}px`;
+
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      ctx.scale(dpr, dpr);
+      ctx.strokeStyle = '#1a1a1a';
+      ctx.lineWidth = 1.8;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
     }
+    // Note: resizing clears the canvas — reset hasSignature
+    setHasSignature(false);
   }, []);
 
-  const getCoordinates = (event: React.MouseEvent | React.TouchEvent) => {
+  useEffect(() => {
+    initCanvas();
+    const observer = new ResizeObserver(initCanvas);
+    if (containerRef.current) observer.observe(containerRef.current);
+    return () => observer.disconnect();
+  }, [initCanvas]);
+
+  // Prevent page scroll while drawing on touch devices
+  useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas) return { x: 0, y: 0 };
-    
-    const rect = canvas.getBoundingClientRect();
-    let clientX, clientY;
-
-    if ('touches' in event) {
-      clientX = event.touches[0].clientX;
-      clientY = event.touches[0].clientY;
-    } else {
-      clientX = (event as React.MouseEvent).clientX;
-      clientY = (event as React.MouseEvent).clientY;
-    }
-
-    return {
-      x: clientX - rect.left,
-      y: clientY - rect.top
+    if (!canvas) return;
+    const prevent = (e: TouchEvent) => {
+      if (isDrawingRef.current) e.preventDefault();
     };
+    canvas.addEventListener('touchmove', prevent, { passive: false });
+    return () => canvas.removeEventListener('touchmove', prevent);
+  }, []);
+
+  const getPoint = (e: React.MouseEvent | React.TouchEvent): { x: number; y: number } => {
+    const canvas = canvasRef.current!;
+    const rect = canvas.getBoundingClientRect();
+    const src = 'touches' in e ? e.touches[0] : e;
+    return { x: src.clientX - rect.left, y: src.clientY - rect.top };
   };
 
   const startDrawing = (e: React.MouseEvent | React.TouchEvent) => {
-    setIsDrawing(true);
+    isDrawingRef.current = true;
     const ctx = canvasRef.current?.getContext('2d');
-    const { x, y } = getCoordinates(e);
+    const { x, y } = getPoint(e);
     ctx?.beginPath();
     ctx?.moveTo(x, y);
   };
 
   const draw = (e: React.MouseEvent | React.TouchEvent) => {
-    if (!isDrawing) return;
+    if (!isDrawingRef.current) return;
     const ctx = canvasRef.current?.getContext('2d');
-    const { x, y } = getCoordinates(e);
+    const { x, y } = getPoint(e);
     ctx?.lineTo(x, y);
     ctx?.stroke();
-    if (!hasSignature) setHasSignature(true);
+    setHasSignature(true);
   };
 
   const stopDrawing = () => {
-    setIsDrawing(false);
-    const ctx = canvasRef.current?.getContext('2d');
-    ctx?.closePath();
+    isDrawingRef.current = false;
   };
 
   const clear = () => {
@@ -82,19 +107,23 @@ export const SignaturePad: React.FC<SignaturePadProps> = ({ onSave, onCancel, ti
 
   const save = () => {
     if (canvasRef.current && hasSignature) {
-      const dataUrl = canvasRef.current.toDataURL('image/png');
-      onSave(dataUrl);
+      onSave(canvasRef.current.toDataURL('image/png'));
     }
   };
 
   return (
-    <div className="bg-white p-6 border border-velum-200 shadow-xl max-w-lg w-full mx-auto animate-fade-in-up">
-      <h3 className="font-serif text-xl text-velum-900 mb-2">{title}</h3>
-      <p className="text-xs text-velum-500 mb-4 text-justify">
-        Al firmar, acepto los términos y condiciones, así como el aviso de privacidad y el consentimiento informado para el procedimiento láser. Declaro que la información médica proporcionada es verídica.
+    <div className="bg-white rounded-2xl border border-velum-200 shadow-xl max-w-lg w-full mx-auto p-6 animate-fade-in">
+      <h3 className="font-serif text-xl text-velum-900 mb-1">{title}</h3>
+      <p className="text-xs text-velum-500 mb-5 leading-relaxed">
+        Al firmar, acepto los términos y condiciones, el aviso de privacidad y el
+        consentimiento informado para el procedimiento. Declaro que la información
+        médica proporcionada es verídica y completa.
       </p>
-      
-      <div className="border-2 border-dashed border-velum-300 bg-velum-50 mb-4 touch-none">
+
+      <div
+        ref={containerRef}
+        className="border-2 border-dashed border-velum-200 rounded-xl bg-velum-50 mb-4 select-none touch-none overflow-hidden"
+      >
         <canvas
           ref={canvasRef}
           onMouseDown={startDrawing}
@@ -104,26 +133,33 @@ export const SignaturePad: React.FC<SignaturePadProps> = ({ onSave, onCancel, ti
           onTouchStart={startDrawing}
           onTouchMove={draw}
           onTouchEnd={stopDrawing}
-          className="w-full h-[200px] cursor-crosshair"
+          className="block cursor-crosshair"
+          aria-label="Área de firma digital"
+          role="img"
         />
       </div>
 
       <div className="flex justify-between items-center">
-        <button 
-            onClick={clear} 
-            className="text-xs text-red-500 font-bold uppercase tracking-widest flex items-center gap-1 hover:text-red-700"
+        <button
+          onClick={clear}
+          className="text-xs text-velum-400 uppercase tracking-widest flex items-center gap-1.5 hover:text-velum-700 transition-colors"
         >
-            <Eraser size={14}/> Borrar
+          <Eraser size={13} /> Borrar
         </button>
         <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={onCancel}>Cancelar</Button>
-            <Button size="sm" onClick={save} disabled={!hasSignature}>
-                <Check size={14} className="mr-2"/> Firmar Digitalmente
-            </Button>
+          <Button variant="outline" size="sm" onClick={onCancel}>Cancelar</Button>
+          <Button size="sm" onClick={save} disabled={!hasSignature}>
+            <Check size={14} className="mr-1.5" /> Firmar
+          </Button>
         </div>
       </div>
-      <p className="text-[10px] text-gray-400 mt-4 text-center">
-        Firma digital segura • IP: {Math.floor(Math.random()*255)}.{Math.floor(Math.random()*255)}.1.12 • {new Date().toLocaleString()}
+
+      {/* Audit metadata — real data only, no simulated values */}
+      <p className="text-[10px] text-velum-300 mt-4 text-center tabular-nums">
+        Firma digital segura
+        {signerName && <> · {signerName}</>}
+        {documentId && <> · Doc #{documentId.slice(-8).toUpperCase()}</>}
+        {' '}· {signedAt.current.replace('T', ' ').slice(0, 19)} UTC
       </p>
     </div>
   );

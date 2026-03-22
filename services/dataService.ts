@@ -28,6 +28,7 @@ const mapDocuments = (documents: any[]): LegalDocument[] =>
 
 const mapMember = (user: any): Member => {
   const membership = user.memberships?.[0];
+  const catalog = membership?.catalogEntry; // enriched by listUsers endpoint
   const tier = MEMBERSHIPS.find((t) => t.stripePriceId === membership?.planId);
   const name = `${user.profile?.firstName ?? ""} ${user.profile?.lastName ?? ""}`.trim() || user.email;
   return {
@@ -36,9 +37,12 @@ const mapMember = (user: any): Member => {
     email: user.email,
     role: user.role as UserRole,
     phone: user.profile?.phone,
-    plan: tier?.name ?? "Plan Velum",
+    plan: catalog?.name ?? tier?.name ?? membership?.planCode ?? "Plan Velum",
+    amount: catalog?.amount ?? tier?.price ?? membership?.amount ?? undefined,
+    interval: catalog?.interval ?? "month",
     subscriptionStatus: membership?.status ?? "inactive",
     nextBillingDate: membership?.currentPeriodEnd ? new Date(membership.currentPeriodEnd).toLocaleDateString("es-MX") : undefined,
+    intakeStatus: user.medicalIntake?.status ?? "draft",
     clinical: {
       consentFormSigned: user.documents?.some((doc: any) => doc.status === "signed" && doc.type === "informed_consent"),
       documents: mapDocuments(user.documents ?? [])
@@ -46,17 +50,36 @@ const mapMember = (user: any): Member => {
   };
 };
 
+// Unwrap paginated or legacy array response
+const extractUsers = (resp: any): any[] => {
+  if (Array.isArray(resp)) return resp;
+  if (resp && Array.isArray(resp.data)) return resp.data;
+  return [];
+};
+
 export const memberService = {
-  getAll: async (): Promise<Member[]> => {
-    const users = await apiFetch<any[]>("/admin/users");
-    return users.filter((user) => user.role === "member").map(mapMember);
+  getAll: async (params?: { page?: number; limit?: number; search?: string; role?: string; status?: string }): Promise<{ members: Member[]; total: number; pages: number }> => {
+    const qs = new URLSearchParams();
+    if (params?.page)   qs.set("page",   String(params.page));
+    if (params?.limit)  qs.set("limit",  String(params.limit));
+    if (params?.search) qs.set("search", params.search);
+    if (params?.role)   qs.set("role",   params.role);
+    if (params?.status) qs.set("status", params.status);
+    const query = qs.toString() ? `?${qs.toString()}` : "";
+    const resp = await apiFetch<any>(`/admin/users${query}`);
+    const users = extractUsers(resp);
+    return {
+      members: users.filter((u: any) => u.role === "member").map(mapMember),
+      total: resp?.total ?? users.length,
+      pages: resp?.pages ?? 1,
+    };
   },
 
   getById: async (id: string): Promise<Member | undefined> => {
-    const user = await apiFetch<any>("/me");
-    if (user.id !== id || user.role !== "member") {
-      return undefined;
-    }
+    const resp = await apiFetch<any>("/admin/users");
+    const users = extractUsers(resp);
+    const user = users.find((u: any) => u.id === id);
+    if (!user) return undefined;
     return mapMember(user);
   },
 
@@ -65,7 +88,50 @@ export const memberService = {
       method: "PATCH",
       body: JSON.stringify({ status })
     });
-  }
+  },
+
+  createPatient: async (payload: {
+    email: string;
+    firstName: string;
+    lastName: string;
+    phone?: string;
+    birthDate?: string;
+    intake?: {
+      personalJson?: Record<string, unknown>;
+      historyJson?: Record<string, unknown>;
+      phototype?: number;
+      consentAccepted?: boolean;
+      signatureKey?: string;
+    };
+    planCode?: string;
+    activateMembership?: boolean;
+    sendCredentials?: boolean;
+  }): Promise<{ message: string; patient: { id: string; email: string }; inviteEmailSent: boolean }> => {
+    return apiFetch('/admin/patients', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+  },
+
+  adminUpdatePatientIntake: async (userId: string, intake: {
+    personalJson?: Record<string, unknown>;
+    historyJson?: Record<string, unknown>;
+    phototype?: number;
+    consentAccepted?: boolean;
+    signatureKey?: string;
+  }): Promise<void> => {
+    await apiFetch(`/admin/patients/${userId}/intake`, {
+      method: 'PUT',
+      body: JSON.stringify(intake)
+    });
+  },
+
+  adminActivateMembership: async (userId: string, planCode: string): Promise<void> => {
+    await apiFetch(`/admin/patients/${userId}/activate-membership`, {
+      method: 'POST',
+      body: JSON.stringify({ planCode, status: 'active' })
+    });
+  },
 };
 
 export const documentService = {
@@ -82,12 +148,12 @@ export const auditService = {
     const logs = await apiFetch<any[]>("/admin/audit-logs");
     return logs.map((log) => ({
       id: log.id,
-      timestamp: new Date(log.createdAt).toLocaleString("es-MX"),
+      timestamp: log.createdAt,
       user: log.actorUser?.email ?? log.user?.email ?? "system",
       role: (log.actorUser?.role ?? log.user?.role ?? "admin") as UserRole,
       action: log.action,
       resource: log.resourceId ?? log.resourceType ?? log.metadata?.targetUserId ?? log.metadata?.documentId ?? "-",
-      ip: log.ip ?? log.metadata?.ip ?? "N/A",
+      ip: log.ip ?? log.metadata?.ip ?? "—",
       status: (log.result ?? "success") as AuditLogEntry["status"]
     }));
   }

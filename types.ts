@@ -10,22 +10,26 @@ export interface MembershipTier {
   id: number;
   name: string;
   price: number;
-  maxZones: number; 
+  maxZones: number;
   description: string;
   isFullBody: boolean;
   stripePriceId: string;
+  /** 'master' = elige N de 4 Zonas VELUM completas | 'custom' = elige zonas pequeñas + medianas */
+  selectionMode: 'master' | 'custom';
 }
 
 export interface UserSubscription {
   membershipId: number;
   selectedZones: ZoneId[];
   startDate: string;
-  status: 'active' | 'pending' | 'canceled' | 'past_due' | 'paused';
+  status: SubscriptionStatus;
 }
 
 // --- SECURITY & COMPLIANCE TYPES ---
 
 export type UserRole = 'admin' | 'staff' | 'member' | 'system';
+export type MedicalIntakeStatus = 'draft' | 'submitted' | 'approved' | 'rejected';
+export type SubscriptionStatus = 'active' | 'pending' | 'canceled' | 'past_due' | 'paused';
 
 export interface AuditLogEntry {
   id: string;
@@ -57,11 +61,12 @@ export interface Member {
   dob?: string;
   plan?: string;
   amount?: number;
+  interval?: string;
   subscriptionStatus?: string;
   nextBillingDate?: string;
   lastPaymentDate?: string;
   paymentMethod?: { type: string; last4: string; expiry: string };
-  history?: any[];
+  intakeStatus?: MedicalIntakeStatus;
   clinical?: {
     fitzpatrickType?: string;
     allergies?: string;
@@ -69,8 +74,15 @@ export interface Member {
     surgicalHistory?: string;
     consentFormSigned?: boolean;
     lastUpdate?: string;
-    sessions?: any[];
+    sessions?: SessionSummary[];
     documents?: LegalDocument[];
   };
-  passwordHash?: string;
+}
+
+export interface SessionSummary {
+  id: string;
+  date: string;
+  zone?: string;
+  staff?: string;
+  feedback?: string;
 }

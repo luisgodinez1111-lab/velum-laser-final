@@ -1,0 +1,176 @@
+/* ── VELUM LASER — Global Styles ───────────────────────────────────────────── */
+
+/* Reset tap highlight on all touch devices */
+* { -webkit-tap-highlight-color: transparent; }
+
+/* Smooth scroll */
+html { scroll-behavior: smooth; }
+
+/* ── Keyframes ────────────────────────────────────────────────────────────── */
+@keyframes fadeSlideIn {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0);    }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes slideUpSheet {
+  from { opacity: 0; transform: translateY(100%); }
+  to   { opacity: 1; transform: translateY(0);    }
+}
+
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.94); }
+  to   { opacity: 1; transform: scale(1);    }
+}
+
+@keyframes countIn {
+  from { opacity: 0; transform: scale(0.75) translateY(6px); }
+  to   { opacity: 1; transform: scale(1)    translateY(0);   }
+}
+
+@keyframes shimmer {
+  0%   { background-position: -400px 0; }
+  100% { background-position:  400px 0; }
+}
+
+@keyframes progressFill {
+  from { stroke-dashoffset: var(--full); }
+  to   { stroke-dashoffset: var(--offset); }
+}
+
+@keyframes dotPulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.5; transform: scale(0.85); }
+}
+
+/* ── Utility classes ─────────────────────────────────────────────────────── */
+.animate-fade-in  { animation: fadeSlideIn 0.38s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.animate-fade     { animation: fadeIn      0.25s ease both; }
+.animate-scale-in { animation: scaleIn     0.28s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.animate-slide-up { animation: slideUpSheet 0.36s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.animate-count-in { animation: countIn     0.45s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.animate-tab-in   { animation: fadeSlideIn 0.22s cubic-bezier(0.16, 1, 0.3, 1) both; }
+
+/* Skeleton shimmer */
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    #f7f5f2 25%,
+    #efeadd 50%,
+    #f7f5f2 75%
+  );
+  background-size: 400px 100%;
+  animation: shimmer 1.4s infinite linear;
+  border-radius: 16px;
+}
+
+/* Hide scrollbar cross-browser */
+.scrollbar-none { scrollbar-width: none; -ms-overflow-style: none; }
+.scrollbar-none::-webkit-scrollbar { display: none; }
+
+/* ── Press / Hover states ────────────────────────────────────────────────── */
+.press {
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+.press:active {
+  transform: scale(0.97);
+}
+
+.card-hover {
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+.card-hover:hover {
+  box-shadow: 0 8px 28px rgba(84, 69, 56, 0.12);
+  transform: translateY(-1px);
+}
+
+/* ── Safe area for mobile bottom bar ─────────────────────────────────────── */
+.pb-safe {
+  padding-bottom: max(env(safe-area-inset-bottom), 0px);
+}
+
+/* ── OTP split inputs ─────────────────────────────────────────────────────── */
+.otp-input {
+  width: 48px;
+  height: 60px;
+  font-size: 24px;
+  font-weight: 700;
+  text-align: center;
+  background: #fdfcfb;
+  border: 1.5px solid rgba(224, 214, 192, 0.6);
+  border-radius: 16px;
+  color: #544538;
+  outline: none;
+  caret-color: #544538;
+  transition: border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
+}
+.otp-input:focus {
+  background: #fff;
+  border-color: #544538;
+  box-shadow: 0 0 0 4px rgba(84, 69, 56, 0.07);
+}
+.otp-input.filled {
+  background: #fff;
+  border-color: #7e664d;
+}
+
+/* ── Progress ring animation ─────────────────────────────────────────────── */
+.progress-ring-circle {
+  animation: progressFill 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* ── Staggered animation delays ──────────────────────────────────────────── */
+.delay-50  { animation-delay: 50ms;  }
+.delay-100 { animation-delay: 100ms; }
+.delay-150 { animation-delay: 150ms; }
+.delay-200 { animation-delay: 200ms; }
+.delay-250 { animation-delay: 250ms; }
+.delay-300 { animation-delay: 300ms; }
+
+/* ── Gradient text ───────────────────────────────────────────────────────── */
+.text-gradient {
+  background: linear-gradient(135deg, #544538 0%, #b89c76 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ── Toast progress bar ───────────────────────────────────────────────────── */
+@keyframes toast-progress {
+  from { width: 100%; }
+  to   { width: 0%;   }
+}
+
+/* ── Accessibility: respect reduced-motion preference ────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ── Animate fade-in-down (mobile menu) ──────────────────────────────────── */
+.animate-fade-in-down {
+  animation: fadeInDown 0.22s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@keyframes fadeInDown {
+  from { opacity: 0; transform: translateY(-8px); }
+  to   { opacity: 1; transform: translateY(0);    }
+}
+
+/* ── Animate fade-in-up ──────────────────────────────────────────────────── */
+.animate-fade-in-up {
+  animation: fadeInUp 0.28s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0);    }
+}

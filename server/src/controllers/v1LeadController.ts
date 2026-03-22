@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import crypto from "crypto";
 import { Response } from "express";
 import { prisma } from "../db/prisma";
@@ -66,7 +67,7 @@ export const createLead = async (req: AuthRequest, res: Response) => {
     data: {
       metaStatus: metaResult.status,
       metaError: metaResult.error,
-      responseSummary: metaResult.responseSummary,
+      responseSummary: metaResult.responseSummary as Prisma.InputJsonValue | undefined,
       sentAt: metaResult.status === "sent" ? new Date() : null
     }
   });
@@ -109,8 +110,8 @@ export const trackMarketingEvent = async (req: AuthRequest, res: Response) => {
       fbc: payload.fbc,
       requestSummary: {
         eventTime: payload.eventTime,
-        customData: payload.customData
-      }
+        customData: payload.customData as Prisma.InputJsonValue | undefined
+      } as Prisma.InputJsonValue
     }
   });
 
@@ -131,7 +132,7 @@ export const trackMarketingEvent = async (req: AuthRequest, res: Response) => {
     data: {
       metaStatus: metaResult.status,
       metaError: metaResult.error,
-      responseSummary: metaResult.responseSummary,
+      responseSummary: metaResult.responseSummary as Prisma.InputJsonValue | undefined,
       sentAt: metaResult.status === "sent" ? new Date() : null
     }
   });

@@ -1,108 +1,121 @@
+import { Prisma } from "@prisma/client";
 import { Response } from "express";
 import { prisma } from "../db/prisma";
 import { AuthRequest } from "../middlewares/auth";
 import { createAuditLog } from "../services/auditService";
+import { medicalIntakeApproveSchema, medicalIntakeUpdateSchema } from "../validators/medicalIntake";
 
-const isObject = (v: unknown): v is Record<string, unknown> =>
-  typeof v === "object" && v !== null && !Array.isArray(v);
-
-const cleanPhototype = (value: unknown): number | undefined => {
-  if (typeof value !== "number") return undefined;
-  if (!Number.isInteger(value)) return undefined;
-  if (value < 1 || value > 6) return undefined;
-  return value;
-};
-
-export const getMyMedicalIntake = async (req: AuthRequest, res: Response) => {
-  const userId = req.user?.id;
-  if (!userId) return res.status(401).json({ message: "No autorizado" });
-
-  const intake = await prisma.medicalIntake.upsert({
+const ensureIntake = async (userId: string) => {
+  return prisma.medicalIntake.upsert({
     where: { userId },
     update: {},
     create: { userId, status: "draft" }
   });
+};
 
-return res.json(intake);
+export const getMyMedicalIntake = async (req: AuthRequest, res: Response) => {
+  const intake = await ensureIntake(req.user!.id);
+  return res.json(intake);
 };
 
 export const updateMyMedicalIntake = async (req: AuthRequest, res: Response) => {
-  const userId = req.user?.id;
-  if (!userId) return res.status(401).json({ message: "No autorizado" });
+  const payload = medicalIntakeUpdateSchema.parse(req.body);
+  const current = await ensureIntake(req.user!.id);
 
-const body = isObject(req.body) ? req.body : {};
-  const submit = body.submit === true;
+  const nextPhototype = payload.phototype ?? current.phototype;
+  const nextConsent = payload.consentAccepted ?? current.consentAccepted;
+  const requestedStatus = payload.status ?? current.status;
 
-const updateData: Record<string, unknown> = {};
-  if ("personalJson" in body) updateData.personalJson = body.personalJson ?? null;
-  if ("historyJson" in body) updateData.historyJson = body.historyJson ?? null;
-  if ("signatureKey" in body) updateData.signatureKey = typeof body.signatureKey === "string" ? body.signatureKey : null;
-  if ("consentAccepted" in body) updateData.consentAccepted = Boolean(body.consentAccepted);
+  if (requestedStatus === "submitted") {
+    if (!nextConsent) {
+      return res.status(400).json({ message: "No se puede enviar sin consentimiento" });
+    }
 
-  const phototype = cleanPhototype(body.phototype);
-  if (phototype !== undefined) updateData.phototype = phototype;
-
-if (submit) {
-    updateData.status = "submitted";
-    updateData.submittedAt = new Date();
-    updateData.rejectedAt = null;
-    updateData.rejectionReason = null;
+    if (!nextPhototype) {
+      return res.status(400).json({ message: "No se puede enviar sin fototipo" });
+    }
   }
-const intake = await prisma.medicalIntake.upsert({
-    where: { userId },
-    update: updateData as any,
-    create: {
-      userId,
-      status: submit ? "submitted" : "draft",
-      submittedAt: submit ? new Date() : null,
-personalJson: (updateData.personalJson as any) ?? null,
-      historyJson: (updateData.historyJson as any) ?? null,
-      phototype: (updateData.phototype as number | undefined) ?? null,
-      consentAccepted: (updateData.consentAccepted as boolean | undefined) ?? false,
-      signatureKey: (updateData.signatureKey as string | null | undefined) ?? null
-    } as any
-  });
-await createAuditLog({
-    userId,
-    action: submit ? "medical_intake.submit" : "medical_intake.update",
-    resourceType: "medical_intake",
-    resourceId: intake.id,
-    ip: req.ip,
-    metadata: { submit }
-  });
-return res.json(intake);
-};
 
-export const approveMedicalIntake = async (req: AuthRequest, res: Response) => {
-  const actorUserId = req.user?.id;
-  if (!actorUserId) return res.status(401).json({ message: "No autorizado" });
-
-const { userId } = req.params;
-  if (!userId) return res.status(400).json({ message: "userId requerido" });
-
-  const current = await prisma.medicalIntake.findUnique({ where: { userId } });
-  if (!current) return res.status(404).json({ message: "Expediente no encontrado" });
-const intake = await prisma.medicalIntake.update({
-    where: { userId },
+  const updated = await prisma.medicalIntake.update({
+    where: { id: current.id },
     data: {
-      status: "approved",
-      approvedAt: new Date(),
-      approvedByUserId: actorUserId,
-      rejectedAt: null,
-      rejectionReason: null
+      personalJson: payload.personalJson as Prisma.InputJsonValue | undefined,
+      historyJson: payload.historyJson as Prisma.InputJsonValue | undefined,
+      phototype: payload.phototype ?? undefined,
+      consentAccepted: payload.consentAccepted ?? undefined,
+      signatureKey: payload.signatureKey ?? undefined,
+      status: requestedStatus,
+      submittedAt: requestedStatus === "submitted" ? new Date() : current.submittedAt,
+      rejectedAt: requestedStatus === "submitted" ? null : current.rejectedAt,
+      rejectionReason: requestedStatus === "submitted" ? null : current.rejectionReason
     }
   });
 
-
-await createAuditLog({
-    actorUserId,
-    targetUserId: userId,
-    userId: actorUserId,
-    action: "medical_intake.approve",
+  await createAuditLog({
+    userId: req.user!.id,
+    action: "medical_intake.update",
     resourceType: "medical_intake",
-    resourceId: intake.id,
-    ip: req.ip
+    resourceId: updated.id,
+    ip: req.ip,
+    metadata: { status: updated.status }
   });
 
+  return res.json(updated);
+};
+
+export const getMedicalIntakeByUserId = async (req: AuthRequest, res: Response) => {
+  const { userId } = req.params;
+  const intake = await prisma.medicalIntake.findUnique({ where: { userId } });
+  if (!intake) return res.status(404).json({ message: "Expediente no encontrado" });
   return res.json(intake);
+};
+
+export const approveMedicalIntake = async (req: AuthRequest, res: Response) => {
+  const payload = medicalIntakeApproveSchema.parse(req.body);
+
+  const intake = await prisma.medicalIntake.findUnique({
+    where: { userId: req.params.userId }
+  });
+
+  if (!intake) {
+    return res.status(404).json({ message: "Expediente no encontrado" });
+  }
+
+  if (!payload.approved && !payload.rejectionReason) {
+    return res.status(400).json({ message: "Debes indicar motivo de rechazo" });
+  }
+
+  const updated = await prisma.medicalIntake.update({
+    where: { id: intake.id },
+    data: payload.approved
+      ? {
+          status: "approved",
+          approvedAt: new Date(),
+          approvedByUserId: req.user!.id,
+          rejectedAt: null,
+          rejectionReason: null
+        }
+      : {
+          status: "rejected",
+          rejectedAt: new Date(),
+          rejectionReason: payload.rejectionReason,
+          approvedAt: null,
+          approvedByUserId: null
+        }
+  });
+
+  await createAuditLog({
+    userId: req.user!.id,
+    targetUserId: req.params.userId,
+    action: payload.approved ? "medical_intake.approve" : "medical_intake.reject",
+    resourceType: "medical_intake",
+    resourceId: intake.id,
+    ip: req.ip,
+    metadata: {
+      approved: payload.approved,
+      rejectionReason: payload.rejectionReason
+    }
+  });
+
+  return res.json(updated);
 };

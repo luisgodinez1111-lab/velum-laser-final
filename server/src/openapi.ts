@@ -57,8 +57,12 @@ export const openApiSpec = {
         properties: {
           id: { type: "string" },
           userId: { type: "string" },
+          cabinId: { type: "string", nullable: true },
           startAt: { type: "string", format: "date-time" },
           endAt: { type: "string", format: "date-time" },
+          confirmedAt: { type: "string", format: "date-time", nullable: true },
+          completedAt: { type: "string", format: "date-time", nullable: true },
+          noShowAt: { type: "string", format: "date-time", nullable: true },
           status: {
             type: "string",
             enum: ["scheduled", "confirmed", "completed", "canceled", "no_show"]
@@ -193,6 +197,49 @@ export const openApiSpec = {
         security: [{ cookieAuth: [] }],
         parameters: [{ name: "appointmentId", in: "path", required: true, schema: { type: "string" } }],
         responses: { "200": { description: "Actualizado" } }
+      }
+    },
+    "/api/v1/agenda/admin/config": {
+      get: {
+        summary: "Config agenda admin (staff/admin/system)",
+        security: [{ cookieAuth: [] }],
+        responses: { "200": { description: "OK" } }
+      },
+      put: {
+        summary: "Actualizar config agenda admin",
+        security: [{ cookieAuth: [] }],
+        responses: { "200": { description: "Actualizado" } }
+      }
+    },
+    "/api/v1/agenda/admin/day/{dateKey}": {
+      get: {
+        summary: "Snapshot diario de agenda admin",
+        security: [{ cookieAuth: [] }],
+        parameters: [{ name: "dateKey", in: "path", required: true, schema: { type: "string", example: "2026-02-18" } }],
+        responses: { "200": { description: "OK" } }
+      }
+    },
+    "/api/v1/agenda/admin/report/{dateKey}": {
+      get: {
+        summary: "Reporte diario por cabina",
+        security: [{ cookieAuth: [] }],
+        parameters: [{ name: "dateKey", in: "path", required: true, schema: { type: "string", example: "2026-02-18" } }],
+        responses: { "200": { description: "OK" } }
+      }
+    },
+    "/api/v1/agenda/admin/blocks": {
+      post: {
+        summary: "Crear bloqueo de agenda",
+        security: [{ cookieAuth: [] }],
+        responses: { "201": { description: "Creado" } }
+      }
+    },
+    "/api/v1/agenda/admin/blocks/{blockId}": {
+      delete: {
+        summary: "Eliminar bloqueo de agenda",
+        security: [{ cookieAuth: [] }],
+        parameters: [{ name: "blockId", in: "path", required: true, schema: { type: "string" } }],
+        responses: { "204": { description: "Eliminado" } }
       }
     },
     "/api/v1/sessions": {

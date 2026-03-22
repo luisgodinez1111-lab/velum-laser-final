@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { prisma } from "../db/prisma";
 
 type AuditResult = "success" | "failed";
@@ -21,13 +22,14 @@ export const createAuditLog = async ({
   resourceId?: string;
   result?: AuditResult;
   ip?: string;
-  metadata?: Record<string, unknown>;
+  metadata?: Prisma.InputJsonValue;
 }) => {
+  // actor = who performed the action; userId = subject of the action (defaults to actor)
   const actor = actorUserId ?? userId;
 
   return prisma.auditLog.create({
     data: {
-      userId: userId ?? actor,
+      userId: userId ?? actorUserId,
       actorUserId: actor,
       targetUserId,
       action,
