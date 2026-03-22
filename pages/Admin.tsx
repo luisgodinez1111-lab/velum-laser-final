@@ -33,7 +33,9 @@ import {
   XCircle,
   Plus,
   Download,
-  BarChart3
+  BarChart3,
+  TrendingUp,
+  Banknote
 } from 'lucide-react';
 import { AuditLogEntry, Member, UserRole } from '../types';
 import { useAuth } from '../context/AuthContext';
@@ -61,7 +63,7 @@ import {
   googleCalendarIntegrationService
 } from '../services/googleCalendarIntegrationService';
 
-type AdminSection = 'panel' | 'socias' | 'agenda' | 'expedientes' | 'pagos' | 'ajustes';
+type AdminSection = 'panel' | 'socias' | 'agenda' | 'expedientes' | 'pagos' | 'kpis' | 'finanzas' | 'ajustes';
 
 type HealthFlag = 'ok' | 'warning' | 'critical';
 
@@ -104,10 +106,12 @@ const sectionMeta: Record<AdminSection, { label: string; icon: React.ComponentTy
   agenda:      { label: 'Agenda',       icon: CalendarDays },
   expedientes: { label: 'Expedientes',  icon: FolderOpen },
   pagos:       { label: 'Pagos',        icon: Wallet },
+  kpis:        { label: 'KPIs',         icon: TrendingUp },
+  finanzas:    { label: 'Finanzas',     icon: Banknote },
   ajustes:     { label: 'Ajustes',      icon: Settings },
 };
 
-const NAV_SECTIONS: AdminSection[] = ['panel', 'socias', 'agenda', 'expedientes', 'pagos', 'ajustes'];
+const NAV_SECTIONS: AdminSection[] = ['panel', 'socias', 'agenda', 'expedientes', 'pagos', 'kpis', 'finanzas', 'ajustes'];
 
 const allowedRoles: UserRole[] = ['admin', 'staff', 'system'];
 
@@ -3814,6 +3818,8 @@ export const Admin: React.FC = () => {
       case 'agenda':       return renderAgenda();
       case 'expedientes':  return renderExpedientes();
       case 'pagos':        return renderPagos();
+      case 'kpis':         return renderKPIs();
+      case 'finanzas':     return renderFinanzas();
       case 'ajustes':      return renderConfiguraciones();
       default:             return null;
     }
