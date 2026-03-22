@@ -227,6 +227,7 @@ export const AdminStripeSettings: React.FC<Props> = ({ embedded = false }) => {
     if (!newCharge.userId) { setChargeError("Selecciona un cliente"); return; }
     if (!newCharge.title.trim()) { setChargeError("El concepto es obligatorio"); return; }
     if (!newCharge.amount || Number(newCharge.amount) <= 0) { setChargeError("El monto debe ser mayor a 0"); return; }
+    if (Number(newCharge.amount) < 10) { setChargeError("El monto mínimo es $10.00 MXN"); return; }
     setSavingCharge(true);
     try {
       await api("/api/v1/admin/custom-charges", {

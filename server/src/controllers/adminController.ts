@@ -8,6 +8,8 @@ import { readStripePlanCatalog } from "../services/stripePlanCatalogService";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import { sendPatientWelcomeEmail } from "../services/emailService";
+import { onNewMember } from "../services/notificationService";
+import { logger } from "../utils/logger";
 
 function generateTempPassword(): string {
   const upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
@@ -282,6 +284,12 @@ export const createPatient = async (req: AuthRequest, res: Response) => {
         // Email failure should not block patient creation
       }
     }
+
+    onNewMember({
+      userId: created.id,
+      userEmail: email,
+      userName: `${firstName} ${lastName}`.trim() || email,
+    }).catch((err: unknown) => logger.warn({ err }, "[admin] new_member notification failed"));
 
     await createAuditLog({
       userId: req.user!.id,

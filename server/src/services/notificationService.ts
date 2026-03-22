@@ -218,6 +218,26 @@ export const onAppointmentDepositPaid = async (params: {
   }).catch((err) => logger.error({ err }, "[notifications] email appointment_deposit_paid (admin) failed"));
 };
 
+/** New member registered (public or created by admin) → notify admins */
+export const onNewMember = async (params: {
+  userId: string;
+  userEmail: string;
+  userName: string;
+}) => {
+  await notifyAdmins(
+    "new_member",
+    `Nuevo paciente: ${params.userName}`,
+    `${params.userEmail} se registró en la plataforma.`,
+    { userId: params.userId }
+  );
+
+  sendAdminNotificationEmail({
+    subject: `Nuevo paciente registrado: ${params.userName}`,
+    title: "Nuevo paciente registrado",
+    body: `<strong>${params.userName}</strong> (${params.userEmail}) acaba de registrarse en la plataforma de Velum Laser.`,
+  }).catch((err) => logger.error({ err }, "[notifications] email new_member (admin) failed"));
+};
+
 /** Membership activated (checkout or invoice) → notify user + admins */
 export const onMembershipActivated = async (params: {
   userId: string;

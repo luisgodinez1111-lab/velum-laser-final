@@ -8,6 +8,7 @@ import { createEmailVerification, createPasswordReset, consumeEmailVerification,
 import { prisma } from "../db/prisma";
 import { createAuditLog } from "../services/auditService";
 import { sendPasswordResetEmail, sendEmailVerificationEmail, sendConsentOtpEmail } from "../services/emailService";
+import { onNewMember } from "../services/notificationService";
 import { logger } from "../utils/logger";
 
 const setAuthCookie = (res: Response, token: string) => {
@@ -56,6 +57,12 @@ export const register = async (req: Request, res: Response) => {
   sendEmailVerificationEmail(user.email, verification.otp).catch((err: unknown) => {
     logger.warn({ err, email: user.email }, "[auth] No se pudo enviar correo de verificación");
   });
+
+  onNewMember({
+    userId: user.id,
+    userEmail: user.email,
+    userName: [user.profile?.firstName, user.profile?.lastName].filter(Boolean).join(" ") || user.email,
+  }).catch((err: unknown) => logger.warn({ err }, "[auth] new_member notification failed"));
 
   const token = signToken({ sub: user.id, role: user.role });
   setAuthCookie(res, token);

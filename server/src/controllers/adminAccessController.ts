@@ -15,6 +15,7 @@ import {
 import { sendWhatsappOtpCode, getEffectiveWhatsappMetaConfig, normalizePhone } from "../services/whatsappMetaService";
 import { stripe } from "../services/stripeService";
 import { sendDeleteUserOtpEmail, sendAdminInvitationEmail } from "../services/emailService";
+import { onNewMember } from "../services/notificationService";
 import { logger } from "../utils/logger";
 
 const MAX_OTP_ATTEMPTS = 5;
@@ -165,6 +166,14 @@ export const createAdminAccessUser = async (req: AuthRequest, res: Response) => 
       }).catch((err: unknown) => {
         logger.warn({ err, email }, "[admin] No se pudo enviar correo de invitación");
       });
+    }
+
+    if (role === "member") {
+      onNewMember({
+        userId: created.id,
+        userEmail: created.email,
+        userName: created.email,
+      }).catch((err: unknown) => logger.warn({ err }, "[admin-access] new_member notification failed"));
     }
 
     await createAuditLog({
