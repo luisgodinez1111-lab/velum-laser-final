@@ -26,6 +26,9 @@ interface AuthContextType {
   hasRole: (roles: UserRole[]) => boolean;
   mustChangePassword: boolean;
   clearMustChangePassword: () => void;
+  /** True when a new member should complete first-time onboarding */
+  needsOnboarding: boolean;
+  completeOnboarding: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -35,6 +38,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isSessionLoading, setIsSessionLoading] = useState(true);
   const [isActionLoading, setIsActionLoading] = useState(false);
   const [mustChangePassword, setMustChangePassword] = useState(false);
+  const [needsOnboarding, setNeedsOnboarding] = useState(false);
 
   useEffect(() => {
     authService.verifySession()
@@ -86,7 +90,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     [user]
   );
 
-  const clearMustChangePassword = useCallback(() => setMustChangePassword(false), []);
+  const clearMustChangePassword = useCallback(() => {
+    setMustChangePassword(false);
+    // New members created by admin need to complete first-time onboarding
+    setUser((prev) => {
+      if (prev?.role === 'member') setNeedsOnboarding(true);
+      return prev;
+    });
+  }, []);
+
+  const completeOnboarding = useCallback(() => setNeedsOnboarding(false), []);
 
   return (
     <AuthContext.Provider
@@ -102,6 +115,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         hasRole,
         mustChangePassword,
         clearMustChangePassword,
+        needsOnboarding,
+        completeOnboarding,
       }}
     >
       {children}

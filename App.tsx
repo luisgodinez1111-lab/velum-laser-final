@@ -7,6 +7,7 @@ import { ToastContainer } from './components/ToastContainer';
 import { AppErrorBoundary } from './components/AppErrorBoundary';
 import { PageSkeleton } from './components/PageSkeleton';
 import { ForcePasswordChange } from './components/ForcePasswordChange';
+import { MemberOnboardingFlow } from './components/MemberOnboardingFlow';
 import { useAuth } from './context/AuthContext';
 
 // Eager — critical for first paint
@@ -27,7 +28,7 @@ const CustomCharge      = lazy(() => import('./pages/CustomChargePage').then(m =
 const NotFound          = lazy(() => import('./pages/NotFound').then(m => ({ default: m.NotFound })));
 
 const InnerApp: React.FC = () => {
-  const { mustChangePassword } = useAuth();
+  const { mustChangePassword, needsOnboarding } = useAuth();
   return (
     <>
       <Router>
@@ -53,7 +54,10 @@ const InnerApp: React.FC = () => {
           </Layout>
         </AppErrorBoundary>
       </Router>
+      {/* ForcePasswordChange takes priority — shown first (z-[9999]) */}
       {mustChangePassword && <ForcePasswordChange />}
+      {/* After password is set, member-only onboarding appears (z-[9998]) */}
+      {!mustChangePassword && needsOnboarding && <MemberOnboardingFlow />}
     </>
   );
 };

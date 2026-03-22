@@ -37,8 +37,7 @@ export const createAuditLog = async ({
       resourceId,
       result,
       ip,
-      metadata,
-      metadataJson: metadata
+      metadata
     }
   });
 };

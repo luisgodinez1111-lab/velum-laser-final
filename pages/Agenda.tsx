@@ -362,7 +362,7 @@ export const Agenda: React.FC = () => {
     setIsOtpLoading(true);
     setOtpMessage(null);
     try {
-      await authService.resetPassword(otpEmail, otpCode, newPassword);
+      await authService.resetPassword(otpCode, newPassword);
       setOtpSuccess(true);
       setOtpMessage("¡Contraseña actualizada! Ya puedes iniciar sesión.");
       setTimeout(() => {

@@ -182,7 +182,6 @@ model AuditLog {
   result       String?
   ip           String?
   metadata     Json?
-  metadataJson Json?
   createdAt    DateTime @default(now())
   user         User?    @relation("AuditLogLegacy", fields: [userId], references: [id], onDelete: SetNull)
   actorUser    User?    @relation("AuditLogActor", fields: [actorUserId], references: [id], onDelete: SetNull)
