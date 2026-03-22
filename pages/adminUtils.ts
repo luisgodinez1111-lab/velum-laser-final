@@ -34,6 +34,17 @@ export const intakeStatusLabel = (status?: string) => {
   }
 };
 
+export const apptStatusLabel = (status?: string): { label: string; cls: string } => {
+  switch (status) {
+    case 'scheduled':  return { label: 'Agendada',   cls: 'bg-blue-50 text-blue-700 border-blue-200' };
+    case 'confirmed':  return { label: 'Confirmada', cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' };
+    case 'completed':  return { label: 'Completada', cls: 'bg-zinc-100 text-zinc-600 border-zinc-200' };
+    case 'canceled':   return { label: 'Cancelada',  cls: 'bg-red-50 text-red-600 border-red-200' };
+    case 'no_show':    return { label: 'No asistió', cls: 'bg-orange-50 text-orange-700 border-orange-200' };
+    default:           return { label: status ?? '—', cls: 'bg-zinc-100 text-zinc-600 border-zinc-200' };
+  }
+};
+
 export const riskOfMember = (member: Member): HealthFlag => {
   const status = member.subscriptionStatus;
   const consent = !!member.clinical?.consentFormSigned;

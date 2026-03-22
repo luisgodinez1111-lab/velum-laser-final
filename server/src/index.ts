@@ -62,6 +62,11 @@ app.use(cors({ origin: env.corsOrigin.split(","), credentials: true }));
 app.use(cookieParser());
 
 // ── Rate limiting ────────────────────────────────────────────────────
+// Login specifically: max 5 attempts per 15 min (brute-force protection)
+app.use(
+  "/auth/login",
+  rateLimit({ windowMs: 15 * 60 * 1000, limit: 5, standardHeaders: true, legacyHeaders: false, message: { message: "Demasiados intentos. Intenta de nuevo en 15 minutos." } })
+);
 app.use(
   "/auth",
   rateLimit({ windowMs: 10 * 60 * 1000, limit: 20, standardHeaders: true, legacyHeaders: false })

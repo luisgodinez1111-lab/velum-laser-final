@@ -48,6 +48,10 @@ import { AdminRiesgosSection } from "./AdminRiesgosSection";
 import { AdminCumplimientoSection } from "./AdminCumplimientoSection";
 import { AdminKPIsSection } from "./AdminKPIsSection";
 import { AdminFinanzasSection } from "./AdminFinanzasSection";
+import { AdminPanelSection } from "./AdminPanelSection";
+import { AdminSociasSection } from "./AdminSociasSection";
+import { AdminExpedientesSection } from "./AdminExpedientesSection";
+import { AdminPagosSection } from "./AdminPagosSection";
 import { useToast } from "../context/ToastContext";
 import { apiFetch } from "../services/apiClient";
 import {
@@ -2276,290 +2280,8 @@ export const Admin: React.FC = () => {
     );
   };
 
-  // ─── Section: Panel ───────────────────────────────────────────────────────
-
-  const renderPanel = () => {
-    const todayLabel = new Date().toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' });
-    const userName = user?.name || user?.email?.split('@')[0] || 'Admin';
-    const actionAlerts = controlAlerts.filter((a) => a.level !== 'ok');
-
-    return (
-      <div className="space-y-8">
-        {/* Greeting */}
-        <div>
-          <p className="text-xs text-velum-400 capitalize">{todayLabel}</p>
-          <h1 className="text-2xl font-serif text-velum-900 mt-0.5">Hola, {userName}</h1>
-        </div>
-
-        {/* 3 primary metrics — tappable shortcuts */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          {[
-            {
-              label: 'Socias activas',
-              value: analytics.sociosActivos,
-              sub: `de ${analytics.totalSocios} registradas`,
-              accent: 'text-velum-900',
-              section: 'socias' as AdminSection,
-            },
-            {
-              label: 'Citas hoy',
-              value: agendaSummary.appointmentsToday,
-              sub: `${agendaSummary.completedToday} completadas`,
-              accent: 'text-velum-900',
-              section: 'agenda' as AdminSection,
-            },
-            {
-              label: 'Expedientes pendientes',
-              value: analytics.expedientesPendientes,
-              sub: 'requieren revisión clínica',
-              accent: analytics.expedientesPendientes > 0 ? 'text-amber-600' : 'text-emerald-600',
-              section: 'expedientes' as AdminSection,
-            },
-          ].map(({ label, value, sub, accent, section }) => (
-            <button key={label} onClick={() => setActiveSection(section)}
-              className="bg-white rounded-2xl border border-velum-100 p-5 text-left hover:border-velum-300 hover:shadow-sm transition group">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-velum-400 mb-2">{label}</p>
-              <p className={`text-4xl font-serif font-bold ${accent}`}>{value}</p>
-              <p className="text-xs text-velum-400 mt-1.5 group-hover:text-velum-600 transition flex items-center gap-1">
-                {sub} <ArrowRight size={11} />
-              </p>
-            </button>
-          ))}
-        </div>
-
-        {/* Acciones urgentes — only shown when needed */}
-        {actionAlerts.length > 0 && (
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-widest text-velum-400 mb-3">Requieren atención</p>
-            <div className="space-y-2">
-              {actionAlerts.map((alert) => (
-                <div key={alert.id}
-                  className={`flex items-center gap-3 px-4 py-3 rounded-2xl border ${alert.level === 'warning' ? 'bg-amber-50 border-amber-200' : 'bg-red-50 border-red-200'}`}>
-                  <div className={`shrink-0 ${alert.level === 'warning' ? 'text-amber-500' : 'text-red-500'}`}>
-                    {alert.level === 'warning' ? <CircleAlert size={16} /> : <AlertTriangle size={16} />}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className={`text-sm font-semibold ${alert.level === 'warning' ? 'text-amber-900' : 'text-red-900'}`}>{alert.title}</p>
-                    <p className={`text-xs ${alert.level === 'warning' ? 'text-amber-700' : 'text-red-700'}`}>{alert.detail}</p>
-                  </div>
-                  {alert.section !== 'panel' && (
-                    <button onClick={() => {
-                      setActiveSection(alert.section);
-                      if (alert.section === 'ajustes') setSettingsCategory('auditoria');
-                    }}
-                      className={`shrink-0 text-xs font-medium px-3 py-1.5 rounded-xl transition
-                        ${alert.level === 'warning' ? 'bg-amber-100 text-amber-700 hover:bg-amber-200' : 'bg-red-100 text-red-700 hover:bg-red-200'}`}>
-                      Ver <ArrowRight size={11} className="inline ml-0.5" />
-                    </button>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Two-column: agenda de hoy + actividad reciente */}
-        <div className="grid lg:grid-cols-2 gap-6">
-          {/* Agenda de hoy */}
-          <div>
-            <div className="flex items-center justify-between mb-3">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-velum-400">Agenda de hoy</p>
-              <button onClick={() => setActiveSection('agenda')} className="text-xs text-velum-400 hover:text-velum-900 transition flex items-center gap-1">
-                Ver agenda <ArrowRight size={11} />
-              </button>
-            </div>
-            <div className="bg-white rounded-2xl border border-velum-100 overflow-hidden">
-              {dayAppointments.length === 0 ? (
-                <div className="py-10 text-center">
-                  <CalendarDays size={24} className="mx-auto text-velum-200 mb-2" />
-                  <p className="text-sm text-velum-400">Sin citas programadas hoy</p>
-                </div>
-              ) : (
-                <div className="divide-y divide-velum-50">
-                  {dayAppointments.slice(0, 6).map((appt) => {
-                    const m = memberById.get(appt.userId ?? '');
-                    const s = apptStatusLabel(appt.status);
-                    return (
-                      <div key={appt.id} className="flex items-center gap-3 px-4 py-3">
-                        <p className="text-xs font-mono text-velum-400 w-12 shrink-0">
-                          {new Date(appt.startAt).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}
-                        </p>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-velum-900 truncate">{m?.name || m?.email || 'Paciente'}</p>
-                        </div>
-                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${s.cls}`}>{s.label}</span>
-                      </div>
-                    );
-                  })}
-                  {dayAppointments.length > 6 && (
-                    <button onClick={() => setActiveSection('agenda')}
-                      className="w-full py-2.5 text-xs text-velum-400 hover:text-velum-700 hover:bg-velum-50 transition">
-                      +{dayAppointments.length - 6} más → Ver agenda completa
-                    </button>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Actividad reciente */}
-          <div>
-            <div className="flex items-center justify-between mb-3">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-velum-400">Actividad reciente</p>
-              <button onClick={() => { setActiveSection('ajustes'); setSettingsCategory('auditoria'); }}
-                className="text-xs text-velum-400 hover:text-velum-900 transition flex items-center gap-1">
-                Ver todo <ArrowRight size={11} />
-              </button>
-            </div>
-            <div className="bg-white rounded-2xl border border-velum-100 overflow-hidden">
-              {auditLogs.length === 0 ? (
-                <div className="py-10 text-center">
-                  <Activity size={24} className="mx-auto text-velum-200 mb-2" />
-                  <p className="text-sm text-velum-400">Sin actividad registrada</p>
-                </div>
-              ) : (
-                <div className="divide-y divide-velum-50">
-                  {auditLogs.slice(0, 6).map((log, i) => (
-                    <div key={log.id ?? i} className="flex items-center gap-3 px-4 py-2.5">
-                      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${log.status === 'success' ? 'bg-emerald-500' : 'bg-red-500'}`} />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-mono text-velum-600 truncate">{log.action}</p>
-                        <p className="text-[10px] text-velum-400">{log.user ?? '—'}</p>
-                      </div>
-                      <p className="text-[10px] text-velum-300 shrink-0 whitespace-nowrap">
-                        {new Date(log.timestamp).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  // ─── Section: Socios ──────────────────────────────────────────────────────
-
-  const renderSocios = () => (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-serif text-velum-900">Socias</h1>
-          <p className="text-sm text-velum-500 mt-1">{membersTotal || members.length} pacientes registradas</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <a
-            href="/api/admin/users/export"
-            download
-            className="flex items-center gap-2 border border-velum-200 text-velum-700 rounded-xl px-4 py-2.5 text-sm font-semibold hover:bg-velum-50 transition"
-          >
-            <Download size={15} />
-            Exportar CSV
-          </a>
-          <button
-            onClick={() => setPatientDrawerOpen(true)}
-            className="flex items-center gap-2 bg-velum-900 text-white rounded-xl px-4 py-2.5 text-sm font-semibold hover:bg-velum-800 transition"
-          >
-            <Plus size={15} />
-            Nuevo expediente
-          </button>
-        </div>
-      </div>
-      {/* Search + filters */}
-      <div className="flex flex-col sm:flex-row gap-3">
-        <div className="relative flex-1">
-          <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-velum-400" />
-          <input value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Buscar por nombre o correo..."
-            className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-velum-200 text-sm focus:outline-none focus:ring-2 focus:ring-velum-900/20 focus:border-velum-900 transition bg-white" />
-          {isSearchingServer && <RefreshCw size={13} className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-velum-400" />}
-        </div>
-        <div className="flex gap-2 flex-wrap">
-          {(['all', 'active', 'issue'] as const).map((f) => (
-            <button key={f} onClick={() => setStatusFilter(f)}
-              className={`px-3 py-2 rounded-xl text-xs font-medium transition ${statusFilter === f ? 'bg-velum-900 text-white' : 'bg-white border border-velum-200 text-velum-600 hover:bg-velum-50'}`}>
-              {f === 'all' ? 'Todos' : f === 'active' ? 'Activos' : 'Con incidencia'}
-            </button>
-          ))}
-        </div>
-      </div>
-      {/* Table */}
-      <div className="bg-white rounded-2xl border border-velum-100 overflow-hidden">
-        {displayedMembers.length === 0 ? (
-          <div className="py-16 text-center">
-            <Users size={32} className="mx-auto text-velum-200 mb-3" />
-            <p className="text-sm text-velum-400">No hay socios que coincidan con tu búsqueda</p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-velum-100 bg-velum-50/50">
-                  {['Nombre', 'Plan', 'Estado', 'Expediente', 'Riesgo', ''].map((h) => (
-                    <th key={h} className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-widest text-velum-400">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {displayedMembers.map((m, i) => {
-                  const risk = riskOfMember(m);
-                  const intake = intakeStatusLabel(m.intakeStatus);
-                  return (
-                    <tr key={m.id} className={`border-b border-velum-50 hover:bg-velum-50/60 transition cursor-pointer ${i === displayedMembers.length - 1 ? 'border-b-0' : ''}`}
-                      onClick={() => handleOpenMemberDrawer(m)}>
-                      <td className="px-4 py-3">
-                        <p className="font-medium text-velum-900">{m.name}</p>
-                        <p className="text-xs text-velum-400">{m.email}</p>
-                      </td>
-                      <td className="px-4 py-3 text-velum-600">{m.plan ?? '—'}</td>
-                      <td className="px-4 py-3"><Pill label={statusLabel(m.subscriptionStatus)} cls={statusPill(m.subscriptionStatus)} /></td>
-                      <td className="px-4 py-3"><Pill label={intake.label} cls={intake.cls} /></td>
-                      <td className="px-4 py-3">
-                        <span className={`inline-flex items-center gap-1.5 text-xs font-medium ${risk === 'ok' ? 'text-emerald-600' : risk === 'warning' ? 'text-amber-600' : 'text-red-600'}`}>
-                          <span className={`w-2 h-2 rounded-full ${risk === 'ok' ? 'bg-emerald-500' : risk === 'warning' ? 'bg-amber-400' : 'bg-red-500'}`} />
-                          {risk === 'ok' ? 'Normal' : risk === 'warning' ? 'Atención' : 'Crítico'}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <button className="text-velum-400 hover:text-velum-900 transition p-1 rounded-lg hover:bg-velum-100"><ArrowRight size={16} /></button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-
-      {/* Pagination */}
-      {tablePageCount > 1 && (
-        <div className="flex items-center justify-between">
-          <p className="text-xs text-velum-400">
-            {(tablePage - 1) * TABLE_PAGE_SIZE + 1}–{Math.min(tablePage * TABLE_PAGE_SIZE, filteredMembers.length)} de {filteredMembers.length}
-          </p>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setTablePage((p) => Math.max(1, p - 1))}
-              disabled={tablePage === 1}
-              className="flex items-center gap-1 px-3 py-1.5 rounded-xl border border-velum-200 text-sm text-velum-700 hover:bg-velum-50 disabled:opacity-40 disabled:cursor-not-allowed transition"
-            >
-              <ChevronLeft size={14} /> Anterior
-            </button>
-            <span className="text-xs text-velum-500 px-1">{tablePage} / {tablePageCount}</span>
-            <button
-              onClick={() => setTablePage((p) => Math.min(tablePageCount, p + 1))}
-              disabled={tablePage === tablePageCount}
-              className="flex items-center gap-1 px-3 py-1.5 rounded-xl border border-velum-200 text-sm text-velum-700 hover:bg-velum-50 disabled:opacity-40 disabled:cursor-not-allowed transition"
-            >
-              Siguiente <ChevronRight size={14} />
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
+  // renderPanel → AdminPanelSection
+  // renderSocios → AdminSociasSection
 
   // ─── Expediente viewer modal ───────────────────────────────────────────────
 
@@ -2771,120 +2493,7 @@ export const Admin: React.FC = () => {
     );
   };
 
-  // ─── Section: Expedientes ─────────────────────────────────────────────────
-
-  const renderExpedientes = () => {
-    const pendingApproval = members.filter((m) => m.intakeStatus === 'submitted');
-    const expStats = [
-      { label: 'Aprobados', value: members.filter((m) => m.intakeStatus === 'approved').length, cls: 'text-emerald-700' },
-      { label: 'Pendientes revisión', value: pendingApproval.length, cls: 'text-amber-600' },
-      { label: 'Rechazados', value: members.filter((m) => m.intakeStatus === 'rejected').length, cls: 'text-red-600' },
-      { label: 'Sin expediente', value: members.filter((m) => !m.intakeStatus || m.intakeStatus === 'draft').length, cls: 'text-velum-600' }
-    ];
-    return (
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-2xl font-serif text-velum-900">Expedientes clínicos</h1>
-          <p className="text-sm text-velum-500 mt-1">Gestión de fichas médicas y consentimientos</p>
-        </div>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          {expStats.map(({ label, value, cls }) => (
-            <div key={label} className="bg-white rounded-2xl border border-velum-100 p-5">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-velum-400 mb-2">{label}</p>
-              <p className={`text-3xl font-serif font-bold ${cls}`}>{value}</p>
-            </div>
-          ))}
-        </div>
-        {/* Pending queue */}
-        {pendingApproval.length > 0 && (
-          <div>
-            <h2 className="text-xs font-bold uppercase tracking-widest text-velum-500 mb-3">Cola de aprobación</h2>
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {pendingApproval.map((m) => (
-                <div key={m.id} className="bg-white rounded-2xl border border-amber-200 bg-amber-50/30 p-4 space-y-3">
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <p className="font-medium text-velum-900 text-sm">{m.name}</p>
-                      <p className="text-xs text-velum-500">{m.email}</p>
-                    </div>
-                    <button onClick={() => openIntakeModal(m)} className="text-[10px] font-bold uppercase tracking-widest text-velum-600 hover:text-velum-900 transition border border-velum-200 rounded-lg px-2 py-1 bg-white shrink-0">
-                      Ver expediente
-                    </button>
-                  </div>
-                  {intakeToReject === m.id ? (
-                    <div className="space-y-2">
-                      <textarea value={intakeRejectReason} onChange={(e) => setIntakeRejectReason(e.target.value)}
-                        placeholder="Motivo del rechazo (requerido)" rows={2}
-                        className="w-full rounded-xl border border-red-200 bg-red-50/30 px-3 py-2 text-xs resize-none focus:outline-none focus:ring-2 focus:ring-red-300 transition" />
-                      <div className="flex gap-2">
-                        <button onClick={() => handleApproveIntake(m.id, false)} disabled={!intakeRejectReason.trim() || isApprovingIntake === m.id}
-                          className="flex-1 bg-red-600 text-white rounded-xl py-1.5 text-xs font-medium hover:bg-red-700 transition disabled:opacity-50">Confirmar</button>
-                        <button onClick={() => { setIntakeToReject(null); setIntakeRejectReason(''); }}
-                          className="px-3 py-1.5 rounded-xl border border-velum-200 text-xs text-velum-600 hover:bg-velum-50 transition">Cancelar</button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="flex gap-2">
-                      <button onClick={() => handleApproveIntake(m.id, true)} disabled={isApprovingIntake === m.id}
-                        className="flex-1 bg-emerald-600 text-white rounded-xl py-2 text-xs font-medium hover:bg-emerald-700 transition disabled:opacity-50">
-                        {isApprovingIntake === m.id ? '...' : 'Aprobar'}
-                      </button>
-                      <button onClick={() => setIntakeToReject(m.id)}
-                        className="flex-1 border border-red-200 text-red-600 bg-red-50 rounded-xl py-2 text-xs font-medium hover:bg-red-100 transition">Rechazar</button>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-        {/* Full table */}
-        <div>
-          <h2 className="text-xs font-bold uppercase tracking-widest text-velum-500 mb-3">Todos los expedientes</h2>
-          <div className="bg-white rounded-2xl border border-velum-100 overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-velum-100 bg-velum-50/50">
-                    {['Socio', 'Consentimiento', 'Estado expediente', 'Docs', 'Acciones'].map((h) => (
-                      <th key={h} className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-widest text-velum-400">{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {members.map((m, i) => {
-                    const intake = intakeStatusLabel(m.intakeStatus);
-                    return (
-                      <tr key={m.id} className={`hover:bg-velum-50 transition ${i < members.length - 1 ? 'border-b border-velum-50' : ''}`}>
-                        <td className="px-4 py-3">
-                          <p className="font-medium text-velum-900">{m.name}</p>
-                          <p className="text-xs text-velum-400">{m.email}</p>
-                        </td>
-                        <td className="px-4 py-3">
-                          <span className={`inline-flex items-center gap-1 text-xs font-medium ${m.clinical?.consentFormSigned ? 'text-emerald-600' : 'text-velum-400'}`}>
-                            {m.clinical?.consentFormSigned ? <CheckCircle2 size={13} /> : <XCircle size={13} />}
-                            {m.clinical?.consentFormSigned ? 'Firmado' : 'Pendiente'}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3"><Pill label={intake.label} cls={intake.cls} /></td>
-                        <td className="px-4 py-3 text-velum-500">{m.clinical?.documents?.length ?? 0}</td>
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-3">
-                            <button onClick={() => openIntakeModal(m)} className="text-xs text-velum-900 font-semibold hover:underline transition">Ver expediente</button>
-                            <button onClick={() => handleOpenMemberDrawer(m)} className="text-xs text-velum-400 hover:text-velum-700 transition">Perfil</button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  };
+  // renderExpedientes → AdminExpedientesSection
 
   // ─── Section: Agenda ──────────────────────────────────────────────────────
 
@@ -3269,190 +2878,7 @@ export const Admin: React.FC = () => {
     }
   };
 
-  const renderPagos = () => {
-    const queue = analytics.collectionQueue;
-    const totalRisk = queue.reduce((acc, m) => acc + (m.amount ?? 0), 0);
-    return (
-      <div className="space-y-6">
-        <div className="flex items-start justify-between">
-          <div>
-            <h1 className="text-2xl font-serif text-velum-900">Pagos</h1>
-            <p className="text-sm text-velum-500 mt-1">Estado de cuentas y cobranza</p>
-          </div>
-          <button
-            onClick={() => void handleDownloadHistCSV()}
-            className="flex items-center gap-2 px-3 py-2 rounded-xl border border-velum-200 text-velum-600 text-xs font-medium hover:bg-velum-50 transition"
-          >
-            <Download size={13} />
-            Exportar CSV
-          </button>
-        </div>
-
-        {/* Métricas del servidor */}
-        {serverReports && (
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-widest text-velum-400 mb-3 flex items-center gap-2">
-              <BarChart3 size={11} /> Resumen del sistema
-            </p>
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-              <KpiCard icon={<Users size={18} />} label="Total usuarios" value={serverReports.users} />
-              <KpiCard icon={<CheckCircle2 size={18} />} label="Membresías activas" value={serverReports.activeMemberships} accent="text-emerald-700" />
-              <KpiCard icon={<AlertTriangle size={18} />} label="Pago vencido" value={serverReports.pastDueMemberships} accent={serverReports.pastDueMemberships > 0 ? 'text-red-600' : 'text-velum-900'} />
-              <KpiCard icon={<FileText size={18} />} label="Docs. pendientes" value={serverReports.pendingDocuments} accent={serverReports.pendingDocuments > 0 ? 'text-amber-600' : 'text-velum-900'} />
-            </div>
-          </div>
-        )}
-
-        <div>
-          <p className="text-[10px] font-bold uppercase tracking-widest text-velum-400 mb-3 flex items-center gap-2">
-            <HandCoins size={11} /> Cola de cobranza
-          </p>
-          <div className="grid grid-cols-3 gap-4">
-            <KpiCard icon={<HandCoins size={18} />} label="Por recuperar" value={queue.length} accent={queue.length > 0 ? 'text-red-600' : 'text-velum-900'} />
-            <KpiCard icon={<Wallet size={18} />} label="Monto en riesgo" value={formatMoney(totalRisk)} accent="text-amber-600" />
-            <KpiCard icon={<CheckCheck size={18} />} label="Activos" value={analytics.sociosActivos} accent="text-emerald-700" />
-          </div>
-        </div>
-        <div className="bg-white rounded-2xl border border-velum-100 overflow-hidden">
-          {queue.length === 0 ? (
-            <div className="py-16 text-center">
-              <CheckCircle2 size={32} className="mx-auto text-emerald-300 mb-3" />
-              <p className="text-sm text-velum-400">Sin cuentas en cobranza activa</p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-velum-100 bg-velum-50/50">
-                    {['Socio', 'Estado', 'Plan', 'Monto', 'Riesgo', 'Acciones'].map((h) => (
-                      <th key={h} className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-widest text-velum-400">{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {queue.map((m, i) => {
-                    const risk = riskOfMember(m);
-                    return (
-                      <tr key={m.id} className={`hover:bg-velum-50 transition ${i < queue.length - 1 ? 'border-b border-velum-50' : ''}`}>
-                        <td className="px-4 py-3">
-                          <p className="font-medium text-velum-900">{m.name}</p>
-                          <p className="text-xs text-velum-400">{m.email}</p>
-                        </td>
-                        <td className="px-4 py-3"><Pill label={statusLabel(m.subscriptionStatus)} cls={statusPill(m.subscriptionStatus)} /></td>
-                        <td className="px-4 py-3 text-velum-600">{m.plan ?? '—'}</td>
-                        <td className="px-4 py-3 font-medium text-velum-900">{m.amount ? formatMoney(m.amount) : '—'}</td>
-                        <td className="px-4 py-3">
-                          <span className={`inline-flex items-center gap-1.5 text-xs font-medium ${risk === 'critical' ? 'text-red-600' : 'text-amber-600'}`}>
-                            <span className={`w-2 h-2 rounded-full ${risk === 'critical' ? 'bg-red-500' : 'bg-amber-400'}`} />
-                            {risk === 'critical' ? 'Crítico' : 'Atención'}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="flex gap-2">
-                            <button onClick={() => handleUpdateMember(m.id, 'active')}
-                              className="text-xs px-2.5 py-1 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 transition">Regularizar</button>
-                            <button onClick={() => handleOpenMemberDrawer(m)}
-                              className="text-xs px-2.5 py-1 rounded-lg border border-velum-200 text-velum-600 hover:bg-velum-50 transition">Ver</button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-
-        {/* ── Historial de pagos ─────────────────────────────── */}
-        <div>
-          <p className="text-[10px] font-bold uppercase tracking-widest text-velum-400 mb-3 flex items-center gap-2">
-            <Wallet size={11} /> Historial de pagos
-          </p>
-          <div className="bg-white rounded-2xl border border-velum-100 p-4 space-y-3">
-            <div className="flex flex-wrap gap-2 items-end">
-              <div className="flex flex-col gap-1">
-                <label className="text-[10px] font-semibold text-velum-400 uppercase tracking-widest">Desde</label>
-                <input type="date" value={histDateFrom} onChange={e => setHistDateFrom(e.target.value)}
-                  className="rounded-xl border border-velum-200 px-3 py-1.5 text-sm text-velum-800 focus:outline-none focus:border-velum-400" />
-              </div>
-              <div className="flex flex-col gap-1">
-                <label className="text-[10px] font-semibold text-velum-400 uppercase tracking-widest">Hasta</label>
-                <input type="date" value={histDateTo} onChange={e => setHistDateTo(e.target.value)}
-                  className="rounded-xl border border-velum-200 px-3 py-1.5 text-sm text-velum-800 focus:outline-none focus:border-velum-400" />
-              </div>
-              <div className="flex flex-col gap-1">
-                <label className="text-[10px] font-semibold text-velum-400 uppercase tracking-widest">Estado</label>
-                <select value={histStatus} onChange={e => setHistStatus(e.target.value)}
-                  className="rounded-xl border border-velum-200 px-3 py-1.5 text-sm text-velum-800 focus:outline-none focus:border-velum-400">
-                  <option value="">Todos</option>
-                  <option value="paid">Pagado</option>
-                  <option value="pending">Pendiente</option>
-                  <option value="failed">Fallido</option>
-                  <option value="refunded">Reembolsado</option>
-                </select>
-              </div>
-              <button onClick={() => void loadHistPayments(1)} disabled={histLoading}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-velum-900 text-white text-xs font-semibold hover:bg-velum-800 transition disabled:opacity-50">
-                {histLoading ? <Loader2 size={13} className="animate-spin" /> : <Search size={13} />}
-                Buscar
-              </button>
-            </div>
-            {histError && (
-              <div className="flex items-center gap-2 p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs">
-                <AlertTriangle size={13} /> {histError}
-              </div>
-            )}
-            {!histLoaded && !histError ? (
-              <p className="text-center text-sm text-velum-400 py-6">Aplica filtros y presiona Buscar</p>
-            ) : !histError && histPayments.length === 0 ? (
-              <p className="text-center text-sm text-velum-400 py-6">Sin pagos en el rango seleccionado</p>
-            ) : !histError && (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-velum-100 bg-velum-50/50">
-                      {['Fecha', 'Usuario', 'Monto', 'Divisa', 'Estado', 'Pagado en'].map(h => (
-                        <th key={h} className="px-3 py-2.5 text-left text-[10px] font-bold uppercase tracking-widest text-velum-400">{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {histPayments.map((p: any, i: number) => (
-                      <tr key={p.id} className={`hover:bg-velum-50 transition ${i < histPayments.length - 1 ? 'border-b border-velum-50' : ''}`}>
-                        <td className="px-3 py-2.5 text-velum-500 text-xs">{new Date(p.createdAt).toLocaleDateString('es-MX')}</td>
-                        <td className="px-3 py-2.5"><p className="font-medium text-velum-900 text-xs">{p.user?.email ?? '—'}</p></td>
-                        <td className="px-3 py-2.5 font-semibold text-velum-900">{p.amount != null ? formatMoney(p.amount) : '—'}</td>
-                        <td className="px-3 py-2.5 text-velum-500 uppercase text-xs">{p.currency ?? '—'}</td>
-                        <td className="px-3 py-2.5">
-                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                            p.status === 'paid' ? 'bg-emerald-50 text-emerald-700' :
-                            p.status === 'failed' ? 'bg-red-50 text-red-600' :
-                            p.status === 'refunded' ? 'bg-blue-50 text-blue-600' :
-                            'bg-amber-50 text-amber-700'
-                          }`}>{p.status}</span>
-                        </td>
-                        <td className="px-3 py-2.5 text-velum-500 text-xs">{p.paidAt ? new Date(p.paidAt).toLocaleDateString('es-MX') : '—'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                <div className="flex items-center justify-between mt-3 px-1">
-                  <p className="text-[11px] text-velum-400">{histTotal} registro{histTotal !== 1 ? 's' : ''} · página {histPage} de {histPages}</p>
-                  <div className="flex gap-1">
-                    <button onClick={() => void loadHistPayments(histPage - 1)} disabled={histPage <= 1 || histLoading}
-                      className="px-2.5 py-1 rounded-lg border border-velum-200 text-xs text-velum-600 hover:bg-velum-50 disabled:opacity-40 transition">‹ Anterior</button>
-                    <button onClick={() => void loadHistPayments(histPage + 1)} disabled={histPage >= histPages || histLoading}
-                      className="px-2.5 py-1 rounded-lg border border-velum-200 text-xs text-velum-600 hover:bg-velum-50 disabled:opacity-40 transition">Siguiente ›</button>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-    );
-  };
+  // renderPagos → AdminPagosSection
 
   // renderRiesgos y renderCumplimiento → AdminRiesgosSection / AdminCumplimientoSection
 
@@ -3896,11 +3322,75 @@ export const Admin: React.FC = () => {
       );
     }
     switch (activeSection) {
-      case 'panel':        return renderPanel();
-      case 'socias':       return renderSocios();
+      case 'panel':        return (
+        <AdminPanelSection
+          userName={user?.name || user?.email?.split('@')[0] || 'Admin'}
+          analytics={analytics}
+          agendaSummary={agendaSummary}
+          controlAlerts={controlAlerts}
+          dayAppointments={dayAppointments}
+          memberById={memberById}
+          auditLogs={auditLogs}
+          onNavigate={(section) => setActiveSection(section)}
+          onNavigateToAudit={() => { setActiveSection('ajustes'); setSettingsCategory('auditoria'); }}
+        />
+      );
+      case 'socias':       return (
+        <AdminSociasSection
+          members={members}
+          displayedMembers={displayedMembers}
+          filteredMembers={filteredMembers}
+          membersTotal={membersTotal}
+          tablePage={tablePage}
+          tablePageCount={tablePageCount}
+          tablePageSize={TABLE_PAGE_SIZE}
+          searchTerm={searchTerm}
+          statusFilter={statusFilter}
+          isSearchingServer={isSearchingServer}
+          onSearch={(term) => setSearchTerm(term)}
+          onFilter={(f) => setStatusFilter(f)}
+          onPageChange={(p) => setTablePage(p)}
+          onOpenMember={handleOpenMemberDrawer}
+          onNewPatient={() => setPatientDrawerOpen(true)}
+        />
+      );
       case 'agenda':       return renderAgenda();
-      case 'expedientes':  return renderExpedientes();
-      case 'pagos':        return renderPagos();
+      case 'expedientes':  return (
+        <AdminExpedientesSection
+          members={members}
+          intakeToReject={intakeToReject}
+          intakeRejectReason={intakeRejectReason}
+          isApprovingIntake={isApprovingIntake}
+          onOpenIntake={openIntakeModal}
+          onApprove={handleApproveIntake}
+          onOpenMember={handleOpenMemberDrawer}
+          onSetReject={setIntakeToReject}
+          onSetRejectReason={setIntakeRejectReason}
+        />
+      );
+      case 'pagos':        return (
+        <AdminPagosSection
+          analytics={analytics}
+          serverReports={serverReports}
+          histPayments={histPayments}
+          histTotal={histTotal}
+          histPage={histPage}
+          histPages={histPages}
+          histLoading={histLoading}
+          histLoaded={histLoaded}
+          histError={histError}
+          histDateFrom={histDateFrom}
+          histDateTo={histDateTo}
+          histStatus={histStatus}
+          onDateFromChange={setHistDateFrom}
+          onDateToChange={setHistDateTo}
+          onStatusChange={setHistStatus}
+          onSearch={(page) => void loadHistPayments(page)}
+          onDownloadCSV={() => void handleDownloadHistCSV()}
+          onOpenMember={handleOpenMemberDrawer}
+          onRegularize={(id, status) => handleUpdateMember(id, status)}
+        />
+      );
       case 'kpis':         return (
         <AdminKPIsSection analytics={analytics} planBreakdown={planBreakdown} />
       );

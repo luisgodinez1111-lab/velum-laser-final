@@ -294,6 +294,15 @@ export const Dashboard: React.FC = () => {
       } catch { /* silent */ }
     };
     void load();
+
+    // Poll unread count every 60s to keep badge fresh
+    const pollInterval = setInterval(async () => {
+      try {
+        const nc = await apiFetch<{ count: number }>("/v1/notifications/unread-count");
+        setInAppUnread(nc?.count ?? 0);
+      } catch { /* silent */ }
+    }, 60_000);
+    return () => clearInterval(pollInterval);
   }, [isAuthLoading, isAuthenticated, navigate, user?.email, user?.id, user?.role]);
 
   // Detect Stripe checkout return URLs
