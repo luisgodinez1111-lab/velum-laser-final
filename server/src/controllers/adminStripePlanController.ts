@@ -1,6 +1,7 @@
 import { Response } from "express";
 import { AuthRequest } from "../middlewares/auth";
 import { readStripePlanCatalog, saveStripePlanCatalog, StripePlanMapping } from "../services/stripePlanCatalogService";
+import { logger } from "../utils/logger";
 
 const isAdmin = (req: AuthRequest): boolean => {
   const role = req.user?.role ?? "";
@@ -29,7 +30,7 @@ export const getAdminStripePlans = async (req: AuthRequest, res: Response) => {
     const plans = await readStripePlanCatalog();
     return res.json({ plans });
   } catch (error: any) {
-    console.error("getAdminStripePlans error:", error);
+    logger.error({ err: error }, "getAdminStripePlans error");
     return res.status(500).json({ message: "No se pudieron obtener planes Stripe" });
   }
 };
@@ -53,7 +54,7 @@ export const updateAdminStripePlans = async (req: AuthRequest, res: Response) =>
       plans: saved,
     });
   } catch (error: any) {
-    console.error("updateAdminStripePlans error:", error);
+    logger.error({ err: error }, "updateAdminStripePlans error");
     return res.status(500).json({ message: "No se pudieron guardar planes Stripe", detail: error?.message ?? "unknown" });
   }
 };

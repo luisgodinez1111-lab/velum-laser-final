@@ -80,6 +80,27 @@ export const listMySessions = async (req: AuthRequest, res: Response) => {
   return res.json(sessions);
 };
 
+export const adminListSessions = async (req: AuthRequest, res: Response) => {
+  const userId = typeof req.query.userId === "string" ? req.query.userId : undefined;
+  const appointmentId = typeof req.query.appointmentId === "string" ? req.query.appointmentId : undefined;
+
+  const sessions = await prisma.sessionTreatment.findMany({
+    where: {
+      ...(userId ? { userId } : {}),
+      ...(appointmentId ? { appointmentId } : {})
+    },
+    include: {
+      appointment: { select: { id: true, startAt: true, status: true } },
+      staffUser: { select: { id: true, email: true, profile: { select: { firstName: true, lastName: true } } } },
+      user: { select: { id: true, email: true, profile: { select: { firstName: true, lastName: true } } } }
+    },
+    orderBy: { createdAt: "desc" },
+    take: 200
+  });
+
+  return res.json(sessions);
+};
+
 export const addSessionFeedback = async (req: AuthRequest, res: Response) => {
   const payload = sessionFeedbackSchema.parse(req.body);
 

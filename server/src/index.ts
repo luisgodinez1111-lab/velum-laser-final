@@ -10,7 +10,6 @@ import { userRoutes } from "./routes/userRoutes";
 import { membershipRoutes } from "./routes/membershipRoutes";
 import { documentRoutes } from "./routes/documentRoutes";
 import { adminRoutes } from "./routes/adminRoutes";
-import { stripeRoutes } from "./routes/stripeRoutes";
 import { v1LeadRoutes } from "./routes/v1LeadRoutes";
 import { v1MedicalIntakeRoutes } from "./routes/v1MedicalIntakeRoutes";
 import { v1AppointmentRoutes } from "./routes/v1AppointmentRoutes";
@@ -126,9 +125,6 @@ app.use(adminStripeConfigRoutes);
 app.use(billingCheckoutRoutes);
 app.use(customChargeRoutes);
 app.use(notificationRoutes);
-
-// ── Stripe legacy (mantenido por compatibilidad con webhooks existentes)
-app.use(stripeRoutes);
 
 // ── Error handler (siempre último) ───────────────────────────────────
 app.use(errorHandler);

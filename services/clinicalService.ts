@@ -394,7 +394,11 @@ export const clinicalService = {
   },
 
   getMemberSessions: async (userId: string): Promise<SessionTreatment[]> => {
-    return apiFetch<SessionTreatment[]>(`/v1/sessions/me?userId=${encodeURIComponent(userId)}`);
+    return apiFetch<SessionTreatment[]>(`/v1/sessions/admin?userId=${encodeURIComponent(userId)}`);
+  },
+
+  getSessionsByAppointment: async (appointmentId: string): Promise<SessionTreatment[]> => {
+    return apiFetch<SessionTreatment[]>(`/v1/sessions/admin?appointmentId=${encodeURIComponent(appointmentId)}`);
   },
 
   getMedicalIntakeByUserId: async (userId: string): Promise<MedicalIntake> => {

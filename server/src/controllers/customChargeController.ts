@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import { AuthRequest } from "../middlewares/auth";
 import { prisma } from "../db/prisma";
 import { resolveStripeConfig } from "../services/stripeConfigService";
+import { resolveBaseUrl } from "../utils/baseUrl";
 import {
   createCustomCharge,
   verifyCustomChargeOtp,
@@ -17,14 +18,6 @@ import {
 
 const asString = (v: unknown): string => (typeof v === "string" ? v.trim() : "");
 
-const resolveBaseUrl = (req: Request): string => {
-  const fromEnv = asString(process.env.STRIPE_CHECKOUT_BASE_URL);
-  if (fromEnv) return fromEnv.replace(/\/+$/, "");
-  const proto = asString(req.headers["x-forwarded-proto"]) || req.protocol || "https";
-  const host = asString(req.headers["x-forwarded-host"]) || asString(req.headers.host);
-  if (host) return `${proto}://${host}`.replace(/\/+$/, "");
-  return "https://velumlaser.com";
-};
 
 const INTERVAL_LABELS: Record<string, string> = {
   day: "diario", week: "semanal", month: "mensual", year: "anual",
@@ -88,7 +81,7 @@ export const createCharge = async (req: AuthRequest, res: Response) => {
     interval,
   });
 
-  const base = resolveBaseUrl(req);
+  const base = resolveBaseUrl();
   const name = [user.profile?.firstName, user.profile?.lastName].filter(Boolean).join(" ") || user.email;
 
   try {
@@ -154,7 +147,7 @@ export const resendOtp = async (req: AuthRequest, res: Response) => {
   const { charge, otp } = result as { charge: any; otp: string };
   const user = charge.user;
   const name = [user?.profile?.firstName, user?.profile?.lastName].filter(Boolean).join(" ") || user?.email;
-  const base = resolveBaseUrl(req);
+  const base = resolveBaseUrl();
 
   try {
     await sendCustomChargeOtpEmail(user.email, {
@@ -235,7 +228,7 @@ export const verifyOtpAndCheckout = async (req: Request, res: Response) => {
   const secret = stripe.config.secretKey;
   if (!secret) return res.status(400).json({ message: "Stripe no configurado en el sistema" });
 
-  const base = resolveBaseUrl(req);
+  const base = resolveBaseUrl();
   const successUrl = `${base}/#/custom-charge/${id}?payment=success`;
   const cancelUrl = `${base}/#/custom-charge/${id}?payment=cancelled`;
 

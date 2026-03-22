@@ -3,17 +3,10 @@ import { AuthRequest } from "../middlewares/auth";
 import { prisma } from "../db/prisma";
 import { resolveStripeConfig } from "../services/stripeConfigService";
 import { findActivePlanByCode } from "../services/stripePlanCatalogService";
+import { resolveBaseUrl } from "../utils/baseUrl";
+import { logger } from "../utils/logger";
 
 const asString = (v: unknown): string => (typeof v === "string" ? v.trim() : "");
-
-const resolveBaseUrl = (req: AuthRequest): string => {
-  const fromEnv = asString(process.env.STRIPE_CHECKOUT_BASE_URL);
-  if (fromEnv) return fromEnv.replace(/\/+$/, "");
-  const proto = asString(req.headers["x-forwarded-proto"]) || req.protocol || "https";
-  const host = asString(req.headers["x-forwarded-host"]) || asString(req.headers.host);
-  if (host) return `${proto}://${host}`.replace(/\/+$/, "");
-  return "https://velumlaser.com";
-};
 
 export const createBillingCheckout = async (req: AuthRequest, res: Response) => {
   try {
@@ -61,7 +54,7 @@ export const createBillingCheckout = async (req: AuthRequest, res: Response) => 
       }
     }
 
-    const base = resolveBaseUrl(req);
+    const base = resolveBaseUrl();
     const successUrl = `${base}/#/dashboard?checkout=success&plan=${encodeURIComponent(plan.planCode)}`;
     const cancelUrl = `${base}/#/dashboard?checkout=cancelled&plan=${encodeURIComponent(plan.planCode)}`;
 
@@ -104,7 +97,7 @@ export const createBillingCheckout = async (req: AuthRequest, res: Response) => 
       checkoutUrl: json?.url || "",
     });
   } catch (error: any) {
-    console.error("createBillingCheckout error:", error);
+    logger.error({ err: error }, "createBillingCheckout error");
     return res.status(500).json({ message: "Error creando checkout", detail: error?.message ?? "unknown" });
   }
 };
@@ -125,7 +118,7 @@ export const createBillingPortal = async (req: AuthRequest, res: Response) => {
     const secret = stripe.config.secretKey;
     if (!secret) return res.status(400).json({ message: "Stripe no configurado (falta STRIPE_SECRET_KEY)" });
 
-    const base = resolveBaseUrl(req);
+    const base = resolveBaseUrl();
     const returnUrl = `${base}/#/dashboard`;
 
     const params = new URLSearchParams();
@@ -150,7 +143,7 @@ export const createBillingPortal = async (req: AuthRequest, res: Response) => {
 
     return res.json({ url: json?.url || "" });
   } catch (error: any) {
-    console.error("createBillingPortal error:", error);
+    logger.error({ err: error }, "createBillingPortal error");
     return res.status(500).json({ message: "Error abriendo portal", detail: error?.message ?? "unknown" });
   }
 };

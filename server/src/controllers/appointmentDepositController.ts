@@ -2,18 +2,13 @@ import { Response } from "express";
 import { AuthRequest } from "../middlewares/auth";
 import { prisma } from "../db/prisma";
 import { resolveStripeConfig } from "../services/stripeConfigService";
+import { resolveBaseUrl } from "../utils/baseUrl";
 
 const asString = (v: unknown): string => (typeof v === "string" ? v.trim() : "");
 
 // Configurable via env — default $200 MXN = 20000 centavos
 const DEPOSIT_AMOUNT_CENTS = Number(process.env.DEPOSIT_AMOUNT_CENTS ?? 20000);
 
-// SSRF-safe: only reads from environment, never from request headers
-const resolveBaseUrl = (): string => {
-  const fromEnv = asString(process.env.STRIPE_CHECKOUT_BASE_URL);
-  if (fromEnv) return fromEnv.replace(/\/+$/, "");
-  return "https://velumlaser.com";
-};
 
 interface DepositBody {
   startAt?: unknown;
