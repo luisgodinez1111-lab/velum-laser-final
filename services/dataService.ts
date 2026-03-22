@@ -140,6 +140,17 @@ export const documentService = {
       method: "POST",
       body: JSON.stringify({ signature })
     });
+  },
+  downloadDocument: async (docId: string, filename: string): Promise<void> => {
+    const resp = await fetch(`/api/documents/${docId}`, { credentials: "include" });
+    if (!resp.ok) throw new Error("No se pudo descargar el documento");
+    const blob = await resp.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
   }
 };
 

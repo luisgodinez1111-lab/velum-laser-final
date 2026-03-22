@@ -25,7 +25,8 @@ import {
   User,
   X,
   Zap,
-  ClipboardList
+  ClipboardList,
+  Download
 } from "lucide-react";
 import { Button } from "../components/Button";
 import { SignaturePad } from "../components/SignaturePad";
@@ -996,7 +997,14 @@ export const Dashboard: React.FC = () => {
                         <span className="text-[14px] font-medium text-velum-800">{doc.title}</span>
                       </div>
                       {doc.signed
-                        ? <span className="flex items-center gap-1.5 text-[11px] font-bold text-emerald-700"><CheckCircle size={13} /> Firmado</span>
+                        ? <div className="flex items-center gap-2">
+                            <span className="flex items-center gap-1.5 text-[11px] font-bold text-emerald-700"><CheckCircle size={13} /> Firmado</span>
+                            <button
+                              onClick={() => documentService.downloadDocument(doc.id, doc.title + ".pdf").catch(() => toast.error("No se pudo descargar el documento"))}
+                              className={`flex items-center gap-1 rounded-xl border border-velum-200 text-velum-600 text-[11px] font-semibold px-2.5 py-1 hover:bg-velum-50 transition-colors ${pressBtn}`}
+                              title="Descargar"
+                            ><Download size={12} /> Descargar</button>
+                          </div>
                         : <button onClick={() => initiateSigning(doc)} className={`rounded-xl bg-velum-900 text-white text-[12px] font-semibold px-3 py-1.5 hover:bg-velum-800 transition-colors ${pressBtn}`}>Firmar</button>
                       }
                     </div>
