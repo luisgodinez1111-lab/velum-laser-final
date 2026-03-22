@@ -23,6 +23,7 @@ const typeIcon: Record<string, string> = {
   appointment_deposit_paid:"📅",
   membership_activated:    "⭐",
   membership_renewed:      "🔄",
+  membership_past_due:     "⚠️",
   new_member:              "👤",
 };
 

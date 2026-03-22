@@ -6,6 +6,7 @@ import {
   onCustomChargePaid,
   onAppointmentDepositPaid,
   onMembershipActivated,
+  onMembershipPaymentFailed,
 } from "./notificationService";
 
 type JsonObject = Record<string, unknown>;
@@ -635,21 +636,35 @@ const processInvoiceEvent = async (event: Stripe.Event, stripe: Stripe, success:
     currency: cleanString(invoice.currency) || null,
   });
 
-  // Notify user + admins on invoice paid (renewal)
-  if (success && userId) {
+  // Notify user + admins on invoice paid (renewal) or failed
+  if (userId) {
     const invoiceUser = await prisma.user.findUnique({
       where: { id: userId },
       select: { email: true, profile: { select: { firstName: true, lastName: true } } },
     }).catch(() => null);
     if (invoiceUser) {
       const invoiceName = [invoiceUser.profile?.firstName, invoiceUser.profile?.lastName].filter(Boolean).join(" ") || invoiceUser.email;
-      onMembershipActivated({
-        userId,
-        userEmail: invoiceUser.email,
-        userName: invoiceName,
-        planCode: subCtx?.planCode,
-        isRenewal: true,
-      }).catch((err) => logger.error({ err }, "[stripe-webhook] membership_renewed notification failed"));
+      if (success) {
+        onMembershipActivated({
+          userId,
+          userEmail: invoiceUser.email,
+          userName: invoiceName,
+          planCode: subCtx?.planCode,
+          isRenewal: true,
+        }).catch((err) => logger.error({ err }, "[stripe-webhook] membership_renewed notification failed"));
+      } else {
+        const amountDue = centsToMajor(invoice.amount_due);
+        const amountFormatted = amountDue !== null
+          ? new Intl.NumberFormat("es-MX", { style: "currency", currency: (cleanString(invoice.currency) || "mxn").toUpperCase() }).format(amountDue)
+          : "—";
+        onMembershipPaymentFailed({
+          userId,
+          userEmail: invoiceUser.email,
+          userName: invoiceName,
+          amountFormatted,
+          planCode: subCtx?.planCode,
+        }).catch((err) => logger.error({ err }, "[stripe-webhook] membership_past_due notification failed"));
+      }
     }
   }
 

@@ -59,7 +59,7 @@ import {
   googleCalendarIntegrationService
 } from '../services/googleCalendarIntegrationService';
 
-type AdminSection = 'panel' | 'socias' | 'agenda' | 'expedientes' | 'ajustes';
+type AdminSection = 'panel' | 'socias' | 'agenda' | 'expedientes' | 'pagos' | 'ajustes';
 
 type HealthFlag = 'ok' | 'warning' | 'critical';
 
@@ -101,10 +101,11 @@ const sectionMeta: Record<AdminSection, { label: string; icon: React.ComponentTy
   socias:      { label: 'Socias',       icon: Users },
   agenda:      { label: 'Agenda',       icon: CalendarDays },
   expedientes: { label: 'Expedientes',  icon: FolderOpen },
+  pagos:       { label: 'Pagos',        icon: Wallet },
   ajustes:     { label: 'Ajustes',      icon: Settings },
 };
 
-const NAV_SECTIONS: AdminSection[] = ['panel', 'socias', 'agenda', 'expedientes', 'ajustes'];
+const NAV_SECTIONS: AdminSection[] = ['panel', 'socias', 'agenda', 'expedientes', 'pagos', 'ajustes'];
 
 const allowedRoles: UserRole[] = ['admin', 'staff', 'system'];
 
@@ -158,6 +159,7 @@ const AdminSidebarContent: React.FC<AdminSidebarProps> = ({
         const badge =
           section === 'expedientes' ? members.filter((m) => m.intakeStatus === 'submitted').length
           : section === 'socias'    ? members.filter((m) => riskOfMember(m) !== 'ok').length
+          : section === 'pagos'     ? members.filter((m) => ['past_due', 'paused', 'inactive', 'canceled'].includes(m.subscriptionStatus ?? '')).length
           : 0;
         return (
           <button
@@ -345,6 +347,7 @@ export const Admin: React.FC = () => {
   const [memberSessions, setMemberSessions] = useState<SessionTreatment[]>([]);
   const [isLoadingSessions, setIsLoadingSessions] = useState(false);
   const [memberAppointments, setMemberAppointments] = useState<Appointment[]>([]);
+  const [memberPayments, setMemberPayments] = useState<any[]>([]);
   const [isLoadingMemberHistory, setIsLoadingMemberHistory] = useState(false);
 
   // Drawer: deactivate / delete with OTP
@@ -637,15 +640,18 @@ export const Admin: React.FC = () => {
   const loadMemberHistory = async (member: Member) => {
     setIsLoadingMemberHistory(true);
     try {
-      const [sessions, appointments] = await Promise.all([
+      const [sessions, appointments, paymentsData] = await Promise.all([
         clinicalService.getMemberSessions(member.id),
-        clinicalService.listAppointments({ userId: member.id })
+        clinicalService.listAppointments({ userId: member.id }),
+        apiFetch<any[]>(`/v1/payments?userId=${encodeURIComponent(member.id)}`).catch(() => [])
       ]);
       setMemberSessions(sessions);
       setMemberAppointments(appointments);
+      setMemberPayments(paymentsData ?? []);
     } catch {
       setMemberSessions([]);
       setMemberAppointments([]);
+      setMemberPayments([]);
     } finally {
       setIsLoadingMemberHistory(false);
     }
@@ -1815,6 +1821,18 @@ export const Admin: React.FC = () => {
               </div>
             ))}
           </div>
+          {/* Payment status banner */}
+          <div className={`mx-4 mt-3 mb-0 px-4 py-2.5 rounded-xl flex items-center gap-2 border ${mem.subscriptionStatus === 'active' ? 'bg-emerald-50 border-emerald-200' : 'bg-red-50 border-red-200'}`}>
+            <span className={`w-2 h-2 rounded-full shrink-0 ${mem.subscriptionStatus === 'active' ? 'bg-emerald-500' : 'bg-red-500'}`} />
+            <span className={`text-sm font-semibold ${mem.subscriptionStatus === 'active' ? 'text-emerald-800' : 'text-red-800'}`}>
+              {mem.subscriptionStatus === 'active' ? 'Al corriente' : 'Pago vencido / no regularizada'}
+            </span>
+            {mem.nextBillingDate && (
+              <span className="text-xs text-velum-400 ml-auto shrink-0">
+                {mem.subscriptionStatus === 'active' ? 'Renueva:' : 'Desde:'} {mem.nextBillingDate}
+              </span>
+            )}
+          </div>
           {/* Scrollable body */}
           <div className="flex-1 overflow-y-auto">
             {/* Acciones */}
@@ -2028,6 +2046,35 @@ export const Admin: React.FC = () => {
                     );
                   })}
                   {memberAppointments.length > 5 && <p className="text-[11px] text-velum-400 text-center">+{memberAppointments.length - 5} más</p>}
+                </div>
+              )}
+            </div>
+            {/* Pagos */}
+            <div className="p-4 border-b border-velum-100">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-velum-400 mb-3">Historial de pagos</p>
+              {isLoadingMemberHistory ? (
+                <div className="space-y-2">{[1,2].map(i => <div key={i} className="h-10 bg-velum-100 rounded-xl animate-pulse" />)}</div>
+              ) : memberPayments.length === 0 ? (
+                <p className="text-xs text-velum-400 text-center py-4">Sin pagos registrados</p>
+              ) : (
+                <div className="space-y-2">
+                  {memberPayments.slice(0, 6).map((p: any) => (
+                    <div key={p.id} className="flex items-center justify-between p-2.5 rounded-xl bg-velum-50">
+                      <div>
+                        <p className="text-xs font-medium text-velum-900">
+                          {new Date(p.createdAt).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })}
+                        </p>
+                        <p className="text-[11px] text-velum-500">{p.concept ?? p.description ?? p.membership?.planId ?? '—'}</p>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <p className="text-xs font-semibold text-velum-900">{p.amount ? formatMoney(p.amount) : '—'}</p>
+                        <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full border ${p.status === 'paid' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : p.status === 'failed' ? 'bg-red-50 text-red-600 border-red-200' : 'bg-amber-50 text-amber-600 border-amber-200'}`}>
+                          {p.status === 'paid' ? 'Pagado' : p.status === 'failed' ? 'Fallido' : p.status === 'refunded' ? 'Reembolsado' : 'Pendiente'}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                  {memberPayments.length > 6 && <p className="text-[11px] text-velum-400 text-center">+{memberPayments.length - 6} más</p>}
                 </div>
               )}
             </div>
@@ -3110,16 +3157,16 @@ export const Admin: React.FC = () => {
     );
   };
 
-  // ─── Section: Cobranza ────────────────────────────────────────────────────
+  // ─── Section: Pagos ───────────────────────────────────────────────────────
 
-  const renderCobranza = () => {
+  const renderPagos = () => {
     const queue = analytics.collectionQueue;
     const totalRisk = queue.reduce((acc, m) => acc + (m.amount ?? 0), 0);
     return (
       <div className="space-y-6">
         <div>
-          <h1 className="text-2xl font-serif text-velum-900">Cobranza</h1>
-          <p className="text-sm text-velum-500 mt-1">Pipeline de recuperación de cuentas</p>
+          <h1 className="text-2xl font-serif text-velum-900">Pagos</h1>
+          <p className="text-sm text-velum-500 mt-1">Estado de cuentas y cobranza</p>
         </div>
         <div className="grid grid-cols-3 gap-4">
           <KpiCard icon={<HandCoins size={18} />} label="Por recuperar" value={queue.length} accent={queue.length > 0 ? 'text-red-600' : 'text-velum-900'} />
@@ -3629,6 +3676,7 @@ export const Admin: React.FC = () => {
       case 'socias':       return renderSocios();
       case 'agenda':       return renderAgenda();
       case 'expedientes':  return renderExpedientes();
+      case 'pagos':        return renderPagos();
       case 'ajustes':      return renderConfiguraciones();
       default:             return null;
     }

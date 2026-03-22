@@ -14,6 +14,7 @@ export type NotificationType =
   | "appointment_deposit_paid"
   | "membership_activated"
   | "membership_renewed"
+  | "membership_past_due"
   | "new_member";
 
 export interface CreateNotificationParams {
@@ -329,6 +330,48 @@ export const onNewMember = async (params: {
     title: "Nuevo paciente registrado",
     body: `<strong>${params.userName}</strong> (${params.userEmail}) acaba de registrarse en la plataforma de Velum Laser.`,
   }).catch((err) => logger.error({ err }, "[notifications] email new_member (admin) failed"));
+};
+
+/** Invoice payment failed → notify user + admins (in-app + email) */
+export const onMembershipPaymentFailed = async (params: {
+  userId: string;
+  userEmail: string;
+  userName: string;
+  amountFormatted: string;
+  planCode?: string | null;
+}) => {
+  // User in-app
+  await createNotification({
+    userId: params.userId,
+    type: "membership_past_due",
+    title: "Pago de membresía fallido",
+    body: `No pudimos procesar tu pago de ${params.amountFormatted}. Por favor actualiza tu método de pago.`,
+    data: { planCode: params.planCode },
+  });
+
+  // User email
+  sendNotificationEmail(params.userEmail, {
+    name: params.userName,
+    subject: "Problema con tu pago — Velum Laser",
+    title: "Pago de membresía no procesado",
+    body: `Hola <strong>${params.userName}</strong>, no pudimos procesar tu pago de <strong>${params.amountFormatted}</strong>${params.planCode ? ` del plan <strong>${params.planCode}</strong>` : ""}. Para continuar disfrutando de tus beneficios, por favor actualiza tu método de pago en Stripe.`,
+    ctaLabel: "Actualizar método de pago",
+    ctaUrl: `${process.env.STRIPE_CHECKOUT_BASE_URL ?? ""}/#/memberships`,
+  }).catch((err) => logger.error({ err }, "[notifications] email membership_past_due (user) failed"));
+
+  // Admins in-app + email
+  await notifyAdmins(
+    "membership_past_due",
+    `Pago fallido: ${params.userName}`,
+    `No se procesó el cobro de ${params.amountFormatted}${params.planCode ? ` (${params.planCode})` : ""}.`,
+    { userId: params.userId, planCode: params.planCode }
+  );
+
+  sendAdminNotificationEmail({
+    subject: `Pago fallido de membresía: ${params.userName}`,
+    title: "Pago de membresía fallido",
+    body: `<strong>${params.userName}</strong> (${params.userEmail}) tuvo un cobro fallido de <strong>${params.amountFormatted}</strong>${params.planCode ? ` en el plan <strong>${params.planCode}</strong>` : ""}. Su membresía pasó a estado "Pago vencido".`,
+  }).catch((err) => logger.error({ err }, "[notifications] email membership_past_due (admin) failed"));
 };
 
 /** Membership activated (checkout or invoice) → notify user + admins */
