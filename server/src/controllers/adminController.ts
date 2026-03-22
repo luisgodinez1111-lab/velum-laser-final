@@ -139,6 +139,7 @@ export const exportUsers = async (req: AuthRequest, res: Response) => {
     where: { role: "member" },
     include: { profile: true, memberships: true },
     orderBy: { createdAt: "desc" },
+    take: 10_000,
   });
 
   const bom = "\uFEFF";
@@ -326,7 +327,7 @@ export const createPatient = async (req: AuthRequest, res: Response) => {
     });
 
     // Update medical intake with provided data
-    const intakeData: any = {
+    const intakeData: Record<string, unknown> = {
       personalJson: intake.personalJson ?? {
         fullName: `${firstName} ${lastName}`.trim(),
         phone,

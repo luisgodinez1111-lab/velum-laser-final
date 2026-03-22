@@ -37,11 +37,11 @@ const processQueueTick = async () => {
           job.googleIntegrationId
         );
         await markIntegrationJobDone(job.id);
-      } catch (error) {
+      } catch (error: unknown) {
         await markIntegrationJobError(job, error);
       }
     }
-  } catch (error) {
+  } catch (error: unknown) {
     logger.error({ err: error }, "Integration worker tick failed");
   } finally {
     isTickInProgress = false;
@@ -60,7 +60,7 @@ const enqueueWatchSweep = async () => {
       payload: { source: "worker_timer" },
       maxAttempts: 3
     });
-  } catch (error) {
+  } catch (error: unknown) {
     logger.error({ err: error }, "Unable to enqueue Google watch sweep job");
   }
 };

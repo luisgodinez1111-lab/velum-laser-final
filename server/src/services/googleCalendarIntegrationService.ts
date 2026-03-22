@@ -255,7 +255,7 @@ const stopWatchChannelIfPresent = async (integration: GoogleCalendarIntegration)
         }
       });
     });
-  } catch (error) {
+  } catch (error: unknown) {
     logger.warn({ integrationId: integration.id, err: error }, "Unable to stop stale Google watch channel");
   }
 };
@@ -556,7 +556,7 @@ oauth2Client.setCredentials(tokenResponse.tokens);
     });
 
     return getFrontendIntegrationRedirectUrl("success");
-  } catch (error) {
+  } catch (error: unknown) {
     logger.error({ err: error }, "Google Calendar OAuth callback failed");
     return getFrontendIntegrationRedirectUrl(
       "error",
@@ -689,7 +689,7 @@ export const runGoogleCalendarIncrementalSync = async (integrationId: string) =>
         lastSyncAt: new Date()
       }
     });
-  } catch (error) {
+  } catch (error: unknown) {
     if (getGoogleErrorStatus(error) === 410) {
       logger.warn({ integrationId: integration.id }, "Google sync token expired, running full sync");
       await prisma.googleCalendarIntegration.update({
@@ -720,7 +720,7 @@ export const ensureGoogleCalendarWatches = async () => {
   for (const integration of integrations) {
     try {
       await registerGoogleCalendarWatch(integration.id);
-    } catch (error) {
+    } catch (error: unknown) {
       const msg = error instanceof Error ? error.message : String(error);
       const isConfigError = msg.includes("env vars are missing") || msg.includes("placeholders");
       if (isConfigError) {
@@ -922,7 +922,7 @@ export const runGoogleAppointmentSync = async (args: {
     }
 
     await pushAppointmentCreateOrUpdate(integration, args.appointmentId, args.action === "create" ? "create" : "update");
-  } catch (error) {
+  } catch (error: unknown) {
     await prisma.appointment.update({
       where: { id: args.appointmentId },
       data: {

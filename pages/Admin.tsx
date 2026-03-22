@@ -55,6 +55,8 @@ import { AdminPagosSection } from "./AdminPagosSection";
 import { useToast } from "../context/ToastContext";
 import { apiFetch } from "../services/apiClient";
 import { AdminMemberDrawer } from "../components/AdminMemberDrawer";
+import { AdminIntakeModal } from "../components/AdminIntakeModal";
+import { SectionErrorBoundary } from "../components/SectionErrorBoundary";
 import {
   formatMoney, statusLabel, statusPill, intakeStatusLabel, apptStatusLabel, Pill
 } from "./adminShared";
@@ -1895,216 +1897,6 @@ export const Admin: React.FC = () => {
   // renderPanel → AdminPanelSection
   // renderSocios → AdminSociasSection
 
-  // ─── Expediente viewer modal ───────────────────────────────────────────────
-
-  const FITZPATRICK = [
-    { type: 1, label: 'Tipo I', desc: 'Muy clara. Siempre se quema, nunca broncea.', color: '#FDEBD0', textCls: 'text-amber-900' },
-    { type: 2, label: 'Tipo II', desc: 'Clara. Siempre se quema, a veces broncea.', color: '#F5CBA7', textCls: 'text-amber-900' },
-    { type: 3, label: 'Tipo III', desc: 'Media. A veces se quema, siempre broncea.', color: '#E59866', textCls: 'text-amber-900' },
-    { type: 4, label: 'Tipo IV', desc: 'Oliva. Raramente se quema, siempre broncea.', color: '#CA6F1E', textCls: 'text-white' },
-    { type: 5, label: 'Tipo V', desc: 'Morena oscura. Muy raramente se quema.', color: '#784212', textCls: 'text-white' },
-    { type: 6, label: 'Tipo VI', desc: 'Negra. No se quema, broncea profundamente.', color: '#2C1503', textCls: 'text-white' },
-  ];
-
-  const renderIntakeModal = () => {
-    if (!intakeModal) return null;
-    const { member: m, intake } = intakeModal;
-    const pj = (intake?.personalJson as any) ?? {};
-    const hj = (intake?.historyJson as any) ?? {};
-    const fitz = FITZPATRICK.find((f) => f.type === intake?.phototype);
-    const intakeStatus = intakeStatusLabel(m.intakeStatus);
-
-    return (
-      <>
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50" onClick={() => setIntakeModal(null)} />
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
-          <div className="pointer-events-auto w-full max-w-2xl max-h-[90vh] bg-white rounded-3xl shadow-2xl flex flex-col overflow-hidden">
-            {/* Header */}
-            <div className="px-6 py-5 border-b border-velum-100 flex items-start justify-between shrink-0">
-              <div>
-                <p className="text-[10px] font-bold uppercase tracking-widest text-velum-400">Expediente clínico</p>
-                <h2 className="font-serif text-xl text-velum-900 mt-0.5">{m.name || m.email}</h2>
-                <p className="text-xs text-velum-500 mt-0.5">{m.email}</p>
-              </div>
-              <div className="flex items-center gap-2">
-                <Pill label={intakeStatus.label} cls={intakeStatus.cls} />
-                <button onClick={() => setIntakeModal(null)} className="p-2 rounded-xl hover:bg-velum-50 text-velum-400 hover:text-velum-700 transition ml-1">
-                  <X size={18} />
-                </button>
-              </div>
-            </div>
-
-            {/* Body */}
-            <div className="flex-1 overflow-y-auto">
-              {intakeModalLoading ? (
-                <div className="p-8 flex flex-col items-center gap-3">
-                  <div className="w-10 h-10 border-2 border-velum-200 border-t-velum-700 rounded-full animate-spin" />
-                  <p className="text-sm text-velum-500">Cargando expediente...</p>
-                </div>
-              ) : !intake ? (
-                <div className="p-8 text-center">
-                  <FolderOpen size={32} className="mx-auto text-velum-300 mb-3" />
-                  <p className="text-sm text-velum-500">Este paciente aún no tiene expediente registrado.</p>
-                </div>
-              ) : (
-                <div className="divide-y divide-velum-50">
-                  {/* Fototipo Fitzpatrick */}
-                  <div className="p-5 space-y-3">
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-velum-400">Fototipo de Fitzpatrick</p>
-                    <div className="flex gap-1.5">
-                      {FITZPATRICK.map((f) => (
-                        <div key={f.type}
-                          className={`flex-1 rounded-xl py-2 text-center transition ${intake.phototype === f.type ? 'ring-2 ring-offset-1 ring-velum-900 scale-105' : 'opacity-50'}`}
-                          style={{ backgroundColor: f.color }}>
-                          <p className={`text-[10px] font-bold ${f.textCls}`}>{f.label}</p>
-                        </div>
-                      ))}
-                    </div>
-                    {fitz ? (
-                      <div className="flex items-start gap-3 bg-velum-50 rounded-xl p-3">
-                        <div className="w-8 h-8 rounded-full shrink-0 ring-2 ring-velum-200" style={{ backgroundColor: fitz.color }} />
-                        <div>
-                          <p className="text-sm font-semibold text-velum-900">{fitz.label}</p>
-                          <p className="text-xs text-velum-500 mt-0.5">{fitz.desc}</p>
-                          {intake.phototype && intake.phototype >= 4 && (
-                            <p className="text-xs text-amber-700 font-medium mt-1.5 flex items-center gap-1">
-                              <AlertTriangle size={11} /> Precaución: fototipos altos requieren parámetros láser ajustados.
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    ) : (
-                      <p className="text-xs text-velum-400 italic">No registrado</p>
-                    )}
-                  </div>
-
-                  {/* Datos personales */}
-                  <div className="p-5 space-y-3">
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-velum-400">Datos personales</p>
-                    <div className="grid grid-cols-2 gap-3">
-                      {[
-                        { label: 'Nombre completo', value: pj.fullName },
-                        { label: 'Teléfono', value: pj.phone },
-                        { label: 'Fecha de nacimiento', value: pj.birthDate ? new Date(pj.birthDate).toLocaleDateString('es-MX', { day: '2-digit', month: 'long', year: 'numeric' }) : null },
-                        { label: 'Correo electrónico', value: m.email },
-                      ].map(({ label, value }) => (
-                        <div key={label} className="bg-velum-50 rounded-xl p-3">
-                          <p className="text-[10px] font-bold uppercase tracking-widest text-velum-400 mb-1">{label}</p>
-                          <p className="text-sm text-velum-900">{value || <span className="text-velum-300 italic">No registrado</span>}</p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Historia clínica */}
-                  <div className="p-5 space-y-3">
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-velum-400">Historia clínica</p>
-                    <div className="space-y-3">
-                      {[
-                        { label: 'Alergias', value: hj.allergies, icon: <AlertTriangle size={12} /> },
-                        { label: 'Medicamentos actuales', value: hj.medications, icon: <FileText size={12} /> },
-                        { label: 'Condiciones de piel', value: hj.skinConditions, icon: <Activity size={12} /> },
-                      ].map(({ label, value, icon }) => (
-                        <div key={label} className="bg-velum-50 rounded-xl p-3">
-                          <p className="text-[10px] font-bold uppercase tracking-widest text-velum-400 mb-1 flex items-center gap-1">{icon}{label}</p>
-                          <p className="text-sm text-velum-900 whitespace-pre-wrap">{value || <span className="text-velum-300 italic">Ninguna / No especificado</span>}</p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Consentimiento */}
-                  <div className="p-5 space-y-3">
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-velum-400">Consentimiento informado</p>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className={`rounded-xl p-3 flex items-center gap-2 ${intake.consentAccepted ? 'bg-emerald-50' : 'bg-velum-50'}`}>
-                        {intake.consentAccepted ? <CheckCircle2 size={16} className="text-emerald-600 shrink-0" /> : <XCircle size={16} className="text-velum-300 shrink-0" />}
-                        <div>
-                          <p className="text-[10px] font-bold uppercase tracking-widest text-velum-400">Consentimiento</p>
-                          <p className={`text-sm font-medium ${intake.consentAccepted ? 'text-emerald-700' : 'text-velum-500'}`}>
-                            {intake.consentAccepted ? 'Aceptado' : 'Pendiente'}
-                          </p>
-                        </div>
-                      </div>
-                      <div className={`rounded-xl p-3 flex items-center gap-2 ${intake.signatureKey ? 'bg-emerald-50' : 'bg-velum-50'}`}>
-                        {intake.signatureKey ? <CheckCheck size={16} className="text-emerald-600 shrink-0" /> : <XCircle size={16} className="text-velum-300 shrink-0" />}
-                        <div>
-                          <p className="text-[10px] font-bold uppercase tracking-widest text-velum-400">Firma digital</p>
-                          <p className={`text-sm font-medium ${intake.signatureKey ? 'text-emerald-700' : 'text-velum-500'}`}>
-                            {intake.signatureKey ? 'Firmado' : 'Sin firma'}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Candidacy note */}
-                  {intake.phototype && (
-                    <div className="p-5">
-                      <p className="text-[10px] font-bold uppercase tracking-widest text-velum-400 mb-3">Determinación de candidatura</p>
-                      <div className={`rounded-xl p-4 text-sm ${intake.phototype <= 3 ? 'bg-emerald-50 border border-emerald-200 text-emerald-800' : intake.phototype === 4 ? 'bg-amber-50 border border-amber-200 text-amber-800' : 'bg-red-50 border border-red-200 text-red-800'}`}>
-                        {intake.phototype <= 3 && <><strong>Candidata favorable.</strong> Fototipo I–III: responde óptimamente al láser de depilación con mínimo riesgo de pigmentación.</>}
-                        {intake.phototype === 4 && <><strong>Candidata con precaución.</strong> Fototipo IV: requiere parámetros ajustados (fluencia reducida, pulso largo). Riesgo moderado de hiperpigmentación post-tratamiento.</>}
-                        {intake.phototype >= 5 && <><strong>Candidata de alto riesgo.</strong> Fototipo V–VI: alto riesgo de hiperpigmentación. Evaluar con especialista antes de iniciar tratamiento. Considerar láser Nd:YAG 1064 nm.</>}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-
-            {/* Footer — approve/reject */}
-            {!intakeModalLoading && intake && (m.intakeStatus === 'submitted' || intakeToReject === m.id) && (
-              <div className="px-6 py-4 border-t border-velum-100 bg-velum-50/50 shrink-0 space-y-3">
-                <p className="text-[10px] font-bold uppercase tracking-widest text-velum-400">Resolución del expediente</p>
-                {intakeToReject === m.id ? (
-                  <div className="space-y-2">
-                    <textarea value={intakeRejectReason} onChange={(e) => setIntakeRejectReason(e.target.value)}
-                      placeholder="Motivo del rechazo (requerido)" rows={2}
-                      className="w-full rounded-xl border border-red-200 bg-white px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-red-300 transition" />
-                    <div className="flex gap-2">
-                      <button onClick={() => handleApproveIntake(m.id, false)} disabled={!intakeRejectReason.trim() || isApprovingIntake === m.id}
-                        className="flex-1 bg-red-600 text-white rounded-xl py-2.5 text-sm font-medium hover:bg-red-700 transition disabled:opacity-50">
-                        {isApprovingIntake === m.id ? 'Procesando...' : 'Confirmar rechazo'}
-                      </button>
-                      <button onClick={() => { setIntakeToReject(null); setIntakeRejectReason(''); }}
-                        className="px-4 py-2.5 rounded-xl border border-velum-200 text-sm text-velum-600 hover:bg-white transition">Cancelar</button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="flex gap-2">
-                    <button onClick={() => handleApproveIntake(m.id, true)} disabled={isApprovingIntake === m.id}
-                      className="flex-1 bg-emerald-600 text-white rounded-xl py-2.5 text-sm font-medium hover:bg-emerald-700 transition disabled:opacity-50">
-                      {isApprovingIntake === m.id ? 'Procesando...' : 'Aprobar candidatura'}
-                    </button>
-                    <button onClick={() => setIntakeToReject(m.id)}
-                      className="flex-1 border border-red-200 text-red-600 bg-white rounded-xl py-2.5 text-sm font-medium hover:bg-red-50 transition">Rechazar</button>
-                  </div>
-                )}
-              </div>
-            )}
-            {!intakeModalLoading && intake && m.intakeStatus === 'approved' && (
-              <div className="px-6 py-4 border-t border-velum-100 bg-emerald-50/50 shrink-0">
-                <div className="flex items-center gap-2 text-emerald-700">
-                  <CheckCircle2 size={16} />
-                  <p className="text-sm font-medium">Expediente aprobado. Paciente candidata confirmada.</p>
-                </div>
-              </div>
-            )}
-            {!intakeModalLoading && intake && m.intakeStatus === 'rejected' && (
-              <div className="px-6 py-4 border-t border-velum-100 bg-red-50/50 shrink-0">
-                <div className="flex items-center gap-2 text-red-700">
-                  <XCircle size={16} />
-                  <p className="text-sm font-medium">Expediente rechazado. Revisar con la paciente.</p>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      </>
-    );
-  };
-
   // renderExpedientes → AdminExpedientesSection
 
   // ─── Section: Agenda ──────────────────────────────────────────────────────
@@ -2935,95 +2727,111 @@ export const Admin: React.FC = () => {
     }
     switch (activeSection) {
       case 'panel':        return (
-        <AdminPanelSection
-          userName={user?.name || user?.email?.split('@')[0] || 'Admin'}
-          analytics={analytics}
-          agendaSummary={agendaSummary}
-          controlAlerts={controlAlerts}
-          dayAppointments={dayAppointments}
-          memberById={memberById}
-          auditLogs={auditLogs}
-          onNavigate={(section) => setActiveSection(section)}
-          onNavigateToAudit={() => { setActiveSection('ajustes'); setSettingsCategory('auditoria'); }}
-        />
+        <SectionErrorBoundary section="Panel">
+          <AdminPanelSection
+            userName={user?.name || user?.email?.split('@')[0] || 'Admin'}
+            analytics={analytics}
+            agendaSummary={agendaSummary}
+            controlAlerts={controlAlerts}
+            dayAppointments={dayAppointments}
+            memberById={memberById}
+            auditLogs={auditLogs}
+            onNavigate={(section) => setActiveSection(section)}
+            onNavigateToAudit={() => { setActiveSection('ajustes'); setSettingsCategory('auditoria'); }}
+          />
+        </SectionErrorBoundary>
       );
       case 'socias':       return (
-        <AdminSociasSection
-          members={members}
-          displayedMembers={displayedMembers}
-          filteredMembers={filteredMembers}
-          membersTotal={membersTotal}
-          tablePage={tablePage}
-          tablePageCount={tablePageCount}
-          tablePageSize={TABLE_PAGE_SIZE}
-          searchTerm={searchTerm}
-          statusFilter={statusFilter}
-          isSearchingServer={isSearchingServer}
-          onSearch={(term) => setSearchTerm(term)}
-          onFilter={(f) => setStatusFilter(f)}
-          onPageChange={(p) => setTablePage(p)}
-          onOpenMember={handleOpenMemberDrawer}
-          onNewPatient={() => setPatientDrawerOpen(true)}
-        />
+        <SectionErrorBoundary section="Socias">
+          <AdminSociasSection
+            members={members}
+            displayedMembers={displayedMembers}
+            filteredMembers={filteredMembers}
+            membersTotal={membersTotal}
+            tablePage={tablePage}
+            tablePageCount={tablePageCount}
+            tablePageSize={TABLE_PAGE_SIZE}
+            searchTerm={searchTerm}
+            statusFilter={statusFilter}
+            isSearchingServer={isSearchingServer}
+            onSearch={(term) => setSearchTerm(term)}
+            onFilter={(f) => setStatusFilter(f)}
+            onPageChange={(p) => setTablePage(p)}
+            onOpenMember={handleOpenMemberDrawer}
+            onNewPatient={() => setPatientDrawerOpen(true)}
+          />
+        </SectionErrorBoundary>
       );
       case 'agenda':       return renderAgenda();
       case 'expedientes':  return (
-        <AdminExpedientesSection
-          members={members}
-          intakeToReject={intakeToReject}
-          intakeRejectReason={intakeRejectReason}
-          isApprovingIntake={isApprovingIntake}
-          onOpenIntake={openIntakeModal}
-          onApprove={handleApproveIntake}
-          onOpenMember={handleOpenMemberDrawer}
-          onSetReject={setIntakeToReject}
-          onSetRejectReason={setIntakeRejectReason}
-        />
+        <SectionErrorBoundary section="Expedientes">
+          <AdminExpedientesSection
+            members={members}
+            intakeToReject={intakeToReject}
+            intakeRejectReason={intakeRejectReason}
+            isApprovingIntake={isApprovingIntake}
+            onOpenIntake={openIntakeModal}
+            onApprove={handleApproveIntake}
+            onOpenMember={handleOpenMemberDrawer}
+            onSetReject={setIntakeToReject}
+            onSetRejectReason={setIntakeRejectReason}
+          />
+        </SectionErrorBoundary>
       );
       case 'pagos':        return (
-        <AdminPagosSection
-          analytics={analytics}
-          serverReports={serverReports}
-          histPayments={histPayments}
-          histTotal={histTotal}
-          histPage={histPage}
-          histPages={histPages}
-          histLoading={histLoading}
-          histLoaded={histLoaded}
-          histError={histError}
-          histDateFrom={histDateFrom}
-          histDateTo={histDateTo}
-          histStatus={histStatus}
-          onDateFromChange={setHistDateFrom}
-          onDateToChange={setHistDateTo}
-          onStatusChange={setHistStatus}
-          onSearch={(page) => void loadHistPayments(page)}
-          onDownloadCSV={() => void handleDownloadHistCSV()}
-          onOpenMember={handleOpenMemberDrawer}
-          onRegularize={(id, status) => handleUpdateMember(id, status)}
-        />
+        <SectionErrorBoundary section="Pagos">
+          <AdminPagosSection
+            analytics={analytics}
+            serverReports={serverReports}
+            histPayments={histPayments}
+            histTotal={histTotal}
+            histPage={histPage}
+            histPages={histPages}
+            histLoading={histLoading}
+            histLoaded={histLoaded}
+            histError={histError}
+            histDateFrom={histDateFrom}
+            histDateTo={histDateTo}
+            histStatus={histStatus}
+            onDateFromChange={setHistDateFrom}
+            onDateToChange={setHistDateTo}
+            onStatusChange={setHistStatus}
+            onSearch={(page) => void loadHistPayments(page)}
+            onDownloadCSV={() => void handleDownloadHistCSV()}
+            onOpenMember={handleOpenMemberDrawer}
+            onRegularize={(id, status) => handleUpdateMember(id, status)}
+          />
+        </SectionErrorBoundary>
       );
       case 'kpis':         return (
-        <AdminKPIsSection analytics={analytics} planBreakdown={planBreakdown} />
+        <SectionErrorBoundary section="KPIs">
+          <AdminKPIsSection analytics={analytics} planBreakdown={planBreakdown} />
+        </SectionErrorBoundary>
       );
       case 'finanzas':     return (
-        <AdminFinanzasSection members={members} analytics={analytics} onOpenMember={handleOpenMemberDrawer} />
+        <SectionErrorBoundary section="Finanzas">
+          <AdminFinanzasSection members={members} analytics={analytics} onOpenMember={handleOpenMemberDrawer} />
+        </SectionErrorBoundary>
       );
       case 'riesgos':      return (
-        <AdminRiesgosSection
-          members={members}
-          failedAudits={analytics.failedAudits}
-          onOpenMember={handleOpenMemberDrawer}
-        />
+        <SectionErrorBoundary section="Riesgos">
+          <AdminRiesgosSection
+            members={members}
+            failedAudits={analytics.failedAudits}
+            onOpenMember={handleOpenMemberDrawer}
+          />
+        </SectionErrorBoundary>
       );
       case 'cumplimiento': return (
-        <AdminCumplimientoSection
-          expedientesFirmados={analytics.expedientesFirmados}
-          failedAudits={analytics.failedAudits}
-          sensitiveEvents={analytics.sensitiveEvents}
-          staffCount={members.filter((m) => m.role !== 'member').length + 1}
-          onRefresh={() => void loadData()}
-        />
+        <SectionErrorBoundary section="Cumplimiento">
+          <AdminCumplimientoSection
+            expedientesFirmados={analytics.expedientesFirmados}
+            failedAudits={analytics.failedAudits}
+            sensitiveEvents={analytics.sensitiveEvents}
+            staffCount={members.filter((m) => m.role !== 'member').length + 1}
+            onRefresh={() => void loadData()}
+          />
+        </SectionErrorBoundary>
       );
       case 'ajustes':      return renderConfiguraciones();
       default:             return null;
@@ -3207,7 +3015,17 @@ export const Admin: React.FC = () => {
           memberSessions={memberSessions}
         />
       )}
-      {renderIntakeModal()}
+      <AdminIntakeModal
+        intakeModal={intakeModal}
+        intakeModalLoading={intakeModalLoading}
+        intakeToReject={intakeToReject}
+        intakeRejectReason={intakeRejectReason}
+        isApprovingIntake={isApprovingIntake}
+        onClose={() => setIntakeModal(null)}
+        onSetReject={setIntakeToReject}
+        onSetRejectReason={setIntakeRejectReason}
+        onApprove={handleApproveIntake}
+      />
 
       <AdminCreatePatientDrawer
         open={patientDrawerOpen}
@@ -3222,14 +3040,19 @@ export const Admin: React.FC = () => {
         return (
           <>
             <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50" onClick={() => setConfirmCancelMemberId(null)} />
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
+            <div
+              className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="cancel-membership-title"
+            >
               <div className="pointer-events-auto w-full max-w-sm bg-white rounded-3xl shadow-2xl p-6 space-y-4">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-2xl bg-red-50 border border-red-200 flex items-center justify-center shrink-0">
                     <XCircle size={18} className="text-red-500" />
                   </div>
                   <div>
-                    <p className="font-semibold text-velum-900 text-sm">Cancelar membresía</p>
+                    <p id="cancel-membership-title" className="font-semibold text-velum-900 text-sm">Cancelar membresía</p>
                     <p className="text-xs text-velum-500 mt-0.5">Esta acción es reversible desde el panel.</p>
                   </div>
                 </div>

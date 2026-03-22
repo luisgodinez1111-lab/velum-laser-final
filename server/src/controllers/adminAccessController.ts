@@ -59,19 +59,27 @@ export const listAdminAccessUsers = async (req: AuthRequest, res: Response) => {
   try {
     if (!isAdminUser(req)) return res.status(403).json({ message: "No autorizado" });
 
-    const users = await prisma.user.findMany({
-      orderBy: { createdAt: "desc" },
-      select: {
-        id: true,
-        email: true,
-        role: true,
-        isActive: true,
-        deactivatedAt: true,
-        createdAt: true,
-        emailVerifiedAt: true,
-        memberships: { select: { stripeSubscriptionId: true, status: true } },
-      },
-    });
+    const page  = Math.max(1, parseInt(String(req.query.page  ?? "1"),   10));
+    const limit = Math.min(200, Math.max(1, parseInt(String(req.query.limit ?? "100"), 10)));
+
+    const [total, users] = await Promise.all([
+      prisma.user.count(),
+      prisma.user.findMany({
+        orderBy: { createdAt: "desc" },
+        skip: (page - 1) * limit,
+        take: limit,
+        select: {
+          id: true,
+          email: true,
+          role: true,
+          isActive: true,
+          deactivatedAt: true,
+          createdAt: true,
+          emailVerifiedAt: true,
+          memberships: { select: { stripeSubscriptionId: true, status: true } },
+        },
+      }),
+    ]);
 
     const store = await readAccessStore();
 
@@ -91,10 +99,14 @@ export const listAdminAccessUsers = async (req: AuthRequest, res: Response) => {
     return res.json({
       users: rows,
       permissionsCatalog: PERMISSIONS_CATALOG,
+      total,
+      page,
+      limit,
+      pages: Math.ceil(total / limit),
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error({ err: error }, "listAdminAccessUsers");
-    return res.status(500).json({ message: "Error al listar usuarios", detail: error?.message ?? "unknown" });
+    return res.status(500).json({ message: "Error al listar usuarios", detail: error instanceof Error ? error.message : "unknown" });
   }
 };
 
@@ -102,9 +114,10 @@ export const createAdminAccessUser = async (req: AuthRequest, res: Response) => 
   try {
     if (!isAdminUser(req)) return res.status(403).json({ message: "No autorizado" });
 
-    const email = clean((req.body as any)?.email).toLowerCase();
-    const role = clean((req.body as any)?.role) || "staff";
-    const incomingPerms = (req.body as any)?.permissions;
+    const body = req.body as Record<string, unknown>;
+    const email = clean(body?.email).toLowerCase();
+    const role = clean(body?.role) || "staff";
+    const incomingPerms = body?.permissions;
 
     if (!validEmail(email)) return res.status(400).json({ message: "Correo inválido" });
     if (!roleAllowed.has(role)) return res.status(400).json({ message: "Rol inválido" });
@@ -119,7 +132,7 @@ export const createAdminAccessUser = async (req: AuthRequest, res: Response) => 
       password = generateTempPassword();
       mustChangePassword = true;
     } else {
-      password = clean((req.body as any)?.password);
+      password = clean(body?.password);
       if (password.length < 8) return res.status(400).json({ message: "La contraseña debe tener al menos 8 caracteres" });
     }
 
@@ -193,9 +206,9 @@ export const createAdminAccessUser = async (req: AuthRequest, res: Response) => 
       user: created,
       inviteEmailSent: isAdminOrStaff,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error({ err: error }, "createAdminAccessUser");
-    return res.status(500).json({ message: "Error al crear usuario", detail: error?.message ?? "unknown" });
+    return res.status(500).json({ message: "Error al crear usuario", detail: error instanceof Error ? error.message : "unknown" });
   }
 };
 
@@ -204,8 +217,9 @@ export const updateAdminAccessUser = async (req: AuthRequest, res: Response) => 
     if (!isAdminUser(req)) return res.status(403).json({ message: "No autorizado" });
 
     const userId = clean(req.params.userId);
-    const nextRoleRaw = clean((req.body as any)?.role);
-    const incomingPerms = (req.body as any)?.permissions;
+    const updateBody = req.body as Record<string, unknown>;
+    const nextRoleRaw = clean(updateBody?.role);
+    const incomingPerms = updateBody?.permissions;
 
     const current = await prisma.user.findUnique({
       where: { id: userId },
@@ -247,9 +261,9 @@ export const updateAdminAccessUser = async (req: AuthRequest, res: Response) => 
       message: "Usuario actualizado",
       user: updated,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error({ err: error }, "updateAdminAccessUser");
-    return res.status(500).json({ message: "Error al actualizar usuario", detail: error?.message ?? "unknown" });
+    return res.status(500).json({ message: "Error al actualizar usuario", detail: error instanceof Error ? error.message : "unknown" });
   }
 };
 
@@ -258,7 +272,7 @@ export const resetAdminAccessPassword = async (req: AuthRequest, res: Response) 
     if (!isAdminUser(req)) return res.status(403).json({ message: "No autorizado" });
 
     const userId = clean(req.params.userId);
-    const newPassword = clean((req.body as any)?.newPassword);
+    const newPassword = clean((req.body as Record<string, unknown>)?.newPassword);
 
     if (newPassword.length < 8) {
       return res.status(400).json({ message: "La contraseña debe tener al menos 8 caracteres" });
@@ -281,9 +295,9 @@ export const resetAdminAccessPassword = async (req: AuthRequest, res: Response) 
     });
 
     return res.json({ message: "Contraseña actualizada" });
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error({ err: error }, "resetAdminAccessPassword");
-    return res.status(500).json({ message: "Error al actualizar contraseña", detail: error?.message ?? "unknown" });
+    return res.status(500).json({ message: "Error al actualizar contraseña", detail: error instanceof Error ? error.message : "unknown" });
   }
 };
 
@@ -313,8 +327,8 @@ export const deactivateUser = async (req: AuthRequest, res: Response) => {
       try {
         await stripe.subscriptions.cancel(sub.stripeSubscriptionId);
         stripeCanceled = true;
-      } catch (stripeErr: any) {
-        if (stripeErr?.code !== "resource_missing") {
+      } catch (stripeErr: unknown) {
+        if ((stripeErr as { code?: string })?.code !== "resource_missing") {
           logger.warn({ err: stripeErr }, "Stripe cancel on deactivate");
         }
       }
@@ -349,9 +363,9 @@ export const deactivateUser = async (req: AuthRequest, res: Response) => {
       message: `Usuario ${target.email} desactivado${stripeCanceled ? " y suscripción de Stripe cancelada" : ""}`,
       stripeCanceled,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error({ err: error }, "deactivateUser");
-    return res.status(500).json({ message: "Error al desactivar usuario", detail: error?.message ?? "unknown" });
+    return res.status(500).json({ message: "Error al desactivar usuario", detail: error instanceof Error ? error.message : "unknown" });
   }
 };
 
@@ -387,9 +401,9 @@ export const activateUser = async (req: AuthRequest, res: Response) => {
     });
 
     return res.json({ message: `Usuario ${target.email} activado. Deberá iniciar sesión nuevamente.` });
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error({ err: error }, "activateUser");
-    return res.status(500).json({ message: "Error al activar usuario", detail: error?.message ?? "unknown" });
+    return res.status(500).json({ message: "Error al activar usuario", detail: error instanceof Error ? error.message : "unknown" });
   }
 };
 
@@ -432,7 +446,7 @@ export const requestDeleteUserOtp = async (req: AuthRequest, res: Response) => {
         targetEmail: target.email,
         otp,
       });
-    } catch (emailErr: any) {
+    } catch (emailErr: unknown) {
       await prisma.deleteOtp.delete({ where: { actorUserId: actorId } }).catch(() => {});
       return res.status(502).json({ message: "No se pudo enviar el correo de autorización. Verifica la configuración de Resend." });
     }
@@ -446,8 +460,8 @@ export const requestDeleteUserOtp = async (req: AuthRequest, res: Response) => {
       targetRole: target.role,
       expiresInMinutes: 10,
     });
-  } catch (error: any) {
-    return res.status(500).json({ message: "Error al enviar código de autorización", detail: error?.message ?? "unknown" });
+  } catch (error: unknown) {
+    return res.status(500).json({ message: "Error al enviar código de autorización", detail: error instanceof Error ? error.message : "unknown" });
   }
 };
 
@@ -458,7 +472,7 @@ export const deleteUser = async (req: AuthRequest, res: Response) => {
 
     const actorId = req.user!.id;
     const targetUserId = clean(req.params.userId);
-    const otpInput = clean((req.body as any)?.otp);
+    const otpInput = clean((req.body as Record<string, unknown>)?.otp);
 
     if (actorId === targetUserId) {
       return res.status(400).json({ message: "No puedes eliminar tu propia cuenta" });
@@ -516,8 +530,8 @@ export const deleteUser = async (req: AuthRequest, res: Response) => {
     if (membership?.stripeSubscriptionId) {
       try {
         await stripe.subscriptions.cancel(membership.stripeSubscriptionId);
-      } catch (stripeErr: any) {
-        if (stripeErr?.code !== "resource_missing") {
+      } catch (stripeErr: unknown) {
+        if ((stripeErr as { code?: string })?.code !== "resource_missing") {
           // Log but don't block deletion
         }
       }
@@ -550,7 +564,7 @@ export const deleteUser = async (req: AuthRequest, res: Response) => {
     });
 
     return res.json({ message: `Usuario ${target.email} eliminado correctamente` });
-  } catch (error: any) {
-    return res.status(500).json({ message: "Error al eliminar usuario", detail: error?.message ?? "unknown" });
+  } catch (error: unknown) {
+    return res.status(500).json({ message: "Error al eliminar usuario", detail: error instanceof Error ? error.message : "unknown" });
   }
 };
