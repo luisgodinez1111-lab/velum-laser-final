@@ -11,7 +11,7 @@ type Notification = {
   createdAt: string;
 };
 
-const POLL_INTERVAL_MS = 30_000;
+const API_BASE = (import.meta as { env?: { VITE_API_URL?: string } }).env?.VITE_API_URL ?? "/api";
 
 const typeIcon: Record<string, string> = {
   custom_charge_created:   "💳",
@@ -51,9 +51,27 @@ export const NotificationBell: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    // Initial count fetch
     void fetchCount();
-    const timer = setInterval(fetchCount, POLL_INTERVAL_MS);
-    return () => clearInterval(timer);
+
+    // SSE — real-time push; EventSource auto-reconnects on network drops
+    const es = new EventSource(`${API_BASE}/v1/notifications/stream`, { withCredentials: true });
+
+    es.onmessage = (event) => {
+      try {
+        const notification: Notification = JSON.parse(event.data as string);
+        setItems((prev) => [notification, ...prev]);
+        setCount((c) => c + 1);
+      } catch {
+        // heartbeat or ping comment line — ignore
+      }
+    };
+
+    es.onerror = () => {
+      // EventSource handles reconnection automatically — no action needed
+    };
+
+    return () => es.close();
   }, [fetchCount]);
 
   // Close on Escape

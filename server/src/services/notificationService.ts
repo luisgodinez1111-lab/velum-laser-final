@@ -1,3 +1,4 @@
+import type { Response } from "express";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../db/prisma";
 import { logger } from "../utils/logger";
@@ -28,10 +29,35 @@ export interface CreateNotificationParams {
   data?: Record<string, unknown> | null;
 }
 
+// ── SSE broadcaster ───────────────────────────────────────────────────────────
+// In-memory map: userId → Set of active SSE response streams
+const sseClients = new Map<string, Set<Response>>();
+
+export const registerSseClient = (userId: string, res: Response): void => {
+  if (!sseClients.has(userId)) sseClients.set(userId, new Set());
+  sseClients.get(userId)!.add(res);
+};
+
+export const unregisterSseClient = (userId: string, res: Response): void => {
+  const clients = sseClients.get(userId);
+  if (!clients) return;
+  clients.delete(res);
+  if (clients.size === 0) sseClients.delete(userId);
+};
+
+const broadcastToUser = (userId: string, payload: unknown): void => {
+  const clients = sseClients.get(userId);
+  if (!clients || clients.size === 0) return;
+  const data = `data: ${JSON.stringify(payload)}\n\n`;
+  for (const res of clients) {
+    try { res.write(data); } catch { clients.delete(res); }
+  }
+};
+
 // ── Create a single in-app notification ──────────────────────────────
 export const createNotification = async (params: CreateNotificationParams) => {
   try {
-    return await prisma.notification.create({
+    const created = await prisma.notification.create({
       data: {
         userId: params.userId,
         type: params.type,
@@ -40,6 +66,9 @@ export const createNotification = async (params: CreateNotificationParams) => {
         data: (params.data ?? {}) as Prisma.InputJsonValue,
       },
     });
+    // Push to connected SSE clients in real time
+    broadcastToUser(params.userId, created);
+    return created;
   } catch (err) {
     logger.error({ err, params }, "[notifications] Failed to create notification");
     return null;
@@ -59,15 +88,18 @@ export const notifyAdmins = async (
       select: { id: true },
     });
     if (admins.length === 0) return;
-    await prisma.notification.createMany({
-      data: admins.map((a) => ({
-        userId: a.id,
-        type,
-        title,
-        body,
-        data: (data ?? {}) as Prisma.InputJsonValue,
-      })),
-    });
+    const rows = admins.map((a) => ({
+      userId: a.id,
+      type,
+      title,
+      body,
+      data: (data ?? {}) as Prisma.InputJsonValue,
+    }));
+    await prisma.notification.createMany({ data: rows });
+    // Push via SSE to each admin that has an active stream
+    for (const row of rows) {
+      broadcastToUser(row.userId, row);
+    }
   } catch (err) {
     logger.error({ err }, "[notifications] Failed to notify admins");
   }
