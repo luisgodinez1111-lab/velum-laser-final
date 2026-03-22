@@ -387,6 +387,41 @@ export const Admin: React.FC = () => {
     }
   };
 
+  // Integration jobs monitoring
+  const [integrationJobs, setIntegrationJobs] = useState<any[]>([]);
+  const [integrationJobsLoading, setIntegrationJobsLoading] = useState(false);
+  const [integrationJobsLoaded, setIntegrationJobsLoaded] = useState(false);
+  const [integrationJobsStatus, setIntegrationJobsStatus] = useState('');
+
+  const loadIntegrationJobs = async (status?: string) => {
+    setIntegrationJobsLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (status) params.set('status', status);
+      const data = await apiFetch<any>(`/v1/admin/integrations/jobs?${params.toString()}`);
+      setIntegrationJobs(data?.jobs ?? []);
+      setIntegrationJobsLoaded(true);
+    } catch { /* ignore */ } finally {
+      setIntegrationJobsLoading(false);
+    }
+  };
+
+  // Webhook events
+  const [webhookEvents, setWebhookEvents] = useState<any[]>([]);
+  const [webhookEventsLoading, setWebhookEventsLoading] = useState(false);
+  const [webhookEventsLoaded, setWebhookEventsLoaded] = useState(false);
+
+  const loadWebhookEvents = async () => {
+    setWebhookEventsLoading(true);
+    try {
+      const data = await apiFetch<any>('/v1/admin/stripe/webhook-events');
+      setWebhookEvents(data?.events ?? []);
+      setWebhookEventsLoaded(true);
+    } catch { /* ignore */ } finally {
+      setWebhookEventsLoading(false);
+    }
+  };
+
   // Drawer: deactivate / delete with OTP
   const [criticalActionsOpen, setCriticalActionsOpen] = useState(false);
   const [drawerDeactivating, setDrawerDeactivating] = useState(false);
@@ -3808,6 +3843,65 @@ export const Admin: React.FC = () => {
         <div className="space-y-6">
           <AdminStripeSettings embedded />
           <AdminWhatsAppSettings embedded />
+
+          {/* Integration Jobs Monitor */}
+          <div className="bg-white rounded-2xl border border-velum-100 p-5 space-y-4">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-bold uppercase tracking-widest text-velum-500">Monitor de trabajos — Google Calendar</p>
+              <div className="flex items-center gap-2">
+                <select value={integrationJobsStatus} onChange={e => { setIntegrationJobsStatus(e.target.value); void loadIntegrationJobs(e.target.value || undefined); }}
+                  className="rounded-xl border border-velum-200 px-2 py-1 text-xs text-velum-700 focus:outline-none focus:border-velum-400 bg-white">
+                  <option value="">Todos</option>
+                  <option value="pending">Pendientes</option>
+                  <option value="running">Corriendo</option>
+                  <option value="done">Completados</option>
+                  <option value="failed">Fallidos</option>
+                </select>
+                <button onClick={() => void loadIntegrationJobs(integrationJobsStatus || undefined)} disabled={integrationJobsLoading}
+                  className="flex items-center gap-1 px-3 py-1.5 rounded-xl border border-velum-200 text-velum-600 text-xs font-medium hover:bg-velum-50 transition disabled:opacity-50">
+                  {integrationJobsLoading ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
+                  Actualizar
+                </button>
+              </div>
+            </div>
+            {!integrationJobsLoaded ? (
+              <p className="text-center text-xs text-velum-400 py-6">Presiona Actualizar para cargar los trabajos</p>
+            ) : integrationJobs.length === 0 ? (
+              <p className="text-center text-xs text-velum-400 py-6">Sin trabajos en la cola</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="border-b border-velum-100 bg-velum-50/50">
+                      {['Tipo', 'Estado', 'Intentos', 'Programado', 'Finalizado', 'Último error'].map(h => (
+                        <th key={h} className="px-3 py-2.5 text-left text-[10px] font-bold uppercase tracking-widest text-velum-400">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {integrationJobs.map((job: any, i: number) => (
+                      <tr key={job.id} className={`hover:bg-velum-50 transition ${i < integrationJobs.length - 1 ? 'border-b border-velum-50' : ''}`}>
+                        <td className="px-3 py-2.5 font-mono text-velum-700">{job.type}</td>
+                        <td className="px-3 py-2.5">
+                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                            job.status === 'done' ? 'bg-emerald-50 text-emerald-700' :
+                            job.status === 'failed' ? 'bg-red-50 text-red-600' :
+                            job.status === 'running' ? 'bg-blue-50 text-blue-600' :
+                            'bg-amber-50 text-amber-700'
+                          }`}>{job.status}</span>
+                        </td>
+                        <td className="px-3 py-2.5 text-velum-500">{job.attempts}/{job.maxAttempts}</td>
+                        <td className="px-3 py-2.5 text-velum-400 whitespace-nowrap">{new Date(job.runAt).toLocaleString('es-MX', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' })}</td>
+                        <td className="px-3 py-2.5 text-velum-400 whitespace-nowrap">{job.finishedAt ? new Date(job.finishedAt).toLocaleString('es-MX', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' }) : '—'}</td>
+                        <td className="px-3 py-2.5 text-red-500 font-mono max-w-[200px] truncate" title={job.lastError ?? ''}>{job.lastError ?? '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <p className="text-[11px] text-velum-400 text-right mt-2 pr-1">{integrationJobs.length} trabajo{integrationJobs.length !== 1 ? 's' : ''}</p>
+              </div>
+            )}
+          </div>
         </div>
       )}
       {settingsCategory === 'auditoria' && (
@@ -3878,6 +3972,51 @@ export const Admin: React.FC = () => {
                     ))}
                   </tbody>
                 </table>
+              </div>
+            )}
+          </div>
+
+          {/* Webhook Events */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-velum-400">Eventos Stripe procesados</p>
+              <button onClick={() => void loadWebhookEvents()} disabled={webhookEventsLoading}
+                className="flex items-center gap-1.5 text-xs text-velum-400 hover:text-velum-900 transition disabled:opacity-50">
+                <RefreshCw size={12} className={webhookEventsLoading ? 'animate-spin' : ''} />Cargar
+              </button>
+            </div>
+            {!webhookEventsLoaded ? (
+              <div className="bg-white rounded-2xl border border-velum-100 py-10 text-center">
+                <p className="text-xs text-velum-400">Presiona "Cargar" para ver los webhooks procesados</p>
+              </div>
+            ) : webhookEvents.length === 0 ? (
+              <div className="bg-white rounded-2xl border border-velum-100 py-10 text-center">
+                <p className="text-xs text-velum-400">Sin eventos registrados</p>
+              </div>
+            ) : (
+              <div className="bg-white rounded-2xl border border-velum-100 overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="border-b border-velum-100 bg-velum-50/50">
+                        {['Fecha', 'Evento Stripe', 'Tipo', 'Procesado en'].map(h => (
+                          <th key={h} className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-widest text-velum-400">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {webhookEvents.map((ev: any, i: number) => (
+                        <tr key={ev.id} className={`hover:bg-velum-50/50 transition ${i < webhookEvents.length - 1 ? 'border-b border-velum-50' : ''}`}>
+                          <td className="px-4 py-2.5 text-velum-400 whitespace-nowrap">{new Date(ev.createdAt).toLocaleString('es-MX', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' })}</td>
+                          <td className="px-4 py-2.5 font-mono text-velum-600 text-[10px]">{ev.stripeEventId}</td>
+                          <td className="px-4 py-2.5 font-mono text-velum-700">{ev.type}</td>
+                          <td className="px-4 py-2.5 text-velum-400 whitespace-nowrap">{new Date(ev.processedAt).toLocaleString('es-MX', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' })}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <p className="text-[11px] text-velum-400 text-right mt-2 pr-3 pb-2">{webhookEvents.length} evento{webhookEvents.length !== 1 ? 's' : ''}</p>
+                </div>
               </div>
             )}
           </div>
