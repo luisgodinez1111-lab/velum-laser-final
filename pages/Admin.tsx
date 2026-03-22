@@ -31,7 +31,9 @@ import {
   Zap,
   CheckCheck,
   XCircle,
-  Plus
+  Plus,
+  Download,
+  BarChart3
 } from 'lucide-react';
 import { AuditLogEntry, Member, UserRole } from '../types';
 import { useAuth } from '../context/AuthContext';
@@ -349,6 +351,7 @@ export const Admin: React.FC = () => {
   const [memberAppointments, setMemberAppointments] = useState<Appointment[]>([]);
   const [memberPayments, setMemberPayments] = useState<any[]>([]);
   const [isLoadingMemberHistory, setIsLoadingMemberHistory] = useState(false);
+  const [serverReports, setServerReports] = useState<{ users: number; activeMemberships: number; pastDueMemberships: number; pendingDocuments: number } | null>(null);
 
   // Drawer: deactivate / delete with OTP
   const [criticalActionsOpen, setCriticalActionsOpen] = useState(false);
@@ -441,7 +444,7 @@ export const Admin: React.FC = () => {
     setIsLoadingData(true);
     setDataLoadError('');
     try {
-      const [membersResult, logsData, configData, dayData, integrationData] = await Promise.all([
+      const [membersResult, logsData, configData, dayData, integrationData, reportsData] = await Promise.all([
         memberService.getAll({ limit: 100 }),
         user?.role === 'admin' || user?.role === 'system'
           ? auditService.getLogs().catch(() => [] as AuditLogEntry[])
@@ -450,11 +453,13 @@ export const Admin: React.FC = () => {
         clinicalService.getAdminAgendaDay(agendaDate).catch(() => null),
         user?.role === 'admin' || user?.role === 'system'
           ? googleCalendarIntegrationService.getStatus().catch(() => null)
-          : Promise.resolve(null)
+          : Promise.resolve(null),
+        apiFetch<any>('/admin/reports').catch(() => null),
       ]);
       setMembers(membersResult.members);
       setAuditLogs(logsData);
       setGoogleIntegrationStatus(integrationData);
+      if (reportsData) setServerReports(reportsData);
       if (configData) {
         setAgendaConfig(configData);
         setAgendaPolicyDraft({
@@ -3159,19 +3164,64 @@ export const Admin: React.FC = () => {
 
   // ─── Section: Pagos ───────────────────────────────────────────────────────
 
+  const handleDownloadReport = async () => {
+    try {
+      const resp = await fetch('/admin/reports?format=csv', { credentials: 'include' });
+      const blob = await resp.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `velum-reporte-${new Date().toISOString().slice(0, 10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      toast.error('No se pudo descargar el reporte');
+    }
+  };
+
   const renderPagos = () => {
     const queue = analytics.collectionQueue;
     const totalRisk = queue.reduce((acc, m) => acc + (m.amount ?? 0), 0);
     return (
       <div className="space-y-6">
-        <div>
-          <h1 className="text-2xl font-serif text-velum-900">Pagos</h1>
-          <p className="text-sm text-velum-500 mt-1">Estado de cuentas y cobranza</p>
+        <div className="flex items-start justify-between">
+          <div>
+            <h1 className="text-2xl font-serif text-velum-900">Pagos</h1>
+            <p className="text-sm text-velum-500 mt-1">Estado de cuentas y cobranza</p>
+          </div>
+          <button
+            onClick={() => void handleDownloadReport()}
+            className="flex items-center gap-2 px-3 py-2 rounded-xl border border-velum-200 text-velum-600 text-xs font-medium hover:bg-velum-50 transition"
+          >
+            <Download size={13} />
+            Descargar CSV
+          </button>
         </div>
-        <div className="grid grid-cols-3 gap-4">
-          <KpiCard icon={<HandCoins size={18} />} label="Por recuperar" value={queue.length} accent={queue.length > 0 ? 'text-red-600' : 'text-velum-900'} />
-          <KpiCard icon={<Wallet size={18} />} label="Monto en riesgo" value={formatMoney(totalRisk)} accent="text-amber-600" />
-          <KpiCard icon={<CheckCheck size={18} />} label="Activos" value={analytics.sociosActivos} accent="text-emerald-700" />
+
+        {/* Métricas del servidor */}
+        {serverReports && (
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-widest text-velum-400 mb-3 flex items-center gap-2">
+              <BarChart3 size={11} /> Resumen del sistema
+            </p>
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+              <KpiCard icon={<Users size={18} />} label="Total usuarios" value={serverReports.users} />
+              <KpiCard icon={<CheckCircle2 size={18} />} label="Membresías activas" value={serverReports.activeMemberships} accent="text-emerald-700" />
+              <KpiCard icon={<AlertTriangle size={18} />} label="Pago vencido" value={serverReports.pastDueMemberships} accent={serverReports.pastDueMemberships > 0 ? 'text-red-600' : 'text-velum-900'} />
+              <KpiCard icon={<FileText size={18} />} label="Docs. pendientes" value={serverReports.pendingDocuments} accent={serverReports.pendingDocuments > 0 ? 'text-amber-600' : 'text-velum-900'} />
+            </div>
+          </div>
+        )}
+
+        <div>
+          <p className="text-[10px] font-bold uppercase tracking-widest text-velum-400 mb-3 flex items-center gap-2">
+            <HandCoins size={11} /> Cola de cobranza
+          </p>
+          <div className="grid grid-cols-3 gap-4">
+            <KpiCard icon={<HandCoins size={18} />} label="Por recuperar" value={queue.length} accent={queue.length > 0 ? 'text-red-600' : 'text-velum-900'} />
+            <KpiCard icon={<Wallet size={18} />} label="Monto en riesgo" value={formatMoney(totalRisk)} accent="text-amber-600" />
+            <KpiCard icon={<CheckCheck size={18} />} label="Activos" value={analytics.sociosActivos} accent="text-emerald-700" />
+          </div>
         </div>
         <div className="bg-white rounded-2xl border border-velum-100 overflow-hidden">
           {queue.length === 0 ? (

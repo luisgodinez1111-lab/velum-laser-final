@@ -585,7 +585,7 @@ const processCheckoutCompleted = async (event: Stripe.Event, stripe: Stripe): Pr
     }
   }
 
-  // Notify user + admins about membership activation
+  // Notify user + admins about membership activation + register payment
   if (userId && subCtx.status === "active") {
     const memberUser = await prisma.user.findUnique({
       where: { id: userId },
@@ -601,9 +601,80 @@ const processCheckoutCompleted = async (event: Stripe.Event, stripe: Stripe): Pr
         isRenewal: false,
       }).catch((err) => logger.error({ err }, "[stripe-webhook] membership_activated notification failed"));
     }
+
+    // Register Payment record for the checkout (first invoice)
+    const checkoutMembership = await prisma.membership.findFirst({
+      where: { stripeSubscriptionId: subCtx.stripeSubscriptionId },
+      select: { id: true },
+    }).catch(() => null);
+    const sessionPaymentIntent = extractExpandableId(session.payment_intent);
+    if (session.invoice || sessionPaymentIntent) {
+      await upsertPaymentRecord({
+        stripeEventId: event.id,
+        stripeInvoiceId: extractExpandableId(session.invoice) ?? `checkout_${session.id}`,
+        stripePaymentIntentId: sessionPaymentIntent,
+        stripeSubscriptionId: subCtx.stripeSubscriptionId,
+        userId,
+        membershipId: checkoutMembership?.id ?? null,
+        amount: centsToMajor(session.amount_total),
+        currency: cleanString(session.currency) || null,
+        status: "paid",
+      });
+    }
   }
 
   logger.info({ eventId: event.id, subscriptionId, userId }, "[stripe-webhook] checkout.session.completed processed");
+};
+
+const upsertPaymentRecord = async (input: {
+  stripeEventId: string;
+  stripeInvoiceId: string | null;
+  stripePaymentIntentId: string | null;
+  stripeSubscriptionId: string | null;
+  userId: string | null;
+  membershipId: string | null;
+  amount: number | null;
+  currency: string | null;
+  status: "paid" | "failed" | "pending" | "refunded";
+  failureCode?: string | null;
+  failureMessage?: string | null;
+}): Promise<void> => {
+  if (!input.userId || !input.stripeInvoiceId) return;
+  try {
+    await prisma.payment.upsert({
+      where: { stripeInvoiceId: input.stripeInvoiceId },
+      update: {
+        stripeEventId: input.stripeEventId,
+        stripePaymentIntentId: input.stripePaymentIntentId ?? undefined,
+        stripeSubscriptionId: input.stripeSubscriptionId ?? undefined,
+        amount: input.amount ?? undefined,
+        currency: input.currency ?? undefined,
+        status: input.status,
+        membershipId: input.membershipId ?? undefined,
+        failureCode: input.failureCode ?? undefined,
+        failureMessage: input.failureMessage ?? undefined,
+        paidAt: input.status === "paid" ? new Date() : undefined,
+        failedAt: input.status === "failed" ? new Date() : undefined,
+      },
+      create: {
+        userId: input.userId,
+        membershipId: input.membershipId ?? undefined,
+        stripeEventId: input.stripeEventId,
+        stripeInvoiceId: input.stripeInvoiceId,
+        stripePaymentIntentId: input.stripePaymentIntentId ?? undefined,
+        stripeSubscriptionId: input.stripeSubscriptionId ?? undefined,
+        amount: input.amount ?? undefined,
+        currency: input.currency ?? undefined,
+        status: input.status,
+        failureCode: input.failureCode ?? undefined,
+        failureMessage: input.failureMessage ?? undefined,
+        paidAt: input.status === "paid" ? new Date() : null,
+        failedAt: input.status === "failed" ? new Date() : null,
+      },
+    });
+  } catch (err) {
+    logger.error({ err }, "[stripe-webhook] payment upsert failed");
+  }
 };
 
 const processInvoiceEvent = async (event: Stripe.Event, stripe: Stripe, success: boolean): Promise<void> => {
@@ -635,6 +706,28 @@ const processInvoiceEvent = async (event: Stripe.Event, stripe: Stripe, success:
     amount: centsToMajor(success ? invoice.amount_paid : invoice.amount_due),
     currency: cleanString(invoice.currency) || null,
   });
+
+  // Register Payment record for history tracking
+  if (userId) {
+    const membership = await prisma.membership.findFirst({
+      where: { stripeSubscriptionId: subscriptionId },
+      select: { id: true },
+    }).catch(() => null);
+    const invoiceObj = invoice as any;
+    await upsertPaymentRecord({
+      stripeEventId: event.id,
+      stripeInvoiceId: cleanString(invoice.id) || null,
+      stripePaymentIntentId: extractExpandableId(invoiceObj.payment_intent),
+      stripeSubscriptionId: subscriptionId,
+      userId,
+      membershipId: membership?.id ?? null,
+      amount: centsToMajor(success ? invoice.amount_paid : invoice.amount_due),
+      currency: cleanString(invoice.currency) || null,
+      status: success ? "paid" : "failed",
+      failureCode: !success ? (cleanString(invoiceObj.last_payment_error?.code) || null) : null,
+      failureMessage: !success ? (cleanString(invoiceObj.last_payment_error?.message) || null) : null,
+    });
+  }
 
   // Notify user + admins on invoice paid (renewal) or failed
   if (userId) {
