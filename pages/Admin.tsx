@@ -35,7 +35,8 @@ import {
   Download,
   BarChart3,
   TrendingUp,
-  Banknote
+  Banknote,
+  Loader2
 } from 'lucide-react';
 import { AuditLogEntry, Member, UserRole } from '../types';
 import { useAuth } from '../context/AuthContext';
@@ -320,6 +321,21 @@ const riskOfMember = (member: Member): HealthFlag => {
   if (status !== 'active' || !consent) return 'warning';
   return 'ok';
 };
+
+const Pill: React.FC<{ label: string; cls: string }> = ({ label, cls }) => (
+  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${cls}`}>{label}</span>
+);
+
+const KpiCard: React.FC<{ icon: React.ReactNode; label: string; value: string | number; sub?: string; accent?: string }> = ({ icon, label, value, sub, accent = 'text-velum-900' }) => (
+  <div className="bg-white rounded-2xl border border-velum-100 p-5 flex flex-col gap-3">
+    <div className="flex items-center justify-between">
+      <span className="text-[10px] font-bold uppercase tracking-widest text-velum-500">{label}</span>
+      <span className="text-velum-400">{icon}</span>
+    </div>
+    <p className={`text-3xl font-serif font-bold leading-none ${accent}`}>{value}</p>
+    {sub && <p className="text-xs text-velum-400">{sub}</p>}
+  </div>
+);
 
 export const Admin: React.FC = () => {
   const { login, logout, user, isAuthenticated, isSessionLoading: isAuthLoading, isActionLoading } = useAuth();
@@ -1830,21 +1846,6 @@ export const Admin: React.FC = () => {
     }
   };
 
-  const Pill: React.FC<{ label: string; cls: string }> = ({ label, cls }) => (
-    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${cls}`}>{label}</span>
-  );
-
-  const KpiCard: React.FC<{ icon: React.ReactNode; label: string; value: string | number; sub?: string; accent?: string }> = ({ icon, label, value, sub, accent = 'text-velum-900' }) => (
-    <div className="bg-white rounded-2xl border border-velum-100 p-5 flex flex-col gap-3">
-      <div className="flex items-center justify-between">
-        <span className="text-[10px] font-bold uppercase tracking-widest text-velum-500">{label}</span>
-        <span className="text-velum-400">{icon}</span>
-      </div>
-      <p className={`text-3xl font-serif font-bold leading-none ${accent}`}>{value}</p>
-      {sub && <p className="text-xs text-velum-400">{sub}</p>}
-    </div>
-  );
-
   // ─── Session Modal ────────────────────────────────────────────────────────
 
   const renderSessionModal = () => {
@@ -3338,18 +3339,23 @@ export const Admin: React.FC = () => {
 
   // ─── Section: Pagos ───────────────────────────────────────────────────────
 
-  const handleDownloadReport = async () => {
+  const handleDownloadHistCSV = async () => {
     try {
-      const resp = await fetch('/admin/reports?format=csv', { credentials: 'include' });
+      const params = new URLSearchParams();
+      if (histDateFrom) params.set('dateFrom', histDateFrom);
+      if (histDateTo) params.set('dateTo', histDateTo);
+      if (histStatus) params.set('status', histStatus);
+      const resp = await fetch(`/api/v1/payments/export?${params.toString()}`, { credentials: 'include' });
+      if (!resp.ok) throw new Error('Error al exportar');
       const blob = await resp.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `velum-reporte-${new Date().toISOString().slice(0, 10)}.csv`;
+      a.download = `pagos-${new Date().toISOString().slice(0, 10)}.csv`;
       a.click();
       URL.revokeObjectURL(url);
     } catch {
-      toast.error('No se pudo descargar el reporte');
+      toast.error('No se pudo descargar el CSV');
     }
   };
 
@@ -3364,11 +3370,11 @@ export const Admin: React.FC = () => {
             <p className="text-sm text-velum-500 mt-1">Estado de cuentas y cobranza</p>
           </div>
           <button
-            onClick={() => void handleDownloadReport()}
+            onClick={() => void handleDownloadHistCSV()}
             className="flex items-center gap-2 px-3 py-2 rounded-xl border border-velum-200 text-velum-600 text-xs font-medium hover:bg-velum-50 transition"
           >
             <Download size={13} />
-            Descargar CSV
+            Exportar CSV
           </button>
         </div>
 

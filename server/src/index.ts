@@ -29,6 +29,7 @@ import { stripeWebhookRouter } from "./routes/stripeWebhookRoutes";
 import { startIntegrationWorker } from "./services/integrationWorker";
 import { startPaymentReminderCron } from "./services/paymentReminderService";
 import { startAppointmentReminderCron } from "./services/appointmentReminderService";
+import { startIntegrationJobCleanupCron } from "./services/integrationJobCleanupService";
 import { env } from "./utils/env";
 import { httpLogger, logger } from "./utils/logger";
 import { errorHandler } from "./middlewares/error";
@@ -137,4 +138,5 @@ app.listen(env.port, () => {
   });
   startPaymentReminderCron();
   startAppointmentReminderCron();
+  startIntegrationJobCleanupCron();
 });

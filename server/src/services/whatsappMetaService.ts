@@ -1,5 +1,6 @@
 import https from "node:https";
 import { prisma } from "../db/prisma";
+import { logger } from "../utils/logger";
 
 export type WhatsappMetaConfig = {
   accessToken: string;
@@ -183,7 +184,7 @@ export const sendWhatsappOtpCode = async (
 
   if (!cfg.accessToken || !cfg.phoneNumberId || !cfg.templateName) {
     if (cfg.allowConsole) {
-      console.log(`[WHATSAPP_OTP_DEV] ${normalized} -> ${code}`);
+      logger.info({ phone: normalized }, `[WHATSAPP_OTP_DEV] code=${code}`);
       return;
     }
     throw new Error("WhatsApp OTP (Meta) no esta configurado");
@@ -240,7 +241,7 @@ export const sendWhatsappAppointmentReminder = async (
   if (!toDigits) return;
 
   if (cfg.allowConsole && (!cfg.accessToken || !cfg.phoneNumberId)) {
-    console.log(`[WHATSAPP_REMINDER_DEV] ${normalized} -> ${params.date} ${params.time}`);
+    logger.info({ phone: normalized, date: params.date, time: params.time }, "[WHATSAPP_REMINDER_DEV]");
     return;
   }
 

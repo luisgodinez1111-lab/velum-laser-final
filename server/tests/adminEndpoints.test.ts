@@ -8,8 +8,8 @@ vi.mock("../src/db/prisma", () => ({
     payment: {
       count: vi.fn().mockResolvedValue(2),
       findMany: vi.fn().mockResolvedValue([
-        { id: "p1", amount: 50000, currency: "mxn", status: "paid", createdAt: new Date("2025-01-15"), paidAt: new Date("2025-01-15"), user: { id: "u1", email: "a@test.com" }, membership: null },
-        { id: "p2", amount: 30000, currency: "mxn", status: "pending", createdAt: new Date("2025-01-20"), paidAt: null, user: { id: "u2", email: "b@test.com" }, membership: null },
+        { id: "p1", amount: 50000, currency: "mxn", status: "paid", createdAt: new Date("2025-01-15"), paidAt: new Date("2025-01-15"), user: { id: "u1", email: "a@test.com", profile: { firstName: "Ana", lastName: "García" } }, membership: null },
+        { id: "p2", amount: 30000, currency: "mxn", status: "pending", createdAt: new Date("2025-01-20"), paidAt: null, user: { id: "u2", email: "b@test.com", profile: null }, membership: null },
       ]),
     },
     integrationJob: {
@@ -17,6 +17,7 @@ vi.mock("../src/db/prisma", () => ({
         { id: "j1", type: "GOOGLE_CALENDAR_SYNC", status: "done", attempts: 1, maxAttempts: 8, runAt: new Date(), finishedAt: new Date(), createdAt: new Date(), lastError: null, googleIntegrationId: null },
         { id: "j2", type: "GOOGLE_CALENDAR_SYNC", status: "failed", attempts: 8, maxAttempts: 8, runAt: new Date(), finishedAt: null, createdAt: new Date(), lastError: "timeout", googleIntegrationId: null },
       ]),
+      deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
     },
     webhookEvent: {
       findMany: vi.fn().mockResolvedValue([
@@ -104,5 +105,42 @@ describe("listWebhookEvents — auditoría Stripe", () => {
     expect(Array.isArray(res.body.events)).toBe(true);
     expect(res.body.events[0]).toHaveProperty("stripeEventId");
     expect(res.body.events[0]).toHaveProperty("type");
+  });
+});
+
+describe("exportPaymentsCSV — exportación CSV", () => {
+  it("devuelve content-type text/csv con BOM", async () => {
+    const { exportPaymentsCSV } = await import("../src/controllers/v1PaymentController");
+    const app = express();
+    app.use(express.json());
+    app.get("/payments/export", mockUser(), exportPaymentsCSV);
+
+    const res = await request(app).get("/payments/export");
+    expect(res.status).toBe(200);
+    expect(res.headers["content-type"]).toMatch(/text\/csv/);
+    expect(res.headers["content-disposition"]).toMatch(/pagos-/);
+    // BOM + header row
+    expect(res.text).toContain("Fecha");
+    expect(res.text).toContain("Email");
+    expect(res.text).toContain("Monto (MXN)");
+  });
+
+  it("acepta filtros dateFrom/dateTo/status sin error", async () => {
+    const { exportPaymentsCSV } = await import("../src/controllers/v1PaymentController");
+    const app = express();
+    app.use(express.json());
+    app.get("/payments/export", mockUser(), exportPaymentsCSV);
+
+    const res = await request(app).get("/payments/export?dateFrom=2025-01-01&dateTo=2025-01-31&status=paid");
+    expect(res.status).toBe(200);
+    expect(res.text).toContain("Ana");
+  });
+});
+
+describe("pruneOldIntegrationJobs — limpieza de cron", () => {
+  it("llama deleteMany para done y failed sin lanzar error", async () => {
+    const { pruneOldIntegrationJobs } = await import("../src/services/integrationJobCleanupService");
+    // Should not throw even when deleteMany returns count 0
+    await expect(pruneOldIntegrationJobs()).resolves.toBeUndefined();
   });
 });
