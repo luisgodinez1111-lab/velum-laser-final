@@ -3,7 +3,7 @@ import { prisma } from "../db/prisma";
 import { logger } from "../utils/logger";
 
 const DONE_MAX_DAYS = 7;
-const FAILED_MAX_DAYS = 30;
+const FAILED_MAX_DAYS = 14;
 
 export const pruneOldIntegrationJobs = async (): Promise<void> => {
   const sevenDaysAgo  = new Date(Date.now() - DONE_MAX_DAYS   * 86400000);

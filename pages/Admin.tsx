@@ -19,9 +19,7 @@ import {
   RefreshCw,
   AlertTriangle,
   Activity,
-  Target,
   FileText,
-  Clock3,
   ArrowRight,
   CheckCircle2,
   CircleAlert,
@@ -48,6 +46,8 @@ import { AdminStripeSettings } from "./AdminStripeSettings";
 import { AdminWhatsAppSettings } from "./AdminWhatsAppSettings";
 import { AdminRiesgosSection } from "./AdminRiesgosSection";
 import { AdminCumplimientoSection } from "./AdminCumplimientoSection";
+import { AdminKPIsSection } from "./AdminKPIsSection";
+import { AdminFinanzasSection } from "./AdminFinanzasSection";
 import { useToast } from "../context/ToastContext";
 import { apiFetch } from "../services/apiClient";
 import {
@@ -2561,126 +2561,6 @@ export const Admin: React.FC = () => {
     </div>
   );
 
-  // ─── Section: KPIs ────────────────────────────────────────────────────────
-
-  const renderKPIs = () => (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-serif text-velum-900">KPIs</h1>
-        <p className="text-sm text-velum-500 mt-1">Indicadores clave de desempeño</p>
-      </div>
-      {analytics.totalSocios === 0 && (
-        <div className="flex items-start gap-3 p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-800 text-sm">
-          <AlertTriangle size={16} className="shrink-0 mt-0.5" />
-          <span>Los KPIs se calcularán automáticamente cuando haya socias registradas con membresías activas. Comienza invitando a tus primeras socias desde la sección <strong>Socias</strong>.</span>
-        </div>
-      )}
-      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-        <KpiCard icon={<Users size={18} />} label="Socios activos" value={analytics.sociosActivos} sub={`${analytics.sociosPendientes} pendientes de activación`} />
-        <KpiCard icon={<Wallet size={18} />} label="MRR" value={formatMoney(analytics.mrr)} sub="Ingreso recurrente mensual" accent="text-emerald-700" />
-        <KpiCard icon={<Target size={18} />} label="ARPU" value={formatMoney(analytics.arpu)} sub="Ingreso promedio por usuario" />
-        <KpiCard icon={<AlertTriangle size={18} />} label="Riesgo de churn" value={`${analytics.churnRisk.toFixed(1)}%`} sub={`${analytics.sociosConRiesgo} socios en riesgo`} accent={analytics.churnRisk > 20 ? 'text-red-600' : 'text-velum-900'} />
-        <KpiCard icon={<FileText size={18} />} label="Expedientes firmados" value={analytics.expedientesFirmados} sub={`de ${analytics.totalSocios} socios`} />
-        <KpiCard icon={<Clock3 size={18} />} label="Renovaciones próximas" value={analytics.renewalsIn7Days} sub="en los próximos 7 días" />
-      </div>
-      {/* Plan breakdown */}
-      <div>
-        <h2 className="text-xs font-bold uppercase tracking-widest text-velum-500 mb-3">Distribución por plan</h2>
-        <div className="bg-white rounded-2xl border border-velum-100 overflow-hidden">
-          {planBreakdown.length === 0 ? (
-            <div className="py-12 text-center text-xs text-velum-400">Sin datos de planes</div>
-          ) : (
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-velum-100 bg-velum-50/50">
-                  {['Plan', 'Socios', 'Ingreso total', '% del MRR'].map((h) => (
-                    <th key={h} className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-widest text-velum-400">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {planBreakdown.map((p, i) => (
-                  <tr key={p.plan} className={i < planBreakdown.length - 1 ? 'border-b border-velum-50' : ''}>
-                    <td className="px-4 py-3 font-medium text-velum-900">{p.plan}</td>
-                    <td className="px-4 py-3 text-velum-600">{p.members}</td>
-                    <td className="px-4 py-3 text-velum-600">{formatMoney(p.revenue)}</td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <div className="flex-1 h-1.5 bg-velum-100 rounded-full overflow-hidden max-w-[80px]">
-                          <div className="h-full bg-velum-900 rounded-full" style={{ width: `${analytics.mrr > 0 ? (p.revenue / analytics.mrr) * 100 : 0}%` }} />
-                        </div>
-                        <span className="text-xs text-velum-500">{analytics.mrr > 0 ? ((p.revenue / analytics.mrr) * 100).toFixed(0) : 0}%</span>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-
-  // ─── Section: Finanzas ────────────────────────────────────────────────────
-
-  const renderFinanzas = () => {
-    const topMembers = [...members].sort((a, b) => (b.amount ?? 0) - (a.amount ?? 0)).slice(0, 20);
-    return (
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-2xl font-serif text-velum-900">Finanzas</h1>
-          <p className="text-sm text-velum-500 mt-1">Radar de ingresos y facturación</p>
-        </div>
-        {analytics.mrr === 0 && analytics.sociosActivos === 0 && (
-          <div className="flex items-start gap-3 p-4 rounded-2xl bg-blue-50 border border-blue-200 text-blue-800 text-sm">
-            <AlertTriangle size={16} className="shrink-0 mt-0.5" />
-            <span>Los datos financieros aparecerán aquí una vez que haya socias con membresías activas y pagos procesados por Stripe.</span>
-          </div>
-        )}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <KpiCard icon={<Wallet size={18} />} label="MRR total" value={formatMoney(analytics.mrr)} accent="text-emerald-700" />
-          <KpiCard icon={<Target size={18} />} label="ARPU" value={formatMoney(analytics.arpu)} />
-          <KpiCard icon={<Users size={18} />} label="Socios activos" value={analytics.sociosActivos} />
-          <KpiCard icon={<AlertTriangle size={18} />} label="En cobranza" value={analytics.collectionQueue.length} accent={analytics.collectionQueue.length > 0 ? 'text-red-600' : 'text-velum-900'} />
-        </div>
-        <div>
-          <h2 className="text-xs font-bold uppercase tracking-widest text-velum-500 mb-3">Top socios por monto</h2>
-          <div className="bg-white rounded-2xl border border-velum-100 overflow-hidden">
-            {topMembers.length === 0 ? (
-              <div className="py-12 text-center text-xs text-velum-400">Sin datos</div>
-            ) : (
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-velum-100 bg-velum-50/50">
-                    {['#', 'Socio', 'Plan', 'Monto', 'Estado'].map((h) => (
-                      <th key={h} className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-widest text-velum-400">{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {topMembers.map((m, i) => (
-                    <tr key={m.id} className={`hover:bg-velum-50 transition cursor-pointer ${i < topMembers.length - 1 ? 'border-b border-velum-50' : ''}`}
-                      onClick={() => handleOpenMemberDrawer(m)}>
-                      <td className="px-4 py-3 text-velum-400 text-xs">{i + 1}</td>
-                      <td className="px-4 py-3">
-                        <p className="font-medium text-velum-900">{m.name}</p>
-                        <p className="text-xs text-velum-400">{m.email}</p>
-                      </td>
-                      <td className="px-4 py-3 text-velum-600">{m.plan ?? '—'}</td>
-                      <td className="px-4 py-3 font-medium text-velum-900">{m.amount ? formatMoney(m.amount) : '—'}</td>
-                      <td className="px-4 py-3"><Pill label={statusLabel(m.subscriptionStatus)} cls={statusPill(m.subscriptionStatus)} /></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
-        </div>
-      </div>
-    );
-  };
-
   // ─── Expediente viewer modal ───────────────────────────────────────────────
 
   const FITZPATRICK = [
@@ -4021,8 +3901,12 @@ export const Admin: React.FC = () => {
       case 'agenda':       return renderAgenda();
       case 'expedientes':  return renderExpedientes();
       case 'pagos':        return renderPagos();
-      case 'kpis':         return renderKPIs();
-      case 'finanzas':     return renderFinanzas();
+      case 'kpis':         return (
+        <AdminKPIsSection analytics={analytics} planBreakdown={planBreakdown} />
+      );
+      case 'finanzas':     return (
+        <AdminFinanzasSection members={members} analytics={analytics} onOpenMember={handleOpenMemberDrawer} />
+      );
       case 'riesgos':      return (
         <AdminRiesgosSection
           members={members}
@@ -4036,7 +3920,6 @@ export const Admin: React.FC = () => {
           failedAudits={analytics.failedAudits}
           sensitiveEvents={analytics.sensitiveEvents}
           staffCount={members.filter((m) => m.role !== 'member').length + 1}
-          auditLogs={auditLogs}
           onRefresh={() => void loadData()}
         />
       );

@@ -238,6 +238,11 @@ export const Dashboard: React.FC = () => {
 
   const [openFaqId, setOpenFaqId]       = useState<string | null>(null);
   const [showEditIntake, setShowEditIntake] = useState(false);
+
+  type InAppNotif = { id: string; title: string; body: string | null; read: boolean; createdAt: string };
+  const [inAppNotifs, setInAppNotifs] = useState<InAppNotif[]>([]);
+  const [inAppUnread, setInAppUnread] = useState(0);
+  const [markingAllRead, setMarkingAllRead] = useState(false);
   const [intakeDraft, setIntakeDraft]   = useState({ fullName: "", phone: "", birthDate: "", allergies: "", medications: "", skinConditions: "" });
   const [isSavingIntake, setIsSavingIntake] = useState(false);
 
@@ -280,6 +285,13 @@ export const Dashboard: React.FC = () => {
       setIsLoadingPayments(true);
       try { setPayments(await clinicalService.getMyPayments()); }
       catch { setPayments([]); } finally { setIsLoadingPayments(false); }
+
+      try {
+        const nd = await apiFetch<any>("/v1/notifications?limit=20");
+        const list: InAppNotif[] = nd?.items ?? [];
+        setInAppNotifs(list);
+        setInAppUnread(nd?.unread ?? list.filter((n) => !n.read).length);
+      } catch { /* silent */ }
     };
     void load();
   }, [isAuthLoading, isAuthenticated, navigate, user?.email, user?.id, user?.role]);
@@ -304,6 +316,15 @@ export const Dashboard: React.FC = () => {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated]);
+
+  const handleMarkAllRead = async () => {
+    setMarkingAllRead(true);
+    try {
+      await apiFetch("/v1/notifications/read-all", { method: "POST" });
+      setInAppNotifs(prev => prev.map(n => ({ ...n, read: true })));
+      setInAppUnread(0);
+    } catch { /* silent */ } finally { setMarkingAllRead(false); }
+  };
 
   const handleCancelAppointment = async () => {
     if (!cancelApptId) return;
@@ -514,7 +535,7 @@ export const Dashboard: React.FC = () => {
   const firstName = (profile.fullName || user?.name || "").split(" ")[0] || "Bienvenida";
 
   // notification count
-  const notifCount = pendingDocs + ((!intakeStatus || intakeStatus === "draft") ? 1 : 0);
+  const notifCount = pendingDocs + ((!intakeStatus || intakeStatus === "draft") ? 1 : 0) + inAppUnread;
 
   // countdown
   const nextApptDate = upcomingAppointments[0]?.startAt ?? null;
@@ -639,6 +660,42 @@ export const Dashboard: React.FC = () => {
                   <button onClick={() => switchTab("records")} className={`shrink-0 self-center text-[11px] font-bold text-velum-900 bg-white rounded-xl px-3 py-1.5 hover:bg-velum-100 transition-colors ${pressBtn}`}>
                     Ir →
                   </button>
+                </div>
+              )}
+
+              {/* In-app notifications panel */}
+              {inAppNotifs.length > 0 && (
+                <div className="bg-white rounded-2xl border border-velum-100 overflow-hidden">
+                  <div className="px-4 py-3 border-b border-velum-100 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Bell size={14} className="text-velum-600" />
+                      <p className="text-[11px] font-bold uppercase tracking-widest text-velum-500">Notificaciones</p>
+                      {inAppUnread > 0 && (
+                        <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-velum-900 text-white text-[9px] font-bold">{inAppUnread}</span>
+                      )}
+                    </div>
+                    {inAppUnread > 0 && (
+                      <button onClick={handleMarkAllRead} disabled={markingAllRead}
+                        className="flex items-center gap-1.5 text-[11px] font-medium text-velum-600 hover:text-velum-900 transition-colors disabled:opacity-40">
+                        {markingAllRead ? <Loader2 size={11} className="animate-spin" /> : <CheckCircle size={11} />}
+                        Marcar todo como leído
+                      </button>
+                    )}
+                  </div>
+                  <div className="divide-y divide-velum-50">
+                    {inAppNotifs.map((n) => (
+                      <div key={n.id} className={`px-4 py-3 flex items-start gap-3 transition-colors ${n.read ? "opacity-60" : "bg-velum-50/50"}`}>
+                        <div className={`mt-0.5 w-1.5 h-1.5 rounded-full shrink-0 ${n.read ? "bg-velum-300" : "bg-velum-900"}`} />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[13px] font-semibold text-velum-900 leading-snug">{n.title}</p>
+                          {n.body && <p className="text-[12px] text-velum-500 mt-0.5 leading-snug">{n.body}</p>}
+                        </div>
+                        <p className="shrink-0 text-[10px] text-velum-400">
+                          {new Date(n.createdAt).toLocaleDateString("es-MX", { day: "2-digit", month: "short" })}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
 
