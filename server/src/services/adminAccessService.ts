@@ -28,7 +28,7 @@ type AccessStore = {
 const SETTING_KEY = "admin_access_matrix_v1";
 let memoryStore: AccessStore = { byUserId: {} };
 
-const getAppSettingModel = (): any | null => {
+const getAppSettingModel = (): typeof prisma.appSetting | null => {
   const model = prisma.appSetting;
   if (!model) return null;
   if (typeof model.findUnique !== "function" || typeof model.upsert !== "function") return null;
@@ -45,9 +45,9 @@ const normalizePermissions = (value: unknown): string[] => {
 
 const normalizeStore = (value: unknown): AccessStore => {
   if (!value || typeof value !== "object") return { byUserId: {} };
-  const raw = value as any;
+  const raw = value as Record<string, unknown>;
   const byUserId: Record<string, string[]> = {};
-  const source = raw.byUserId && typeof raw.byUserId === "object" ? raw.byUserId : {};
+  const source = raw.byUserId && typeof raw.byUserId === "object" ? (raw.byUserId as Record<string, unknown>) : {};
   for (const [k, v] of Object.entries(source)) byUserId[k] = normalizePermissions(v);
   return { byUserId };
 };
@@ -93,8 +93,8 @@ export const writeAccessStore = async (store: AccessStore): Promise<void> => {
   try {
     await model.upsert({
       where: { key: SETTING_KEY },
-      update: { value: memoryStore as any },
-      create: { key: SETTING_KEY, value: memoryStore as any },
+      update: { value: memoryStore as unknown as Record<string, unknown> },
+      create: { key: SETTING_KEY, value: memoryStore as unknown as Record<string, unknown> },
     });
   } catch {
     // fallback en memoria para no romper operación

@@ -4,6 +4,7 @@ import {
   getStripeWebhookConfig,
   handleBusinessStripeEvent,
 } from "../services/stripeWebhookService";
+import { prisma } from "../db/prisma";
 
 const getStripeSignature = (req: Request): string => {
   const value = req.headers["stripe-signature"];
@@ -50,6 +51,17 @@ export const stripeWebhookController = async (req: Request, res: Response): Prom
     res.status(400).json({ ok: false, message });
     return;
   }
+
+  // ── Deduplicación de eventos Stripe ──────────────────────────────
+  const existing = await prisma.webhookEvent.findUnique({ where: { stripeEventId: event.id } }).catch(() => null);
+  if (existing) {
+    res.status(200).json({ ok: true, received: true, duplicate: true, eventId: event.id });
+    return;
+  }
+
+  await prisma.webhookEvent.create({
+    data: { stripeEventId: event.id, type: event.type, processedAt: new Date() },
+  }).catch(() => {});
 
   try {
     await handleBusinessStripeEvent(event, stripe);

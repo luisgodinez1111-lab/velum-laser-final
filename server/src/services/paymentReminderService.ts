@@ -142,10 +142,21 @@ export const runPaymentReminders = async (): Promise<void> => {
   }
 };
 
+const runWithRetry = (fn: () => Promise<void>, jobName: string): void => {
+  fn().catch((err) => {
+    logger.error({ err }, `[${jobName}] Error en primera ejecución — reintentando en 5s`);
+    setTimeout(() => {
+      fn().catch((retryErr) => {
+        logger.error({ err: retryErr }, `[${jobName}] Error en retry`);
+      });
+    }, 5000);
+  });
+};
+
 export const startPaymentReminderCron = (): void => {
   // "0 9 * * *" with timezone: fires at 09:00 AM Mexico City time (node-cron interprets in given timezone)
   cron.schedule("0 9 * * *", () => {
-    void runPaymentReminders();
+    runWithRetry(runPaymentReminders, "payment-reminder");
   }, { timezone: "America/Mexico_City" });
 
   logger.info("[payment-reminder] Cron scheduled — daily at 09:00 AM Mexico City time");

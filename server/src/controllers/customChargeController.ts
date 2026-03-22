@@ -49,10 +49,10 @@ export const listCustomCharges = async (req: AuthRequest, res: Response) => {
 export const createCharge = async (req: AuthRequest, res: Response) => {
   if (!req.user?.id) return res.status(401).json({ message: "No autorizado" });
 
-  const body = req.body as any;
+  const body = req.body as Record<string, unknown>;
   const userId = asString(body?.userId);
   const title = asString(body?.title);
-  const description = asString(body?.description) || undefined;
+  const description = asString(body?.description).slice(0, 500) || undefined;
   const amountPesos = Number(body?.amount);
   const currency = asString(body?.currency) || "mxn";
   const type = asString(body?.type) === "RECURRING" ? "RECURRING" : "ONE_TIME";
@@ -201,9 +201,9 @@ export const getChargePublic = async (req: Request, res: Response) => {
 // ── Public: Verify OTP and create Stripe checkout ────────────────────
 export const verifyOtpAndCheckout = async (req: Request, res: Response) => {
   const { id } = req.params;
-  const otp = asString((req.body as any)?.otp);
+  const otp = asString((req.body as Record<string, unknown>)?.otp);
 
-  if (!otp || otp.length !== 6) return res.status(400).json({ message: "OTP inválido" });
+  if (!otp || !/^[A-Z0-9]{6}$/i.test(otp)) return res.status(400).json({ message: "OTP inválido" });
 
   const result = await verifyCustomChargeOtp(id, otp);
 
@@ -273,7 +273,7 @@ export const verifyOtpAndCheckout = async (req: Request, res: Response) => {
     body: params.toString(),
   });
 
-  const json: any = await rsp.json().catch(() => ({}));
+  const json = await rsp.json().catch(() => ({})) as Record<string, unknown>;
 
   if (!rsp.ok) {
     const detail = json?.error?.message || "Error creando checkout en Stripe";

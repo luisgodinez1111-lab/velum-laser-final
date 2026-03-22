@@ -14,6 +14,41 @@ export class ApiError extends Error {
   }
 }
 
+const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+
+const fetchWithRetry = async (
+  url: string,
+  init: RequestInit,
+  retries: number,
+  backoff: number
+): Promise<Response> => {
+  try {
+    const response = await fetch(url, init);
+
+    // 429: espera el Retry-After del servidor antes de reintentar
+    if (response.status === 429 && retries > 0) {
+      const retryAfter = parseInt(response.headers.get('Retry-After') ?? '5', 10);
+      await sleep(retryAfter * 1000);
+      return fetchWithRetry(url, init, retries - 1, backoff * 2);
+    }
+
+    // 503: reintenta tras 2 segundos
+    if (response.status === 503 && retries > 0) {
+      await sleep(2000);
+      return fetchWithRetry(url, init, retries - 1, backoff * 2);
+    }
+
+    return response;
+  } catch (err) {
+    // Error de red (fetch failed, sin conexión) — reintenta con backoff
+    if (retries > 0 && !(err instanceof DOMException)) {
+      await sleep(backoff);
+      return fetchWithRetry(url, init, retries - 1, backoff * 2);
+    }
+    throw err;
+  }
+};
+
 export const apiFetch = async <T>(
   path: string,
   options: RequestInit = {},
@@ -24,7 +59,7 @@ export const apiFetch = async <T>(
 
   try {
     const isFormData = options.body instanceof FormData;
-    const response = await fetch(`${API_BASE_URL}${path}`, {
+    const init: RequestInit = {
       credentials: 'include',
       signal: controller.signal,
       ...options,
@@ -32,7 +67,9 @@ export const apiFetch = async <T>(
         ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
         ...(options.headers ?? {}),
       },
-    });
+    };
+
+    const response = await fetchWithRetry(`${API_BASE_URL}${path}`, init, 2, 500);
 
     if (!response.ok) {
       const errorBody = await response.json().catch(() => ({}));

@@ -193,6 +193,8 @@ model AuditLog {
   @@index([targetUserId])
   @@index([resourceType])
   @@index([createdAt])
+  @@index([resourceType, createdAt])
+  @@index([userId, createdAt])
 }
 
 model Lead {
@@ -309,6 +311,7 @@ model Appointment {
   @@index([startAt, endAt])
   @@index([status])
   @@index([status, startAt])
+  @@index([userId, startAt])
   @@index([googleEventId])
 }
 
@@ -463,6 +466,7 @@ model Payment {
   @@index([status])
   @@index([createdAt])
   @@index([createdAt, status])
+  @@index([membershipId, createdAt])
 }
 
 model EmailVerificationToken {

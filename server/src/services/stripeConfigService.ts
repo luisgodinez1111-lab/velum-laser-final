@@ -17,7 +17,7 @@ const mask = (value: string): string => {
   return `${v.slice(0, 4)}...${v.slice(-4)}`;
 };
 
-const getAppSettingModel = (): any | null => {
+const getAppSettingModel = (): typeof prisma.appSetting | null => {
   const model = prisma.appSetting;
   if (!model) return null;
   if (typeof model.findUnique !== "function" || typeof model.upsert !== "function") return null;
@@ -31,7 +31,7 @@ const fromEnv = (): StripeConfig => ({
 });
 
 const normalize = (v: unknown): StripeConfig => {
-  const raw = (v && typeof v === "object" ? (v as any) : {}) as any;
+  const raw = (v && typeof v === "object" ? v : {}) as Record<string, unknown>;
   return {
     secretKey: asString(raw.secretKey),
     publishableKey: asString(raw.publishableKey),
@@ -77,8 +77,8 @@ export const saveStripeConfig = async (incoming: Partial<StripeConfig>): Promise
 
   await model.upsert({
     where: { key: SETTING_KEY },
-    update: { value: next as any },
-    create: { key: SETTING_KEY, value: next as any },
+    update: { value: next as Record<string, unknown> },
+    create: { key: SETTING_KEY, value: next as Record<string, unknown> },
   });
 
   return { source: "database", config: next };

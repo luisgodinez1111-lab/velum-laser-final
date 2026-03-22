@@ -16,7 +16,7 @@ export const getAdminStripeConfig = async (req: AuthRequest, res: Response) => {
 
     const config = await resolveStripeConfig();
     return res.json(presentStripeConfig(config.source, config.config));
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error({ err: error }, "getAdminStripeConfig error");
     return res.status(500).json({ message: "No se pudo obtener configuración Stripe" });
   }
@@ -26,9 +26,9 @@ export const updateAdminStripeConfig = async (req: AuthRequest, res: Response) =
   try {
     if (!isAdmin(req)) return res.status(403).json({ message: "No autorizado" });
 
-    const secretKey = asString((req.body as any)?.secretKey);
-    const publishableKey = asString((req.body as any)?.publishableKey);
-    const webhookSecret = asString((req.body as any)?.webhookSecret);
+    const secretKey = asString((req.body as Record<string, unknown>)?.secretKey);
+    const publishableKey = asString((req.body as Record<string, unknown>)?.publishableKey);
+    const webhookSecret = asString((req.body as Record<string, unknown>)?.webhookSecret);
 
     if (!secretKey && !publishableKey && !webhookSecret) {
       return res.status(400).json({ message: "Proporciona al menos una clave para actualizar" });
@@ -40,9 +40,9 @@ export const updateAdminStripeConfig = async (req: AuthRequest, res: Response) =
       message: "Configuración Stripe guardada",
       ...presentStripeConfig(saved.source, saved.config),
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error({ err: error }, "updateAdminStripeConfig error");
-    return res.status(500).json({ message: "No se pudo guardar configuración Stripe", detail: error?.message ?? "unknown" });
+    return res.status(500).json({ message: "No se pudo guardar configuración Stripe", detail: error instanceof Error ? error.message : "unknown" });
   }
 };
 
@@ -73,8 +73,8 @@ export const testAdminStripeConfig = async (req: AuthRequest, res: Response) => 
         country: body?.country || "",
       },
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error({ err: error }, "testAdminStripeConfig error");
-    return res.status(500).json({ message: "No se pudo validar Stripe", detail: error?.message ?? "unknown" });
+    return res.status(500).json({ message: "No se pudo validar Stripe", detail: error instanceof Error ? error.message : "unknown" });
   }
 };

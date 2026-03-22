@@ -130,10 +130,21 @@ export const runAppointmentReminders = async (): Promise<void> => {
   }
 };
 
+const runWithRetry = (fn: () => Promise<void>, jobName: string): void => {
+  fn().catch((err) => {
+    logger.error({ err }, `[${jobName}] Error en primera ejecución — reintentando en 5s`);
+    setTimeout(() => {
+      fn().catch((retryErr) => {
+        logger.error({ err: retryErr }, `[${jobName}] Error en retry`);
+      });
+    }, 5000);
+  });
+};
+
 export const startAppointmentReminderCron = (): void => {
   // Fires at 08:00 AM Chihuahua time — catches appointments for the following day
   cron.schedule("0 8 * * *", () => {
-    void runAppointmentReminders();
+    runWithRetry(runAppointmentReminders, "appointment-reminder");
   }, { timezone: TIMEZONE });
 
   logger.info("[appointment-reminder] Cron scheduled — daily at 08:00 AM Mexico City time");

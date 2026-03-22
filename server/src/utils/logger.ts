@@ -24,5 +24,7 @@ export const httpLogger = pinoHttp({
   redact: {
     paths: redactPaths,
     remove: true
-  }
+  },
+  customAttributeKeys: { requestId: "requestId" },
+  genReqId: (req) => req.headers["x-request-id"] as string | undefined,
 });

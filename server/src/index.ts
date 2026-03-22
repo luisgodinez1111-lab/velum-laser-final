@@ -56,9 +56,18 @@ app.get("/health", healthHandler);
 app.get("/api/health", healthHandler);
 
 app.set("trust proxy", 1);
+
+// ── Request ID — correlaciona logs por request ─────────────────────
+app.use((req, res, next) => {
+  const requestId = (req.headers["x-request-id"] as string) || crypto.randomUUID();
+  req.headers["x-request-id"] = requestId;
+  res.setHeader("x-request-id", requestId);
+  next();
+});
+
 app.use(httpLogger);
 app.use(helmet());
-app.use(cors({ origin: env.corsOrigin.split(","), credentials: true }));
+app.use(cors({ origin: env.corsOrigin.split(",").map((s) => s.trim()), credentials: true }));
 app.use(cookieParser());
 
 // ── Rate limiting ────────────────────────────────────────────────────
