@@ -319,7 +319,66 @@ export const sendAppointmentBookingEmail = async (
 };
 
 // ──────────────────────────────────────────────────────────────────────
-// 3c. OTP de autorización para eliminar paciente (API key 3 — reminders)
+// 3c. Cancelación de cita por la clínica (API key 3 — reminders)
+// ──────────────────────────────────────────────────────────────────────
+export const sendAppointmentCancellationEmail = async (
+  to: string,
+  params: {
+    name: string;
+    date: string;
+    time: string;
+    treatment?: string;
+    reason?: string;
+  }
+): Promise<void> => {
+  const html = baseHtml(`
+    <p style="${headingStyle}">Tu cita ha sido cancelada</p>
+    <p style="${bodyStyle}">
+      Hola <strong>${params.name}</strong>, lamentamos informarte que tu cita en Velum Laser ha sido cancelada.
+    </p>
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:#f8f6f3;border-radius:12px;padding:20px;margin:20px 0;">
+      <tr>
+        <td style="padding:6px 0;">
+          <p style="margin:0;font-size:12px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#9b8d80;">Fecha</p>
+          <p style="margin:2px 0 0;font-size:16px;font-weight:600;color:#1a1614;">${params.date}</p>
+        </td>
+      </tr>
+      <tr>
+        <td style="padding:6px 0;">
+          <p style="margin:0;font-size:12px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#9b8d80;">Hora</p>
+          <p style="margin:2px 0 0;font-size:16px;font-weight:600;color:#1a1614;">${params.time}</p>
+        </td>
+      </tr>
+      ${params.treatment ? `
+      <tr>
+        <td style="padding:6px 0;">
+          <p style="margin:0;font-size:12px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#9b8d80;">Tratamiento</p>
+          <p style="margin:2px 0 0;font-size:16px;font-weight:600;color:#1a1614;">${params.treatment}</p>
+        </td>
+      </tr>` : ""}
+      ${params.reason ? `
+      <tr>
+        <td style="padding:6px 0;">
+          <p style="margin:0;font-size:12px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#9b8d80;">Motivo</p>
+          <p style="margin:2px 0 0;font-size:14px;color:#5a4e44;">${params.reason}</p>
+        </td>
+      </tr>` : ""}
+    </table>
+    <p style="${bodyStyle}">
+      Puedes agendar una nueva cita desde tu perfil en velumlaser.com. Si tienes dudas, contáctanos.
+    </p>
+  `);
+
+  await withRetry(() => resendReminders.emails.send({
+    from: FROM,
+    to,
+    subject: `Tu cita del ${params.date} fue cancelada — Velum Laser`,
+    html,
+  }));
+};
+
+// ──────────────────────────────────────────────────────────────────────
+// 3d. OTP de autorización para eliminar paciente (API key 3 — reminders)
 // ──────────────────────────────────────────────────────────────────────
 export const sendDeleteUserOtpEmail = async (
   to: string,

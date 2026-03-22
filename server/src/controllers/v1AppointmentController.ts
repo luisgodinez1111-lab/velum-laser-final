@@ -17,7 +17,7 @@ import {
 import { env } from "../utils/env";
 import { getClinicIdByUserId } from "../utils/clinic";
 import { logger } from "../utils/logger";
-import { onAppointmentBooked, onAppointmentConfirmed } from "../services/notificationService";
+import { onAppointmentBooked, onAppointmentConfirmed, onAppointmentCancelledByClinic, onAppointmentCancelledByPatient } from "../services/notificationService";
 import { agendaBlockCreateSchema, agendaConfigUpdateSchema, agendaDateParamSchema } from "../validators/agenda";
 import { appointmentCreateSchema, appointmentUpdateSchema } from "../validators/appointments";
 
@@ -624,6 +624,38 @@ export const updateAppointment = async (req: AuthRequest, res: Response) => {
     }).catch((error) => {
       logger.error({ err: error, appointmentId: appointment.id }, "Unable to enqueue Google cancel sync");
     });
+
+    const TZ = "America/Chihuahua";
+    const cancelDate = appointment.startAt.toLocaleDateString("es-MX", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: TZ });
+    const cancelTime = appointment.startAt.toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit", hour12: true, timeZone: TZ });
+    const cancelTreatment = canceled.treatment?.name;
+    const cancelReason = payload.canceledReason;
+
+    const cancelledByClinic = req.user!.id !== appointment.userId;
+    if (cancelledByClinic) {
+      const profile = await prisma.profile.findUnique({ where: { userId: canceled.user.id }, select: { firstName: true, lastName: true } });
+      const userName = [profile?.firstName, profile?.lastName].filter(Boolean).join(" ") || canceled.user.email;
+      onAppointmentCancelledByClinic({
+        userId: canceled.user.id,
+        userEmail: canceled.user.email,
+        userName,
+        date: cancelDate,
+        time: cancelTime,
+        treatment: cancelTreatment,
+        reason: cancelReason,
+      }).catch((err) => logger.error({ err }, "[appointment] cancelled-by-clinic notification failed"));
+    } else {
+      const profile = await prisma.profile.findUnique({ where: { userId: canceled.user.id }, select: { firstName: true, lastName: true } });
+      const userName = [profile?.firstName, profile?.lastName].filter(Boolean).join(" ") || canceled.user.email;
+      onAppointmentCancelledByPatient({
+        userName,
+        userEmail: canceled.user.email,
+        date: cancelDate,
+        time: cancelTime,
+        treatment: cancelTreatment,
+        reason: cancelReason,
+      }).catch((err) => logger.error({ err }, "[appointment] cancelled-by-patient notification failed"));
+    }
 
     return res.json(canceled);
   }

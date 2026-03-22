@@ -19,6 +19,7 @@ const typeIcon: Record<string, string> = {
   custom_charge_paid:      "💰",
   appointment_booked:      "🗓️",
   appointment_confirmed:   "✔️",
+  appointment_cancelled:   "❌",
   appointment_deposit_paid:"📅",
   membership_activated:    "⭐",
   membership_renewed:      "🔄",

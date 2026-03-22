@@ -2,7 +2,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "../db/prisma";
 import { logger } from "../utils/logger";
 import { sendNotificationEmail, sendAdminNotificationEmail } from "./notificationEmailService";
-import { sendAppointmentBookingEmail } from "./emailService";
+import { sendAppointmentBookingEmail, sendAppointmentCancellationEmail } from "./emailService";
 
 export type NotificationType =
   | "custom_charge_created"
@@ -10,6 +10,7 @@ export type NotificationType =
   | "custom_charge_paid"
   | "appointment_booked"
   | "appointment_confirmed"
+  | "appointment_cancelled"
   | "appointment_deposit_paid"
   | "membership_activated"
   | "membership_renewed"
@@ -260,6 +261,54 @@ export const onAppointmentConfirmed = async (params: {
     title: "Tu cita fue confirmada",
     body: `${params.date} a las ${params.time}${params.treatment ? ` · ${params.treatment}` : ""}`,
   });
+};
+
+/** Clinic cancels patient's appointment → notify patient (in-app + email) */
+export const onAppointmentCancelledByClinic = async (params: {
+  userId: string;
+  userEmail: string;
+  userName: string;
+  date: string;
+  time: string;
+  treatment?: string;
+  reason?: string;
+}) => {
+  await createNotification({
+    userId: params.userId,
+    type: "appointment_cancelled",
+    title: "Tu cita fue cancelada",
+    body: `${params.date} a las ${params.time}${params.treatment ? ` · ${params.treatment}` : ""}`,
+  });
+
+  sendAppointmentCancellationEmail(params.userEmail, {
+    name: params.userName,
+    date: params.date,
+    time: params.time,
+    treatment: params.treatment,
+    reason: params.reason,
+  }).catch((err) => logger.error({ err }, "[notifications] email appointment_cancelled failed"));
+};
+
+/** Patient cancels their own appointment → notify admins (in-app + email) */
+export const onAppointmentCancelledByPatient = async (params: {
+  userName: string;
+  userEmail: string;
+  date: string;
+  time: string;
+  treatment?: string;
+  reason?: string;
+}) => {
+  await notifyAdmins(
+    "appointment_cancelled",
+    `Cita cancelada por paciente: ${params.userName}`,
+    `${params.date} a las ${params.time}${params.treatment ? ` · ${params.treatment}` : ""}${params.reason ? ` — "${params.reason}"` : ""}`,
+  );
+
+  sendAdminNotificationEmail({
+    subject: `Cita cancelada por ${params.userName}`,
+    title: "Paciente canceló su cita",
+    body: `<strong>${params.userName}</strong> (${params.userEmail}) canceló su cita del <strong>${params.date}</strong> a las <strong>${params.time}</strong>${params.treatment ? ` · ${params.treatment}` : ""}${params.reason ? `.<br>Motivo: ${params.reason}` : "."}`,
+  }).catch((err) => logger.error({ err }, "[notifications] email appointment_cancelled_by_patient failed"));
 };
 
 /** New member registered (public or created by admin) → notify admins */
