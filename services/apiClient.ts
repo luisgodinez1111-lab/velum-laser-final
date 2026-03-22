@@ -3,6 +3,23 @@
 const API_BASE_URL = import.meta.env.VITE_API_URL ?? '/api';
 const DEFAULT_TIMEOUT_MS = 15_000;
 
+// ── Silent refresh token rotation ─────────────────────────────────────────────
+// On 401, try POST /auth/refresh before redirecting to login.
+// Shared promise prevents multiple concurrent refresh calls (e.g. parallel requests).
+let _refreshInFlight: Promise<boolean> | null = null;
+
+const attemptTokenRefresh = (): Promise<boolean> => {
+  if (_refreshInFlight) return _refreshInFlight;
+  _refreshInFlight = fetch(`${API_BASE_URL}/auth/refresh`, {
+    method: 'POST',
+    credentials: 'include',
+  })
+    .then((r) => r.ok)
+    .catch(() => false)
+    .finally(() => { _refreshInFlight = null; });
+  return _refreshInFlight;
+};
+
 export class ApiError extends Error {
   constructor(
     message: string,
@@ -80,9 +97,23 @@ export const apiFetch = async <T>(
           typeof (errorBody as Record<string, unknown>).message === 'string')
           ? (errorBody as Record<string, unknown>).message as string
           : `Error ${response.status}`;
-      if (response.status === 401 && !window.location.pathname.includes('/login')) {
-        window.location.replace('/login');
+
+      // On 401: try silent refresh then retry the original request once.
+      // Skip for auth paths to prevent infinite loops.
+      if (response.status === 401 && !path.startsWith('/auth/')) {
+        const refreshed = await attemptTokenRefresh();
+        if (refreshed) {
+          const retryResp = await fetch(`${API_BASE_URL}${path}`, init).catch(() => null);
+          if (retryResp?.ok) {
+            if (retryResp.status === 204) return undefined as unknown as T;
+            return retryResp.json() as Promise<T>;
+          }
+        }
+        if (!window.location.pathname.includes('/login')) {
+          window.location.replace('/login');
+        }
       }
+
       throw new ApiError(message, response.status, errorBody);
     }
 

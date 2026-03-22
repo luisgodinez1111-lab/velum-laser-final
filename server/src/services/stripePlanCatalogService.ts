@@ -10,7 +10,12 @@ export type StripePlanMapping = {
 };
 
 const SETTING_KEY = "stripe_plan_catalog_v1";
+const CATALOG_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
 let memoryPlans: StripePlanMapping[] = [];
+let cacheAt = 0; // timestamp of last successful DB read
+
+export const invalidatePlanCatalogCache = (): void => { cacheAt = 0; };
 
 const asString = (v: unknown): string => (typeof v === "string" ? v.trim() : "");
 const asNumber = (v: unknown): number => {
@@ -65,6 +70,11 @@ const getAppSettingModel = (): any | null => {
 };
 
 export const readStripePlanCatalog = async (): Promise<StripePlanMapping[]> => {
+  // Return cached result if fresh
+  if (memoryPlans.length > 0 && Date.now() - cacheAt < CATALOG_CACHE_TTL_MS) {
+    return memoryPlans;
+  }
+
   const model = getAppSettingModel();
   if (!model) return memoryPlans;
 
@@ -84,6 +94,7 @@ export const readStripePlanCatalog = async (): Promise<StripePlanMapping[]> => {
     );
 
     memoryPlans = plans;
+    cacheAt = Date.now();
     return plans;
   } catch {
     return memoryPlans;
@@ -97,6 +108,7 @@ export const saveStripePlanCatalog = async (incoming: StripePlanMapping[]): Prom
   );
 
   memoryPlans = plans;
+  cacheAt = Date.now(); // refresh cache timestamp on save too
 
   const model = getAppSettingModel();
   if (!model) return plans;

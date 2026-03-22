@@ -2,7 +2,7 @@ import { Request, Response } from "express";
 import { AuthRequest } from "../middlewares/auth";
 import { registerSchema, loginSchema, forgotSchema, resetSchema, verifyEmailSchema, consentOtpVerifySchema } from "../validators/auth";
 import { createUser, getUserByEmail } from "../services/userService";
-import { hashPassword, signToken, verifyPassword } from "../utils/auth";
+import { hashPassword, signToken, verifyPassword, createRefreshToken, rotateRefreshToken, revokeRefreshToken, revokeAllRefreshTokens } from "../utils/auth";
 import { env, isProduction } from "../utils/env";
 import { createEmailVerification, createPasswordReset, consumeEmailVerification, consumePasswordReset, createConsentOtp, consumeConsentOtp } from "../services/authService";
 import { prisma } from "../db/prisma";
@@ -11,14 +11,27 @@ import { sendPasswordResetEmail, sendEmailVerificationEmail, sendConsentOtpEmail
 import { onNewMember } from "../services/notificationService";
 import { logger } from "../utils/logger";
 
-const setAuthCookie = (res: Response, token: string) => {
+const setAccessCookie = (res: Response, token: string) => {
   res.cookie(env.cookieName, token, {
     httpOnly: true,
     secure: isProduction,
     sameSite: "strict",
-    maxAge: 1000 * 60 * 60 * 24
+    maxAge: 1000 * 60 * 60 * 24, // 1d (set JWT_EXPIRES_IN=15m in production with refresh tokens)
   });
 };
+
+const setRefreshCookie = (res: Response, raw: string) => {
+  res.cookie(env.refreshCookieName, raw, {
+    httpOnly: true,
+    secure: isProduction,
+    sameSite: "strict",
+    maxAge: env.refreshTokenExpiresDays * 86_400_000,
+    path: "/auth/refresh", // restrict cookie to the refresh endpoint only
+  });
+};
+
+// Keep old name for backward compat
+const setAuthCookie = setAccessCookie;
 
 export const register = async (req: Request, res: Response) => {
   const payload = registerSchema.parse(req.body);
@@ -65,7 +78,9 @@ export const register = async (req: Request, res: Response) => {
   }).catch((err: unknown) => logger.warn({ err }, "[auth] new_member notification failed"));
 
   const token = signToken({ sub: user.id, role: user.role });
-  setAuthCookie(res, token);
+  setAccessCookie(res, token);
+  const rawRefreshReg = await createRefreshToken(user.id);
+  setRefreshCookie(res, rawRefreshReg);
   await createAuditLog({
     userId: user.id,
     action: "auth.register",
@@ -94,7 +109,9 @@ export const login = async (req: Request, res: Response) => {
     return res.status(403).json({ message: "Tu cuenta ha sido desactivada. Contacta a la clínica para más información." });
   }
   const token = signToken({ sub: user.id, role: user.role });
-  setAuthCookie(res, token);
+  setAccessCookie(res, token);
+  const rawRefresh = await createRefreshToken(user.id);
+  setRefreshCookie(res, rawRefresh);
   await createAuditLog({
     userId: user.id,
     action: "auth.login",
@@ -106,9 +123,45 @@ export const login = async (req: Request, res: Response) => {
   return res.json({ user: { id: user.id, email: user.email, role: user.role } });
 };
 
-export const logout = async (_req: Request, res: Response) => {
+export const logout = async (req: Request, res: Response) => {
+  // Revoke refresh token so it can't be used after logout
+  const rawRefresh = (req.cookies as Record<string, string>)?.[env.refreshCookieName];
+  if (rawRefresh) {
+    await revokeRefreshToken(rawRefresh).catch(() => {});
+  }
   res.clearCookie(env.cookieName);
+  res.clearCookie(env.refreshCookieName, { path: "/auth/refresh" });
   return res.status(204).send();
+};
+
+export const refreshToken = async (req: Request, res: Response) => {
+  const rawRefresh = (req.cookies as Record<string, string>)?.[env.refreshCookieName];
+  if (!rawRefresh) {
+    return res.status(401).json({ message: "No hay sesión activa" });
+  }
+
+  const result = await rotateRefreshToken(rawRefresh);
+  if (!result) {
+    res.clearCookie(env.cookieName);
+    res.clearCookie(env.refreshCookieName, { path: "/auth/refresh" });
+    return res.status(401).json({ message: "Sesión expirada. Inicia sesión de nuevo." });
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { id: result.userId },
+    select: { id: true, email: true, role: true, isActive: true },
+  });
+
+  if (!user || !user.isActive) {
+    await revokeAllRefreshTokens(result.userId).catch(() => {});
+    return res.status(401).json({ message: "Cuenta inactiva o no encontrada" });
+  }
+
+  const newAccessToken = signToken({ sub: user.id, role: user.role });
+  setAccessCookie(res, newAccessToken);
+  setRefreshCookie(res, result.newRaw);
+
+  return res.json({ user: { id: user.id, email: user.email, role: user.role } });
 };
 
 export const forgotPassword = async (req: Request, res: Response) => {

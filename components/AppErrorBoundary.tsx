@@ -17,9 +17,20 @@ export class AppErrorBoundary extends React.Component<Props, State> {
     return { error };
   }
 
-  componentDidCatch(_error: Error, _info: React.ErrorInfo) {
-    // Future: forward to error monitoring service (e.g. Sentry)
-    // Sentry.captureException(error, { extra: { componentStack: info.componentStack } });
+  componentDidCatch(error: Error, info: React.ErrorInfo) {
+    // Report to backend — fire-and-forget; never throw from here
+    const API_BASE = (import.meta as { env?: { VITE_API_URL?: string } }).env?.VITE_API_URL ?? '/api';
+    fetch(`${API_BASE}/v1/errors/client`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        message: error.message,
+        stack: error.stack?.slice(0, 1000),
+        componentStack: info.componentStack?.slice(0, 1000),
+        url: window.location.href,
+      }),
+    }).catch(() => {});
   }
 
   render() {

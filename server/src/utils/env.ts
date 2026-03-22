@@ -60,7 +60,11 @@ export const env = {
   baseUrl: process.env.BASE_URL ?? "http://localhost:4000",
   defaultClinicId: process.env.DEFAULT_CLINIC_ID ?? "default",
   googleSyncIgnoreWindowSeconds: Number(process.env.GOOGLE_SYNC_IGNORE_WINDOW_SECONDS ?? 10),
-  resendFromEmail: process.env.RESEND_FROM_EMAIL ?? "noreply@velumlaser.com"
+  resendFromEmail: process.env.RESEND_FROM_EMAIL ?? "noreply@velumlaser.com",
+  refreshCookieName: process.env.REFRESH_COOKIE_NAME ?? "velum_refresh",
+  refreshTokenExpiresDays: Number(process.env.REFRESH_TOKEN_EXPIRES_DAYS ?? 30),
+  errorWebhookUrl: process.env.ERROR_WEBHOOK_URL ?? "",
+  healthApiKey: process.env.HEALTH_API_KEY ?? "",
 };
 
 export const isProduction = env.nodeEnv === "production";

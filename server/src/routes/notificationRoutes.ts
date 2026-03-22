@@ -16,7 +16,7 @@ export const notificationRoutes = Router();
 // ── SSE stream — MUST be before /:id routes ───────────────────────────────────
 // ?since=ISO_DATE  →  catch-up: server replays missed notifications since that timestamp
 notificationRoutes.get("/api/v1/notifications/stream", requireAuth, async (req, res: Response) => {
-  const userId = (req as AuthRequest).user.sub;
+  const userId = (req as AuthRequest).user!.id;
 
   res.setHeader("Content-Type", "text/event-stream");
   res.setHeader("Cache-Control", "no-cache");

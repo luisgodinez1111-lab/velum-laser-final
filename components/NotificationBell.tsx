@@ -14,17 +14,20 @@ type Notification = {
 const API_BASE = (import.meta as { env?: { VITE_API_URL?: string } }).env?.VITE_API_URL ?? "/api";
 
 const typeIcon: Record<string, string> = {
-  custom_charge_created:   "💳",
-  custom_charge_accepted:  "✅",
-  custom_charge_paid:      "💰",
-  appointment_booked:      "🗓️",
-  appointment_confirmed:   "✔️",
-  appointment_cancelled:   "❌",
-  appointment_deposit_paid:"📅",
-  membership_activated:    "⭐",
-  membership_renewed:      "🔄",
-  membership_past_due:     "⚠️",
-  new_member:              "👤",
+  custom_charge_created:    "💳",
+  custom_charge_accepted:   "✅",
+  custom_charge_paid:       "💰",
+  appointment_booked:       "🗓️",
+  appointment_confirmed:    "✔️",
+  appointment_cancelled:    "❌",
+  appointment_deposit_paid: "📅",
+  membership_activated:     "⭐",
+  membership_renewed:       "🔄",
+  membership_past_due:      "⚠️",
+  membership_renewing_soon: "🔔",
+  new_member:               "👤",
+  intake_approved:          "✅",
+  intake_rejected:          "❌",
 };
 
 function timeAgo(iso: string): string {
@@ -98,19 +101,30 @@ export const NotificationBell: React.FC = () => {
   };
 
   const markOne = async (id: string) => {
+    // Optimistic update — revert on failure
+    setItems((prev) => prev.map((n) => n.id === id ? { ...n, read: true } : n));
+    setCount((c) => Math.max(0, c - 1));
     try {
       await apiFetch(`/v1/notifications/${id}/read`, { method: "POST" });
-      setItems((prev) => prev.map((n) => n.id === id ? { ...n, read: true } : n));
-      setCount((c) => Math.max(0, c - 1));
-    } catch { /* silent */ }
+    } catch {
+      // Revert on error
+      setItems((prev) => prev.map((n) => n.id === id ? { ...n, read: false } : n));
+      setCount((c) => c + 1);
+    }
   };
 
   const markAll = async () => {
+    // Optimistic update — revert on failure
+    const prev = items.map((n) => ({ ...n }));
+    const prevCount = count;
+    setItems((p) => p.map((n) => ({ ...n, read: true })));
+    setCount(0);
     try {
       await apiFetch("/v1/notifications/read-all", { method: "POST" });
-      setItems((prev) => prev.map((n) => ({ ...n, read: true })));
-      setCount(0);
-    } catch { /* silent */ }
+    } catch {
+      setItems(prev);
+      setCount(prevCount);
+    }
   };
 
   return (

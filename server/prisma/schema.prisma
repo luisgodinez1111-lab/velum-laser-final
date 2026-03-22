@@ -115,6 +115,7 @@ model User {
   mustChangePassword          Boolean   @default(false)
   customCharges               CustomCharge[]
   notifications               Notification[]
+  refreshTokens               RefreshToken[]
 
   @@index([clinicId])
 }
@@ -511,6 +512,18 @@ model ConsentOtpToken {
   @@index([userId])
 }
 
+model RefreshToken {
+  id        String   @id @default(cuid())
+  userId    String
+  tokenHash String   @unique  // SHA-256 of raw token — never store plain
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
 model CustomCharge {
   id                    String             @id @default(cuid())
   userId                String
@@ -539,6 +552,7 @@ model CustomCharge {
   @@index([userId])
   @@index([status])
   @@index([createdAt])
+  @@index([status, expiresAt])
 }
 
 model Notification {

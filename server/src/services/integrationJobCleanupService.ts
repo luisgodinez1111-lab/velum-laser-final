@@ -31,6 +31,33 @@ export const pruneOldIntegrationJobs = async (): Promise<void> => {
   }
 };
 
+export const pruneExpiredRefreshTokens = async (): Promise<void> => {
+  try {
+    const { count } = await prisma.refreshToken.deleteMany({
+      where: { expiresAt: { lt: new Date() } },
+    });
+    if (count > 0) {
+      logger.info({ count }, "[refresh-cleanup] Pruned expired RefreshTokens");
+    }
+  } catch (err) {
+    logger.error({ err }, "[refresh-cleanup] Failed to prune RefreshTokens");
+  }
+};
+
+export const expireCustomCharges = async (): Promise<void> => {
+  try {
+    const { count } = await prisma.customCharge.updateMany({
+      where: { status: "PENDING_ACCEPTANCE", expiresAt: { lt: new Date() } },
+      data: { status: "EXPIRED" },
+    });
+    if (count > 0) {
+      logger.info({ count }, "[charge-cleanup] Marked expired CustomCharges as EXPIRED");
+    }
+  } catch (err) {
+    logger.error({ err }, "[charge-cleanup] Failed to expire CustomCharges");
+  }
+};
+
 export const pruneOldWebhookEvents = async (): Promise<void> => {
   const cutoff = new Date(Date.now() - WEBHOOK_EVENT_MAX_DAYS * 86400000);
   try {
@@ -61,11 +88,15 @@ export const startIntegrationJobCleanupCron = (): void => {
   cron.schedule("0 3 * * *", () => {
     runWithRetry(pruneOldIntegrationJobs, "integration-cleanup");
     runWithRetry(pruneOldWebhookEvents, "webhook-cleanup");
+    runWithRetry(expireCustomCharges, "charge-cleanup");
+    runWithRetry(pruneExpiredRefreshTokens, "refresh-cleanup");
   }, { timezone: "America/Mexico_City" });
 
   // Run once on startup to clear existing backlog
   runWithRetry(pruneOldIntegrationJobs, "integration-cleanup");
   runWithRetry(pruneOldWebhookEvents, "webhook-cleanup");
+  runWithRetry(expireCustomCharges, "charge-cleanup");
+  runWithRetry(pruneExpiredRefreshTokens, "refresh-cleanup");
 
-  logger.info("[integration-cleanup] Cron scheduled — daily at 03:00 AM (jobs + webhook events)");
+  logger.info("[integration-cleanup] Cron scheduled — daily at 03:00 AM (jobs + webhook events + charge expiry)");
 };

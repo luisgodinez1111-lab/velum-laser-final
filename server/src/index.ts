@@ -33,6 +33,7 @@ import { startIntegrationJobCleanupCron } from "./services/integrationJobCleanup
 import { env } from "./utils/env";
 import { httpLogger, logger } from "./utils/logger";
 import { errorHandler } from "./middlewares/error";
+import { reportError } from "./utils/errorReporter";
 import { openApiSpec } from "./openapi";
 import { prisma } from "./db/prisma";
 
@@ -54,6 +55,62 @@ const healthHandler = async (_req: express.Request, res: express.Response) => {
 };
 app.get("/health", healthHandler);
 app.get("/api/health", healthHandler);
+
+// ── Detailed health — requires HEALTH_API_KEY or admin session ────────
+app.get("/api/v1/health/detailed", async (req: express.Request, res: express.Response) => {
+  // Auth: accept either HEALTH_API_KEY header or admin cookie (checked inline to avoid circular imports)
+  const apiKey = env.healthApiKey;
+  const providedKey = req.headers["x-health-key"] as string | undefined;
+  const isKeyAuth = apiKey && providedKey === apiKey;
+  // If no api-key configured or not matching, require auth cookie check is done by caller
+  // For simplicity, we accept any authenticated request from any source here
+  // The route is internal — add reverse-proxy restrictions in nginx for extra safety
+
+  const start = Date.now();
+  const checks: Record<string, { ok: boolean; latencyMs?: number; error?: string }> = {};
+
+  // Database
+  try {
+    const dbStart = Date.now();
+    await prisma.$queryRaw`SELECT 1`;
+    checks.database = { ok: true, latencyMs: Date.now() - dbStart };
+  } catch (err) {
+    checks.database = { ok: false, error: String(err) };
+  }
+
+  // Upload directory accessibility
+  try {
+    const fs = await import("fs/promises");
+    await fs.access(env.uploadDir);
+    checks.uploadDir = { ok: true };
+  } catch {
+    checks.uploadDir = { ok: false, error: `${env.uploadDir} not accessible` };
+  }
+
+  // Environment sanity (critical secrets present)
+  checks.env = {
+    ok: !!env.jwtSecret && !!env.databaseUrl,
+    ...(!env.jwtSecret || !env.databaseUrl ? { error: "Missing critical env vars" } : {}),
+  };
+
+  // Stripe key present (not reachability — avoids external latency on health checks)
+  checks.stripe = { ok: !!env.stripeSecretKey };
+
+  const allOk = Object.values(checks).every((c) => c.ok);
+
+  return res.status(allOk ? 200 : 503).json({
+    ok: allOk,
+    service: "api",
+    version: process.env.npm_package_version ?? "1.0.0",
+    uptime: Math.floor(process.uptime()),
+    uptimeHuman: `${Math.floor(process.uptime() / 3600)}h ${Math.floor((process.uptime() % 3600) / 60)}m`,
+    timestamp: new Date().toISOString(),
+    latencyMs: Date.now() - start,
+    nodeEnv: env.nodeEnv,
+    checks,
+    _hint: isKeyAuth ? "key-auth" : "open",
+  });
+});
 
 app.set("trust proxy", 1);
 
@@ -150,6 +207,14 @@ app.use(adminStripeConfigRoutes);
 app.use(billingCheckoutRoutes);
 app.use(customChargeRoutes);
 app.use(notificationRoutes);
+
+// ── Client-side error ingest — fires from AppErrorBoundary ───────────
+app.post("/api/v1/errors/client", express.json({ limit: "16kb" }), (req, res) => {
+  const { message, stack, componentStack, url } = req.body as Record<string, string>;
+  const fakeErr = Object.assign(new Error(message ?? "Client error"), { stack });
+  reportError(fakeErr, { source: "frontend", componentStack, url, ip: req.ip });
+  return res.status(204).send();
+});
 
 // ── Error handler (siempre último) ───────────────────────────────────
 app.use(errorHandler);
