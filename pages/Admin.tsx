@@ -364,25 +364,38 @@ export const Admin: React.FC = () => {
   const [isLoadingMemberHistory, setIsLoadingMemberHistory] = useState(false);
   const [serverReports, setServerReports] = useState<{ users: number; activeMemberships: number; pastDueMemberships: number; pendingDocuments: number } | null>(null);
 
-  // Payment history with filters
+  // Payment history with filters + pagination
   const [histPayments, setHistPayments] = useState<any[]>([]);
   const [histLoading, setHistLoading] = useState(false);
   const [histDateFrom, setHistDateFrom] = useState('');
   const [histDateTo, setHistDateTo] = useState('');
   const [histStatus, setHistStatus] = useState('');
   const [histLoaded, setHistLoaded] = useState(false);
+  const [histError, setHistError] = useState('');
+  const [histPage, setHistPage] = useState(1);
+  const [histTotal, setHistTotal] = useState(0);
+  const [histPages, setHistPages] = useState(1);
+  const HIST_LIMIT = 50;
 
-  const loadHistPayments = async () => {
+  const loadHistPayments = async (page = 1) => {
     setHistLoading(true);
+    setHistError('');
     try {
       const params = new URLSearchParams();
       if (histDateFrom) params.set('dateFrom', histDateFrom);
       if (histDateTo) params.set('dateTo', histDateTo);
       if (histStatus) params.set('status', histStatus);
-      const data = await apiFetch<any[]>(`/v1/payments?${params.toString()}`);
-      setHistPayments(data ?? []);
+      params.set('page', String(page));
+      params.set('limit', String(HIST_LIMIT));
+      const data = await apiFetch<any>(`/v1/payments?${params.toString()}`);
+      setHistPayments(data?.payments ?? []);
+      setHistTotal(data?.total ?? 0);
+      setHistPages(data?.pages ?? 1);
+      setHistPage(page);
       setHistLoaded(true);
-    } catch { /* ignore */ } finally {
+    } catch (e: any) {
+      setHistError(e?.message ?? 'No se pudo cargar el historial');
+    } finally {
       setHistLoading(false);
     }
   };
@@ -393,15 +406,20 @@ export const Admin: React.FC = () => {
   const [integrationJobsLoaded, setIntegrationJobsLoaded] = useState(false);
   const [integrationJobsStatus, setIntegrationJobsStatus] = useState('');
 
+  const [integrationJobsError, setIntegrationJobsError] = useState('');
+
   const loadIntegrationJobs = async (status?: string) => {
     setIntegrationJobsLoading(true);
+    setIntegrationJobsError('');
     try {
       const params = new URLSearchParams();
       if (status) params.set('status', status);
       const data = await apiFetch<any>(`/v1/admin/integrations/jobs?${params.toString()}`);
       setIntegrationJobs(data?.jobs ?? []);
       setIntegrationJobsLoaded(true);
-    } catch { /* ignore */ } finally {
+    } catch (e: any) {
+      setIntegrationJobsError(e?.message ?? 'No se pudo cargar los trabajos');
+    } finally {
       setIntegrationJobsLoading(false);
     }
   };
@@ -411,13 +429,18 @@ export const Admin: React.FC = () => {
   const [webhookEventsLoading, setWebhookEventsLoading] = useState(false);
   const [webhookEventsLoaded, setWebhookEventsLoaded] = useState(false);
 
+  const [webhookEventsError, setWebhookEventsError] = useState('');
+
   const loadWebhookEvents = async () => {
     setWebhookEventsLoading(true);
+    setWebhookEventsError('');
     try {
       const data = await apiFetch<any>('/v1/admin/stripe/webhook-events');
       setWebhookEvents(data?.events ?? []);
       setWebhookEventsLoaded(true);
-    } catch { /* ignore */ } finally {
+    } catch (e: any) {
+      setWebhookEventsError(e?.message ?? 'No se pudo cargar los eventos');
+    } finally {
       setWebhookEventsLoading(false);
     }
   };
@@ -2515,6 +2538,12 @@ export const Admin: React.FC = () => {
         <h1 className="text-2xl font-serif text-velum-900">KPIs</h1>
         <p className="text-sm text-velum-500 mt-1">Indicadores clave de desempeño</p>
       </div>
+      {analytics.totalSocios === 0 && (
+        <div className="flex items-start gap-3 p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-800 text-sm">
+          <AlertTriangle size={16} className="shrink-0 mt-0.5" />
+          <span>Los KPIs se calcularán automáticamente cuando haya socias registradas con membresías activas. Comienza invitando a tus primeras socias desde la sección <strong>Socias</strong>.</span>
+        </div>
+      )}
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
         <KpiCard icon={<Users size={18} />} label="Socios activos" value={analytics.sociosActivos} sub={`${analytics.sociosPendientes} pendientes de activación`} />
         <KpiCard icon={<Wallet size={18} />} label="MRR" value={formatMoney(analytics.mrr)} sub="Ingreso recurrente mensual" accent="text-emerald-700" />
@@ -2572,6 +2601,12 @@ export const Admin: React.FC = () => {
           <h1 className="text-2xl font-serif text-velum-900">Finanzas</h1>
           <p className="text-sm text-velum-500 mt-1">Radar de ingresos y facturación</p>
         </div>
+        {analytics.mrr === 0 && analytics.sociosActivos === 0 && (
+          <div className="flex items-start gap-3 p-4 rounded-2xl bg-blue-50 border border-blue-200 text-blue-800 text-sm">
+            <AlertTriangle size={16} className="shrink-0 mt-0.5" />
+            <span>Los datos financieros aparecerán aquí una vez que haya socias con membresías activas y pagos procesados por Stripe.</span>
+          </div>
+        )}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <KpiCard icon={<Wallet size={18} />} label="MRR total" value={formatMoney(analytics.mrr)} accent="text-emerald-700" />
           <KpiCard icon={<Target size={18} />} label="ARPU" value={formatMoney(analytics.arpu)} />
@@ -3441,17 +3476,22 @@ export const Admin: React.FC = () => {
                   <option value="refunded">Reembolsado</option>
                 </select>
               </div>
-              <button onClick={() => void loadHistPayments()} disabled={histLoading}
+              <button onClick={() => void loadHistPayments(1)} disabled={histLoading}
                 className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-velum-900 text-white text-xs font-semibold hover:bg-velum-800 transition disabled:opacity-50">
                 {histLoading ? <Loader2 size={13} className="animate-spin" /> : <Search size={13} />}
                 Buscar
               </button>
             </div>
-            {!histLoaded ? (
+            {histError && (
+              <div className="flex items-center gap-2 p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs">
+                <AlertTriangle size={13} /> {histError}
+              </div>
+            )}
+            {!histLoaded && !histError ? (
               <p className="text-center text-sm text-velum-400 py-6">Aplica filtros y presiona Buscar</p>
-            ) : histPayments.length === 0 ? (
+            ) : !histError && histPayments.length === 0 ? (
               <p className="text-center text-sm text-velum-400 py-6">Sin pagos en el rango seleccionado</p>
-            ) : (
+            ) : !histError && (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
@@ -3465,9 +3505,7 @@ export const Admin: React.FC = () => {
                     {histPayments.map((p: any, i: number) => (
                       <tr key={p.id} className={`hover:bg-velum-50 transition ${i < histPayments.length - 1 ? 'border-b border-velum-50' : ''}`}>
                         <td className="px-3 py-2.5 text-velum-500 text-xs">{new Date(p.createdAt).toLocaleDateString('es-MX')}</td>
-                        <td className="px-3 py-2.5">
-                          <p className="font-medium text-velum-900 text-xs">{p.user?.email ?? '—'}</p>
-                        </td>
+                        <td className="px-3 py-2.5"><p className="font-medium text-velum-900 text-xs">{p.user?.email ?? '—'}</p></td>
                         <td className="px-3 py-2.5 font-semibold text-velum-900">{p.amount != null ? formatMoney(p.amount) : '—'}</td>
                         <td className="px-3 py-2.5 text-velum-500 uppercase text-xs">{p.currency ?? '—'}</td>
                         <td className="px-3 py-2.5">
@@ -3483,7 +3521,15 @@ export const Admin: React.FC = () => {
                     ))}
                   </tbody>
                 </table>
-                <p className="text-[11px] text-velum-400 text-right mt-2 pr-1">{histPayments.length} registro{histPayments.length !== 1 ? 's' : ''}</p>
+                <div className="flex items-center justify-between mt-3 px-1">
+                  <p className="text-[11px] text-velum-400">{histTotal} registro{histTotal !== 1 ? 's' : ''} · página {histPage} de {histPages}</p>
+                  <div className="flex gap-1">
+                    <button onClick={() => void loadHistPayments(histPage - 1)} disabled={histPage <= 1 || histLoading}
+                      className="px-2.5 py-1 rounded-lg border border-velum-200 text-xs text-velum-600 hover:bg-velum-50 disabled:opacity-40 transition">‹ Anterior</button>
+                    <button onClick={() => void loadHistPayments(histPage + 1)} disabled={histPage >= histPages || histLoading}
+                      className="px-2.5 py-1 rounded-lg border border-velum-200 text-xs text-velum-600 hover:bg-velum-50 disabled:opacity-40 transition">Siguiente ›</button>
+                  </div>
+                </div>
               </div>
             )}
           </div>
@@ -3864,11 +3910,16 @@ export const Admin: React.FC = () => {
                 </button>
               </div>
             </div>
-            {!integrationJobsLoaded ? (
+            {integrationJobsError && (
+              <div className="flex items-center gap-2 p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs">
+                <AlertTriangle size={13} /> {integrationJobsError}
+              </div>
+            )}
+            {!integrationJobsLoaded && !integrationJobsError ? (
               <p className="text-center text-xs text-velum-400 py-6">Presiona Actualizar para cargar los trabajos</p>
-            ) : integrationJobs.length === 0 ? (
+            ) : !integrationJobsError && integrationJobs.length === 0 ? (
               <p className="text-center text-xs text-velum-400 py-6">Sin trabajos en la cola</p>
-            ) : (
+            ) : !integrationJobsError && (
               <div className="overflow-x-auto">
                 <table className="w-full text-xs">
                   <thead>
@@ -3985,13 +4036,18 @@ export const Admin: React.FC = () => {
                 <RefreshCw size={12} className={webhookEventsLoading ? 'animate-spin' : ''} />Cargar
               </button>
             </div>
-            {!webhookEventsLoaded ? (
+            {webhookEventsError && (
+              <div className="flex items-center gap-2 p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs">
+                <AlertTriangle size={13} /> {webhookEventsError}
+              </div>
+            )}
+            {!webhookEventsLoaded && !webhookEventsError ? (
               <div className="bg-white rounded-2xl border border-velum-100 py-10 text-center">
                 <p className="text-xs text-velum-400">Presiona "Cargar" para ver los webhooks procesados</p>
               </div>
-            ) : webhookEvents.length === 0 ? (
+            ) : !webhookEventsError && webhookEvents.length === 0 ? (
               <div className="bg-white rounded-2xl border border-velum-100 py-10 text-center">
-                <p className="text-xs text-velum-400">Sin eventos registrados</p>
+                <p className="text-xs text-velum-400">Sin eventos registrados aún</p>
               </div>
             ) : (
               <div className="bg-white rounded-2xl border border-velum-100 overflow-hidden">

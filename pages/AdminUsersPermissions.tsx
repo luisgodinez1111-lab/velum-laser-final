@@ -234,6 +234,12 @@ export const AdminUsersPermissions: React.FC<Props> = ({ embedded = false }) => 
   const [togglingActive, setTogglingActive] = useState<string | null>(null);
 
   const toggleActive = async (u: UserRow) => {
+    if (u.isActive) {
+      const confirmed = window.confirm(
+        `¿Desactivar a ${u.email}?\nEsto cancelará su suscripción en Stripe y bloqueará su acceso inmediatamente.`
+      );
+      if (!confirmed) return;
+    }
     setTogglingActive(u.id);
     setError(""); setMessage("");
     try {

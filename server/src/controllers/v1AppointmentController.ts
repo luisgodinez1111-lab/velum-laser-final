@@ -531,8 +531,14 @@ export const listAppointments = async (req: AuthRequest, res: Response) => {
   const queryUserId = typeof req.query.userId === "string" ? req.query.userId : undefined;
   const targetUserId = isPrivileged ? queryUserId : req.user!.id;
 
+  const startDate = typeof req.query.startDate === "string" ? new Date(req.query.startDate) : new Date(Date.now() - 30 * 86400000);
+  const endDate = typeof req.query.endDate === "string" ? new Date(req.query.endDate) : new Date(Date.now() + 90 * 86400000);
+
   const appointments = await prisma.appointment.findMany({
-    where: targetUserId ? { clinicId, userId: targetUserId } : { clinicId },
+    where: {
+      ...(targetUserId ? { clinicId, userId: targetUserId } : { clinicId }),
+      startAt: { gte: startDate, lte: endDate }
+    },
     include: {
       user: {
         select: { id: true, email: true }

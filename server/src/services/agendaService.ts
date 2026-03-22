@@ -1132,8 +1132,13 @@ export const getAgendaDaySnapshot = async (dateKeyRaw: string) => {
       orderBy: [{ startMinute: "asc" }, { cabinId: "asc" }]
     }),
     prisma.appointment.findMany({
+      where: {
+        startAt: {
+          gte: new Date(new Date(dateKey + "T00:00:00Z").getTime() - 2 * 86400000),
+          lte: new Date(new Date(dateKey + "T00:00:00Z").getTime() + 3 * 86400000)
+        }
+      },
       orderBy: { startAt: "asc" },
-      take: 2000,
       include: {
         user: {
           select: { id: true, email: true }

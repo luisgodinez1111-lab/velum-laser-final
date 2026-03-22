@@ -83,6 +83,7 @@ export const AdminStripeSettings: React.FC<Props> = ({ embedded = false }) => {
   const [chargeOk, setChargeOk] = useState("");
   const [savingCharge, setSavingCharge] = useState(false);
   const [users, setUsers] = useState<UserOption[]>([]);
+  const [userSearch, setUserSearch] = useState("");
   const [newCharge, setNewCharge] = useState<NewChargeForm>({
     userId: "", title: "", description: "", amount: "", currency: "mxn",
     type: "ONE_TIME", interval: "month",
@@ -505,18 +506,45 @@ export const AdminStripeSettings: React.FC<Props> = ({ embedded = false }) => {
                 <p className="text-xs font-bold uppercase tracking-widest text-velum-500">Nuevo cobro</p>
 
                 {/* Client selector */}
-                <div>
+                <div className="relative">
                   <label className="block text-[10px] font-bold uppercase tracking-widest text-velum-400 mb-1">Cliente</label>
-                  <select className="w-full rounded-lg border border-velum-200 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-velum-900/20 focus:border-velum-700 bg-white"
-                    value={newCharge.userId}
-                    onChange={(e) => setNewCharge((p) => ({ ...p, userId: e.target.value }))}>
-                    <option value="">Selecciona un cliente...</option>
-                    {users.map((u) => (
-                      <option key={u.id} value={u.id}>
-                        {[u.firstName, u.lastName].filter(Boolean).join(" ") || u.email} — {u.email}
-                      </option>
-                    ))}
-                  </select>
+                  <input
+                    type="text"
+                    placeholder="Buscar por nombre o email..."
+                    value={userSearch}
+                    onChange={(e) => { setUserSearch(e.target.value); setNewCharge((p) => ({ ...p, userId: "" })); }}
+                    className="w-full rounded-lg border border-velum-200 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-velum-900/20 focus:border-velum-700"
+                  />
+                  {newCharge.userId && (
+                    <p className="mt-1 text-xs text-emerald-700 font-medium">
+                      ✓ {users.find(u => u.id === newCharge.userId)?.email}
+                    </p>
+                  )}
+                  {userSearch.length >= 2 && !newCharge.userId && (
+                    <div className="absolute z-10 w-full mt-1 bg-white border border-velum-200 rounded-xl shadow-lg max-h-48 overflow-y-auto">
+                      {users
+                        .filter(u => {
+                          const q = userSearch.toLowerCase();
+                          return u.email.toLowerCase().includes(q) ||
+                            [u.firstName, u.lastName].filter(Boolean).join(" ").toLowerCase().includes(q);
+                        })
+                        .slice(0, 8)
+                        .map(u => (
+                          <button key={u.id} type="button"
+                            onClick={() => { setNewCharge(p => ({ ...p, userId: u.id })); setUserSearch([u.firstName, u.lastName].filter(Boolean).join(" ") || u.email); }}
+                            className="w-full text-left px-3 py-2 text-sm hover:bg-velum-50 transition border-b border-velum-50 last:border-0">
+                            <span className="font-medium text-velum-900">{[u.firstName, u.lastName].filter(Boolean).join(" ") || u.email}</span>
+                            <span className="ml-2 text-xs text-velum-400">{u.email}</span>
+                          </button>
+                        ))}
+                      {users.filter(u => {
+                        const q = userSearch.toLowerCase();
+                        return u.email.toLowerCase().includes(q) || [u.firstName, u.lastName].filter(Boolean).join(" ").toLowerCase().includes(q);
+                      }).length === 0 && (
+                        <p className="px-3 py-2 text-xs text-velum-400">Sin resultados</p>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

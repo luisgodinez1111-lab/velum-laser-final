@@ -43,6 +43,9 @@ export const apiFetch = async <T>(
           typeof (errorBody as Record<string, unknown>).message === 'string')
           ? (errorBody as Record<string, unknown>).message as string
           : `Error ${response.status}`;
+      if (response.status === 401 && !window.location.pathname.includes('/login')) {
+        window.location.replace('/login');
+      }
       throw new ApiError(message, response.status, errorBody);
     }
 

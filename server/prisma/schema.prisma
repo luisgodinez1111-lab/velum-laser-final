@@ -462,6 +462,7 @@ model Payment {
   @@index([membershipId])
   @@index([status])
   @@index([createdAt])
+  @@index([createdAt, status])
 }
 
 model EmailVerificationToken {
