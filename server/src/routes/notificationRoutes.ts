@@ -9,11 +9,13 @@ import {
   readAllNotifications,
 } from "../controllers/notificationController";
 import { registerSseClient, unregisterSseClient } from "../services/notificationService";
+import { prisma } from "../db/prisma";
 
 export const notificationRoutes = Router();
 
 // ── SSE stream — MUST be before /:id routes ───────────────────────────────────
-notificationRoutes.get("/api/v1/notifications/stream", requireAuth, (req, res: Response) => {
+// ?since=ISO_DATE  →  catch-up: server replays missed notifications since that timestamp
+notificationRoutes.get("/api/v1/notifications/stream", requireAuth, async (req, res: Response) => {
   const userId = (req as AuthRequest).user.sub;
 
   res.setHeader("Content-Type", "text/event-stream");
@@ -22,7 +24,25 @@ notificationRoutes.get("/api/v1/notifications/stream", requireAuth, (req, res: R
   res.setHeader("X-Accel-Buffering", "no"); // disable nginx buffering
   res.flushHeaders();
 
-  // Initial ping to confirm connection
+  // Catch-up: replay notifications missed since last connection (max 50)
+  const sinceRaw = req.query.since ? String(req.query.since) : null;
+  if (sinceRaw) {
+    const since = new Date(sinceRaw);
+    if (!isNaN(since.getTime())) {
+      try {
+        const missed = await prisma.notification.findMany({
+          where: { userId, createdAt: { gt: since } },
+          orderBy: { createdAt: "asc" },
+          take: 50,
+        });
+        for (const n of missed) {
+          res.write(`data: ${JSON.stringify(n)}\n\n`);
+        }
+      } catch { /* non-fatal — continue with live stream */ }
+    }
+  }
+
+  // Initial ping to confirm connection (after catch-up)
   res.write(": connected\n\n");
 
   registerSseClient(userId, res);

@@ -4,6 +4,7 @@ import { logger } from "../utils/logger";
 
 const DONE_MAX_DAYS = 7;
 const FAILED_MAX_DAYS = 14;
+const WEBHOOK_EVENT_MAX_DAYS = 30;
 
 export const pruneOldIntegrationJobs = async (): Promise<void> => {
   const sevenDaysAgo  = new Date(Date.now() - DONE_MAX_DAYS   * 86400000);
@@ -30,6 +31,20 @@ export const pruneOldIntegrationJobs = async (): Promise<void> => {
   }
 };
 
+export const pruneOldWebhookEvents = async (): Promise<void> => {
+  const cutoff = new Date(Date.now() - WEBHOOK_EVENT_MAX_DAYS * 86400000);
+  try {
+    const { count } = await prisma.webhookEvent.deleteMany({
+      where: { processedAt: { lte: cutoff } },
+    });
+    if (count > 0) {
+      logger.info({ count }, "[webhook-cleanup] Pruned old WebhookEvent records");
+    }
+  } catch (err) {
+    logger.error({ err }, "[webhook-cleanup] Failed to prune WebhookEvent records");
+  }
+};
+
 const runWithRetry = (fn: () => Promise<void>, jobName: string): void => {
   fn().catch((err) => {
     logger.error({ err }, `[${jobName}] Error en primera ejecución — reintentando en 5s`);
@@ -45,10 +60,12 @@ export const startIntegrationJobCleanupCron = (): void => {
   // Runs every day at 03:00 AM Mexico City time
   cron.schedule("0 3 * * *", () => {
     runWithRetry(pruneOldIntegrationJobs, "integration-cleanup");
+    runWithRetry(pruneOldWebhookEvents, "webhook-cleanup");
   }, { timezone: "America/Mexico_City" });
 
   // Run once on startup to clear existing backlog
   runWithRetry(pruneOldIntegrationJobs, "integration-cleanup");
+  runWithRetry(pruneOldWebhookEvents, "webhook-cleanup");
 
-  logger.info("[integration-cleanup] Cron scheduled — daily at 03:00 AM");
+  logger.info("[integration-cleanup] Cron scheduled — daily at 03:00 AM (jobs + webhook events)");
 };

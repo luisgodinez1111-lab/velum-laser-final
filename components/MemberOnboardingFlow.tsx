@@ -58,6 +58,13 @@ const InlineSignature: React.FC<{ onSave: (dataUrl: string) => void }> = ({ onSa
 
   const save = () => {
     const canvas = canvasRef.current; if (!canvas) return;
+    // Double-check canvas is not blank before capturing
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+      const hasInk = pixels.some((v, i) => i % 4 === 3 && v > 0); // any non-transparent pixel
+      if (!hasInk) return; // blank canvas — ignore
+    }
     onSave(canvas.toDataURL('image/png'));
   };
 
@@ -176,7 +183,6 @@ export const MemberOnboardingFlow: React.FC = () => {
         method: 'PUT',
         body: JSON.stringify({
           consentAccepted: true,
-          signatureKey: signatureData,
           signatureImageData: signatureData,
           status: 'submitted'
         })

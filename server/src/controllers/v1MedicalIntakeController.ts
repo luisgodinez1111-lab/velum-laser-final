@@ -38,6 +38,11 @@ export const updateMyMedicalIntake = async (req: AuthRequest, res: Response) => 
     }
   }
 
+  // Auto-generate a short signatureKey when image data arrives (avoid storing full PNG as key)
+  const signatureKey = payload.signatureImageData
+    ? `sig_${current.id}_${Date.now()}`
+    : (payload.signatureKey ?? undefined);
+
   const updated = await prisma.medicalIntake.update({
     where: { id: current.id },
     data: {
@@ -45,7 +50,7 @@ export const updateMyMedicalIntake = async (req: AuthRequest, res: Response) => 
       historyJson: payload.historyJson as Prisma.InputJsonValue | undefined,
       phototype: payload.phototype ?? undefined,
       consentAccepted: payload.consentAccepted ?? undefined,
-      signatureKey: payload.signatureKey ?? undefined,
+      signatureKey,
       signatureImageData: payload.signatureImageData ?? undefined,
       status: requestedStatus,
       submittedAt: requestedStatus === "submitted" ? new Date() : current.submittedAt,

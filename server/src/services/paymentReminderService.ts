@@ -3,6 +3,7 @@ import { prisma } from "../db/prisma";
 import { sendPaymentReminderEmail } from "./emailService";
 import { readStripePlanCatalog } from "./stripePlanCatalogService";
 import { sendWhatsappPaymentReminder } from "./whatsappMetaService";
+import { createNotification } from "./notificationService";
 import { logger } from "../utils/logger";
 
 // Days before renewal to send reminders
@@ -123,6 +124,17 @@ export const runPaymentReminders = async (): Promise<void> => {
               logger.warn({ err: waErr, email: ms.user.email }, "[payment-reminder] WhatsApp reminder failed (non-fatal)");
             }
           }
+
+          // In-app notification so admins/member see it in the notification bell
+          await createNotification({
+            userId: ms.user.id,
+            type: "membership_renewing_soon",
+            title: `Tu membresía renueva en ${daysLeft} día${daysLeft === 1 ? "" : "s"}`,
+            body: `${planName} · ${amount} el ${renewalDate}`,
+            data: { daysLeft, planName, renewalDate },
+          }).catch((err) =>
+            logger.warn({ err, email: ms.user.email }, "[payment-reminder] In-app notification failed (non-fatal)")
+          );
 
           await prisma.membership.update({
             where: { id: ms.id },

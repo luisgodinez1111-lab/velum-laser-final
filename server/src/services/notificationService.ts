@@ -17,6 +17,7 @@ export type NotificationType =
   | "membership_activated"
   | "membership_renewed"
   | "membership_past_due"
+  | "membership_renewing_soon"
   | "new_member"
   | "intake_approved"
   | "intake_rejected";
@@ -31,11 +32,23 @@ export interface CreateNotificationParams {
 
 // ── SSE broadcaster ───────────────────────────────────────────────────────────
 // In-memory map: userId → Set of active SSE response streams
+// NOTE: single-process only. For multi-instance deployments add Redis pub/sub.
 const sseClients = new Map<string, Set<Response>>();
+const MAX_SSE_PER_USER = 3; // prevent memory exhaustion from many open tabs
 
 export const registerSseClient = (userId: string, res: Response): void => {
   if (!sseClients.has(userId)) sseClients.set(userId, new Set());
-  sseClients.get(userId)!.add(res);
+  const clients = sseClients.get(userId)!;
+
+  // Evict oldest connection when limit is exceeded
+  if (clients.size >= MAX_SSE_PER_USER) {
+    const oldest = clients.values().next().value as Response | undefined;
+    if (oldest) {
+      try { oldest.end(); } catch { /* already closed */ }
+      clients.delete(oldest);
+    }
+  }
+  clients.add(res);
 };
 
 export const unregisterSseClient = (userId: string, res: Response): void => {

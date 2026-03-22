@@ -271,6 +271,17 @@ export const AdminUsersPermissions: React.FC<Props> = ({ embedded = false }) => 
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }, [users, filterStatus, filterRole]);
 
+  const hasDirtyDrafts = useMemo(() =>
+    users.some((u) =>
+      roleDrafts[u.id] !== u.role ||
+      JSON.stringify([...(permDrafts[u.id] || [])].sort()) !== JSON.stringify([...(u.permissions || [])].sort())
+    ), [users, roleDrafts, permDrafts]);
+
+  const changePage = (next: number) => {
+    if (hasDirtyDrafts && !window.confirm("Tienes cambios sin guardar en esta página. ¿Cambiar de página y descartarlos?")) return;
+    setPage(next);
+  };
+
   const adminCount = users.filter((u) => u.role === "admin").length;
   const staffCount = users.filter((u) => u.role === "staff").length;
   const memberCount = users.filter((u) => u.role === "member").length;
@@ -575,7 +586,7 @@ export const AdminUsersPermissions: React.FC<Props> = ({ embedded = false }) => 
           <span>{totalUsers} usuarios en total</span>
           <div className="flex items-center gap-2">
             <button
-              onClick={() => setPage((p) => p - 1)}
+              onClick={() => changePage(page - 1)}
               disabled={page === 1 || loading}
               className="px-3 py-1.5 rounded-xl border border-velum-200 disabled:opacity-40 hover:bg-velum-50 transition text-xs font-medium"
             >
@@ -583,7 +594,7 @@ export const AdminUsersPermissions: React.FC<Props> = ({ embedded = false }) => 
             </button>
             <span className="text-xs">Página {page} de {totalPages}</span>
             <button
-              onClick={() => setPage((p) => p + 1)}
+              onClick={() => changePage(page + 1)}
               disabled={page === totalPages || loading}
               className="px-3 py-1.5 rounded-xl border border-velum-200 disabled:opacity-40 hover:bg-velum-50 transition text-xs font-medium"
             >
