@@ -5,6 +5,21 @@ process.env.DATABASE_URL = "postgresql://x:x@localhost/x";
 process.env.STRIPE_WEBHOOK_SECRET = "whsec_test";
 process.env.STRIPE_SECRET_KEY = "sk_test_123";
 
+// Mock the webhook service — provides credentials and stubs business logic
+vi.mock("../src/services/stripeWebhookService", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../src/services/stripeWebhookService")>();
+  return {
+    ...actual,
+    getStripeWebhookConfig: vi.fn().mockResolvedValue({
+      secretKey: "sk_test_123",
+      webhookSecret: "whsec_test",
+      publishableKey: "",
+      source: "env" as const,
+    }),
+    handleBusinessStripeEvent: vi.fn().mockResolvedValue(undefined),
+  };
+});
+
 // Mock Prisma
 vi.mock("../src/db/prisma", () => ({
   prisma: {
@@ -12,27 +27,7 @@ vi.mock("../src/db/prisma", () => ({
       findUnique: vi.fn().mockResolvedValue(null),
       create: vi.fn().mockResolvedValue({ id: "we1" }),
     },
-    membership: { findFirst: vi.fn(), updateMany: vi.fn() },
-    user: { findFirst: vi.fn(), findUnique: vi.fn() },
-    payment: {
-      findUnique: vi.fn().mockResolvedValue(null),
-      upsert: vi.fn().mockResolvedValue({ id: "p1" }),
-    },
-    marketingAttribution: {
-      findUnique: vi.fn().mockResolvedValue(null),
-      create: vi.fn().mockResolvedValue({ id: "ma1" }),
-      update: vi.fn(),
-    },
-    auditLog: { create: vi.fn() },
   },
-}));
-
-vi.mock("../src/services/metaService", () => ({
-  sendMetaEvent: vi.fn().mockResolvedValue({ status: "skipped" }),
-}));
-
-vi.mock("../src/services/auditService", () => ({
-  createAuditLog: vi.fn(),
 }));
 
 import express from "express";
@@ -40,67 +35,68 @@ import request from "supertest";
 import Stripe from "stripe";
 
 const buildApp = async () => {
-  const { handleWebhook } = await import("../src/controllers/stripeController");
+  const { stripeWebhookController } = await import("../src/controllers/stripeWebhookController");
   const app = express();
-  app.post("/webhook", express.raw({ type: "application/json" }), handleWebhook);
+  // type: "*/*" ensures raw body is parsed regardless of Content-Type header (test environment)
+  app.post("/webhook", express.raw({ type: "*/*" }), stripeWebhookController);
   return app;
 };
 
-const makeSignedEvent = (payload: object, secret: string) => {
+const makeSignedEvent = (payload: object) => {
   const stripe = new Stripe("sk_test_fake");
   const body = JSON.stringify(payload);
-  const timestamp = Math.floor(Date.now() / 1000);
   const signature = stripe.webhooks.generateTestHeaderString({
     payload: body,
-    secret,
+    secret: "whsec_test",
   });
   return { body, signature };
 };
 
-describe("stripe webhook — idempotencia y firma", () => {
+describe("stripe webhook — firma e idempotencia", () => {
   it("rechaza firma inválida con 400", async () => {
     const app = await buildApp();
     const res = await request(app)
       .post("/webhook")
       .set("Content-Type", "application/json")
       .set("stripe-signature", "bad_sig")
-      .send(JSON.stringify({ id: "evt_bad", type: "test" }));
+      .send(Buffer.from(JSON.stringify({ id: "evt_bad", type: "test" })));
     expect(res.status).toBe(400);
   });
 
-  it("acepta evento con firma válida y retorna received:true", async () => {
+  it("acepta evento con firma válida y retorna ok:true y received:true", async () => {
     const { prisma } = await import("../src/db/prisma");
     vi.mocked(prisma.webhookEvent.findUnique).mockResolvedValueOnce(null);
 
     const app = await buildApp();
-    const payload = { id: "evt_valid_001", type: "invoice.created", data: { object: {} } };
-    const { body, signature } = makeSignedEvent(payload, "whsec_test");
+    const payload = { id: "evt_valid_001", type: "invoice.payment_succeeded", data: { object: {} } };
+    const { body, signature } = makeSignedEvent(payload);
 
     const res = await request(app)
       .post("/webhook")
       .set("Content-Type", "application/json")
       .set("stripe-signature", signature)
-      .send(body);
+      .send(body as any);
 
     expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
     expect(res.body.received).toBe(true);
   });
 
-  it("responde idempotente si el evento ya fue procesado", async () => {
+  it("responde idempotente si el evento ya fue procesado (duplicate:true)", async () => {
     const { prisma } = await import("../src/db/prisma");
     vi.mocked(prisma.webhookEvent.findUnique).mockResolvedValueOnce({ id: "we_existing" } as any);
 
     const app = await buildApp();
-    const payload = { id: "evt_dup_001", type: "invoice.paid", data: { object: {} } };
-    const { body, signature } = makeSignedEvent(payload, "whsec_test");
+    const payload = { id: "evt_dup_001", type: "invoice.payment_failed", data: { object: {} } };
+    const { body, signature } = makeSignedEvent(payload);
 
     const res = await request(app)
       .post("/webhook")
       .set("Content-Type", "application/json")
       .set("stripe-signature", signature)
-      .send(body);
+      .send(body as any);
 
     expect(res.status).toBe(200);
-    expect(res.body.idempotent).toBe(true);
+    expect(res.body.duplicate).toBe(true);
   });
 });

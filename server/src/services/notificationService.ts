@@ -2,6 +2,7 @@ import type { Response } from "express";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../db/prisma";
 import { logger } from "../utils/logger";
+import { env } from "../utils/env";
 import { sendNotificationEmail, sendAdminNotificationEmail } from "./notificationEmailService";
 import { sendAppointmentBookingEmail, sendAppointmentCancellationEmail } from "./emailService";
 import { generateAppointmentConfirmToken } from "../utils/appointmentToken";
@@ -182,7 +183,7 @@ export const onCustomChargeCreated = async (params: {
     title: "Nuevo cobro personalizado",
     body: `El equipo de Velum Laser ha generado un cobro de <strong>${params.amountFormatted}</strong> por concepto de <strong>${params.chargeTitle}</strong>.`,
     ctaLabel: "Ver cobro y autorizar",
-    ctaUrl: `${process.env.STRIPE_CHECKOUT_BASE_URL ?? ""}/#/custom-charge/${params.chargeId}`,
+    ctaUrl: `${env.stripeCheckoutBaseUrl}/#/custom-charge/${params.chargeId}`,
   }).catch((err) => logger.error({ err }, "[notifications] email custom_charge_created failed"));
 };
 
@@ -226,7 +227,7 @@ export const onCustomChargePaid = async (params: {
     title: "¡Pago confirmado!",
     body: `Tu pago de <strong>${params.amountFormatted}</strong> por concepto de <strong>${params.chargeTitle}</strong> fue procesado exitosamente. El equipo de Velum Laser ya recibió la confirmación.`,
     ctaLabel: "Ir a mi cuenta",
-    ctaUrl: `${process.env.STRIPE_CHECKOUT_BASE_URL ?? ""}/#/`,
+    ctaUrl: `${env.stripeCheckoutBaseUrl}/#/`,
   }).catch((err) => logger.error({ err }, "[notifications] email custom_charge_paid (user) failed"));
 
   // Admin in-app + email
@@ -423,7 +424,7 @@ export const onMembershipPaymentFailed = async (params: {
     title: "Pago de membresía no procesado",
     body: `Hola <strong>${params.userName}</strong>, no pudimos procesar tu pago de <strong>${params.amountFormatted}</strong>${params.planCode ? ` del plan <strong>${params.planCode}</strong>` : ""}. Para continuar disfrutando de tus beneficios, por favor actualiza tu método de pago en Stripe.`,
     ctaLabel: "Actualizar método de pago",
-    ctaUrl: `${process.env.STRIPE_CHECKOUT_BASE_URL ?? ""}/#/memberships`,
+    ctaUrl: `${env.stripeCheckoutBaseUrl}/#/memberships`,
   }).catch((err) => logger.error({ err }, "[notifications] email membership_past_due (user) failed"));
 
   // Admins in-app + email
@@ -472,7 +473,7 @@ export const onMembershipActivated = async (params: {
       title: "¡Bienvenida a Velum Laser!",
       body: `Tu membresía${params.planCode ? ` <strong>${params.planCode}</strong>` : ""} ha sido activada exitosamente. Ya puedes disfrutar de todos tus beneficios.`,
       ctaLabel: "Ver mi membresía",
-      ctaUrl: `${process.env.STRIPE_CHECKOUT_BASE_URL ?? ""}/#/memberships`,
+      ctaUrl: `${env.stripeCheckoutBaseUrl}/#/memberships`,
     }).catch((err) => logger.error({ err }, "[notifications] email membership_activated (user) failed"));
   }
 
@@ -494,7 +495,7 @@ export const onIntakeApproved = async (params: {
   userEmail: string;
   userName: string;
 }) => {
-  const baseUrl = process.env.STRIPE_CHECKOUT_BASE_URL ?? "";
+  const baseUrl = env.stripeCheckoutBaseUrl;
 
   await createNotification({
     userId: params.userId,
@@ -520,7 +521,7 @@ export const onIntakeRejected = async (params: {
   userName: string;
   rejectionReason?: string | null;
 }) => {
-  const baseUrl = process.env.STRIPE_CHECKOUT_BASE_URL ?? "";
+  const baseUrl = env.stripeCheckoutBaseUrl;
 
   await createNotification({
     userId: params.userId,

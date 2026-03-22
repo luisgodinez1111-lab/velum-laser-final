@@ -65,6 +65,7 @@ export const env = {
   refreshTokenExpiresDays: Number(process.env.REFRESH_TOKEN_EXPIRES_DAYS ?? 30),
   errorWebhookUrl: process.env.ERROR_WEBHOOK_URL ?? "",
   healthApiKey: process.env.HEALTH_API_KEY ?? "",
+  stripeCheckoutBaseUrl: process.env.STRIPE_CHECKOUT_BASE_URL ?? "",
 };
 
 export const isProduction = env.nodeEnv === "production";
