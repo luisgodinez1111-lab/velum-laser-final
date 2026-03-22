@@ -423,6 +423,16 @@ const processCheckoutCompleted = async (event: Stripe.Event, stripe: Stripe): Pr
   if (cleanString(metadata.type) === "custom_charge") {
     const customChargeId = cleanString(metadata.customChargeId);
     if (customChargeId) {
+      // Idempotency guard — skip if already PAID to prevent double notifications
+      const existing = await prisma.customCharge.findUnique({
+        where: { id: customChargeId },
+        select: { status: true },
+      });
+      if (!existing || existing.status === "PAID") {
+        logger.info({ customChargeId }, "[stripe-webhook] custom_charge already PAID or not found — skipping");
+        return;
+      }
+
       const paymentIntentId = extractExpandableId(session.payment_intent);
       const subscriptionId = extractExpandableId(session.subscription);
       const updatedCharge = await prisma.customCharge.update({

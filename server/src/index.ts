@@ -101,6 +101,11 @@ app.use(
   "/api/webhooks/google-calendar",
   rateLimit({ windowMs: 60 * 1000, limit: 60, standardHeaders: true, legacyHeaders: false })
 );
+// OTP resend endpoints — muy restrictivos para evitar spam/abuso
+app.use(
+  ["/api/v1/custom-charges/:id/resend-otp", "/api/v1/users/me/password/request-whatsapp-code"],
+  rateLimit({ windowMs: 15 * 60 * 1000, limit: 3, standardHeaders: true, legacyHeaders: false, message: { message: "Demasiadas solicitudes de código. Intenta de nuevo en 15 minutos." } })
+);
 // Custom charges OTP — public endpoint, stricter limit
 app.use(
   "/api/v1/custom-charges",
