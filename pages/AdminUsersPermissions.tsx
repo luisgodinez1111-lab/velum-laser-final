@@ -54,6 +54,10 @@ export const AdminUsersPermissions: React.FC<Props> = ({ embedded = false }) => 
 
   const [users, setUsers] = useState<UserRow[]>([]);
   const [catalog, setCatalog] = useState<PermissionItem[]>([]);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalUsers, setTotalUsers] = useState(0);
+  const PAGE_LIMIT = 50;
 
   // Create form
   const [createEmail, setCreateEmail] = useState("");
@@ -85,14 +89,16 @@ export const AdminUsersPermissions: React.FC<Props> = ({ embedded = false }) => 
   const [savingUser, setSavingUser] = useState<string | null>(null);
   const [resettingPwd, setResettingPwd] = useState<string | null>(null);
 
-  const load = async () => {
+  const load = async (targetPage = page) => {
     setLoading(true);
     setError("");
     try {
-      const out = await api("/api/v1/admin/access/users");
+      const out = await api(`/api/v1/admin/access/users?page=${targetPage}&limit=${PAGE_LIMIT}`);
       const list: UserRow[] = out.users || [];
       setUsers(list);
       setCatalog(out.permissionsCatalog || []);
+      setTotalUsers(out.total ?? list.length);
+      setTotalPages(out.pages ?? 1);
       const nextRoles: Record<string, string> = {};
       const nextPerms: Record<string, string[]> = {};
       list.forEach((u) => { nextRoles[u.id] = u.role; nextPerms[u.id] = u.permissions || []; });
@@ -105,7 +111,7 @@ export const AdminUsersPermissions: React.FC<Props> = ({ embedded = false }) => 
     }
   };
 
-  useEffect(() => { void load(); }, []);
+  useEffect(() => { void load(page); }, [page]);
 
   const canHavePermissions = (role: string) => role === "admin" || role === "staff";
 
@@ -562,6 +568,30 @@ export const AdminUsersPermissions: React.FC<Props> = ({ embedded = false }) => 
           })
         )}
       </div>
+
+      {/* Paginación */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between px-4 py-3 border-t border-velum-100 text-sm text-velum-500">
+          <span>{totalUsers} usuarios en total</span>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setPage((p) => p - 1)}
+              disabled={page === 1 || loading}
+              className="px-3 py-1.5 rounded-xl border border-velum-200 disabled:opacity-40 hover:bg-velum-50 transition text-xs font-medium"
+            >
+              Anterior
+            </button>
+            <span className="text-xs">Página {page} de {totalPages}</span>
+            <button
+              onClick={() => setPage((p) => p + 1)}
+              disabled={page === totalPages || loading}
+              className="px-3 py-1.5 rounded-xl border border-velum-200 disabled:opacity-40 hover:bg-velum-50 transition text-xs font-medium"
+            >
+              Siguiente
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 

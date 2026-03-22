@@ -63,6 +63,14 @@ enum CustomChargeStatus {
   CANCELLED
 }
 
+enum CustomChargeInterval {
+  day
+  week
+  month
+  year
+  once
+}
+
 enum IntegrationJobStatus {
   pending
   processing
@@ -211,6 +219,7 @@ model Lead {
   @@index([email])
   @@index([phone])
   @@index([createdAt])
+  @@index([convertedUserId])
 }
 
 model MarketingAttribution {
@@ -252,8 +261,9 @@ model MedicalIntake {
   historyJson      Json?
   phototype        Int?
   consentAccepted  Boolean      @default(false)
-  signatureKey     String?
-  submittedAt      DateTime?
+  signatureKey       String?
+  signatureImageData String?  @db.Text
+  submittedAt        DateTime?
   approvedAt       DateTime?
   approvedByUserId String?
   rejectedAt       DateTime?
@@ -510,7 +520,7 @@ model CustomCharge {
   amount                Int                // in cents (e.g. 150000 = $1,500 MXN)
   currency              String             @default("mxn")
   type                  CustomChargeType   @default(ONE_TIME)
-  interval              String?            // day | week | month | year — only for RECURRING
+  interval              CustomChargeInterval? // day | week | month | year | once — only for RECURRING
   otpHash               String?
   otpExpiresAt          DateTime?
   otpAttempts           Int                @default(0)

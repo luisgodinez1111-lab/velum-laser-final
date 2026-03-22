@@ -20,7 +20,7 @@ export const createCustomCharge = async (params: {
   amount: number; // in cents
   currency?: string;
   type: "ONE_TIME" | "RECURRING";
-  interval?: string;
+  interval?: "day" | "week" | "month" | "year" | "once";
   expiresInHours?: number;
 }) => {
   const otp = generateOtp();
@@ -37,7 +37,7 @@ export const createCustomCharge = async (params: {
       amount: params.amount,
       currency: params.currency ?? "mxn",
       type: params.type,
-      interval: params.type === "RECURRING" ? (params.interval ?? "month") : null,
+      interval: params.type === "RECURRING" ? (params.interval ?? "month") : undefined,
       otpHash,
       otpExpiresAt,
       status: "PENDING_ACCEPTANCE",

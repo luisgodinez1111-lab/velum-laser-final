@@ -46,6 +46,7 @@ export const updateMyMedicalIntake = async (req: AuthRequest, res: Response) => 
       phototype: payload.phototype ?? undefined,
       consentAccepted: payload.consentAccepted ?? undefined,
       signatureKey: payload.signatureKey ?? undefined,
+      signatureImageData: payload.signatureImageData ?? undefined,
       status: requestedStatus,
       submittedAt: requestedStatus === "submitted" ? new Date() : current.submittedAt,
       rejectedAt: requestedStatus === "submitted" ? null : current.rejectedAt,

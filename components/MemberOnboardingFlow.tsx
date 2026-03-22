@@ -177,6 +177,7 @@ export const MemberOnboardingFlow: React.FC = () => {
         body: JSON.stringify({
           consentAccepted: true,
           signatureKey: signatureData,
+          signatureImageData: signatureData,
           status: 'submitted'
         })
       });
