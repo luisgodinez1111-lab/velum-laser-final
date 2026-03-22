@@ -260,7 +260,66 @@ export const sendAppointmentReminderEmail = async (
 };
 
 // ──────────────────────────────────────────────────────────────────────
-// 3b. OTP de autorización para eliminar paciente (API key 3 — reminders)
+// 3b. Confirmación de cita agendada (API key 3 — reminders)
+// ──────────────────────────────────────────────────────────────────────
+export const sendAppointmentBookingEmail = async (
+  to: string,
+  params: {
+    name: string;
+    date: string;
+    time: string;
+    treatment?: string;
+    cabin?: string;
+  }
+): Promise<void> => {
+  const html = baseHtml(`
+    <p style="${headingStyle}">Tu cita está confirmada</p>
+    <p style="${bodyStyle}">
+      Hola <strong>${params.name}</strong>, tu cita en Velum Laser ha sido agendada exitosamente.
+    </p>
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:#f8f6f3;border-radius:12px;padding:20px;margin:20px 0;">
+      <tr>
+        <td style="padding:6px 0;">
+          <p style="margin:0;font-size:12px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#9b8d80;">Fecha</p>
+          <p style="margin:2px 0 0;font-size:16px;font-weight:600;color:#1a1614;">${params.date}</p>
+        </td>
+      </tr>
+      <tr>
+        <td style="padding:6px 0;">
+          <p style="margin:0;font-size:12px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#9b8d80;">Hora</p>
+          <p style="margin:2px 0 0;font-size:16px;font-weight:600;color:#1a1614;">${params.time}</p>
+        </td>
+      </tr>
+      ${params.treatment ? `
+      <tr>
+        <td style="padding:6px 0;">
+          <p style="margin:0;font-size:12px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#9b8d80;">Tratamiento</p>
+          <p style="margin:2px 0 0;font-size:16px;font-weight:600;color:#1a1614;">${params.treatment}</p>
+        </td>
+      </tr>` : ""}
+      ${params.cabin ? `
+      <tr>
+        <td style="padding:6px 0;">
+          <p style="margin:0;font-size:12px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#9b8d80;">Cabina</p>
+          <p style="margin:2px 0 0;font-size:16px;font-weight:600;color:#1a1614;">${params.cabin}</p>
+        </td>
+      </tr>` : ""}
+    </table>
+    <p style="${noteStyle}">
+      Puedes cancelar o reprogramar con al menos 24 horas de anticipación desde tu perfil en velumlaser.com.
+    </p>
+  `);
+
+  await withRetry(() => resendReminders.emails.send({
+    from: FROM,
+    to,
+    subject: `Tu cita en Velum Laser — ${params.date}`,
+    html,
+  }));
+};
+
+// ──────────────────────────────────────────────────────────────────────
+// 3c. OTP de autorización para eliminar paciente (API key 3 — reminders)
 // ──────────────────────────────────────────────────────────────────────
 export const sendDeleteUserOtpEmail = async (
   to: string,

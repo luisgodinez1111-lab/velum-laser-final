@@ -2,11 +2,14 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "../db/prisma";
 import { logger } from "../utils/logger";
 import { sendNotificationEmail, sendAdminNotificationEmail } from "./notificationEmailService";
+import { sendAppointmentBookingEmail } from "./emailService";
 
 export type NotificationType =
   | "custom_charge_created"
   | "custom_charge_accepted"
   | "custom_charge_paid"
+  | "appointment_booked"
+  | "appointment_confirmed"
   | "appointment_deposit_paid"
   | "membership_activated"
   | "membership_renewed"
@@ -216,6 +219,47 @@ export const onAppointmentDepositPaid = async (params: {
     title: "Depósito de cita recibido",
     body: `<strong>${params.userName}</strong> (${params.userEmail}) pagó su depósito para una cita el <strong>${dateLabel}</strong>.`,
   }).catch((err) => logger.error({ err }, "[notifications] email appointment_deposit_paid (admin) failed"));
+};
+
+/** Appointment created → notify patient (in-app + email) */
+export const onAppointmentBooked = async (params: {
+  userId: string;
+  userEmail: string;
+  userName: string;
+  date: string;
+  time: string;
+  treatment?: string;
+  cabin?: string;
+}) => {
+  await createNotification({
+    userId: params.userId,
+    type: "appointment_booked",
+    title: "Cita agendada",
+    body: `${params.date} a las ${params.time}${params.treatment ? ` · ${params.treatment}` : ""}`,
+  });
+
+  sendAppointmentBookingEmail(params.userEmail, {
+    name: params.userName,
+    date: params.date,
+    time: params.time,
+    treatment: params.treatment,
+    cabin: params.cabin,
+  }).catch((err) => logger.error({ err }, "[notifications] email appointment_booked failed"));
+};
+
+/** Staff confirms appointment → notify patient (in-app only) */
+export const onAppointmentConfirmed = async (params: {
+  userId: string;
+  date: string;
+  time: string;
+  treatment?: string;
+}) => {
+  await createNotification({
+    userId: params.userId,
+    type: "appointment_confirmed",
+    title: "Tu cita fue confirmada",
+    body: `${params.date} a las ${params.time}${params.treatment ? ` · ${params.treatment}` : ""}`,
+  });
 };
 
 /** New member registered (public or created by admin) → notify admins */

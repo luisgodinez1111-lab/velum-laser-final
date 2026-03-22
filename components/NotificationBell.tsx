@@ -14,13 +14,15 @@ type Notification = {
 const POLL_INTERVAL_MS = 30_000;
 
 const typeIcon: Record<string, string> = {
-  custom_charge_created:  "💳",
-  custom_charge_accepted: "✅",
-  custom_charge_paid:     "💰",
-  appointment_deposit_paid: "📅",
-  membership_activated:   "⭐",
-  membership_renewed:     "🔄",
-  new_member:             "👤",
+  custom_charge_created:   "💳",
+  custom_charge_accepted:  "✅",
+  custom_charge_paid:      "💰",
+  appointment_booked:      "🗓️",
+  appointment_confirmed:   "✔️",
+  appointment_deposit_paid:"📅",
+  membership_activated:    "⭐",
+  membership_renewed:      "🔄",
+  new_member:              "👤",
 };
 
 function timeAgo(iso: string): string {

@@ -17,6 +17,7 @@ import {
 import { env } from "../utils/env";
 import { getClinicIdByUserId } from "../utils/clinic";
 import { logger } from "../utils/logger";
+import { onAppointmentBooked, onAppointmentConfirmed } from "../services/notificationService";
 import { agendaBlockCreateSchema, agendaConfigUpdateSchema, agendaDateParamSchema } from "../validators/agenda";
 import { appointmentCreateSchema, appointmentUpdateSchema } from "../validators/appointments";
 
@@ -459,7 +460,7 @@ export const createAppointment = async (req: AuthRequest, res: Response) => {
     },
     include: {
       user: {
-        select: { id: true, email: true }
+        select: { id: true, email: true, profile: { select: { firstName: true, lastName: true } } }
       },
       createdBy: {
         select: { id: true, email: true, role: true }
@@ -479,6 +480,18 @@ export const createAppointment = async (req: AuthRequest, res: Response) => {
       }
     }
   });
+
+  const TIMEZONE = "America/Chihuahua";
+  const userName = [appointment.user.profile?.firstName, appointment.user.profile?.lastName].filter(Boolean).join(" ") || appointment.user.email;
+  onAppointmentBooked({
+    userId: appointment.user.id,
+    userEmail: appointment.user.email,
+    userName,
+    date: appointment.startAt.toLocaleDateString("es-MX", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: TIMEZONE }),
+    time: appointment.startAt.toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit", hour12: true, timeZone: TIMEZONE }),
+    treatment: appointment.treatment?.name,
+    cabin: appointment.cabin?.name,
+  }).catch((err) => logger.error({ err }, "[appointment] booking notification failed"));
 
   await createAuditLog({
     userId: req.user!.id,
@@ -640,6 +653,14 @@ export const updateAppointment = async (req: AuthRequest, res: Response) => {
       resourceId: appointment.id,
       ip: req.ip
     });
+
+    const TZ = "America/Chihuahua";
+    onAppointmentConfirmed({
+      userId: confirmed.user.id,
+      date: confirmed.startAt.toLocaleDateString("es-MX", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: TZ }),
+      time: confirmed.startAt.toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit", hour12: true, timeZone: TZ }),
+      treatment: confirmed.treatment?.name,
+    }).catch((err) => logger.error({ err }, "[appointment] confirmed notification failed"));
 
     return res.json(confirmed);
   }
