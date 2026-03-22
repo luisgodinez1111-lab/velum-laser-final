@@ -467,9 +467,9 @@ export const handleGoogleCalendarOAuthCallback = async (args: { code: string; st
 
     const oauth2Client = createGoogleOAuthClient();
 
-const runtimeClientId = process.env.GOOGLE_CLIENT_ID || env.googleClientId;
-const runtimeClientSecret = process.env.GOOGLE_CLIENT_SECRET || env.googleClientSecret;
-const runtimeRedirectUri = process.env.GOOGLE_REDIRECT_URI || env.googleRedirectUri;
+const runtimeClientId = env.googleClientId;
+const runtimeClientSecret = env.googleClientSecret;
+const runtimeRedirectUri = env.googleRedirectUri;
 
 const tokenPayload = new URLSearchParams({
   code: args.code,

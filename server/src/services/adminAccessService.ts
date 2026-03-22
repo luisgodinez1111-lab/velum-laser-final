@@ -1,4 +1,5 @@
 import { prisma } from "../db/prisma";
+import { Prisma } from "@prisma/client";
 
 export type PermissionItem = {
   code: string;
@@ -93,8 +94,8 @@ export const writeAccessStore = async (store: AccessStore): Promise<void> => {
   try {
     await model.upsert({
       where: { key: SETTING_KEY },
-      update: { value: memoryStore as unknown as Record<string, unknown> },
-      create: { key: SETTING_KEY, value: memoryStore as unknown as Record<string, unknown> },
+      update: { value: memoryStore as unknown as Prisma.InputJsonValue },
+      create: { key: SETTING_KEY, value: memoryStore as unknown as Prisma.InputJsonValue },
     });
   } catch {
     // fallback en memoria para no romper operación

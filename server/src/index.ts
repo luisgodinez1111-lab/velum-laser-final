@@ -173,6 +173,14 @@ app.use(
   "/api/v1/notifications",
   rateLimit({ windowMs: 10 * 60 * 1000, limit: 120, standardHeaders: true, legacyHeaders: false })
 );
+// Rate limiter global de fallback — cubre cualquier ruta sin limitador explícito
+app.use(rateLimit({
+  windowMs: 10 * 60 * 1000,
+  limit: 300,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: (req) => req.path === "/api/v1/notifications/stream",
+}));
 
 // ── Stripe webhook — raw body antes de express.json ──────────────────
 // Solo un webhook activo: la versión v1

@@ -2,6 +2,7 @@ import Stripe from "stripe";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../db/prisma";
 import { logger } from "../utils/logger";
+import { env } from "../utils/env";
 import {
   onCustomChargePaid,
   onAppointmentDepositPaid,
@@ -178,9 +179,9 @@ const readAppSettingValue = async (key: string): Promise<unknown> => {
 };
 
 export const getStripeWebhookConfig = async (): Promise<StripeConfig> => {
-  const envSecret = cleanString(process.env.STRIPE_SECRET_KEY);
-  const envPublishable = cleanString(process.env.STRIPE_PUBLISHABLE_KEY);
-  const envWebhook = cleanString(process.env.STRIPE_WEBHOOK_SECRET);
+  const envSecret = cleanString(env.stripeSecretKey);
+  const envPublishable = cleanString(env.stripePublishableKey);
+  const envWebhook = cleanString(env.stripeWebhookSecret);
 
   const raw = await readAppSettingValue(STRIPE_CONFIG_KEY);
   const db = safeParseRecord(raw);

@@ -1,4 +1,6 @@
 import { prisma } from "../db/prisma";
+import { Prisma } from "@prisma/client";
+import { env as appEnv } from "../utils/env";
 
 export type StripeConfig = {
   secretKey: string;
@@ -25,9 +27,9 @@ const getAppSettingModel = (): typeof prisma.appSetting | null => {
 };
 
 const fromEnv = (): StripeConfig => ({
-  secretKey: asString(process.env.STRIPE_SECRET_KEY),
-  publishableKey: asString(process.env.STRIPE_PUBLISHABLE_KEY),
-  webhookSecret: asString(process.env.STRIPE_WEBHOOK_SECRET),
+  secretKey: asString(appEnv.stripeSecretKey),
+  publishableKey: asString(appEnv.stripePublishableKey),
+  webhookSecret: asString(appEnv.stripeWebhookSecret),
 });
 
 const normalize = (v: unknown): StripeConfig => {
@@ -77,8 +79,8 @@ export const saveStripeConfig = async (incoming: Partial<StripeConfig>): Promise
 
   await model.upsert({
     where: { key: SETTING_KEY },
-    update: { value: next as Record<string, unknown> },
-    create: { key: SETTING_KEY, value: next as Record<string, unknown> },
+    update: { value: next as unknown as Prisma.InputJsonValue },
+    create: { key: SETTING_KEY, value: next as unknown as Prisma.InputJsonValue },
   });
 
   return { source: "database", config: next };

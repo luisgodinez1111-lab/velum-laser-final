@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { CheckCircle2, XCircle, Loader2, CreditCard, ArrowRight } from "lucide-react";
 
@@ -17,7 +17,7 @@ type ChargeInfo = {
   user: { email: string; profile?: { firstName?: string } };
 };
 
-const apiBase = (import.meta as any).env?.VITE_API_URL ?? "";
+const apiBase = (import.meta.env as Record<string, string | undefined>)?.VITE_API_URL ?? "";
 
 async function apiFetch(path: string, init?: RequestInit) {
   const res = await fetch(`${apiBase}${path}`, {
@@ -43,8 +43,11 @@ export const CustomChargePage: React.FC = () => {
   const [verifying, setVerifying] = useState(false);
   const [verifyError, setVerifyError] = useState("");
   const [otpBlocked, setOtpBlocked] = useState(false);
+  const [resending, setResending] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0);
 
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
+  const resendTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -89,8 +92,8 @@ export const CustomChargePage: React.FC = () => {
       if (data.checkoutUrl) {
         window.location.href = data.checkoutUrl;
       }
-    } catch (e: any) {
-      const msg: string = e.message || "Código incorrecto o expirado";
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Código incorrecto o expirado";
       const isTerminal = msg.toLowerCase().includes("demasiados intentos") ||
                          msg.toLowerCase().includes("too many");
       if (isTerminal) setOtpBlocked(true);
@@ -98,6 +101,32 @@ export const CustomChargePage: React.FC = () => {
       setVerifying(false);
     }
   };
+
+  const handleResend = useCallback(async () => {
+    setResending(true);
+    try {
+      await apiFetch(`/api/v1/custom-charges/${id}/resend`, { method: "POST" });
+      setOtp(["", "", "", "", "", ""]);
+      setVerifyError("");
+      setOtpBlocked(false);
+      setResendCooldown(60);
+      const interval = setInterval(() => {
+        setResendCooldown((prev) => {
+          if (prev <= 1) { clearInterval(interval); return 0; }
+          return prev - 1;
+        });
+      }, 1000);
+      resendTimerRef.current = interval;
+    } catch (e: unknown) {
+      setVerifyError(e instanceof Error ? e.message : "No se pudo reenviar el código");
+    } finally {
+      setResending(false);
+    }
+  }, [id]);
+
+  useEffect(() => {
+    return () => { if (resendTimerRef.current) clearInterval(resendTimerRef.current); };
+  }, []);
 
   // ── Payment success state ──────────────────────────────────────────
   if (paymentResult === "success") {
@@ -278,6 +307,16 @@ export const CustomChargePage: React.FC = () => {
                 <p className={`text-sm ${otpBlocked ? "text-amber-700" : "text-red-700"}`}>{verifyError}</p>
               </div>
             )}
+
+            <button
+              onClick={handleResend}
+              disabled={resending || resendCooldown > 0}
+              className="w-full text-center text-xs text-velum-400 hover:text-velum-700 transition disabled:opacity-40 py-1"
+            >
+              {resendCooldown > 0
+                ? `Reenviar código en ${resendCooldown}s`
+                : resending ? "Enviando..." : "¿No recibiste el código? Reenviar"}
+            </button>
 
             <button onClick={handleVerify} disabled={verifying || otp.join("").length !== 6 || otpBlocked}
               className="w-full flex items-center justify-center gap-2 bg-[#1a1614] text-white rounded-xl py-3.5 text-sm font-semibold

@@ -83,7 +83,8 @@ describe("POST /auth/refresh — happy path", () => {
       role:  activeUser.role,
     });
 
-    const cookies: string[] = (res.headers["set-cookie"] as string[] | undefined) ?? [];
+    const rawCookies = res.headers["set-cookie"] as string | string[] | undefined;
+    const cookies: string[] = Array.isArray(rawCookies) ? rawCookies : rawCookies ? [rawCookies] : [];
     expect(cookies.some((c) => c.startsWith(ACCESS_COOKIE + "="))).toBe(true);
     expect(cookies.some((c) => c.startsWith(REFRESH_COOKIE + "="))).toBe(true);
     expect(mockRotateRefreshToken).toHaveBeenCalledWith(FAKE_REFRESH);

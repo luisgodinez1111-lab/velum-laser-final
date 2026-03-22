@@ -7,9 +7,9 @@ import { env } from "../utils/env";
 
 const getGoogleOAuthRuntimeConfig = () => {
   return {
-    clientId: process.env.GOOGLE_CLIENT_ID || env.googleClientId,
-    clientSecret: process.env.GOOGLE_CLIENT_SECRET || env.googleClientSecret,
-    redirectUri: process.env.GOOGLE_REDIRECT_URI || env.googleRedirectUri
+    clientId: env.googleClientId,
+    clientSecret: env.googleClientSecret,
+    redirectUri: env.googleRedirectUri,
   };
 };
 

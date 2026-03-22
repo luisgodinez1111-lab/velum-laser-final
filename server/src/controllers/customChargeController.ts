@@ -78,7 +78,7 @@ export const createCharge = async (req: AuthRequest, res: Response) => {
     amount: amountCents,
     currency,
     type: type as "ONE_TIME" | "RECURRING",
-    interval,
+    interval: interval as "day" | "week" | "month" | "year" | "once",
   });
 
   const base = resolveBaseUrl();
@@ -276,7 +276,8 @@ export const verifyOtpAndCheckout = async (req: Request, res: Response) => {
   const json = await rsp.json().catch(() => ({})) as Record<string, unknown>;
 
   if (!rsp.ok) {
-    const detail = json?.error?.message || "Error creando checkout en Stripe";
+    const errorObj = json?.error as Record<string, unknown> | undefined;
+    const detail = (typeof errorObj?.message === "string" ? errorObj.message : undefined) || "Error creando checkout en Stripe";
     logger.error({ detail }, "[custom-charge] Stripe checkout creation failed");
     return res.status(502).json({ message: "No se pudo crear el pago en Stripe", detail });
   }

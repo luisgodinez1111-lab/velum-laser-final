@@ -1,15 +1,16 @@
 import { Resend } from "resend";
+import { env } from "../utils/env";
 
 // ──────────────────────────────────────────────────────────────────────
 // 4 clientes Resend dedicados, uno por propósito
 // ──────────────────────────────────────────────────────────────────────
-const resendVerification = new Resend(process.env.RESEND_KEY_VERIFICATION ?? "");
-const resendReset        = new Resend(process.env.RESEND_KEY_RESET        ?? "");
-const resendReminders    = new Resend(process.env.RESEND_KEY_REMINDERS    ?? "");
-const resendDocuments    = new Resend(process.env.RESEND_KEY_DOCUMENTS    ?? "");
-const resendAdminInvite  = new Resend(process.env.RESEND_KEY_ADMIN_INVITE ?? "");
+const resendVerification = new Resend(env.resendKeyVerification);
+const resendReset        = new Resend(env.resendKeyReset);
+const resendReminders    = new Resend(env.resendKeyReminders);
+const resendDocuments    = new Resend(env.resendKeyDocuments);
+const resendAdminInvite  = new Resend(env.resendKeyAdminInvite);
 
-const FROM = `Velum Laser <${process.env.RESEND_FROM_EMAIL ?? "noreply@velumlaser.com"}>`;
+const FROM = `Velum Laser <${env.resendFromEmail}>`;
 
 // ── Retry helper — exponential backoff, max 3 attempts ─────────────────────
 async function withRetry<T>(fn: () => Promise<T>, attempts = 3, baseDelayMs = 500): Promise<T> {
