@@ -63,7 +63,7 @@ import {
   googleCalendarIntegrationService
 } from '../services/googleCalendarIntegrationService';
 
-type AdminSection = 'panel' | 'socias' | 'agenda' | 'expedientes' | 'pagos' | 'kpis' | 'finanzas' | 'ajustes';
+type AdminSection = 'panel' | 'socias' | 'agenda' | 'expedientes' | 'pagos' | 'kpis' | 'finanzas' | 'riesgos' | 'cumplimiento' | 'ajustes';
 
 type HealthFlag = 'ok' | 'warning' | 'critical';
 
@@ -108,10 +108,12 @@ const sectionMeta: Record<AdminSection, { label: string; icon: React.ComponentTy
   pagos:       { label: 'Pagos',        icon: Wallet },
   kpis:        { label: 'KPIs',         icon: TrendingUp },
   finanzas:    { label: 'Finanzas',     icon: Banknote },
+  riesgos:     { label: 'Riesgos',      icon: AlertTriangle },
+  cumplimiento:{ label: 'Cumplimiento', icon: ShieldCheck },
   ajustes:     { label: 'Ajustes',      icon: Settings },
 };
 
-const NAV_SECTIONS: AdminSection[] = ['panel', 'socias', 'agenda', 'expedientes', 'pagos', 'kpis', 'finanzas', 'ajustes'];
+const NAV_SECTIONS: AdminSection[] = ['panel', 'socias', 'agenda', 'expedientes', 'pagos', 'kpis', 'finanzas', 'riesgos', 'cumplimiento', 'ajustes'];
 
 const allowedRoles: UserRole[] = ['admin', 'staff', 'system'];
 
@@ -3820,6 +3822,8 @@ export const Admin: React.FC = () => {
       case 'pagos':        return renderPagos();
       case 'kpis':         return renderKPIs();
       case 'finanzas':     return renderFinanzas();
+      case 'riesgos':      return renderRiesgos();
+      case 'cumplimiento': return renderCumplimiento();
       case 'ajustes':      return renderConfiguraciones();
       default:             return null;
     }
