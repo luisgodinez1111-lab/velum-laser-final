@@ -4,6 +4,8 @@ import { prisma } from "../db/prisma";
 import { AuthRequest } from "../middlewares/auth";
 import { createAuditLog } from "../services/auditService";
 import { medicalIntakeApproveSchema, medicalIntakeUpdateSchema } from "../validators/medicalIntake";
+import { onIntakeApproved, onIntakeRejected } from "../services/notificationService";
+import { logger } from "../utils/logger";
 
 const ensureIntake = async (userId: string) => {
   return prisma.medicalIntake.upsert({
@@ -116,6 +118,19 @@ export const approveMedicalIntake = async (req: AuthRequest, res: Response) => {
       rejectionReason: payload.rejectionReason
     }
   });
+
+  // Notify patient about the result
+  const patient = await prisma.user.findUnique({
+    where: { id: req.params.userId },
+    select: { email: true, profile: { select: { firstName: true, lastName: true } } }
+  });
+  if (patient) {
+    const name = [patient.profile?.firstName, patient.profile?.lastName].filter(Boolean).join(" ") || patient.email;
+    const notifyFn = payload.approved
+      ? onIntakeApproved({ userId: req.params.userId, userEmail: patient.email, userName: name })
+      : onIntakeRejected({ userId: req.params.userId, userEmail: patient.email, userName: name, rejectionReason: payload.rejectionReason });
+    notifyFn.catch((err) => logger.error({ err }, "[intake] notification failed"));
+  }
 
   return res.json(updated);
 };

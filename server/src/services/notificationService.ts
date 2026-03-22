@@ -16,7 +16,9 @@ export type NotificationType =
   | "membership_activated"
   | "membership_renewed"
   | "membership_past_due"
-  | "new_member";
+  | "new_member"
+  | "intake_approved"
+  | "intake_rejected";
 
 export interface CreateNotificationParams {
   userId: string;
@@ -440,4 +442,55 @@ export const onMembershipActivated = async (params: {
     title: adminTitle,
     body: `<strong>${params.userName}</strong> (${params.userEmail}) ${params.isRenewal ? "renovó" : "activó"} su membresía${params.planCode ? ` con el plan <strong>${params.planCode}</strong>` : ""}.`,
   }).catch((err) => logger.error({ err }, "[notifications] email membership_activated (admin) failed"));
+};
+
+export const onIntakeApproved = async (params: {
+  userId: string;
+  userEmail: string;
+  userName: string;
+}) => {
+  const baseUrl = process.env.STRIPE_CHECKOUT_BASE_URL ?? "";
+
+  await createNotification({
+    userId: params.userId,
+    type: "intake_approved",
+    title: "Tu expediente fue aprobado",
+    body: "Ya puedes agendar tu primera cita.",
+    data: {},
+  });
+
+  sendNotificationEmail(params.userEmail, {
+    name: params.userName,
+    subject: "Tu expediente médico fue aprobado — Velum Laser",
+    title: "Expediente aprobado",
+    body: "Hola <strong>" + params.userName + "</strong>, tu expediente médico fue revisado y aprobado por nuestro equipo clínico. Ya puedes agendar tu primera cita.",
+    ctaLabel: "Agendar cita",
+    ctaUrl: `${baseUrl}/#/agenda`,
+  }).catch((err) => logger.error({ err }, "[notifications] email intake_approved failed"));
+};
+
+export const onIntakeRejected = async (params: {
+  userId: string;
+  userEmail: string;
+  userName: string;
+  rejectionReason?: string | null;
+}) => {
+  const baseUrl = process.env.STRIPE_CHECKOUT_BASE_URL ?? "";
+
+  await createNotification({
+    userId: params.userId,
+    type: "intake_rejected",
+    title: "Tu expediente requiere correcciones",
+    body: params.rejectionReason ?? "Por favor revisa y actualiza tu expediente.",
+    data: { rejectionReason: params.rejectionReason },
+  });
+
+  sendNotificationEmail(params.userEmail, {
+    name: params.userName,
+    subject: "Tu expediente médico requiere correcciones — Velum Laser",
+    title: "Expediente con observaciones",
+    body: `Hola <strong>${params.userName}</strong>, tu expediente médico fue revisado y requiere algunas correcciones antes de continuar.${params.rejectionReason ? `<br><br><strong>Motivo:</strong> ${params.rejectionReason}` : ""}<br><br>Por favor actualiza tu expediente para continuar.`,
+    ctaLabel: "Actualizar expediente",
+    ctaUrl: `${baseUrl}/#/dashboard`,
+  }).catch((err) => logger.error({ err }, "[notifications] email intake_rejected failed"));
 };
