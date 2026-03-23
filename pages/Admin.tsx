@@ -564,7 +564,7 @@ export const Admin: React.FC = () => {
       const [sessionsResp, appointmentsResp, paymentsResp] = await Promise.all([
         apiFetch<any>(`/v1/sessions/admin?userId=${encodeURIComponent(member.id)}`).catch(() => null),
         apiFetch<any>(`/v1/appointments?userId=${encodeURIComponent(member.id)}`).catch(() => null),
-        apiFetch<any>(`/v1/payments?userId=${encodeURIComponent(member.id)}`).catch(() => null),
+        apiFetch<any>(`/v1/payments?userId=${encodeURIComponent(member.id)}&limit=100`).catch(() => null),
       ]);
       // All three endpoints may return paginated objects — extract arrays defensively
       const sessionsData: any[] = Array.isArray(sessionsResp) ? sessionsResp : (sessionsResp?.sessions ?? sessionsResp?.data ?? []);

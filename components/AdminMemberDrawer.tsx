@@ -352,7 +352,7 @@ export const AdminMemberDrawer: React.FC<AdminMemberDrawerProps> = ({
               <p className="text-xs text-velum-400 text-center py-4">Sin pagos registrados</p>
             ) : (
               <div className="space-y-2">
-                {(memberPayments as any[]).slice(0, 6).map((p) => (
+                {(memberPayments as any[]).slice(0, 20).map((p) => (
                   <div key={p.id} className="flex items-center justify-between p-2.5 rounded-xl bg-velum-50">
                     <div>
                       <p className="text-xs font-medium text-velum-900">
@@ -368,7 +368,7 @@ export const AdminMemberDrawer: React.FC<AdminMemberDrawerProps> = ({
                     </div>
                   </div>
                 ))}
-                {memberPayments.length > 6 && <p className="text-[11px] text-velum-400 text-center">+{memberPayments.length - 6} más</p>}
+                {memberPayments.length > 20 && <p className="text-[11px] text-velum-400 text-center">+{memberPayments.length - 20} más</p>}
               </div>
             )}
           </div>
