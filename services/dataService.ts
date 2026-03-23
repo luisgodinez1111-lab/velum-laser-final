@@ -158,7 +158,9 @@ export const documentService = {
 
 export const auditService = {
   getLogs: async (): Promise<AuditLogEntry[]> => {
-    const logs = await apiFetch<any[]>("/admin/audit-logs");
+    const resp = await apiFetch<any>("/admin/audit-logs");
+    // Backend returns { data: logs[], pagination } — extract array defensively
+    const logs: any[] = Array.isArray(resp) ? resp : (resp?.data ?? []);
     return logs.map((log) => ({
       id: log.id,
       timestamp: log.createdAt,

@@ -561,17 +561,17 @@ export const Admin: React.FC = () => {
   const loadMemberHistory = async (member: Member) => {
     setIsLoadingMemberHistory(true);
     try {
-      const [sessions, appointments, paymentsResp] = await Promise.all([
-        clinicalService.getMemberSessions(member.id),
-        clinicalService.listAppointments({ userId: member.id }),
-        apiFetch<any>(`/v1/payments?userId=${encodeURIComponent(member.id)}`).catch(() => null)
+      const [sessionsResp, appointmentsResp, paymentsResp] = await Promise.all([
+        apiFetch<any>(`/v1/sessions/admin?userId=${encodeURIComponent(member.id)}`).catch(() => null),
+        apiFetch<any>(`/v1/appointments?userId=${encodeURIComponent(member.id)}`).catch(() => null),
+        apiFetch<any>(`/v1/payments?userId=${encodeURIComponent(member.id)}`).catch(() => null),
       ]);
-      // API returns { payments: [], total, ... } — extract the array defensively
-      const paymentsData: any[] = Array.isArray(paymentsResp)
-        ? paymentsResp
-        : (paymentsResp?.payments ?? []);
-      setMemberSessions(sessions);
-      setMemberAppointments(appointments);
+      // All three endpoints may return paginated objects — extract arrays defensively
+      const sessionsData: any[] = Array.isArray(sessionsResp) ? sessionsResp : (sessionsResp?.sessions ?? sessionsResp?.data ?? []);
+      const appointmentsData: any[] = Array.isArray(appointmentsResp) ? appointmentsResp : (appointmentsResp?.appointments ?? appointmentsResp?.data ?? []);
+      const paymentsData: any[] = Array.isArray(paymentsResp) ? paymentsResp : (paymentsResp?.payments ?? paymentsResp?.data ?? []);
+      setMemberSessions(sessionsData);
+      setMemberAppointments(appointmentsData);
       setMemberPayments(paymentsData);
     } catch {
       setMemberSessions([]);
