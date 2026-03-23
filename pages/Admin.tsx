@@ -587,6 +587,9 @@ export const Admin: React.FC = () => {
     setDrawerDeleteStep('idle');
     setDrawerDeleteOtp('');
     setDrawerDeleteMsg('');
+    setMemberSessions([]);
+    setMemberAppointments([]);
+    setMemberPayments([]);
     void loadMemberHistory(member);
   };
 
@@ -2773,6 +2776,7 @@ export const Admin: React.FC = () => {
       {/* Modals */}
       {renderSessionModal()}
       {selectedMember && (
+        <SectionErrorBoundary section="Perfil">
         <AdminMemberDrawer
           member={selectedMember}
           onClose={() => { setSelectedMember(null); setIntakeToApprove(null); }}
@@ -2808,6 +2812,7 @@ export const Admin: React.FC = () => {
           memberPayments={memberPayments}
           memberSessions={memberSessions}
         />
+        </SectionErrorBoundary>
       )}
       <AdminIntakeModal
         intakeModal={intakeModal}

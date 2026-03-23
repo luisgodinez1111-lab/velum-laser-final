@@ -323,7 +323,7 @@ export const AdminMemberDrawer: React.FC<AdminMemberDrawerProps> = ({
             <p className="text-[10px] font-bold uppercase tracking-widest text-velum-400 mb-3">Citas recientes</p>
             {isLoadingMemberHistory ? (
               <div className="space-y-2">{[1,2,3].map(i => <div key={i} className="h-10 bg-velum-100 rounded-xl animate-pulse" />)}</div>
-            ) : memberAppointments.length === 0 ? (
+            ) : !Array.isArray(memberAppointments) || memberAppointments.length === 0 ? (
               <p className="text-xs text-velum-400 text-center py-4">Sin citas registradas</p>
             ) : (
               <div className="space-y-2">
@@ -348,7 +348,7 @@ export const AdminMemberDrawer: React.FC<AdminMemberDrawerProps> = ({
             <p className="text-[10px] font-bold uppercase tracking-widest text-velum-400 mb-3">Historial de pagos</p>
             {isLoadingMemberHistory ? (
               <div className="space-y-2">{[1,2].map(i => <div key={i} className="h-10 bg-velum-100 rounded-xl animate-pulse" />)}</div>
-            ) : memberPayments.length === 0 ? (
+            ) : !Array.isArray(memberPayments) || memberPayments.length === 0 ? (
               <p className="text-xs text-velum-400 text-center py-4">Sin pagos registrados</p>
             ) : (
               <div className="space-y-2">
@@ -377,7 +377,7 @@ export const AdminMemberDrawer: React.FC<AdminMemberDrawerProps> = ({
             <p className="text-[10px] font-bold uppercase tracking-widest text-velum-400 mb-3">Sesiones clínicas</p>
             {isLoadingMemberHistory ? (
               <div className="space-y-2">{[1,2].map(i => <div key={i} className="h-12 bg-velum-100 rounded-xl animate-pulse" />)}</div>
-            ) : memberSessions.length === 0 ? (
+            ) : !Array.isArray(memberSessions) || memberSessions.length === 0 ? (
               <p className="text-xs text-velum-400 text-center py-4">Sin sesiones registradas</p>
             ) : (
               <div className="space-y-2">
