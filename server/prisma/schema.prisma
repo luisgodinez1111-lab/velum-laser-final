@@ -117,8 +117,11 @@ model User {
   notifications               Notification[]
   refreshTokens               RefreshToken[]
   passwordHistory             PasswordHistory[]
+  deletedAt                   DateTime?
+  deletedBy                   String?
 
   @@index([clinicId])
+  @@index([deletedAt])
 }
 
 model Profile {

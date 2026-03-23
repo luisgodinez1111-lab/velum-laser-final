@@ -3,6 +3,7 @@ import { prisma } from "../db/prisma";
 import { sendAppointmentReminderEmail } from "./emailService";
 import { sendWhatsappAppointmentReminder } from "./whatsappMetaService";
 import { logger } from "../utils/logger";
+import { recordWorkerRun } from "../utils/workerRegistry";
 
 const LOCK_KEY = "appointment_reminder_lock";
 const LOCK_TTL_MINUTES = 30;
@@ -127,6 +128,7 @@ export const runAppointmentReminders = async (): Promise<void> => {
     logger.error({ err }, "[appointment-reminder] Cron run error");
   } finally {
     await releaseLock();
+    await recordWorkerRun("appointment-reminder");
   }
 };
 

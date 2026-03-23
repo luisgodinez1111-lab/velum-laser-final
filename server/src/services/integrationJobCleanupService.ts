@@ -3,6 +3,7 @@ import { prisma } from "../db/prisma";
 import { logger } from "../utils/logger";
 import { sendAdminNotificationEmail } from "./notificationEmailService";
 import { notifyAdmins } from "./notificationService";
+import { recordWorkerRun } from "../utils/workerRegistry";
 
 const DONE_MAX_DAYS = 7;
 const FAILED_MAX_DAYS = 14;
@@ -192,6 +193,7 @@ export const startIntegrationJobCleanupCron = (): void => {
     runWithRetry(prunePasswordHistory, "pwd-history-cleanup");
     runWithRetry(pruneOldNotifications, "notification-cleanup");
     runWithRetry(checkWhatsappTokenExpiry, "whatsapp-token-check");
+    recordWorkerRun("nightly-cleanup").catch(() => {});
   }, { timezone: "America/Mexico_City" });
 
   // Run once on startup to clear existing backlog

@@ -1,5 +1,6 @@
 import { Resend } from "resend";
 import { env } from "../utils/env";
+import { getRequestId } from "../utils/requestContext";
 
 // ──────────────────────────────────────────────────────────────────────
 // 4 clientes Resend dedicados, uno por propósito
@@ -11,6 +12,12 @@ const resendDocuments    = new Resend(env.resendKeyDocuments);
 const resendAdminInvite  = new Resend(env.resendKeyAdminInvite);
 
 const FROM = `Velum Laser <${env.resendFromEmail}>`;
+
+/** Resend tags from current request context for tracing across services. */
+const getResendTags = (): Array<{ name: string; value: string }> => {
+  const requestId = getRequestId();
+  return requestId ? [{ name: "requestId", value: requestId }] : [];
+};
 
 // ── Retry helper — exponential backoff, max 3 attempts ─────────────────────
 async function withRetry<T>(fn: () => Promise<T>, attempts = 3, baseDelayMs = 500): Promise<T> {
@@ -695,6 +702,72 @@ export const sendCustomChargeOtpEmail = async (
     from: FROM,
     to,
     subject: `Autoriza tu cobro personalizado — Velum Laser`,
-    html
+    html,
+    tags: getResendTags(),
+  }));
+};
+
+// ──────────────────────────────────────────────────────────────────────
+// 7. Comprobante de pago de membresía (API key 3 — reminders)
+// ──────────────────────────────────────────────────────────────────────
+export const sendPaymentReceiptEmail = async (
+  to: string,
+  params: {
+    name: string;
+    planName: string;
+    amount: string;
+    date: string;
+    invoiceId?: string;
+  }
+): Promise<void> => {
+  const html = baseHtml(`
+    <p style="${headingStyle}">Comprobante de pago</p>
+    <p style="${bodyStyle}">
+      Hola <strong>${esc(params.name)}</strong>, confirmamos que tu pago de membresía ha sido procesado exitosamente.
+    </p>
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:#f0faf4;border:1px solid #b7e4c7;border-radius:12px;padding:20px;margin:20px 0;">
+      <tr>
+        <td style="padding:6px 0;">
+          <p style="margin:0;font-size:12px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#2d6a4f;">Plan</p>
+          <p style="margin:2px 0 0;font-size:16px;font-weight:600;color:#1a1614;">${esc(params.planName)}</p>
+        </td>
+      </tr>
+      <tr>
+        <td style="padding:6px 0;">
+          <p style="margin:0;font-size:12px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#2d6a4f;">Monto cobrado</p>
+          <p style="margin:2px 0 0;font-size:22px;font-weight:700;color:#1a1614;">${esc(params.amount)}</p>
+        </td>
+      </tr>
+      <tr>
+        <td style="padding:6px 0;">
+          <p style="margin:0;font-size:12px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#2d6a4f;">Fecha de pago</p>
+          <p style="margin:2px 0 0;font-size:16px;font-weight:600;color:#1a1614;">${esc(params.date)}</p>
+        </td>
+      </tr>
+      ${params.invoiceId ? `
+      <tr>
+        <td style="padding:6px 0;border-top:1px solid #b7e4c7;">
+          <p style="margin:0;font-size:11px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#2d6a4f;">Folio</p>
+          <p style="margin:2px 0 0;font-size:12px;color:#5a7a6a;font-family:'Courier New',monospace;">${esc(params.invoiceId)}</p>
+        </td>
+      </tr>` : ""}
+    </table>
+    <p style="${bodyStyle}">
+      Tu membresía está activa. Puedes revisar tu historial de pagos desde tu cuenta en velumlaser.com.
+    </p>
+    <div style="text-align:center;margin:28px 0;">
+      <a href="https://velumlaser.com/#/dashboard" style="${btnStyle}">Ver mi cuenta</a>
+    </div>
+    <p style="${noteStyle}">
+      Conserva este correo como comprobante de tu pago. Si tienes dudas, contáctanos directamente.
+    </p>
+  `);
+
+  await withRetry(() => resendReminders.emails.send({
+    from: FROM,
+    to,
+    subject: `Comprobante de pago — Velum Laser`,
+    html,
+    tags: getResendTags(),
   }));
 };

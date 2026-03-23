@@ -9,6 +9,7 @@ import {
   onMembershipActivated,
   onMembershipPaymentFailed,
 } from "./notificationService";
+import { sendPaymentReceiptEmail } from "./emailService";
 
 type JsonObject = Record<string, unknown>;
 type Delegate = {
@@ -768,6 +769,17 @@ const processInvoiceEvent = async (event: Stripe.Event, stripe: Stripe, success:
           planCode: subCtx?.planCode,
           isRenewal: true,
         }).catch((err) => logger.error({ err }, "[stripe-webhook] membership_renewed notification failed"));
+        const amountPaid = centsToMajor(invoice.amount_paid);
+        const amountFormatted = amountPaid !== null
+          ? new Intl.NumberFormat("es-MX", { style: "currency", currency: (cleanString(invoice.currency) || "mxn").toUpperCase() }).format(amountPaid)
+          : "—";
+        sendPaymentReceiptEmail(invoiceUser.email, {
+          name: invoiceName,
+          planName: subCtx?.planCode ?? "Membresía Velum",
+          amount: amountFormatted,
+          date: new Date().toLocaleDateString("es-MX", { day: "numeric", month: "long", year: "numeric" }),
+          invoiceId: cleanString(invoice.id) || undefined,
+        }).catch((err) => logger.error({ err }, "[stripe-webhook] receipt email failed"));
       } else {
         const amountDue = centsToMajor(invoice.amount_due);
         const amountFormatted = amountDue !== null

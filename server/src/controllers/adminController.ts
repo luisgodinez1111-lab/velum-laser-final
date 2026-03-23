@@ -46,7 +46,7 @@ export const listUsers = async (req: AuthRequest, res: Response) => {
   const roleFilter   = String(req.query.role   ?? "").trim();
   const statusFilter = String(req.query.status ?? "").trim();
 
-  const where: Prisma.UserWhereInput = {};
+  const where: Prisma.UserWhereInput = { deletedAt: null };
   if (search) {
     where.OR = [
       { email: { contains: search, mode: "insensitive" } },
@@ -172,7 +172,7 @@ export const exportUsers = async (req: AuthRequest, res: Response) => {
 
   while (hasMore) {
     const batch = await prisma.user.findMany({
-      where: { role: "member" },
+      where: { role: "member", deletedAt: null },
       select: { id: true, email: true, createdAt: true, profile: { select: { firstName: true, lastName: true, phone: true } }, memberships: { select: { planId: true, status: true }, take: 1 } },
       orderBy: [{ createdAt: "asc" }, { id: "asc" }],
       take: BATCH,
@@ -187,6 +187,69 @@ export const exportUsers = async (req: AuthRequest, res: Response) => {
       const status = ms?.status ?? "inactive";
       const created = u.createdAt.toISOString().slice(0, 10);
       const row = [name, u.email, phone, plan, status, created].map((v) => `"${String(v).replace(/"/g, '""')}"`).join(",");
+      res.write(row + "\n");
+    }
+
+    if (batch.length < BATCH) {
+      hasMore = false;
+    } else {
+      cursor = batch[batch.length - 1].id;
+    }
+  }
+
+  return res.end();
+};
+
+export const exportAuditLogsCSV = async (req: AuthRequest, res: Response) => {
+  const parsed = auditFilterSchema.parse(req.query);
+  const BATCH = 500;
+  const bom = "\uFEFF";
+  const header = "Fecha,Actor,Acción,Recurso,ID Recurso,Target,Resultado,IP\n";
+
+  const where = {
+    ...(parsed.actorUserId ? { actorUserId: parsed.actorUserId } : {}),
+    ...(parsed.targetUserId ? { targetUserId: parsed.targetUserId } : {}),
+    ...(parsed.userId ? { userId: parsed.userId } : {}),
+    ...(parsed.action ? { action: parsed.action } : {}),
+    ...(parsed.resourceType ? { resourceType: parsed.resourceType } : {}),
+    ...(parsed.resourceId ? { resourceId: parsed.resourceId } : {}),
+    ...(parsed.result ? { result: parsed.result } : {}),
+    ...(parsed.startDate || parsed.endDate
+      ? { createdAt: { ...(parsed.startDate ? { gte: new Date(parsed.startDate) } : {}), ...(parsed.endDate ? { lte: new Date(parsed.endDate) } : {}) } }
+      : {}),
+  };
+
+  res.setHeader("Content-Type", "text/csv; charset=utf-8");
+  res.setHeader("Content-Disposition", `attachment; filename="velum-auditoria-${new Date().toISOString().slice(0, 10)}.csv"`);
+  res.write(bom + header);
+
+  let cursor: string | undefined;
+  let hasMore = true;
+  const esc = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+
+  while (hasMore) {
+    const batch = await prisma.auditLog.findMany({
+      where,
+      include: {
+        actorUser: { select: { email: true } },
+        targetUser: { select: { email: true } },
+      },
+      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+      take: BATCH,
+      ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
+    });
+
+    for (const log of batch) {
+      const row = [
+        log.createdAt.toISOString(),
+        log.actorUser?.email ?? "",
+        log.action,
+        log.resourceType ?? "",
+        log.resourceId ?? "",
+        log.targetUser?.email ?? "",
+        log.result ?? "",
+        log.ip ?? "",
+      ].map(esc).join(",");
       res.write(row + "\n");
     }
 

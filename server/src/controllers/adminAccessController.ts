@@ -579,7 +579,15 @@ export const deleteUser = async (req: AuthRequest, res: Response) => {
       data: { staffUserId: actorId },
     });
 
-    await prisma.user.delete({ where: { id: targetUserId } });
+    // Soft delete: mark user as deleted instead of hard-deleting
+    await prisma.user.update({
+      where: { id: targetUserId },
+      data: {
+        deletedAt: new Date(),
+        deletedBy: actorId,
+        isActive: false,
+      },
+    });
 
     await createAuditLog({
       userId: actorId,

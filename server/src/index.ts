@@ -2,6 +2,7 @@ import "express-async-errors";
 import express, { raw } from "express";
 import cors from "cors";
 import helmet from "helmet";
+import compression from "compression";
 import cookieParser from "cookie-parser";
 import rateLimit from "express-rate-limit";
 import swaggerUi from "swagger-ui-express";
@@ -38,6 +39,8 @@ import { reportError } from "./utils/errorReporter";
 import { openApiSpec } from "./openapi";
 import { prisma } from "./db/prisma";
 import { getSseConnectionCount } from "./services/notificationService";
+import { requestContext } from "./utils/requestContext";
+import { getWorkerStatus } from "./utils/workerRegistry";
 
 if (!env.jwtSecret) {
   throw new Error("JWT_SECRET is required");
@@ -101,6 +104,14 @@ app.get("/api/v1/health/detailed", async (req: express.Request, res: express.Res
   // SSE connections count (informational)
   checks.sse = { ok: true, ...({ connections: getSseConnectionCount() } as any) };
 
+  // Worker last-run timestamps
+  try {
+    const workerStatus = await getWorkerStatus();
+    (checks as any).workers = { ok: true, lastRuns: workerStatus };
+  } catch {
+    (checks as any).workers = { ok: true, lastRuns: {} };
+  }
+
   // Node.js memory usage
   const mem = process.memoryUsage();
   checks.memory = { ok: true, ...({ heapUsedMB: Math.round(mem.heapUsed / 1024 / 1024), heapTotalMB: Math.round(mem.heapTotal / 1024 / 1024), rssMB: Math.round(mem.rss / 1024 / 1024) } as any) };
@@ -124,14 +135,16 @@ app.get("/api/v1/health/detailed", async (req: express.Request, res: express.Res
 
 app.set("trust proxy", 1);
 
-// ── Request ID — correlaciona logs por request ─────────────────────
+// ── Request ID — correlaciona logs por request + propaga a servicios externos ──
 app.use((req, res, next) => {
   const requestId = (req.headers["x-request-id"] as string) || crypto.randomUUID();
   req.headers["x-request-id"] = requestId;
   res.setHeader("x-request-id", requestId);
-  next();
+  requestContext.run({ requestId }, next);
 });
 
+// ── Gzip / Brotli compression ─────────────────────────────────────────
+app.use(compression({ level: 6, threshold: 1024 }));
 app.use(httpLogger);
 app.use(helmet({
   contentSecurityPolicy: {
@@ -152,7 +165,13 @@ app.use(helmet({
     ? { maxAge: 31536000, includeSubDomains: true, preload: true }
     : false,
 }));
-app.use(cors({ origin: env.corsOrigin.split(",").map((s) => s.trim()), credentials: true }));
+app.use(cors({
+  origin: env.corsOrigin.split(",").map((s) => s.trim()),
+  credentials: true,
+  maxAge: 86400, // preflight cached 24h
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization", "X-Request-ID", "X-Health-Key"],
+}));
 app.use(cookieParser());
 
 // ── Rate limiting ────────────────────────────────────────────────────
@@ -272,7 +291,7 @@ app.use(rateLimit({
   limit: 300,
   standardHeaders: true,
   legacyHeaders: false,
-  skip: (req) => req.path === "/api/v1/notifications/stream",
+  skip: (req) => req.path === "/api/v1/notifications/stream" || req.path === "/health" || req.path === "/api/health" || req.path === "/api/v1/health/detailed",
   keyGenerator: (req) => {
     try {
       const token = (req as { cookies?: Record<string, string> }).cookies?.accessToken;

@@ -2,6 +2,7 @@ import { Router } from "express";
 import { requireAuth, requireRole } from "../middlewares/auth";
 import {
   listAuditLogs,
+  exportAuditLogsCSV,
   listDocumentsAdmin,
   listMemberships,
   listUsers,
@@ -27,6 +28,7 @@ adminRoutes.get("/admin/memberships", listMemberships);
 adminRoutes.get("/admin/documents", listDocumentsAdmin);
 adminRoutes.get("/admin/reports", reports);
 adminRoutes.get("/admin/audit-logs", requireRole(["admin", "system"]), listAuditLogs);
+adminRoutes.get("/admin/audit-logs/export", requireRole(["admin", "system"]), exportAuditLogsCSV);
 adminRoutes.patch("/admin/users/:userId/membership", updateMembershipStatus);
 adminRoutes.patch("/admin/users/:userId/role", requireRole(["admin", "system"]), updateUserRole);
 adminRoutes.post("/admin/patients", createPatient);

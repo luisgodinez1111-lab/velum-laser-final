@@ -5,6 +5,7 @@ import { readStripePlanCatalog } from "./stripePlanCatalogService";
 import { sendWhatsappPaymentReminder } from "./whatsappMetaService";
 import { createNotification } from "./notificationService";
 import { logger } from "../utils/logger";
+import { recordWorkerRun } from "../utils/workerRegistry";
 
 // Days before renewal to send reminders
 const REMINDER_DAYS = [3, 1];
@@ -152,6 +153,7 @@ export const runPaymentReminders = async (): Promise<void> => {
     logger.error({ err }, "[payment-reminder] Cron run error");
   } finally {
     await releaseLock();
+    await recordWorkerRun("payment-reminder");
   }
 };
 
