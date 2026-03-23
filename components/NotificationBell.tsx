@@ -46,7 +46,9 @@ export const NotificationBell: React.FC = () => {
   const [count, setCount] = useState(0);
   const [items, setItems] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(false);
+  const [sseError, setSseError] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
+  const sseFailCountRef = useRef(0);
 
   // SSE reconnection state
   const esRef             = useRef<EventSource | null>(null);
@@ -76,8 +78,10 @@ export const NotificationBell: React.FC = () => {
     esRef.current = es;
 
     es.onopen = () => {
-      // Connection established — reset backoff
+      // Connection established — reset backoff and error state
       backoffRef.current = SSE_BACKOFF_INITIAL_MS;
+      sseFailCountRef.current = 0;
+      setSseError(false);
     };
 
     es.onmessage = (event) => {
@@ -96,6 +100,9 @@ export const NotificationBell: React.FC = () => {
       es.close();
       esRef.current = null;
       if (unmountedRef.current) return;
+      sseFailCountRef.current += 1;
+      // Show persistent error after 3 failed reconnects
+      if (sseFailCountRef.current >= 3) setSseError(true);
       const delay = backoffRef.current;
       backoffRef.current = Math.min(delay * 2, SSE_BACKOFF_MAX_MS);
       reconnectTimerRef.current = setTimeout(connectSSE, delay);
@@ -169,11 +176,14 @@ export const NotificationBell: React.FC = () => {
       {/* Bell button */}
       <button
         onClick={openPanel}
-        className="relative flex items-center justify-center w-9 h-9 rounded-full border border-velum-200 bg-white hover:border-velum-400 transition shadow-sm"
+        className={`relative flex items-center justify-center w-9 h-9 rounded-full border bg-white hover:border-velum-400 transition shadow-sm ${
+          sseError ? "border-amber-300" : "border-velum-200"
+        }`}
         aria-label="Notificaciones"
         aria-expanded={open}
+        title={sseError ? "Sin conexión en tiempo real — recargando..." : undefined}
       >
-        <Bell size={16} className="text-velum-700" />
+        <Bell size={16} className={sseError ? "text-amber-500" : "text-velum-700"} />
         {count > 0 && (
           <span
             aria-live="polite"
@@ -207,6 +217,14 @@ export const NotificationBell: React.FC = () => {
               </button>
             )}
           </div>
+
+          {/* SSE error banner */}
+          {sseError && (
+            <div className="px-4 py-2 bg-amber-50 border-b border-amber-100 text-xs text-amber-700 flex items-center gap-1.5">
+              <span>⚠️</span>
+              <span>Sin tiempo real — intentando reconectar</span>
+            </div>
+          )}
 
           {/* Body */}
           <div className="overflow-y-auto flex-1">

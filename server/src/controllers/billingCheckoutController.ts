@@ -25,9 +25,15 @@ export const createBillingCheckout = async (req: AuthRequest, res: Response) => 
 
     const me = await prisma.user.findUnique({
       where: { id: req.user.id },
-      select: { id: true, email: true },
+      select: { id: true, email: true, memberships: { select: { status: true } } },
     });
     if (!me) return res.status(404).json({ message: "Usuario no encontrado" });
+
+    // Prevent double-subscribe if already active
+    const hasActiveMembership = me.memberships.some((m) => m.status === "active");
+    if (hasActiveMembership) {
+      return res.status(409).json({ message: "Ya tienes una membresía activa. Usa el portal de facturación para gestionar tu plan." });
+    }
 
     // Check for appointment deposit credit (200 MXN off first month)
     const userFlags = await prisma.user.findUnique({
@@ -48,6 +54,7 @@ export const createBillingCheckout = async (req: AuthRequest, res: Response) => 
         method: "POST",
         headers: { Authorization: `Bearer ${secret}`, "Content-Type": "application/x-www-form-urlencoded" },
         body: couponParams.toString(),
+        signal: AbortSignal.timeout(10_000),
       });
       const couponJson: any = await couponRsp.json().catch(() => ({}));
       if (couponRsp.ok && couponJson?.id) {
@@ -87,8 +94,10 @@ export const createBillingCheckout = async (req: AuthRequest, res: Response) => 
         Authorization: `Bearer ${secret}`,
         "Content-Type": "application/x-www-form-urlencoded",
         "Idempotency-Key": idempotencyKey,
+        "X-Request-Id": (req.headers["x-request-id"] as string) || "",
       },
       body: params.toString(),
+      signal: AbortSignal.timeout(10_000),
     });
 
     const json: any = await rsp.json().catch(() => ({}));
@@ -121,6 +130,10 @@ export const createBillingPortal = async (req: AuthRequest, res: Response) => {
     if (!me?.stripeCustomerId) {
       return res.status(400).json({ message: "No tienes una suscripción activa con Stripe" });
     }
+    if (!me.stripeCustomerId.startsWith("cus_")) {
+      logger.warn({ userId: req.user.id, stripeCustomerId: me.stripeCustomerId }, "[billing-portal] stripeCustomerId has unexpected format");
+      return res.status(400).json({ message: "No tienes una suscripción activa con Stripe" });
+    }
 
     const stripe = await resolveStripeConfig();
     const secret = stripe.config.secretKey;
@@ -138,8 +151,10 @@ export const createBillingPortal = async (req: AuthRequest, res: Response) => {
       headers: {
         Authorization: `Bearer ${secret}`,
         "Content-Type": "application/x-www-form-urlencoded",
+        "X-Request-Id": (req.headers["x-request-id"] as string) || "",
       },
       body: params.toString(),
+      signal: AbortSignal.timeout(10_000),
     });
 
     const json: any = await rsp.json().catch(() => ({}));

@@ -279,8 +279,10 @@ export const verifyOtpAndCheckout = async (req: Request, res: Response) => {
       Authorization: `Bearer ${secret}`,
       "Content-Type": "application/x-www-form-urlencoded",
       "Idempotency-Key": idempotencyKey,
+      "X-Request-Id": (req.headers["x-request-id"] as string) || "",
     },
     body: params.toString(),
+    signal: AbortSignal.timeout(10_000),
   });
 
   const json = await rsp.json().catch(() => ({})) as Record<string, unknown>;

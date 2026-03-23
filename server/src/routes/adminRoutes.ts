@@ -5,6 +5,7 @@ import {
   listDocumentsAdmin,
   listMemberships,
   listUsers,
+  getUserById,
   reports,
   updateMembershipStatus,
   updateUserRole,
@@ -20,6 +21,7 @@ adminRoutes.use("/admin", requireAuth, requireRole(["staff", "admin", "system"])
 
 adminRoutes.get("/admin/users", listUsers);
 adminRoutes.get("/admin/users/export", exportUsers);
+adminRoutes.get("/admin/users/:userId", getUserById);
 adminRoutes.get("/admin/memberships", listMemberships);
 adminRoutes.get("/admin/documents", listDocumentsAdmin);
 adminRoutes.get("/admin/reports", reports);

@@ -51,6 +51,19 @@ export const createAppointmentDepositCheckout = async (req: AuthRequest, res: Re
     const me = await prisma.user.findUnique({ where: { id: req.user.id }, select: { email: true, clinicId: true } });
     if (!me) return res.status(404).json({ message: "Usuario no encontrado" });
 
+    // Prevent duplicate deposits: block if user already has a recent pending or paid deposit
+    const existingDeposit = await prisma.payment.findFirst({
+      where: {
+        userId: req.user.id,
+        status: { in: ["pending", "paid"] },
+        createdAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) }, // within last 24h
+      },
+      select: { id: true, status: true },
+    });
+    if (existingDeposit) {
+      return res.status(409).json({ message: "Ya tienes un depósito reciente. Si necesitas ayuda, contacta al equipo de Velum Laser." });
+    }
+
     const reason = asString(body.reason);
     const cabinId = asString(body.cabinId);
     const treatmentId = asString(body.treatmentId);
@@ -88,8 +101,10 @@ export const createAppointmentDepositCheckout = async (req: AuthRequest, res: Re
         Authorization: `Bearer ${secret}`,
         "Content-Type": "application/x-www-form-urlencoded",
         "Idempotency-Key": idempotencyKey,
+        "X-Request-Id": (req.headers["x-request-id"] as string) || "",
       },
       body: params.toString(),
+      signal: AbortSignal.timeout(10_000),
     });
 
     const json: { url?: string; error?: { message?: string } } = await rsp.json().catch(() => ({}));

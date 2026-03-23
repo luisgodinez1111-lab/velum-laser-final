@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
-import { CheckCircle2, XCircle, Loader2, CreditCard, ArrowRight } from "lucide-react";
+import { CheckCircle2, XCircle, Loader2, CreditCard, ArrowRight, Clock } from "lucide-react";
 
 type ChargeInfo = {
   id: string;
@@ -46,16 +46,35 @@ export const CustomChargePage: React.FC = () => {
   const [resending, setResending] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
 
+  const [expirySecondsLeft, setExpirySecondsLeft] = useState<number | null>(null);
+
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
   const resendTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const expiryTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     if (!id) return;
     apiFetch(`/api/v1/custom-charges/${id}`)
-      .then((data) => setCharge(data.charge))
+      .then((data) => {
+        setCharge(data.charge);
+        // Start expiry countdown if charge is pending and has an expiresAt
+        if (data.charge?.expiresAt && data.charge.status === "PENDING_ACCEPTANCE") {
+          const calcSecondsLeft = () => Math.max(0, Math.floor((new Date(data.charge.expiresAt).getTime() - Date.now()) / 1000));
+          setExpirySecondsLeft(calcSecondsLeft());
+          expiryTimerRef.current = setInterval(() => {
+            const secs = calcSecondsLeft();
+            setExpirySecondsLeft(secs);
+            if (secs <= 0 && expiryTimerRef.current) clearInterval(expiryTimerRef.current);
+          }, 1000);
+        }
+      })
       .catch((e) => setLoadError(e.message || "No se encontró el cobro"))
       .finally(() => setLoading(false));
   }, [id]);
+
+  useEffect(() => {
+    return () => { if (expiryTimerRef.current) clearInterval(expiryTimerRef.current); };
+  }, []);
 
   const handleOtpChange = (index: number, value: string) => {
     const digit = value.replace(/\D/g, "").slice(-1);
@@ -275,6 +294,24 @@ export const CustomChargePage: React.FC = () => {
             <p className="text-sm text-velum-700">
               Ingresa el código de 6 dígitos que recibiste en tu correo <strong>{charge.user.email}</strong> para autorizar este cobro.
             </p>
+            {expirySecondsLeft !== null && expirySecondsLeft > 0 && (
+              <div className="flex items-center gap-1.5 text-xs text-velum-500">
+                <Clock size={12} />
+                <span>
+                  Expira en {expirySecondsLeft >= 3600
+                    ? `${Math.floor(expirySecondsLeft / 3600)}h ${Math.floor((expirySecondsLeft % 3600) / 60)}m`
+                    : expirySecondsLeft >= 60
+                    ? `${Math.floor(expirySecondsLeft / 60)}m ${expirySecondsLeft % 60}s`
+                    : `${expirySecondsLeft}s`}
+                </span>
+              </div>
+            )}
+            {expirySecondsLeft === 0 && (
+              <div className="flex items-center gap-1.5 text-xs text-amber-600 font-medium">
+                <Clock size={12} />
+                <span>Este cobro ha expirado. Contacta a Velum Laser.</span>
+              </div>
+            )}
 
             <div className="flex justify-center gap-2" onPaste={handlePaste}>
               {otp.map((digit, i) => (

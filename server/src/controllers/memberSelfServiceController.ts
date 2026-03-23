@@ -12,7 +12,7 @@ const OTP_MAX_ATTEMPTS = 5;
 const asString = (v: unknown): string => (typeof v === "string" ? v.trim() : "");
 
 const getPasswordChecks = (value: string) => ({
-  length: value.length >= 8,
+  length: value.length >= 12,
   upper: /[A-Z]/.test(value),
   lower: /[a-z]/.test(value),
   number: /[0-9]/.test(value),
@@ -160,7 +160,7 @@ export const changeMyPassword = async (req: AuthRequest, res: Response) => {
 
   if (!isStrongPassword(newPassword)) {
     return res.status(400).json({
-      message: "La contrasena nueva debe incluir minimo 8 caracteres, mayuscula, minuscula, numero y simbolo"
+      message: "La contraseña nueva debe incluir mínimo 12 caracteres, mayúscula, minúscula, número y símbolo"
     });
   }
 

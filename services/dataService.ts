@@ -76,11 +76,13 @@ export const memberService = {
   },
 
   getById: async (id: string): Promise<Member | undefined> => {
-    const resp = await apiFetch<any>("/admin/users");
-    const users = extractUsers(resp);
-    const user = users.find((u: any) => u.id === id);
-    if (!user) return undefined;
-    return mapMember(user);
+    try {
+      const user = await apiFetch<any>(`/admin/users/${id}`);
+      if (!user) return undefined;
+      return mapMember(user);
+    } catch {
+      return undefined;
+    }
   },
 
   updateMembershipStatus: async (userId: string, status: string): Promise<void> => {

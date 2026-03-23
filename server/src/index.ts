@@ -36,6 +36,7 @@ import { errorHandler } from "./middlewares/error";
 import { reportError } from "./utils/errorReporter";
 import { openApiSpec } from "./openapi";
 import { prisma } from "./db/prisma";
+import { getSseConnectionCount } from "./services/notificationService";
 
 if (!env.jwtSecret) {
   throw new Error("JWT_SECRET is required");
@@ -95,6 +96,9 @@ app.get("/api/v1/health/detailed", async (req: express.Request, res: express.Res
 
   // Stripe key present (not reachability — avoids external latency on health checks)
   checks.stripe = { ok: !!env.stripeSecretKey };
+
+  // SSE connections count (informational)
+  checks.sse = { ok: true, ...({ connections: getSseConnectionCount() } as any) };
 
   const allOk = Object.values(checks).every((c) => c.ok);
 
@@ -248,8 +252,25 @@ app.post("/api/v1/errors/client", express.json({ limit: "16kb" }), (req, res) =>
 app.use(errorHandler);
 
 // ── Servidor ─────────────────────────────────────────────────────────
+// ── Startup: warn if Prisma migrations are pending ────────────────────
+const warnIfMigrationsPending = async () => {
+  try {
+    const rows = await prisma.$queryRaw<Array<{ migration_name: string }>>`
+      SELECT migration_name FROM "_prisma_migrations"
+      WHERE finished_at IS NULL AND rolled_back_at IS NULL
+      LIMIT 5
+    `;
+    if (rows.length > 0) {
+      logger.warn({ pending: rows.map((r) => r.migration_name) }, "[startup] Prisma migrations are pending — run `prisma migrate deploy`");
+    }
+  } catch {
+    // Table may not exist in fresh installs — not fatal
+  }
+};
+
 const server = app.listen(env.port, () => {
   logger.info(`API running on :${env.port}`);
+  void warnIfMigrationsPending();
   void startIntegrationWorker().catch((error) => {
     logger.error({ err: error }, "Unable to start integration worker");
   });

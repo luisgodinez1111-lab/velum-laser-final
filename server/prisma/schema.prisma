@@ -480,6 +480,7 @@ model Payment {
   @@index([createdAt])
   @@index([createdAt, status])
   @@index([membershipId, createdAt])
+  @@index([stripeSubscriptionId])
 }
 
 model EmailVerificationToken {

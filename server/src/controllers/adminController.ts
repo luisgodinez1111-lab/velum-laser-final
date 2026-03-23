@@ -87,6 +87,25 @@ export const listUsers = async (req: AuthRequest, res: Response) => {
   return res.json({ data: enriched, total, page, limit, pages: Math.ceil(total / limit) });
 };
 
+export const getUserById = async (req: AuthRequest, res: Response) => {
+  const { userId } = req.params;
+  const [user, catalog] = await Promise.all([
+    prisma.user.findUnique({
+      where: { id: userId },
+      include: { profile: true, memberships: true, documents: true, medicalIntake: true },
+    }),
+    readStripePlanCatalog().catch(() => []),
+  ]);
+  if (!user) return res.status(404).json({ message: "Usuario no encontrado" });
+
+  const ms = user.memberships[0];
+  if (ms) {
+    const catalogEntry = catalog.find((p) => p.planCode === (ms.planId ?? "").toLowerCase() || p.stripePriceId === ms.planId);
+    return res.json({ ...user, memberships: [{ ...ms, catalogEntry: catalogEntry ?? null }] });
+  }
+  return res.json(user);
+};
+
 export const listMemberships = async (req: AuthRequest, res: Response) => {
   const page  = Math.max(1, parseInt(String(req.query.page  ?? "1"), 10));
   const limit = Math.min(100, Math.max(1, parseInt(String(req.query.limit ?? "50"), 10)));

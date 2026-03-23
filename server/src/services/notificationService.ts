@@ -67,6 +67,13 @@ export const unregisterSseClient = (userId: string, res: Response): void => {
   if (clients.size === 0) sseClients.delete(userId);
 };
 
+/** Returns the total number of active SSE connections across all users. */
+export const getSseConnectionCount = (): number => {
+  let total = 0;
+  for (const clients of sseClients.values()) total += clients.size;
+  return total;
+};
+
 const broadcastToUser = (userId: string, payload: unknown): void => {
   const clients = sseClients.get(userId);
   if (!clients || clients.size === 0) return;

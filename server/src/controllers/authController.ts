@@ -130,6 +130,7 @@ export const login = async (req: Request, res: Response) => {
 
   // Per-account lockout check (prevents credential stuffing)
   if (checkAccountLocked(payload.email)) {
+    res.set("Retry-After", String(Math.ceil(LOGIN_LOCKOUT_MS / 1000)));
     return res.status(429).json({ message: "Demasiados intentos fallidos. Intenta de nuevo en 15 minutos." });
   }
 
@@ -233,6 +234,14 @@ export const resetPassword = async (req: Request, res: Response) => {
   // Prevent reuse of recent passwords
   const reused = await isPasswordReused(reset.userId, payload.password);
   if (reused) {
+    await createAuditLog({
+      userId: reset.userId,
+      action: "auth.password_reset_reuse_blocked",
+      resourceType: "user",
+      resourceId: reset.userId,
+      ip: req.ip,
+      metadata: {}
+    });
     return res.status(400).json({ message: "No puedes reutilizar una contraseña reciente. Elige una diferente." });
   }
 
@@ -343,8 +352,20 @@ export const changeInitialPassword = async (req: AuthRequest, res: Response) => 
   const userId = req.user!.id;
   const { newPassword } = req.body as { newPassword?: string };
 
-  if (!newPassword || newPassword.length < 8) {
-    return res.status(400).json({ message: "La contraseña debe tener al menos 8 caracteres" });
+  if (!newPassword) {
+    return res.status(400).json({ message: "La contraseña es obligatoria" });
+  }
+  // Reutilizar el mismo validador fuerte que en registro/reset
+  const strengthCheck = ((): string | null => {
+    if (newPassword.length < 12) return "La contraseña debe tener al menos 12 caracteres";
+    if (!/[A-Z]/.test(newPassword)) return "Debe incluir al menos una letra mayúscula";
+    if (!/[a-z]/.test(newPassword)) return "Debe incluir al menos una letra minúscula";
+    if (!/[0-9]/.test(newPassword)) return "Debe incluir al menos un número";
+    if (!/[^A-Za-z0-9]/.test(newPassword)) return "Debe incluir al menos un símbolo";
+    return null;
+  })();
+  if (strengthCheck) {
+    return res.status(400).json({ message: strengthCheck });
   }
 
   const user = await prisma.user.findUnique({
@@ -359,6 +380,14 @@ export const changeInitialPassword = async (req: AuthRequest, res: Response) => 
   // Prevent reuse of recent passwords
   const reusedInitial = await isPasswordReused(userId, newPassword);
   if (reusedInitial) {
+    await createAuditLog({
+      userId,
+      action: "auth.initial_password_reuse_blocked",
+      resourceType: "user",
+      resourceId: userId,
+      ip: req.ip,
+      metadata: {}
+    });
     return res.status(400).json({ message: "No puedes reutilizar una contraseña reciente. Elige una diferente." });
   }
 
