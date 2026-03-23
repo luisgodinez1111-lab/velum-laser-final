@@ -22,27 +22,31 @@ export const createSessionTreatment = async (req: AuthRequest, res: Response) =>
     }
   }
 
-  const treatment = await prisma.sessionTreatment.create({
-    data: {
-      appointmentId: payload.appointmentId,
-      userId: payload.userId,
-      staffUserId: req.user!.id,
-      laserParametersJson: payload.laserParametersJson as Prisma.InputJsonValue | undefined,
-      notes: payload.notes,
-      adverseEvents: payload.adverseEvents
-    }
-  });
-
-  if (payload.appointmentId) {
-    await prisma.appointment.update({
-      where: { id: payload.appointmentId },
+  const treatment = await prisma.$transaction(async (tx) => {
+    const created = await tx.sessionTreatment.create({
       data: {
-        status: "completed",
-        completedAt: new Date(),
-        noShowAt: null
+        appointmentId: payload.appointmentId,
+        userId: payload.userId,
+        staffUserId: req.user!.id,
+        laserParametersJson: payload.laserParametersJson as Prisma.InputJsonValue | undefined,
+        notes: payload.notes,
+        adverseEvents: payload.adverseEvents
       }
     });
-  }
+
+    if (payload.appointmentId) {
+      await tx.appointment.update({
+        where: { id: payload.appointmentId },
+        data: {
+          status: "completed",
+          completedAt: new Date(),
+          noShowAt: null
+        }
+      });
+    }
+
+    return created;
+  });
 
   await createAuditLog({
     userId: req.user!.id,

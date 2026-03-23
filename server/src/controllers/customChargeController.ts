@@ -285,7 +285,10 @@ export const verifyOtpAndCheckout = async (req: Request, res: Response) => {
   // Save session URL for reference
   await prisma.customCharge.update({
     where: { id },
-    data: { stripeSessionId: json.id, stripeSessionUrl: json.url },
+    data: {
+      stripeSessionId: typeof json.id === "string" ? json.id : null,
+      stripeSessionUrl: typeof json.url === "string" ? json.url : null,
+    },
   });
 
   // Notify admins that the user accepted the charge (OTP verified)

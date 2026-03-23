@@ -16,6 +16,19 @@ const docTypeLabel: Record<string, string> = {
 
 const allowedTypes = ["application/pdf", "image/png", "image/jpeg"];
 
+// Magic bytes (file signatures) to validate actual file content, not just the MIME header
+const MAGIC_BYTES: Array<{ mime: string; offset: number; bytes: number[] }> = [
+  { mime: "application/pdf", offset: 0, bytes: [0x25, 0x50, 0x44, 0x46] }, // %PDF
+  { mime: "image/png",       offset: 0, bytes: [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a] }, // PNG
+  { mime: "image/jpeg",      offset: 0, bytes: [0xff, 0xd8, 0xff] }, // JPEG
+];
+
+function validateMagicBytes(buffer: Buffer, declaredMime: string): boolean {
+  const entry = MAGIC_BYTES.find((m) => m.mime === declaredMime);
+  if (!entry) return false;
+  return entry.bytes.every((byte, i) => buffer[entry.offset + i] === byte);
+}
+
 export const listDocuments = async (req: AuthRequest, res: Response) => {
   const documents = await prisma.document.findMany({ where: { userId: req.user!.id } });
   return res.json(documents);
@@ -29,6 +42,9 @@ export const createUpload = async (req: AuthRequest, res: Response) => {
   }
   if (!allowedTypes.includes(file.mimetype)) {
     return res.status(400).json({ message: "Tipo de archivo no permitido" });
+  }
+  if (!validateMagicBytes(file.buffer, file.mimetype)) {
+    return res.status(400).json({ message: "El contenido del archivo no coincide con su tipo declarado" });
   }
   const key = generateStorageKey(req.user!.id, file.mimetype);
   await saveFile({ key, buffer: file.buffer });

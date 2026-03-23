@@ -22,7 +22,12 @@ googleCalendarIntegrationRoutes.post(
   requireRole(["admin", "system"]),
   connectGoogleCalendar
 );
-googleCalendarIntegrationRoutes.get("/api/integrations/google-calendar/callback", callbackGoogleCalendar);
+googleCalendarIntegrationRoutes.get(
+  "/api/integrations/google-calendar/callback",
+  requireAuth,
+  requireRole(["admin", "system"]),
+  callbackGoogleCalendar
+);
 googleCalendarIntegrationRoutes.post(
   "/api/integrations/google-calendar/disconnect",
   requireAuth,

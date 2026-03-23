@@ -11,39 +11,43 @@ export const createLead = async (req: AuthRequest, res: Response) => {
   const payload = leadCreateSchema.parse(req.body);
   const eventId = crypto.randomUUID();
 
-  const lead = await prisma.lead.create({
-    data: {
-      name: payload.name,
-      email: payload.email,
-      phone: payload.phone,
-      consent: payload.consent
-    }
-  });
+  const { lead, attribution } = await prisma.$transaction(async (tx) => {
+    const newLead = await tx.lead.create({
+      data: {
+        name: payload.name,
+        email: payload.email,
+        phone: payload.phone,
+        consent: payload.consent
+      }
+    });
 
-  const attribution = await prisma.marketingAttribution.create({
-    data: {
-      leadId: lead.id,
-      userId: req.user?.id,
-      eventName: "Lead",
-      eventId,
-      utmSource: payload.utm_source,
-      utmMedium: payload.utm_medium,
-      utmCampaign: payload.utm_campaign,
-      utmTerm: payload.utm_term,
-      utmContent: payload.utm_content,
-      fbp: payload.fbp,
-      fbc: payload.fbc,
-      fbclid: payload.fbclid,
-      consent: payload.consent,
-      requestSummary: {
-        utm_source: payload.utm_source,
-        utm_medium: payload.utm_medium,
-        utm_campaign: payload.utm_campaign,
+    const newAttribution = await tx.marketingAttribution.create({
+      data: {
+        leadId: newLead.id,
+        userId: req.user?.id,
+        eventName: "Lead",
+        eventId,
+        utmSource: payload.utm_source,
+        utmMedium: payload.utm_medium,
+        utmCampaign: payload.utm_campaign,
+        utmTerm: payload.utm_term,
+        utmContent: payload.utm_content,
         fbp: payload.fbp,
         fbc: payload.fbc,
-        fbclid: payload.fbclid
+        fbclid: payload.fbclid,
+        consent: payload.consent,
+        requestSummary: {
+          utm_source: payload.utm_source,
+          utm_medium: payload.utm_medium,
+          utm_campaign: payload.utm_campaign,
+          fbp: payload.fbp,
+          fbc: payload.fbc,
+          fbclid: payload.fbclid
+        }
       }
-    }
+    });
+
+    return { lead: newLead, attribution: newAttribution };
   });
 
   const metaResult = await sendMetaEvent({

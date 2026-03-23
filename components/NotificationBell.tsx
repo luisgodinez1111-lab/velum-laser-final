@@ -176,7 +176,12 @@ export const NotificationBell: React.FC = () => {
       >
         <Bell size={16} className="text-velum-700" />
         {count > 0 && (
-          <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] flex items-center justify-center rounded-full bg-red-500 text-white text-[10px] font-bold px-1 leading-none">
+          <span
+            aria-live="polite"
+            aria-atomic="true"
+            aria-label={`${count > 99 ? "Más de 99" : count} notificaciones sin leer`}
+            className="absolute -top-1 -right-1 min-w-[18px] h-[18px] flex items-center justify-center rounded-full bg-red-500 text-white text-[10px] font-bold px-1 leading-none"
+          >
             {count > 99 ? "99+" : count}
           </span>
         )}

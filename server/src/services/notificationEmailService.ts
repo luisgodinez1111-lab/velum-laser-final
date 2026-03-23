@@ -1,17 +1,18 @@
 import { Resend } from "resend";
 import { logger } from "../utils/logger";
+import { env } from "../utils/env";
 
 // Dedicated Resend client exclusively for in-app notifications
 // Initialized lazily to avoid crash on startup when key is not set
 let _resendNotifications: Resend | null = null;
 const getResend = (): Resend | null => {
-  const key = process.env.RESEND_KEY_NOTIFICATIONS ?? "";
+  const key = env.resendKeyNotifications;
   if (!key) return null;
   if (!_resendNotifications) _resendNotifications = new Resend(key);
   return _resendNotifications;
 };
 
-const FROM = `Velum Laser <${process.env.RESEND_FROM_EMAIL ?? "noreply@velumlaser.com"}>`;
+const FROM = `Velum Laser <${env.resendFromEmail}>`;
 
 async function withRetry<T>(fn: () => Promise<T>, attempts = 3, baseDelayMs = 500): Promise<T> {
   let lastErr: unknown;
@@ -103,7 +104,7 @@ export const sendAdminNotificationEmail = async (params: {
   title: string;
   body: string;
 }): Promise<void> => {
-  const adminEmail = process.env.ADMIN_NOTIFICATION_EMAIL;
+  const adminEmail = env.adminNotificationEmail;
   if (!adminEmail) {
     logger.warn("[notifications] ADMIN_NOTIFICATION_EMAIL not set — skipping admin email");
     return;

@@ -10,7 +10,7 @@ export const verifyPassword = async (password: string, hash: string) => bcrypt.c
 export const signToken = (payload: object) =>
   jwt.sign(payload, env.jwtSecret, { expiresIn: env.jwtExpiresIn as jwt.SignOptions["expiresIn"] });
 
-export const verifyToken = (token: string) => jwt.verify(token, env.jwtSecret) as {
+export const verifyToken = (token: string) => jwt.verify(token, env.jwtSecret, { algorithms: ["HS256"] }) as {
   sub: string;
   role: string;
   iat: number;
@@ -49,18 +49,32 @@ export const rotateRefreshToken = async (
   const tokenHash = hashRawToken(rawToken);
   const existing = await prisma.refreshToken.findUnique({ where: { tokenHash } });
 
-  if (!existing) return null;
+  if (!existing) {
+    // Token not found — could be reuse of an already-rotated token (token theft).
+    // Revoke ALL tokens for the user if we can detect the userId via a different mechanism.
+    // Here we can't know the userId, so we just return null and let the caller clear cookies.
+    return null;
+  }
+
   if (existing.expiresAt < new Date()) {
     await prisma.refreshToken.delete({ where: { tokenHash } }).catch(() => {});
     return null;
   }
 
-  // Atomic rotation: delete old → create new
-  await prisma.refreshToken.delete({ where: { tokenHash } });
+  // Atomic rotation: delete old → create new in a single transaction
   const newRaw = crypto.randomBytes(40).toString("hex");
   const newHash = hashRawToken(newRaw);
   const expiresAt = new Date(Date.now() + env.refreshTokenExpiresDays * 86_400_000);
-  await prisma.refreshToken.create({ data: { userId: existing.userId, tokenHash: newHash, expiresAt } });
+
+  try {
+    await prisma.$transaction([
+      prisma.refreshToken.delete({ where: { tokenHash } }),
+      prisma.refreshToken.create({ data: { userId: existing.userId, tokenHash: newHash, expiresAt } }),
+    ]);
+  } catch {
+    // Concurrent rotation (race condition) — token already consumed, treat as invalid
+    return null;
+  }
 
   return { userId: existing.userId, newRaw };
 };

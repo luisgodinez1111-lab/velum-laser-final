@@ -1,6 +1,7 @@
 import cron from "node-cron";
 import { prisma } from "../db/prisma";
 import { logger } from "../utils/logger";
+import { sendAdminNotificationEmail } from "./notificationEmailService";
 
 const DONE_MAX_DAYS = 7;
 const FAILED_MAX_DAYS = 14;
@@ -72,6 +73,40 @@ export const pruneOldWebhookEvents = async (): Promise<void> => {
   }
 };
 
+// ── WhatsApp token expiry warning ─────────────────────────────────────────────
+// Meta WhatsApp tokens expire ~60 days after generation.
+// This check warns the admin at 10 and 5 days before expiry.
+export const checkWhatsappTokenExpiry = async (): Promise<void> => {
+  const WARNING_DAYS = [10, 5];
+  try {
+    const rows = await prisma.$queryRaw<Array<{ updatedAt: Date }>>`
+      SELECT "updatedAt" FROM "SystemSetting" WHERE "key" = 'whatsapp_meta_config' LIMIT 1
+    `;
+    if (!rows?.length) return;
+
+    const configuredAt = rows[0].updatedAt;
+    const ageMs = Date.now() - configuredAt.getTime();
+    const ageDays = Math.floor(ageMs / 86_400_000);
+    const daysUntilExpiry = 60 - ageDays;
+
+    if (WARNING_DAYS.includes(daysUntilExpiry)) {
+      logger.warn({ daysUntilExpiry }, "[whatsapp-check] Token de WhatsApp próximo a expirar");
+      await sendAdminNotificationEmail({
+        subject: `Token de WhatsApp expira en ${daysUntilExpiry} día${daysUntilExpiry === 1 ? "" : "s"}`,
+        title: `⚠️ Token de WhatsApp — Renovación requerida`,
+        body: `El token de acceso de WhatsApp Cloud API fue configurado hace ${ageDays} días.
+Los tokens de Meta expiran a los 60 días. Quedan aproximadamente ${daysUntilExpiry} día${daysUntilExpiry === 1 ? "" : "s"} para la expiración.
+<br><br>
+Renueva el token en el panel de admin: <strong>Ajustes → WhatsApp</strong>.`,
+      }).catch((err) => logger.error({ err }, "[whatsapp-check] No se pudo enviar alerta de expiración"));
+    } else if (daysUntilExpiry <= 0) {
+      logger.error({ ageDays }, "[whatsapp-check] Token de WhatsApp posiblemente expirado");
+    }
+  } catch (err) {
+    logger.warn({ err }, "[whatsapp-check] No se pudo verificar expiración del token (SystemSetting puede no existir)");
+  }
+};
+
 const runWithRetry = (fn: () => Promise<void>, jobName: string): void => {
   fn().catch((err) => {
     logger.error({ err }, `[${jobName}] Error en primera ejecución — reintentando en 5s`);
@@ -90,6 +125,7 @@ export const startIntegrationJobCleanupCron = (): void => {
     runWithRetry(pruneOldWebhookEvents, "webhook-cleanup");
     runWithRetry(expireCustomCharges, "charge-cleanup");
     runWithRetry(pruneExpiredRefreshTokens, "refresh-cleanup");
+    runWithRetry(checkWhatsappTokenExpiry, "whatsapp-token-check");
   }, { timezone: "America/Mexico_City" });
 
   // Run once on startup to clear existing backlog

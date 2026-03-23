@@ -37,7 +37,13 @@ export const env = {
   nodeEnv: process.env.NODE_ENV ?? "development",
   appUrl: process.env.APP_URL ?? "http://localhost:5173",
   apiUrl: process.env.API_URL ?? "http://localhost:4000",
-  databaseUrl: requireEnv("DATABASE_URL"),
+  databaseUrl: (() => {
+    const url = requireEnv("DATABASE_URL");
+    try { new URL(url); } catch {
+      throw new Error(`[env] DATABASE_URL no es una URL válida: "${url.slice(0, 40)}..."`);
+    }
+    return url;
+  })(),
   jwtSecret: requireSecret("JWT_SECRET", 32),
   jwtExpiresIn: process.env.JWT_EXPIRES_IN ?? "1d",
   cookieName: process.env.COOKIE_NAME ?? "velum_token",
@@ -47,7 +53,13 @@ export const env = {
   uploadDir: process.env.UPLOAD_DIR ?? "/var/velum/uploads",
   uploadMaxSize: Number(process.env.UPLOAD_MAX_SIZE ?? 10 * 1024 * 1024),
   gracePeriodDays: Number(process.env.GRACE_PERIOD_DAYS ?? 5),
-  corsOrigin: process.env.CORS_ORIGIN ?? "http://localhost:5173",
+  corsOrigin: (() => {
+    const origin = process.env.CORS_ORIGIN ?? "http://localhost:5173";
+    if (!origin.trim()) {
+      throw new Error("[env] CORS_ORIGIN está vacío. Define al menos un origen permitido.");
+    }
+    return origin;
+  })(),
   metaEnabled: process.env.META_ENABLED === "true",
   metaApiVersion: process.env.META_API_VERSION ?? "v20.0",
   metaPixelId: process.env.META_PIXEL_ID ?? "",
@@ -65,8 +77,10 @@ export const env = {
   resendKeyReset:        process.env.RESEND_KEY_RESET        ?? "",
   resendKeyReminders:    process.env.RESEND_KEY_REMINDERS    ?? "",
   resendKeyDocuments:    process.env.RESEND_KEY_DOCUMENTS    ?? "",
-  resendKeyAdminInvite:  process.env.RESEND_KEY_ADMIN_INVITE ?? "",
-  stripePublishableKey:  process.env.STRIPE_PUBLISHABLE_KEY  ?? "",
+  resendKeyAdminInvite:        process.env.RESEND_KEY_ADMIN_INVITE        ?? "",
+  resendKeyNotifications:      process.env.RESEND_KEY_NOTIFICATIONS      ?? "",
+  adminNotificationEmail:      process.env.ADMIN_NOTIFICATION_EMAIL      ?? "",
+  stripePublishableKey:        process.env.STRIPE_PUBLISHABLE_KEY        ?? "",
   refreshCookieName: process.env.REFRESH_COOKIE_NAME ?? "velum_refresh",
   refreshTokenExpiresDays: Number(process.env.REFRESH_TOKEN_EXPIRES_DAYS ?? 30),
   errorWebhookUrl: process.env.ERROR_WEBHOOK_URL ?? "",

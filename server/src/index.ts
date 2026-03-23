@@ -123,7 +123,22 @@ app.use((req, res, next) => {
 });
 
 app.use(httpLogger);
-app.use(helmet());
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", "data:", "blob:"],
+      connectSrc: ["'self'"],
+      fontSrc: ["'self'", "data:"],
+      objectSrc: ["'none'"],
+      frameAncestors: ["'none'"],
+      upgradeInsecureRequests: env.nodeEnv === "production" ? [] : null,
+    },
+  },
+  crossOriginEmbedderPolicy: false, // needed for SSE EventSource in some browsers
+}));
 app.use(cors({ origin: env.corsOrigin.split(",").map((s) => s.trim()), credentials: true }));
 app.use(cookieParser());
 
@@ -152,6 +167,11 @@ app.use(
 app.use(
   ["/documents", "/api/v1/documents"],
   rateLimit({ windowMs: 10 * 60 * 1000, limit: 30, standardHeaders: true, legacyHeaders: false })
+);
+// API docs: prevent scraping/enumeration
+app.use(
+  "/docs",
+  rateLimit({ windowMs: 60 * 1000, limit: 30, standardHeaders: true, legacyHeaders: false })
 );
 // Google Calendar webhook: prevent replay floods
 app.use(

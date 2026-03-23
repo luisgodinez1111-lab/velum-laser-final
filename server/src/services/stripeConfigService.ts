@@ -9,6 +9,9 @@ export type StripeConfig = {
 };
 
 const SETTING_KEY = "stripe_config";
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+let _cache: { data: { source: "database" | "env"; config: StripeConfig }; expiresAt: number } | null = null;
 
 const asString = (v: unknown): string => (typeof v === "string" ? v.trim() : "");
 
@@ -42,6 +45,9 @@ const normalize = (v: unknown): StripeConfig => {
 };
 
 export const resolveStripeConfig = async (): Promise<{ source: "database" | "env"; config: StripeConfig }> => {
+  // Return cached result if still valid
+  if (_cache && Date.now() < _cache.expiresAt) return _cache.data;
+
   const env = fromEnv();
   const model = getAppSettingModel();
   if (!model) return { source: "env", config: env };
@@ -51,20 +57,26 @@ export const resolveStripeConfig = async (): Promise<{ source: "database" | "env
     const db = normalize(row?.value ?? {});
     const hasDb = !!(db.secretKey || db.publishableKey || db.webhookSecret);
 
-    if (!hasDb) return { source: "env", config: env };
+    const result = hasDb
+      ? {
+          source: "database" as const,
+          config: {
+            secretKey: db.secretKey || env.secretKey,
+            publishableKey: db.publishableKey || env.publishableKey,
+            webhookSecret: db.webhookSecret || env.webhookSecret,
+          },
+        }
+      : { source: "env" as const, config: env };
 
-    return {
-      source: "database",
-      config: {
-        secretKey: db.secretKey || env.secretKey,
-        publishableKey: db.publishableKey || env.publishableKey,
-        webhookSecret: db.webhookSecret || env.webhookSecret,
-      },
-    };
+    _cache = { data: result, expiresAt: Date.now() + CACHE_TTL_MS };
+    return result;
   } catch {
     return { source: "env", config: env };
   }
 };
+
+/** Invalida el caché cuando se guarda una nueva configuración. */
+export const invalidateStripeConfigCache = (): void => { _cache = null; };
 
 export const saveStripeConfig = async (incoming: Partial<StripeConfig>): Promise<{ source: "database" | "env"; config: StripeConfig }> => {
   const current = await resolveStripeConfig();
@@ -83,6 +95,7 @@ export const saveStripeConfig = async (incoming: Partial<StripeConfig>): Promise
     create: { key: SETTING_KEY, value: next as unknown as Prisma.InputJsonValue },
   });
 
+  invalidateStripeConfigCache();
   return { source: "database", config: next };
 };
 

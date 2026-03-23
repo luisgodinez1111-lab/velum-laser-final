@@ -1,3 +1,4 @@
+import crypto from "crypto";
 import pino from "pino";
 import pinoHttp from "pino-http";
 
@@ -26,5 +27,5 @@ export const httpLogger = pinoHttp({
     remove: true
   },
   customAttributeKeys: { reqId: "requestId" },
-  genReqId: (req) => req.headers["x-request-id"] as string | undefined,
+  genReqId: (req) => (req.headers["x-request-id"] as string | undefined) ?? crypto.randomUUID(),
 });
