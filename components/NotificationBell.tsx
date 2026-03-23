@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Bell, Check, CheckCheck, Loader2 } from "lucide-react";
+import { Bell, Check, CheckCheck, Loader2, AlertCircle } from "lucide-react";
 import { apiFetch } from "../services/apiClient";
 
 const SSE_BACKOFF_INITIAL_MS = 1_000;
@@ -46,6 +46,7 @@ export const NotificationBell: React.FC = () => {
   const [count, setCount] = useState(0);
   const [items, setItems] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(false);
+  const [fetchError, setFetchError] = useState(false);
   const [sseError, setSseError] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
   const sseFailCountRef = useRef(0);
@@ -134,11 +135,14 @@ export const NotificationBell: React.FC = () => {
     setOpen(next);
     if (next) {
       setLoading(true);
+      setFetchError(false);
       try {
         const data = await apiFetch<{ items: Notification[]; unread: number }>("/v1/notifications?limit=30");
         setItems(data.items);
         setCount(data.unread);
-      } catch { /* silent */ } finally {
+      } catch {
+        setFetchError(true);
+      } finally {
         setLoading(false);
       }
     }
@@ -217,6 +221,14 @@ export const NotificationBell: React.FC = () => {
               </button>
             )}
           </div>
+
+          {/* Fetch error banner */}
+          {fetchError && (
+            <div className="px-4 py-2 bg-red-50 border-b border-red-100 text-xs text-red-700 flex items-center gap-1.5">
+              <AlertCircle size={12} className="shrink-0" />
+              <span>No se pudieron cargar las notificaciones. Intenta de nuevo.</span>
+            </div>
+          )}
 
           {/* SSE error banner */}
           {sseError && (

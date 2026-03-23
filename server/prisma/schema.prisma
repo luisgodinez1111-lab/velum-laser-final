@@ -560,6 +560,7 @@ model CustomCharge {
   @@index([status])
   @@index([createdAt])
   @@index([status, expiresAt])
+  @@index([userId, status])
 }
 
 model Notification {

@@ -964,10 +964,10 @@ export const Dashboard: React.FC = () => {
                 </div>
                 <h2 className="font-serif text-xl text-velum-900">Información personal</h2>
               </div>
-              <div><label className={lbl}>Nombre completo</label><input className={fld} value={profile.fullName} onChange={e => setProfile(p => ({...p, fullName: e.target.value}))} placeholder="Nombre y apellido" /></div>
-              <div><label className={lbl}>Correo electrónico</label><input className={fld} type="email" value={profile.email} onChange={e => setProfile(p => ({...p, email: e.target.value}))} placeholder="correo@dominio.com" /></div>
-              <div><label className={lbl}>Teléfono</label><input className={fld} value={profile.phone} onChange={e => setProfile(p => ({...p, phone: e.target.value}))} placeholder="+52 55 1234 5678" /></div>
-              <button type="button" onClick={handleSaveProfile} disabled={isSavingProfile}
+              <div><label className={lbl}>Nombre completo</label><input className={fld} value={profile.fullName} onChange={e => setProfile(p => ({...p, fullName: e.target.value}))} placeholder="Nombre y apellido" disabled={isLoadingData} /></div>
+              <div><label className={lbl}>Correo electrónico</label><input className={fld} type="email" value={profile.email} onChange={e => setProfile(p => ({...p, email: e.target.value}))} placeholder="correo@dominio.com" disabled={isLoadingData} /></div>
+              <div><label className={lbl}>Teléfono</label><input className={fld} value={profile.phone} onChange={e => setProfile(p => ({...p, phone: e.target.value}))} placeholder="+52 55 1234 5678" disabled={isLoadingData} /></div>
+              <button type="button" onClick={handleSaveProfile} disabled={isSavingProfile || isLoadingData}
                 className={`w-full rounded-2xl bg-velum-900 text-white py-4 text-[15px] font-semibold hover:bg-velum-800 disabled:opacity-50 transition-colors ${pressBtn}`}>
                 {isSavingProfile ? "Guardando…" : "Guardar cambios"}
               </button>

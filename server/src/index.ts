@@ -210,13 +210,46 @@ app.use(
   "/api/v1/notifications",
   rateLimit({ windowMs: 10 * 60 * 1000, limit: 120, standardHeaders: true, legacyHeaders: false })
 );
+// Per-admin rate limit: max 20 patient creations per hour per admin
+app.use(
+  "/admin/patients",
+  rateLimit({
+    windowMs: 60 * 60 * 1000,
+    limit: 20,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { message: "Límite de creación de pacientes alcanzado. Intenta de nuevo en 1 hora." },
+    keyGenerator: (req) => {
+      try {
+        const token = (req as { cookies?: Record<string, string> }).cookies?.accessToken;
+        if (token) {
+          const payload = JSON.parse(Buffer.from(token.split(".")[1], "base64url").toString()) as { sub?: string };
+          if (typeof payload.sub === "string") return `admin:${payload.sub}`;
+        }
+      } catch { /* fall through */ }
+      return req.ip ?? "unknown";
+    },
+    skip: (req) => req.method !== "POST",
+  })
+);
 // Rate limiter global de fallback — cubre cualquier ruta sin limitador explícito
+// Uses authenticated user ID (from JWT cookie) when available; falls back to IP.
 app.use(rateLimit({
   windowMs: 10 * 60 * 1000,
   limit: 300,
   standardHeaders: true,
   legacyHeaders: false,
   skip: (req) => req.path === "/api/v1/notifications/stream",
+  keyGenerator: (req) => {
+    try {
+      const token = (req as { cookies?: Record<string, string> }).cookies?.accessToken;
+      if (token) {
+        const payload = JSON.parse(Buffer.from(token.split(".")[1], "base64url").toString()) as { sub?: string };
+        if (typeof payload.sub === "string") return `user:${payload.sub}`;
+      }
+    } catch { /* fall through */ }
+    return req.ip ?? "unknown";
+  },
 }));
 
 // ── Stripe webhook — raw body antes de express.json ──────────────────

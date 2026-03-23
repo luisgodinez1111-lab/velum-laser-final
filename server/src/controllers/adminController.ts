@@ -13,6 +13,10 @@ import { sendPatientWelcomeEmail } from "../services/emailService";
 import { onNewMember } from "../services/notificationService";
 import { logger } from "../utils/logger";
 import { revokeAllRefreshTokens } from "../utils/auth";
+import { safeIp } from "../utils/request";
+
+// Max base64 signature size: 2 MB decoded ≈ 2.73 MB base64
+const MAX_SIGNATURE_B64_LEN = 3_000_000;
 
 function generateTempPassword(): string {
   const upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
@@ -170,7 +174,7 @@ export const exportUsers = async (req: AuthRequest, res: Response) => {
     const batch = await prisma.user.findMany({
       where: { role: "member" },
       select: { id: true, email: true, createdAt: true, profile: { select: { firstName: true, lastName: true, phone: true } }, memberships: { select: { planId: true, status: true }, take: 1 } },
-      orderBy: { createdAt: "asc" },
+      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
       take: BATCH,
       ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
     });
@@ -350,7 +354,7 @@ export const createPatient = async (req: AuthRequest, res: Response) => {
     if (!clinicId) return res.status(400).json({ message: "No se pudo resolver clinicId" });
 
     const tempPassword = generateTempPassword();
-    const passwordHash = await bcrypt.hash(tempPassword, 10);
+    const passwordHash = await bcrypt.hash(tempPassword, 12);
 
     // Create user + profile + membership + medicalIntake + documents in transaction
     const created = await prisma.$transaction(async (tx) => {
@@ -449,7 +453,7 @@ export const createPatient = async (req: AuthRequest, res: Response) => {
       action: 'admin.patient.create',
       resourceType: 'user',
       resourceId: created.id,
-      ip: req.ip,
+      ip: safeIp(req),
       metadata: { email, planCode, activateMembership, inviteEmailSent }
     });
 
@@ -471,6 +475,12 @@ export const adminUpdatePatientIntake = async (req: AuthRequest, res: Response) 
 
     const current = await prisma.medicalIntake.findUnique({ where: { userId } });
     if (!current) return res.status(404).json({ message: 'Expediente no encontrado' });
+
+    // Guard: signature image data must not exceed 2 MB decoded
+    if (intake.signatureImageData && typeof intake.signatureImageData === "string" &&
+        intake.signatureImageData.length > MAX_SIGNATURE_B64_LEN) {
+      return res.status(413).json({ message: 'La imagen de firma es demasiado grande (máx. 2 MB)' });
+    }
 
     const consentAccepted = intake.consentAccepted ?? current.consentAccepted;
     const phototype       = intake.phototype       ?? current.phototype;
@@ -495,7 +505,7 @@ export const adminUpdatePatientIntake = async (req: AuthRequest, res: Response) 
       action: 'admin.patient.intake_update',
       resourceType: 'medical_intake',
       resourceId: current.id,
-      ip: req.ip,
+      ip: safeIp(req),
       metadata: { status }
     });
 
@@ -529,7 +539,7 @@ export const adminActivateMembership = async (req: AuthRequest, res: Response) =
       action: 'admin.patient.membership_activate',
       resourceType: 'membership',
       resourceId: membership.id,
-      ip: req.ip,
+      ip: safeIp(req),
       metadata: { planCode, status }
     });
 

@@ -506,9 +506,10 @@ export const createAppointment = async (req: AuthRequest, res: Response) => {
     metadata: {
       startAt: appointment.startAt,
       endAt: appointment.endAt,
-      cabinId: appointment.cabinId
+      cabinId: appointment.cabinId,
+      requestId: req.headers["x-request-id"] as string | undefined,
     }
-  });
+  }).catch((err) => logger.error({ err, appointmentId: appointment.id }, "[appointment] audit log failed"));
 
   void enqueueGoogleAppointmentSync({
     clinicId: appointment.clinicId,

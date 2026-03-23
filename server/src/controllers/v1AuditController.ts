@@ -8,6 +8,8 @@ export const listAuditLogsV1 = async (req: AuthRequest, res: Response) => {
   const limit  = parsed.limit ?? 50;
   const page   = parsed.page  ?? 1;
   const skip   = (page - 1) * limit;
+  // Only join user relations when caller explicitly requests them (reduces query cost)
+  const withRelations = req.query.include === "relations";
 
   const where = {
     ...(parsed.actorUserId  ? { actorUserId: parsed.actorUserId }   : {}),
@@ -25,18 +27,22 @@ export const listAuditLogsV1 = async (req: AuthRequest, res: Response) => {
       : {})
   };
 
+  const userSelect = { id: true, email: true, role: true } as const;
+
   const [total, logs] = await Promise.all([
     prisma.auditLog.count({ where }),
     prisma.auditLog.findMany({
       where,
-      include: {
-        actorUser:  { select: { id: true, email: true, role: true } },
-        targetUser: { select: { id: true, email: true, role: true } },
-        user:       { select: { id: true, email: true, role: true } }
-      },
-      orderBy: { createdAt: "desc" },
+      ...(withRelations ? {
+        include: {
+          actorUser:  { select: userSelect },
+          targetUser: { select: userSelect },
+          user:       { select: userSelect },
+        },
+      } : {}),
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       skip,
-      take: limit
+      take: limit,
     })
   ]);
 

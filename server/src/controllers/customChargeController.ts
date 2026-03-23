@@ -19,6 +19,14 @@ import {
 
 const asString = (v: unknown): string => (typeof v === "string" ? v.trim() : "");
 
+// CUID v1/v2 basic format validator (starts with 'c', 20-30 chars, alphanumeric)
+const CUID_RE = /^c[a-z0-9]{20,}$/i;
+const isValidId = (id: string): boolean => CUID_RE.test(id);
+
+// Full Stripe customer ID validation: prefix + min 14 chars
+const STRIPE_CUS_RE = /^cus_[A-Za-z0-9]{14,}$/;
+const isValidStripeCustomerId = (id: string): boolean => STRIPE_CUS_RE.test(id);
+
 
 const INTERVAL_LABELS: Record<string, string> = {
   day: "diario", week: "semanal", month: "mensual", year: "anual",
@@ -140,6 +148,7 @@ export const cancelCharge = async (req: AuthRequest, res: Response) => {
 // ── Admin: Resend OTP email ───────────────────────────────────────────
 export const resendOtp = async (req: AuthRequest, res: Response) => {
   const { id } = req.params;
+  if (!isValidId(id)) return res.status(400).json({ message: "ID de cobro inválido" });
   const result = await resendCustomChargeOtp(id);
 
   if ("error" in result) {
@@ -262,7 +271,7 @@ export const verifyOtpAndCheckout = async (req: Request, res: Response) => {
   params.set("metadata[customChargeId]", id);
   params.set("metadata[userId]", charge.user.id);
 
-  if (charge.user.stripeCustomerId && charge.user.stripeCustomerId.startsWith("cus_")) {
+  if (charge.user.stripeCustomerId && isValidStripeCustomerId(charge.user.stripeCustomerId)) {
     params.set("customer", charge.user.stripeCustomerId);
     params.delete("customer_email");
   } else if (charge.user.stripeCustomerId) {
