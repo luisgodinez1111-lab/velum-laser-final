@@ -2130,31 +2130,37 @@ export const Admin: React.FC = () => {
             <label className="block text-xs font-bold uppercase tracking-widest text-velum-400 mb-2">Auto-confirmar (horas)</label>
             <input type="number" min="0" max="72" value={agendaPolicyDraft.autoConfirmHours} onChange={(e) => updateAgendaPolicyField('autoConfirmHours', Number(e.target.value))}
               className="w-full rounded-xl border border-velum-200 px-3 py-2.5 text-sm focus:outline-none focus:border-velum-900 transition" />
+            <p className="mt-1 text-[11px] text-velum-400">0 – 72 horas</p>
           </div>
           <div>
             <label className="block text-xs font-bold uppercase tracking-widest text-velum-400 mb-2">Gracia no-show (min)</label>
             <input type="number" min="5" max="240" value={agendaPolicyDraft.noShowGraceMinutes} onChange={(e) => updateAgendaPolicyField('noShowGraceMinutes', Number(e.target.value))}
               className="w-full rounded-xl border border-velum-200 px-3 py-2.5 text-sm focus:outline-none focus:border-velum-900 transition" />
+            <p className="mt-1 text-[11px] text-velum-400">5 – 240 minutos</p>
           </div>
           <div>
             <label className="block text-xs font-bold uppercase tracking-widest text-velum-400 mb-2">Anticipación mínima (min)</label>
             <input type="number" min="0" value={agendaPolicyDraft.minAdvanceMinutes} onChange={(e) => updateAgendaPolicyField('minAdvanceMinutes', Number(e.target.value))}
               className="w-full rounded-xl border border-velum-200 px-3 py-2.5 text-sm focus:outline-none focus:border-velum-900 transition" />
+            <p className="mt-1 text-[11px] text-velum-400">mín. 0 minutos</p>
           </div>
           <div>
             <label className="block text-xs font-bold uppercase tracking-widest text-velum-400 mb-2">Máx. días de anticipación</label>
             <input type="number" min="1" max="365" value={agendaPolicyDraft.maxAdvanceDays} onChange={(e) => updateAgendaPolicyField('maxAdvanceDays', Number(e.target.value))}
               className="w-full rounded-xl border border-velum-200 px-3 py-2.5 text-sm focus:outline-none focus:border-velum-900 transition" />
+            <p className="mt-1 text-[11px] text-velum-400">1 – 365 días</p>
           </div>
           <div>
             <label className="block text-xs font-bold uppercase tracking-widest text-velum-400 mb-2">Citas activas/semana</label>
             <input type="number" min="1" max="50" value={agendaPolicyDraft.maxActiveAppointmentsPerWeek} onChange={(e) => updateAgendaPolicyField('maxActiveAppointmentsPerWeek', Number(e.target.value))}
               className="w-full rounded-xl border border-velum-200 px-3 py-2.5 text-sm focus:outline-none focus:border-velum-900 transition" />
+            <p className="mt-1 text-[11px] text-velum-400">1 – 50 citas</p>
           </div>
           <div>
             <label className="block text-xs font-bold uppercase tracking-widest text-velum-400 mb-2">Citas activas/mes</label>
             <input type="number" min="1" max="200" value={agendaPolicyDraft.maxActiveAppointmentsPerMonth} onChange={(e) => updateAgendaPolicyField('maxActiveAppointmentsPerMonth', Number(e.target.value))}
               className="w-full rounded-xl border border-velum-200 px-3 py-2.5 text-sm focus:outline-none focus:border-velum-900 transition" />
+            <p className="mt-1 text-[11px] text-velum-400">1 – 200 citas</p>
           </div>
         </div>
       </div>

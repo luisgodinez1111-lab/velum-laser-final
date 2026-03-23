@@ -12,5 +12,9 @@ export const medicalIntakeUpdateSchema = z.object({
 
 export const medicalIntakeApproveSchema = z.object({
   approved: z.boolean(),
-  rejectionReason: z.string().min(3).optional()
+  rejectionReason: z.string().min(3).max(500).optional()
+}).superRefine((data, ctx) => {
+  if (!data.approved && !data.rejectionReason) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["rejectionReason"], message: "El motivo de rechazo es obligatorio al rechazar un expediente" });
+  }
 });

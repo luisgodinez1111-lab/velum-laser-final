@@ -390,15 +390,18 @@ export const clinicalService = {
   },
 
   getMySessions: async (): Promise<SessionTreatment[]> => {
-    return apiFetch<SessionTreatment[]>("/v1/sessions/me");
+    const r = await apiFetch<{ sessions: SessionTreatment[] } | SessionTreatment[]>("/v1/sessions/me");
+    return Array.isArray(r) ? r : (r as { sessions: SessionTreatment[] }).sessions ?? [];
   },
 
   getMemberSessions: async (userId: string): Promise<SessionTreatment[]> => {
-    return apiFetch<SessionTreatment[]>(`/v1/sessions/admin?userId=${encodeURIComponent(userId)}`);
+    const r = await apiFetch<{ sessions: SessionTreatment[] } | SessionTreatment[]>(`/v1/sessions/admin?userId=${encodeURIComponent(userId)}`);
+    return Array.isArray(r) ? r : (r as { sessions: SessionTreatment[] }).sessions ?? [];
   },
 
   getSessionsByAppointment: async (appointmentId: string): Promise<SessionTreatment[]> => {
-    return apiFetch<SessionTreatment[]>(`/v1/sessions/admin?appointmentId=${encodeURIComponent(appointmentId)}`);
+    const r = await apiFetch<{ sessions: SessionTreatment[] } | SessionTreatment[]>(`/v1/sessions/admin?appointmentId=${encodeURIComponent(appointmentId)}`);
+    return Array.isArray(r) ? r : (r as { sessions: SessionTreatment[] }).sessions ?? [];
   },
 
   getMedicalIntakeByUserId: async (userId: string): Promise<MedicalIntake> => {

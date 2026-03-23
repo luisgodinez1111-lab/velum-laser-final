@@ -31,6 +31,17 @@ async function withRetry<T>(fn: () => Promise<T>, attempts = 3, baseDelayMs = 50
 // ──────────────────────────────────────────────────────────────────────
 // Utilidad de layout base
 // ──────────────────────────────────────────────────────────────────────
+// ── HTML escape — prevents injection in email templates ───────────────────────
+function esc(str: string | undefined | null): string {
+  if (!str) return "";
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 function baseHtml(content: string): string {
   return `<!DOCTYPE html>
 <html lang="es">
@@ -164,7 +175,7 @@ export const sendPaymentReminderEmail = async (
   const html = baseHtml(`
     <p style="${headingStyle}">Recordatorio de pago de membresía</p>
     <p style="${bodyStyle}">
-      Hola <strong>${params.name}</strong>, te recordamos que tu membresía Velum Laser se renovará pronto.
+      Hola <strong>${esc(params.name)}</strong>, te recordamos que tu membresía Velum Laser se renovará pronto.
     </p>
     <div style="background:${urgencyBg};border:1px solid ${urgencyBorder};border-radius:12px;padding:16px 20px;margin:20px 0;">
       <p style="margin:0;font-size:13px;font-weight:700;color:${urgencyColor};">${urgencyLabel}</p>
@@ -173,19 +184,19 @@ export const sendPaymentReminderEmail = async (
       <tr>
         <td style="padding:6px 0;">
           <p style="margin:0;font-size:12px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#9b8d80;">Plan</p>
-          <p style="margin:2px 0 0;font-size:16px;font-weight:600;color:#1a1614;">${params.planName}</p>
+          <p style="margin:2px 0 0;font-size:16px;font-weight:600;color:#1a1614;">${esc(params.planName)}</p>
         </td>
       </tr>
       <tr>
         <td style="padding:6px 0;">
           <p style="margin:0;font-size:12px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#9b8d80;">Monto a cobrar</p>
-          <p style="margin:2px 0 0;font-size:16px;font-weight:600;color:#1a1614;">${params.amount}</p>
+          <p style="margin:2px 0 0;font-size:16px;font-weight:600;color:#1a1614;">${esc(params.amount)}</p>
         </td>
       </tr>
       <tr>
         <td style="padding:6px 0;">
           <p style="margin:0;font-size:12px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#9b8d80;">Fecha de renovación</p>
-          <p style="margin:2px 0 0;font-size:16px;font-weight:600;color:#1a1614;">${params.renewalDate}</p>
+          <p style="margin:2px 0 0;font-size:16px;font-weight:600;color:#1a1614;">${esc(params.renewalDate)}</p>
         </td>
       </tr>
     </table>
@@ -224,26 +235,26 @@ export const sendAppointmentReminderEmail = async (
   const html = baseHtml(`
     <p style="${headingStyle}">Recordatorio de cita</p>
     <p style="${bodyStyle}">
-      Hola <strong>${params.name}</strong>, te recordamos que tienes una cita próxima en Velum Laser.
+      Hola <strong>${esc(params.name)}</strong>, te recordamos que tienes una cita próxima en Velum Laser.
     </p>
     <table width="100%" cellpadding="0" cellspacing="0" style="background:#f8f6f3;border-radius:12px;padding:20px;margin:20px 0;">
       <tr>
         <td style="padding:6px 0;">
           <p style="margin:0;font-size:12px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#9b8d80;">Fecha</p>
-          <p style="margin:2px 0 0;font-size:16px;font-weight:600;color:#1a1614;">${params.date}</p>
+          <p style="margin:2px 0 0;font-size:16px;font-weight:600;color:#1a1614;">${esc(params.date)}</p>
         </td>
       </tr>
       <tr>
         <td style="padding:6px 0;">
           <p style="margin:0;font-size:12px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#9b8d80;">Hora</p>
-          <p style="margin:2px 0 0;font-size:16px;font-weight:600;color:#1a1614;">${params.time}</p>
+          <p style="margin:2px 0 0;font-size:16px;font-weight:600;color:#1a1614;">${esc(params.time)}</p>
         </td>
       </tr>
       ${params.treatment ? `
       <tr>
         <td style="padding:6px 0;">
           <p style="margin:0;font-size:12px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#9b8d80;">Tratamiento</p>
-          <p style="margin:2px 0 0;font-size:16px;font-weight:600;color:#1a1614;">${params.treatment}</p>
+          <p style="margin:2px 0 0;font-size:16px;font-weight:600;color:#1a1614;">${esc(params.treatment)}</p>
         </td>
       </tr>` : ""}
     </table>
@@ -276,33 +287,33 @@ export const sendAppointmentBookingEmail = async (
   const html = baseHtml(`
     <p style="${headingStyle}">Tu cita está confirmada</p>
     <p style="${bodyStyle}">
-      Hola <strong>${params.name}</strong>, tu cita en Velum Laser ha sido agendada exitosamente.
+      Hola <strong>${esc(params.name)}</strong>, tu cita en Velum Laser ha sido agendada exitosamente.
     </p>
     <table width="100%" cellpadding="0" cellspacing="0" style="background:#f8f6f3;border-radius:12px;padding:20px;margin:20px 0;">
       <tr>
         <td style="padding:6px 0;">
           <p style="margin:0;font-size:12px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#9b8d80;">Fecha</p>
-          <p style="margin:2px 0 0;font-size:16px;font-weight:600;color:#1a1614;">${params.date}</p>
+          <p style="margin:2px 0 0;font-size:16px;font-weight:600;color:#1a1614;">${esc(params.date)}</p>
         </td>
       </tr>
       <tr>
         <td style="padding:6px 0;">
           <p style="margin:0;font-size:12px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#9b8d80;">Hora</p>
-          <p style="margin:2px 0 0;font-size:16px;font-weight:600;color:#1a1614;">${params.time}</p>
+          <p style="margin:2px 0 0;font-size:16px;font-weight:600;color:#1a1614;">${esc(params.time)}</p>
         </td>
       </tr>
       ${params.treatment ? `
       <tr>
         <td style="padding:6px 0;">
           <p style="margin:0;font-size:12px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#9b8d80;">Tratamiento</p>
-          <p style="margin:2px 0 0;font-size:16px;font-weight:600;color:#1a1614;">${params.treatment}</p>
+          <p style="margin:2px 0 0;font-size:16px;font-weight:600;color:#1a1614;">${esc(params.treatment)}</p>
         </td>
       </tr>` : ""}
       ${params.cabin ? `
       <tr>
         <td style="padding:6px 0;">
           <p style="margin:0;font-size:12px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#9b8d80;">Cabina</p>
-          <p style="margin:2px 0 0;font-size:16px;font-weight:600;color:#1a1614;">${params.cabin}</p>
+          <p style="margin:2px 0 0;font-size:16px;font-weight:600;color:#1a1614;">${esc(params.cabin)}</p>
         </td>
       </tr>` : ""}
     </table>
@@ -335,33 +346,33 @@ export const sendAppointmentCancellationEmail = async (
   const html = baseHtml(`
     <p style="${headingStyle}">Tu cita ha sido cancelada</p>
     <p style="${bodyStyle}">
-      Hola <strong>${params.name}</strong>, lamentamos informarte que tu cita en Velum Laser ha sido cancelada.
+      Hola <strong>${esc(params.name)}</strong>, lamentamos informarte que tu cita en Velum Laser ha sido cancelada.
     </p>
     <table width="100%" cellpadding="0" cellspacing="0" style="background:#f8f6f3;border-radius:12px;padding:20px;margin:20px 0;">
       <tr>
         <td style="padding:6px 0;">
           <p style="margin:0;font-size:12px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#9b8d80;">Fecha</p>
-          <p style="margin:2px 0 0;font-size:16px;font-weight:600;color:#1a1614;">${params.date}</p>
+          <p style="margin:2px 0 0;font-size:16px;font-weight:600;color:#1a1614;">${esc(params.date)}</p>
         </td>
       </tr>
       <tr>
         <td style="padding:6px 0;">
           <p style="margin:0;font-size:12px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#9b8d80;">Hora</p>
-          <p style="margin:2px 0 0;font-size:16px;font-weight:600;color:#1a1614;">${params.time}</p>
+          <p style="margin:2px 0 0;font-size:16px;font-weight:600;color:#1a1614;">${esc(params.time)}</p>
         </td>
       </tr>
       ${params.treatment ? `
       <tr>
         <td style="padding:6px 0;">
           <p style="margin:0;font-size:12px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#9b8d80;">Tratamiento</p>
-          <p style="margin:2px 0 0;font-size:16px;font-weight:600;color:#1a1614;">${params.treatment}</p>
+          <p style="margin:2px 0 0;font-size:16px;font-weight:600;color:#1a1614;">${esc(params.treatment)}</p>
         </td>
       </tr>` : ""}
       ${params.reason ? `
       <tr>
         <td style="padding:6px 0;">
           <p style="margin:0;font-size:12px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#9b8d80;">Motivo</p>
-          <p style="margin:2px 0 0;font-size:14px;color:#5a4e44;">${params.reason}</p>
+          <p style="margin:2px 0 0;font-size:14px;color:#5a4e44;">${esc(params.reason)}</p>
         </td>
       </tr>` : ""}
     </table>
@@ -389,8 +400,8 @@ export const sendDeleteUserOtpEmail = async (
     <p style="${headingStyle}">Autorización requerida — Eliminación de paciente</p>
     <p style="${bodyStyle}">
       Se ha solicitado la <strong>eliminación permanente</strong> del paciente
-      <strong>${params.targetEmail}</strong> desde la cuenta administrativa
-      <strong>${params.adminEmail}</strong>.
+      <strong>${esc(params.targetEmail)}</strong> desde la cuenta administrativa
+      <strong>${esc(params.adminEmail)}</strong>.
     </p>
     <p style="${bodyStyle}">
       Usa el siguiente código OTP para confirmar esta acción. Es válido por <strong>10 minutos</strong> y de un solo uso.
@@ -424,7 +435,7 @@ export const sendConsentOtpEmail = async (
   const html = baseHtml(`
     <p style="${headingStyle}">Firma de Consentimiento Informado</p>
     <p style="${bodyStyle}">
-      Hola <strong>${params.name}</strong>, para completar la firma digital de tu
+      Hola <strong>${esc(params.name)}</strong>, para completar la firma digital de tu
       <strong>Consentimiento Informado para Depilación Láser</strong>,
       ingresa el siguiente código de verificación:
     </p>
@@ -468,19 +479,19 @@ export const sendDocumentSignedEmail = async (
   const html = baseHtml(`
     <p style="${headingStyle}">Documento firmado exitosamente</p>
     <p style="${bodyStyle}">
-      Hola <strong>${params.name}</strong>, confirmamos que el siguiente documento ha sido firmado digitalmente:
+      Hola <strong>${esc(params.name)}</strong>, confirmamos que el siguiente documento ha sido firmado digitalmente:
     </p>
     <table width="100%" cellpadding="0" cellspacing="0" style="background:#f0faf4;border:1px solid #b7e4c7;border-radius:12px;padding:20px;margin:20px 0;">
       <tr>
         <td>
           <p style="margin:0;font-size:12px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#2d6a4f;">Documento</p>
-          <p style="margin:4px 0 0;font-size:15px;font-weight:600;color:#1a1614;">${params.documentType}</p>
+          <p style="margin:4px 0 0;font-size:15px;font-weight:600;color:#1a1614;">${esc(params.documentType)}</p>
         </td>
       </tr>
       <tr>
         <td style="padding-top:12px;">
           <p style="margin:0;font-size:12px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#2d6a4f;">Fecha y hora de firma</p>
-          <p style="margin:4px 0 0;font-size:15px;font-weight:600;color:#1a1614;">${params.signedAt}</p>
+          <p style="margin:4px 0 0;font-size:15px;font-weight:600;color:#1a1614;">${esc(params.signedAt)}</p>
         </td>
       </tr>
     </table>
@@ -516,7 +527,7 @@ export const sendAdminInvitationEmail = async (
   const html = baseHtml(`
     <p style="${headingStyle}">Bienvenido al panel de Velum Laser</p>
     <p style="${bodyStyle}">
-      <strong>${params.invitedBy}</strong> te ha agregado al panel de administración de
+      <strong>${esc(params.invitedBy)}</strong> te ha agregado al panel de administración de
       <strong>Velum Laser</strong> con el rol de <strong>${roleLabel}</strong>.
     </p>
     <p style="${bodyStyle}">
@@ -572,14 +583,14 @@ export const sendPatientWelcomeEmail = async (
   const html = baseHtml(`
     <p style="${headingStyle}">Bienvenida a Velum Laser</p>
     <p style="${bodyStyle}">
-      Hola <strong>${params.name}</strong>, el equipo de <strong>Velum Laser</strong>
+      Hola <strong>${esc(params.name)}</strong>, el equipo de <strong>Velum Laser</strong>
       ha creado tu cuenta y tu expediente clínico digital.
-      ${params.createdBy ? `Tu expediente fue preparado por <strong>${params.createdBy}</strong>.` : ''}
+      ${params.createdBy ? `Tu expediente fue preparado por <strong>${esc(params.createdBy)}</strong>.` : ''}
     </p>
     ${params.planName ? `
     <div style="background:#f0faf4;border:1px solid #b7e4c7;border-radius:12px;padding:16px 20px;margin:20px 0;">
       <p style="margin:0;font-size:11px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:#2d6a4f;">Plan activado</p>
-      <p style="margin:4px 0 0;font-size:17px;font-weight:700;color:#1a1614;">${params.planName}</p>
+      <p style="margin:4px 0 0;font-size:17px;font-weight:700;color:#1a1614;">${esc(params.planName)}</p>
     </div>` : ''}
     <p style="${bodyStyle}">Usa las siguientes credenciales para acceder a tu cuenta:</p>
     <table width="100%" cellpadding="0" cellspacing="0" style="background:#f8f6f3;border-radius:12px;padding:20px;margin:20px 0;">
@@ -641,21 +652,21 @@ export const sendCustomChargeOtpEmail = async (
   const html = baseHtml(`
     <p style="${headingStyle}">Autorización de cobro personalizado</p>
     <p style="${bodyStyle}">
-      Hola <strong>${params.name}</strong>, el equipo de Velum Laser ha preparado un cobro personalizado para ti.
+      Hola <strong>${esc(params.name)}</strong>, el equipo de Velum Laser ha preparado un cobro personalizado para ti.
       Revisa los detalles y autorízalo con tu código de verificación.
     </p>
     <table width="100%" cellpadding="0" cellspacing="0" style="background:#f8f6f3;border-radius:12px;padding:20px;margin:20px 0;">
       <tr>
         <td style="padding:6px 0;border-bottom:1px solid #ede8e2;">
           <p style="margin:0;font-size:11px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#9b8d80;">Concepto</p>
-          <p style="margin:4px 0 0;font-size:16px;font-weight:600;color:#1a1614;">${params.title}</p>
-          ${params.description ? `<p style="margin:4px 0 0;font-size:13px;color:#6b5e53;">${params.description}</p>` : ""}
+          <p style="margin:4px 0 0;font-size:16px;font-weight:600;color:#1a1614;">${esc(params.title)}</p>
+          ${params.description ? `<p style="margin:4px 0 0;font-size:13px;color:#6b5e53;">${esc(params.description)}</p>` : ""}
         </td>
       </tr>
       <tr>
         <td style="padding:6px 0;border-bottom:1px solid #ede8e2;">
           <p style="margin:0;font-size:11px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#9b8d80;">Monto</p>
-          <p style="margin:4px 0 0;font-size:22px;font-weight:700;color:#1a1614;">${params.amountFormatted}</p>
+          <p style="margin:4px 0 0;font-size:22px;font-weight:700;color:#1a1614;">${esc(params.amountFormatted)}</p>
         </td>
       </tr>
       <tr>

@@ -211,6 +211,16 @@ app.use(
   "/api/v1/notifications",
   rateLimit({ windowMs: 10 * 60 * 1000, limit: 120, standardHeaders: true, legacyHeaders: false })
 );
+// Medical intakes — prevent form spam (15 req/hour)
+app.use(
+  "/api/v1/medical-intakes",
+  rateLimit({ windowMs: 60 * 60 * 1000, limit: 15, standardHeaders: true, legacyHeaders: false, message: { message: "Demasiadas solicitudes de expediente médico. Intenta de nuevo más tarde." } })
+);
+// Appointment confirmation token — 5 attempts per 5 min per IP
+app.use(
+  "/api/v1/appointments/confirm",
+  rateLimit({ windowMs: 5 * 60 * 1000, limit: 5, standardHeaders: true, legacyHeaders: false, message: { message: "Demasiados intentos de confirmación. Intenta de nuevo en 5 minutos." } })
+);
 // Per-admin rate limit: max 20 patient creations per hour per admin
 app.use(
   "/admin/patients",

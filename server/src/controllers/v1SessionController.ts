@@ -66,43 +66,57 @@ export const listMySessions = async (req: AuthRequest, res: Response) => {
     ? req.user!.id
     : (typeof req.query.userId === "string" ? req.query.userId : undefined);
 
-  const sessions = await prisma.sessionTreatment.findMany({
-    where: filterUserId ? { userId: filterUserId } : undefined,
-    include: {
-      appointment: true,
-      staffUser: {
-        select: { id: true, email: true }
-      },
-      user: {
-        select: { id: true, email: true }
-      }
-    },
-    orderBy: { createdAt: "desc" },
-    take: 300
-  });
+  const page  = Math.max(1, parseInt(String(req.query.page  ?? "1"),  10) || 1);
+  const limit = Math.min(100, Math.max(1, parseInt(String(req.query.limit ?? "50"), 10) || 50));
+  const skip  = (page - 1) * limit;
+  const where = filterUserId ? { userId: filterUserId } : undefined;
 
-  return res.json(sessions);
+  const [sessions, total] = await Promise.all([
+    prisma.sessionTreatment.findMany({
+      where,
+      include: {
+        appointment: true,
+        staffUser: { select: { id: true, email: true } },
+        user: { select: { id: true, email: true } }
+      },
+      orderBy: { createdAt: "desc" },
+      skip,
+      take: limit,
+    }),
+    prisma.sessionTreatment.count({ where }),
+  ]);
+
+  return res.json({ sessions, total, page, limit, pages: Math.ceil(total / limit) });
 };
 
 export const adminListSessions = async (req: AuthRequest, res: Response) => {
   const userId = typeof req.query.userId === "string" ? req.query.userId : undefined;
   const appointmentId = typeof req.query.appointmentId === "string" ? req.query.appointmentId : undefined;
 
-  const sessions = await prisma.sessionTreatment.findMany({
-    where: {
-      ...(userId ? { userId } : {}),
-      ...(appointmentId ? { appointmentId } : {})
-    },
-    include: {
-      appointment: { select: { id: true, startAt: true, status: true } },
-      staffUser: { select: { id: true, email: true, profile: { select: { firstName: true, lastName: true } } } },
-      user: { select: { id: true, email: true, profile: { select: { firstName: true, lastName: true } } } }
-    },
-    orderBy: { createdAt: "desc" },
-    take: 200
-  });
+  const page  = Math.max(1, parseInt(String(req.query.page  ?? "1"),  10) || 1);
+  const limit = Math.min(200, Math.max(1, parseInt(String(req.query.limit ?? "100"), 10) || 100));
+  const skip  = (page - 1) * limit;
+  const where = {
+    ...(userId ? { userId } : {}),
+    ...(appointmentId ? { appointmentId } : {})
+  };
 
-  return res.json(sessions);
+  const [sessions, total] = await Promise.all([
+    prisma.sessionTreatment.findMany({
+      where,
+      include: {
+        appointment: { select: { id: true, startAt: true, status: true } },
+        staffUser: { select: { id: true, email: true, profile: { select: { firstName: true, lastName: true } } } },
+        user: { select: { id: true, email: true, profile: { select: { firstName: true, lastName: true } } } }
+      },
+      orderBy: { createdAt: "desc" },
+      skip,
+      take: limit,
+    }),
+    prisma.sessionTreatment.count({ where }),
+  ]);
+
+  return res.json({ sessions, total, page, limit, pages: Math.ceil(total / limit) });
 };
 
 export const addSessionFeedback = async (req: AuthRequest, res: Response) => {

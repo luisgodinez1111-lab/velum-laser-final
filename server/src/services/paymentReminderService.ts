@@ -107,6 +107,12 @@ export const runPaymentReminders = async (): Promise<void> => {
 
           const renewalDate = ms.currentPeriodEnd ? formatDate(ms.currentPeriodEnd) : "próximamente";
 
+          // Reserve the slot before sending — prevents duplicates if process crashes mid-send
+          await prisma.membership.update({
+            where: { id: ms.id },
+            data: { lastReminderSentAt: now },
+          });
+
           await sendPaymentReminderEmail(ms.user.email, {
             name,
             planName,
@@ -135,11 +141,6 @@ export const runPaymentReminders = async (): Promise<void> => {
           }).catch((err) =>
             logger.warn({ err, email: ms.user.email }, "[payment-reminder] In-app notification failed (non-fatal)")
           );
-
-          await prisma.membership.update({
-            where: { id: ms.id },
-            data: { lastReminderSentAt: now },
-          });
 
           logger.info({ email: ms.user.email, daysLeft }, "[payment-reminder] Reminder sent");
         } catch (err: unknown) {
