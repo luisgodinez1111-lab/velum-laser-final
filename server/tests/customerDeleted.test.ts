@@ -21,7 +21,6 @@ vi.mock("../src/services/stripeWebhookService", async (importOriginal) => {
 vi.mock("../src/db/prisma", () => ({
   prisma: {
     webhookEvent: {
-      findUnique: vi.fn().mockResolvedValue(null),
       create: vi.fn().mockResolvedValue({ id: "we1" }),
     },
     user: {
@@ -79,7 +78,10 @@ describe("customer.deleted webhook", () => {
   });
 
   it("es idempotente — rechaza evento ya procesado", async () => {
-    vi.mocked(prisma.webhookEvent.findUnique).mockResolvedValueOnce({ id: "we_dup" } as any);
+    const { Prisma } = await import("@prisma/client");
+    vi.mocked(prisma.webhookEvent.create).mockRejectedValueOnce(
+      new Prisma.PrismaClientKnownRequestError("Unique constraint", { code: "P2002", clientVersion: "5.0.0" })
+    );
     const app = await buildApp();
     const payload = { id: "evt_dup_002", type: "customer.deleted", data: { object: { id: "cus_dup" } } };
     const { body, signature } = makeSignedEvent(payload);

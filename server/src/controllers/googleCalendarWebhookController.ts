@@ -20,10 +20,11 @@ export const receiveGoogleCalendarWebhook = async (req: Request, res: Response) 
     return;
   }
 
-  // Optional: reject if a token was registered but header is missing/wrong
-  // (Prevents unsolicited replays from external parties who guessed a channelId)
-  if (channelToken && channelToken !== process.env.GOOGLE_WEBHOOK_TOKEN) {
-    logger.warn({ channelId }, "Google Calendar webhook: invalid channel token — ignoring");
+  // Enforce token verification when GOOGLE_WEBHOOK_TOKEN is configured.
+  // Rejects both missing tokens and wrong tokens — prevents unsolicited replays.
+  const expectedToken = process.env.GOOGLE_WEBHOOK_TOKEN;
+  if (expectedToken && channelToken !== expectedToken) {
+    logger.warn({ channelId, hasToken: Boolean(channelToken) }, "[gcal-webhook] Invalid or missing channel token — ignoring");
     return;
   }
 

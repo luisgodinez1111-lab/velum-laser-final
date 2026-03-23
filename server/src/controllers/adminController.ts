@@ -10,7 +10,7 @@ import { readStripePlanCatalog } from "../services/stripePlanCatalogService";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import { sendPatientWelcomeEmail } from "../services/emailService";
-import { onNewMember } from "../services/notificationService";
+import { onNewMember, invalidateAdminIdCache } from "../services/notificationService";
 import { logger } from "../utils/logger";
 import { revokeAllRefreshTokens } from "../utils/auth";
 import { safeIp } from "../utils/request";
@@ -312,6 +312,8 @@ export const updateUserRole = async (req: AuthRequest, res: Response) => {
   await revokeAllRefreshTokens(targetUser.id).catch((err: unknown) =>
     logger.warn({ err }, "[admin] Failed to revoke refresh tokens on role change")
   );
+  // Invalidate admin ID cache so next notifyAdmins picks up the role change
+  invalidateAdminIdCache();
 
   await createAuditLog({
     userId: req.user?.id,
@@ -436,8 +438,9 @@ export const createPatient = async (req: AuthRequest, res: Response) => {
           createdBy: actorName
         });
         inviteEmailSent = true;
-      } catch (emailErr: any) {
-        // Email failure should not block patient creation
+      } catch (emailErr: unknown) {
+        // Email failure should not block patient creation — log for ops visibility
+        logger.warn({ err: emailErr, email }, "[admin] sendPatientWelcomeEmail failed");
       }
     }
 

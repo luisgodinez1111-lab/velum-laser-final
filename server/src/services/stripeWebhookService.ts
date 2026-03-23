@@ -606,6 +606,10 @@ const processCheckoutCompleted = async (event: Stripe.Event, stripe: Stripe): Pr
     }).catch(() => null);
     if (memberUser) {
       const memberName = [memberUser.profile?.firstName, memberUser.profile?.lastName].filter(Boolean).join(" ") || memberUser.email;
+      logger.info(
+        { userId, planCode: requestedPlanCode || subCtx.planCode, eventId: event.id },
+        "[stripe-webhook] membership activated via checkout"
+      );
       onMembershipActivated({
         userId,
         userEmail: memberUser.email,

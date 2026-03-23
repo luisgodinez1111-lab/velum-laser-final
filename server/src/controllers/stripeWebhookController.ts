@@ -1,4 +1,5 @@
 import type { Request, Response } from "express";
+import { Prisma } from "@prisma/client";
 import {
   createStripeClientForWebhook,
   getStripeWebhookConfig,
@@ -54,16 +55,27 @@ export const stripeWebhookController = async (req: Request, res: Response): Prom
   }
 
   // ── Deduplicación de eventos Stripe ──────────────────────────────
-  const existing = await prisma.webhookEvent.findUnique({ where: { stripeEventId: event.id } }).catch(() => null);
-  if (existing) {
+  // Use create-or-catch instead of findUnique+create to eliminate the TOCTOU
+  // race condition where two simultaneous requests both pass the findUnique check.
+  let isDuplicate = false;
+  try {
+    await prisma.webhookEvent.create({
+      data: { stripeEventId: event.id, type: event.type, processedAt: new Date() },
+    });
+  } catch (err) {
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+      // Unique constraint violation — another worker already registered this event
+      isDuplicate = true;
+    } else {
+      // Log unexpected DB errors but continue processing (idempotency > reliability)
+      logger.error({ err, eventId: event.id }, "[stripe-webhook] Failed to record webhook event");
+    }
+  }
+  if (isDuplicate) {
     logger.info({ eventId: event.id, eventType: event.type }, "[stripe-webhook] Duplicate event suppressed");
     res.status(200).json({ ok: true, received: true, duplicate: true, eventId: event.id });
     return;
   }
-
-  await prisma.webhookEvent.create({
-    data: { stripeEventId: event.id, type: event.type, processedAt: new Date() },
-  }).catch(() => {});
 
   try {
     await handleBusinessStripeEvent(event, stripe);

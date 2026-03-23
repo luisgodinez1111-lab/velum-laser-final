@@ -18,6 +18,8 @@ let started = false;
 let isTickInProgress = false;
 let pollTimer: NodeJS.Timeout | null = null;
 let watchTimer: NodeJS.Timeout | null = null;
+let consecutiveTickFailures = 0;
+const MAX_CONSECUTIVE_FAILURES = 5;
 
 const processQueueTick = async () => {
   if (isTickInProgress) {
@@ -42,10 +44,19 @@ const processQueueTick = async () => {
       }
     }
   } catch (error: unknown) {
-    logger.error({ err: error }, "Integration worker tick failed");
+    consecutiveTickFailures += 1;
+    logger.error({ err: error, consecutiveFailures: consecutiveTickFailures }, "Integration worker tick failed");
+    if (consecutiveTickFailures >= MAX_CONSECUTIVE_FAILURES) {
+      logger.error(
+        { consecutiveFailures: consecutiveTickFailures },
+        `[integration-worker] ${consecutiveTickFailures} consecutive tick failures — check DB connectivity and GCal config`
+      );
+    }
+    return;
   } finally {
     isTickInProgress = false;
   }
+  consecutiveTickFailures = 0; // reset on successful tick
 };
 
 const enqueueWatchSweep = async () => {

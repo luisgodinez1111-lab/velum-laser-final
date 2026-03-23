@@ -24,7 +24,6 @@ vi.mock("../src/services/stripeWebhookService", async (importOriginal) => {
 vi.mock("../src/db/prisma", () => ({
   prisma: {
     webhookEvent: {
-      findUnique: vi.fn().mockResolvedValue(null),
       create: vi.fn().mockResolvedValue({ id: "we1" }),
     },
   },
@@ -64,8 +63,6 @@ describe("stripe webhook — firma e idempotencia", () => {
   });
 
   it("acepta evento con firma válida y retorna ok:true y received:true", async () => {
-    const { prisma } = await import("../src/db/prisma");
-    vi.mocked(prisma.webhookEvent.findUnique).mockResolvedValueOnce(null);
 
     const app = await buildApp();
     const payload = { id: "evt_valid_001", type: "invoice.payment_succeeded", data: { object: {} } };
@@ -84,7 +81,11 @@ describe("stripe webhook — firma e idempotencia", () => {
 
   it("responde idempotente si el evento ya fue procesado (duplicate:true)", async () => {
     const { prisma } = await import("../src/db/prisma");
-    vi.mocked(prisma.webhookEvent.findUnique).mockResolvedValueOnce({ id: "we_existing" } as any);
+    // New dedup strategy: create throws P2002 instead of findUnique returning existing row
+    const { Prisma } = await import("@prisma/client");
+    vi.mocked(prisma.webhookEvent.create).mockRejectedValueOnce(
+      new Prisma.PrismaClientKnownRequestError("Unique constraint", { code: "P2002", clientVersion: "5.0.0" })
+    );
 
     const app = await buildApp();
     const payload = { id: "evt_dup_001", type: "invoice.payment_failed", data: { object: {} } };

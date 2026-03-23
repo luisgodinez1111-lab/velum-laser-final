@@ -6,6 +6,7 @@ import { generateStorageKey, getFilePath, saveFile } from "../services/storageSe
 import { prisma } from "../db/prisma";
 import { createAuditLog } from "../services/auditService";
 import { sendDocumentSignedEmail } from "../services/emailService";
+import { logger } from "../utils/logger";
 
 const docTypeLabel: Record<string, string> = {
   consent: "Consentimiento informado",
@@ -125,7 +126,7 @@ export const signDocument = async (req: AuthRequest, res: Response) => {
       name,
       documentType: docTypeLabel[document.type] ?? document.type,
       signedAt
-    }).catch(() => {});
+    }).catch((err) => logger.warn({ err, userId: req.user!.id, documentId: document.id }, "[document] sendDocumentSignedEmail failed"));
   }
 
   return res.json(updated);

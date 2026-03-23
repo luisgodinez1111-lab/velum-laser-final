@@ -15,7 +15,7 @@ import {
 import { sendWhatsappOtpCode, getEffectiveWhatsappMetaConfig, normalizePhone } from "../services/whatsappMetaService";
 import { stripe } from "../services/stripeService";
 import { sendDeleteUserOtpEmail, sendAdminInvitationEmail } from "../services/emailService";
-import { onNewMember } from "../services/notificationService";
+import { onNewMember, invalidateAdminIdCache } from "../services/notificationService";
 import { logger } from "../utils/logger";
 import { revokeAllRefreshTokens } from "../utils/auth";
 
@@ -360,6 +360,7 @@ export const deactivateUser = async (req: AuthRequest, res: Response) => {
       where: { id: targetUserId },
       data: { isActive: false, deactivatedAt: new Date() },
     });
+    invalidateAdminIdCache(); // deactivated user may have been admin/staff
 
     await createAuditLog({
       userId: actorId,
@@ -401,6 +402,7 @@ export const activateUser = async (req: AuthRequest, res: Response) => {
       where: { id: targetUserId },
       data: { isActive: true, deactivatedAt: null },
     });
+    invalidateAdminIdCache(); // reactivated user may be admin/staff
 
     await createAuditLog({
       userId: actorId,

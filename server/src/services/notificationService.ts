@@ -104,6 +104,27 @@ export const createNotification = async (params: CreateNotificationParams) => {
   }
 };
 
+// ── Admin ID cache — avoids a DB query on every notification event ───
+let adminIdCache: string[] | null = null;
+let adminIdCacheAt = 0;
+const ADMIN_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+const getAdminIds = async (): Promise<string[]> => {
+  if (adminIdCache && Date.now() - adminIdCacheAt < ADMIN_CACHE_TTL_MS) {
+    return adminIdCache;
+  }
+  const admins = await prisma.user.findMany({
+    where: { role: { in: ["admin", "staff", "system"] }, isActive: true },
+    select: { id: true },
+  });
+  adminIdCache = admins.map((a) => a.id);
+  adminIdCacheAt = Date.now();
+  return adminIdCache;
+};
+
+/** Call when an admin user is created, deactivated, or role-changed. */
+export const invalidateAdminIdCache = (): void => { adminIdCache = null; };
+
 // ── Broadcast in-app notification to all admin/staff users ───────────
 export const notifyAdmins = async (
   type: NotificationType,
@@ -112,10 +133,8 @@ export const notifyAdmins = async (
   data?: Record<string, unknown>
 ) => {
   try {
-    const admins = await prisma.user.findMany({
-      where: { role: { in: ["admin", "staff", "system"] }, isActive: true },
-      select: { id: true },
-    });
+    const adminIds = await getAdminIds();
+    const admins = adminIds.map((id) => ({ id }));
     if (admins.length === 0) return;
     const rows = admins.map((a) => ({
       userId: a.id,
