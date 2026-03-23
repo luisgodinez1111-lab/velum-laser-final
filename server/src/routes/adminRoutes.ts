@@ -12,7 +12,8 @@ import {
   createPatient,
   adminUpdatePatientIntake,
   adminActivateMembership,
-  exportUsers
+  exportUsers,
+  getMemberHistory,
 } from "../controllers/adminController";
 
 export const adminRoutes = Router();
@@ -31,3 +32,4 @@ adminRoutes.patch("/admin/users/:userId/role", requireRole(["admin", "system"]),
 adminRoutes.post("/admin/patients", createPatient);
 adminRoutes.put("/admin/patients/:userId/intake", adminUpdatePatientIntake);
 adminRoutes.post("/admin/patients/:userId/activate-membership", adminActivateMembership);
+adminRoutes.get("/admin/users/:userId/history", getMemberHistory);

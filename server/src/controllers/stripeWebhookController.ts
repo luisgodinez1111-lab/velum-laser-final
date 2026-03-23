@@ -67,8 +67,11 @@ export const stripeWebhookController = async (req: Request, res: Response): Prom
       // Unique constraint violation — another worker already registered this event
       isDuplicate = true;
     } else {
-      // Log unexpected DB errors but continue processing (idempotency > reliability)
-      logger.error({ err, eventId: event.id }, "[stripe-webhook] Failed to record webhook event");
+      // Fail-safe: if we cannot record the event, return 500 so Stripe retries
+      // when the DB recovers — prevents processing duplicates without a record
+      logger.error({ err, eventId: event.id }, "[stripe-webhook] Failed to record webhook event — returning 500 for Stripe retry");
+      res.status(500).json({ ok: false, message: "No se pudo registrar el evento" });
+      return;
     }
   }
   if (isDuplicate) {

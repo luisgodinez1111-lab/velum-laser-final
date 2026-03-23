@@ -166,6 +166,7 @@ export const Admin: React.FC = () => {
   const [memberPayments, setMemberPayments] = useState<any[]>([]);
   const [isLoadingMemberHistory, setIsLoadingMemberHistory] = useState(false);
   const [memberHistoryError, setMemberHistoryError] = useState<string | null>(null);
+  const [isUpdatingMember, setIsUpdatingMember] = useState(false);
   const [serverReports, setServerReports] = useState<{ users: number; activeMemberships: number; pastDueMemberships: number; pendingDocuments: number } | null>(null);
 
   // Payment history with filters + pagination
@@ -541,6 +542,7 @@ export const Admin: React.FC = () => {
   };
 
   const doUpdateMember = async (id: string, status: string) => {
+    setIsUpdatingMember(true);
     try {
       await memberService.updateMembershipStatus(id, status);
       await loadData();
@@ -548,6 +550,8 @@ export const Admin: React.FC = () => {
       toast.success('Membresía actualizada.');
     } catch {
       toast.error('No fue posible actualizar el estatus de la membresía.');
+    } finally {
+      setIsUpdatingMember(false);
     }
   };
 
@@ -563,18 +567,13 @@ export const Admin: React.FC = () => {
     setIsLoadingMemberHistory(true);
     setMemberHistoryError(null);
     try {
-      const [sessionsResp, appointmentsResp, paymentsResp] = await Promise.all([
-        apiFetch<any>(`/v1/sessions/admin?userId=${encodeURIComponent(member.id)}`).catch(() => null),
-        apiFetch<any>(`/v1/appointments?userId=${encodeURIComponent(member.id)}`).catch(() => null),
-        apiFetch<any>(`/v1/payments?userId=${encodeURIComponent(member.id)}&limit=100`).catch(() => null),
-      ]);
-      // All three endpoints may return paginated objects — extract arrays defensively
-      const sessionsData: any[] = Array.isArray(sessionsResp) ? sessionsResp : (sessionsResp?.sessions ?? sessionsResp?.data ?? []);
-      const appointmentsData: any[] = Array.isArray(appointmentsResp) ? appointmentsResp : (appointmentsResp?.appointments ?? appointmentsResp?.data ?? []);
-      const paymentsData: any[] = Array.isArray(paymentsResp) ? paymentsResp : (paymentsResp?.payments ?? paymentsResp?.data ?? []);
-      setMemberSessions(sessionsData);
-      setMemberAppointments(appointmentsData);
-      setMemberPayments(paymentsData);
+      const resp = await apiFetch<{ sessions: any[]; appointments: any[]; payments: any[] }>(
+        `/admin/users/${encodeURIComponent(member.id)}/history`
+      );
+      const toArr = (v: unknown): any[] => Array.isArray(v) ? v : [];
+      setMemberSessions(toArr(resp?.sessions));
+      setMemberAppointments(toArr(resp?.appointments));
+      setMemberPayments(toArr(resp?.payments));
     } catch {
       setMemberSessions([]);
       setMemberAppointments([]);
@@ -2817,6 +2816,7 @@ export const Admin: React.FC = () => {
           onOpenSessionModal={(m) => { openSessionModal(m); setSelectedMember(null); }}
           onOpenIntakeModal={(m) => { void openIntakeModal(m); setSelectedMember(null); }}
           onUpdateMember={handleUpdateMember}
+          isUpdatingMember={isUpdatingMember}
           isLoadingMemberHistory={isLoadingMemberHistory}
           memberHistoryError={memberHistoryError}
           memberAppointments={memberAppointments}

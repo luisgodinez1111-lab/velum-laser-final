@@ -221,6 +221,28 @@ app.use(
   "/api/v1/appointments/confirm",
   rateLimit({ windowMs: 5 * 60 * 1000, limit: 5, standardHeaders: true, legacyHeaders: false, message: { message: "Demasiados intentos de confirmación. Intenta de nuevo en 5 minutos." } })
 );
+// Admin delete OTP — very strict (3 requests/15 min per authenticated admin)
+app.use(
+  "/api/v1/admin/access/users",
+  rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit: 10,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { message: "Demasiados intentos. Intenta de nuevo en 15 minutos." },
+    skip: (req) => req.method === "GET",
+    keyGenerator: (req) => {
+      try {
+        const token = (req as { cookies?: Record<string, string> }).cookies?.accessToken;
+        if (token) {
+          const payload = JSON.parse(Buffer.from(token.split(".")[1], "base64url").toString()) as { sub?: string };
+          if (typeof payload.sub === "string") return `admin-delete:${payload.sub}`;
+        }
+      } catch { /* fall through */ }
+      return req.ip ?? "unknown";
+    },
+  })
+);
 // Per-admin rate limit: max 20 patient creations per hour per admin
 app.use(
   "/admin/patients",

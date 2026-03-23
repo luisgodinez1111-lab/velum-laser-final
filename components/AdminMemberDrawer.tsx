@@ -43,6 +43,7 @@ export type AdminMemberDrawerProps = {
   onOpenSessionModal: (member: Member) => void;
   onOpenIntakeModal: (member: Member) => void;
   onUpdateMember: (id: string, status: string) => void;
+  isUpdatingMember?: boolean;
   // History
   isLoadingMemberHistory: boolean;
   memberHistoryError: string | null;
@@ -81,12 +82,15 @@ export const AdminMemberDrawer: React.FC<AdminMemberDrawerProps> = ({
   onOpenSessionModal,
   onOpenIntakeModal,
   onUpdateMember,
+  isUpdatingMember = false,
   isLoadingMemberHistory,
   memberHistoryError,
   memberAppointments,
   memberPayments,
   memberSessions,
 }) => {
+  const [showAllAppointments, setShowAllAppointments] = React.useState(false);
+  const [showAllSessions, setShowAllSessions] = React.useState(false);
   const intake = intakeStatusLabel(member.intakeStatus);
   const mem = member;
 
@@ -139,21 +143,21 @@ export const AdminMemberDrawer: React.FC<AdminMemberDrawerProps> = ({
               <Zap size={14} />Registrar sesión
             </button>
             {mem.subscriptionStatus !== 'active' && (
-              <button onClick={() => onUpdateMember(mem.id, 'active')}
-                className="w-full flex items-center gap-2 px-4 py-2.5 bg-emerald-600 text-white rounded-xl text-sm font-medium hover:bg-emerald-700 transition">
-                <CheckCircle2 size={14} />Activar cuenta
+              <button onClick={() => onUpdateMember(mem.id, 'active')} disabled={isUpdatingMember}
+                className="w-full flex items-center gap-2 px-4 py-2.5 bg-emerald-600 text-white rounded-xl text-sm font-medium hover:bg-emerald-700 transition disabled:opacity-50 disabled:cursor-not-allowed">
+                <CheckCircle2 size={14} />{isUpdatingMember ? 'Actualizando...' : 'Activar cuenta'}
               </button>
             )}
             {mem.subscriptionStatus === 'active' && (
-              <button onClick={() => onUpdateMember(mem.id, 'past_due')}
-                className="w-full flex items-center gap-2 px-4 py-2.5 border border-amber-300 text-amber-700 bg-amber-50 rounded-xl text-sm font-medium hover:bg-amber-100 transition">
-                <CircleAlert size={14} />Marcar pago vencido
+              <button onClick={() => onUpdateMember(mem.id, 'past_due')} disabled={isUpdatingMember}
+                className="w-full flex items-center gap-2 px-4 py-2.5 border border-amber-300 text-amber-700 bg-amber-50 rounded-xl text-sm font-medium hover:bg-amber-100 transition disabled:opacity-50 disabled:cursor-not-allowed">
+                <CircleAlert size={14} />{isUpdatingMember ? 'Actualizando...' : 'Marcar pago vencido'}
               </button>
             )}
             {mem.subscriptionStatus !== 'canceled' && (
-              <button onClick={() => onUpdateMember(mem.id, 'canceled')}
-                className="w-full flex items-center gap-2 px-4 py-2.5 border border-red-200 text-red-600 bg-red-50 rounded-xl text-sm font-medium hover:bg-red-100 transition">
-                <XCircle size={14} />Cancelar membresía
+              <button onClick={() => onUpdateMember(mem.id, 'canceled')} disabled={isUpdatingMember}
+                className="w-full flex items-center gap-2 px-4 py-2.5 border border-red-200 text-red-600 bg-red-50 rounded-xl text-sm font-medium hover:bg-red-100 transition disabled:opacity-50 disabled:cursor-not-allowed">
+                <XCircle size={14} />{isUpdatingMember ? 'Actualizando...' : 'Cancelar membresía'}
               </button>
             )}
 
@@ -336,7 +340,7 @@ export const AdminMemberDrawer: React.FC<AdminMemberDrawerProps> = ({
               <p className="text-xs text-velum-400 text-center py-4">Sin citas registradas</p>
             ) : (
               <div className="space-y-2">
-                {memberAppointments.slice(0, 5).map((a) => {
+                {(showAllAppointments ? memberAppointments : memberAppointments.slice(0, 5)).map((a) => {
                   const s = apptStatusLabel(a.status);
                   return (
                     <div key={a.id} className="flex items-center justify-between p-2.5 rounded-xl bg-velum-50">
@@ -348,7 +352,11 @@ export const AdminMemberDrawer: React.FC<AdminMemberDrawerProps> = ({
                     </div>
                   );
                 })}
-                {memberAppointments.length > 5 && <p className="text-[11px] text-velum-400 text-center">+{memberAppointments.length - 5} más</p>}
+                {memberAppointments.length > 5 && (
+                  <button onClick={() => setShowAllAppointments(v => !v)} className="w-full text-[11px] text-velum-500 hover:text-velum-900 text-center py-1 transition">
+                    {showAllAppointments ? 'Ver menos' : `+${memberAppointments.length - 5} citas más`}
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -390,7 +398,7 @@ export const AdminMemberDrawer: React.FC<AdminMemberDrawerProps> = ({
               <p className="text-xs text-velum-400 text-center py-4">Sin sesiones registradas</p>
             ) : (
               <div className="space-y-2">
-                {memberSessions.slice(0, 5).map((s) => {
+                {(showAllSessions ? memberSessions : memberSessions.slice(0, 5)).map((s) => {
                   const params = s.laserParametersJson as Record<string, string> | null;
                   return (
                     <div key={s.id} className="p-3 rounded-xl bg-velum-50 space-y-1">
@@ -407,7 +415,11 @@ export const AdminMemberDrawer: React.FC<AdminMemberDrawerProps> = ({
                     </div>
                   );
                 })}
-                {memberSessions.length > 5 && <p className="text-[11px] text-velum-400 text-center">+{memberSessions.length - 5} más</p>}
+                {memberSessions.length > 5 && (
+                  <button onClick={() => setShowAllSessions(v => !v)} className="w-full text-[11px] text-velum-500 hover:text-velum-900 text-center py-1 transition">
+                    {showAllSessions ? 'Ver menos' : `+${memberSessions.length - 5} sesiones más`}
+                  </button>
+                )}
               </div>
             )}
           </div>

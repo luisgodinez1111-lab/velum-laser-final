@@ -252,27 +252,57 @@ export const listAuditLogs = async (req: AuthRequest, res: Response) => {
 
 export const updateMembershipStatus = async (req: AuthRequest, res: Response) => {
   const payload = membershipUpdateSchema.parse(req.body);
-  const membership = await prisma.membership.findFirst({ where: { userId: req.params.userId } });
-  if (!membership) {
+
+  // Atomic update — avoids TOCTOU race between findFirst and update
+  const { count } = await prisma.membership.updateMany({
+    where: { userId: req.params.userId },
+    data: { status: payload.status },
+  });
+  if (count === 0) {
     return res.status(404).json({ message: "Membresía no encontrada" });
   }
-
-  const updated = await prisma.membership.update({
-    where: { id: membership.id },
-    data: { status: payload.status }
-  });
+  const updated = await prisma.membership.findFirst({ where: { userId: req.params.userId } });
 
   await createAuditLog({
     userId: req.user?.id,
     targetUserId: req.params.userId,
     action: "membership.update",
     resourceType: "membership",
-    resourceId: updated.id,
+    resourceId: updated?.id ?? req.params.userId,
     ip: req.ip,
     metadata: { status: payload.status }
   });
 
   return res.json(updated);
+};
+
+export const getMemberHistory = async (req: AuthRequest, res: Response) => {
+  const userId = req.params.userId;
+
+  const [sessions, appointments, payments] = await Promise.all([
+    prisma.sessionTreatment.findMany({
+      where: { userId },
+      include: {
+        appointment: { select: { id: true, startAt: true, status: true } },
+        staffUser: { select: { id: true, email: true, profile: { select: { firstName: true, lastName: true } } } },
+      },
+      orderBy: { createdAt: "desc" },
+      take: 50,
+    }),
+    prisma.appointment.findMany({
+      where: { userId },
+      include: { treatment: { select: { name: true } } },
+      orderBy: { startAt: "desc" },
+      take: 50,
+    }),
+    prisma.payment.findMany({
+      where: { userId },
+      orderBy: { createdAt: "desc" },
+      take: 50,
+    }),
+  ]);
+
+  return res.json({ sessions, appointments, payments });
 };
 
 export const updateUserRole = async (req: AuthRequest, res: Response) => {
