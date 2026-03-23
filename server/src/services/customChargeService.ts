@@ -1,6 +1,19 @@
 import { createHash, randomInt } from "crypto";
 import { prisma } from "../db/prisma";
 import { addHours } from "../utils/date";
+import { logger } from "../utils/logger";
+import { env } from "../utils/env";
+import { onCustomChargeCreated } from "./notificationService";
+import { sendCustomChargeOtpEmail } from "./emailService";
+import { resolveBaseUrl } from "../utils/baseUrl";
+
+const INTERVAL_LABELS: Record<string, string> = {
+  day: "diario", week: "semanal", month: "mensual", year: "anual",
+};
+
+function formatAmountMxn(cents: number, currency: string): string {
+  return new Intl.NumberFormat("es-MX", { style: "currency", currency: currency.toUpperCase() }).format(cents / 100);
+}
 
 const MAX_OTP_ATTEMPTS = 5;
 
@@ -80,6 +93,7 @@ export const verifyCustomChargeOtp = async (chargeId: string, otp: string) => {
 
   const inputHash = hashOtp(otp);
   if (inputHash !== charge.otpHash) {
+    // increment is atomic at DB level — no race risk here
     await prisma.customCharge.update({
       where: { id: chargeId },
       data: { otpAttempts: { increment: 1 } },
@@ -87,14 +101,25 @@ export const verifyCustomChargeOtp = async (chargeId: string, otp: string) => {
     return { error: "invalid_otp" as const };
   }
 
-  // OTP is valid — mark as accepted
-  const updated = await prisma.customCharge.update({
-    where: { id: chargeId },
+  // OTP is valid — accept atomically using updateMany with status guard.
+  // This prevents a race condition where two concurrent requests both pass
+  // the hash check and both try to accept the same charge.
+  const accepted = await prisma.customCharge.updateMany({
+    where: { id: chargeId, status: "PENDING_ACCEPTANCE" },
     data: { status: "ACCEPTED", acceptedAt: new Date(), otpHash: null },
+  });
+
+  if (accepted.count === 0) {
+    // Another concurrent request already accepted (or status changed)
+    return { error: "already_paid" as const };
+  }
+
+  const updated = await prisma.customCharge.findUnique({
+    where: { id: chargeId },
     include: { user: { select: { id: true, email: true, stripeCustomerId: true } } },
   });
 
-  return { charge: updated };
+  return { charge: updated! };
 };
 
 const computeNextChargeAt = (interval: string | null | undefined): Date | undefined => {
@@ -137,9 +162,11 @@ export const renewRecurringCharges = async (): Promise<number> => {
   });
 
   let count = 0;
+  const base = resolveBaseUrl();
+
   for (const charge of due) {
     try {
-      await createCustomCharge({
+      const { charge: newCharge, otp } = await createCustomCharge({
         userId: charge.userId,
         createdByAdminId: charge.createdByAdminId ?? undefined,
         title: charge.title,
@@ -149,12 +176,37 @@ export const renewRecurringCharges = async (): Promise<number> => {
         type: "RECURRING",
         interval: charge.interval ?? undefined,
       });
-      // Clear nextChargeAt so we don't re-process this record
+
+      // Clear nextChargeAt on the paid record to prevent re-processing
       await prisma.customCharge.update({ where: { id: charge.id }, data: { nextChargeAt: null } });
+
+      // Notify the user (in-app + OTP email)
+      const userName = [charge.user.profile?.firstName, charge.user.profile?.lastName].filter(Boolean).join(" ") || charge.user.email;
+      const amountFormatted = formatAmountMxn(charge.amount, charge.currency);
+
+      onCustomChargeCreated({
+        userId: charge.userId,
+        userEmail: charge.user.email,
+        userName,
+        chargeId: newCharge.id,
+        chargeTitle: newCharge.title,
+        amountFormatted,
+      }).catch((err) => logger.error({ err, chargeId: newCharge.id }, "[recurring-charges] notification failed"));
+
+      sendCustomChargeOtpEmail(charge.user.email, {
+        name: userName,
+        otp,
+        chargeId: newCharge.id,
+        title: newCharge.title,
+        description: newCharge.description ?? undefined,
+        amountFormatted,
+        type: "RECURRING",
+        intervalLabel: INTERVAL_LABELS[charge.interval ?? "month"],
+        appBaseUrl: base,
+      }).catch((err) => logger.error({ err, chargeId: newCharge.id }, "[recurring-charges] OTP email failed"));
+
       count++;
     } catch (err) {
-      // log but continue — don't block other renewals
-      const { logger } = await import("../utils/logger");
       logger.error({ err, chargeId: charge.id }, "[recurring-charges] renewal failed");
     }
   }

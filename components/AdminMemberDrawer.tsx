@@ -45,6 +45,7 @@ export type AdminMemberDrawerProps = {
   onUpdateMember: (id: string, status: string) => void;
   // History
   isLoadingMemberHistory: boolean;
+  memberHistoryError: string | null;
   memberAppointments: Appointment[];
   memberPayments: unknown[];
   memberSessions: SessionTreatment[];
@@ -81,6 +82,7 @@ export const AdminMemberDrawer: React.FC<AdminMemberDrawerProps> = ({
   onOpenIntakeModal,
   onUpdateMember,
   isLoadingMemberHistory,
+  memberHistoryError,
   memberAppointments,
   memberPayments,
   memberSessions,
@@ -316,6 +318,13 @@ export const AdminMemberDrawer: React.FC<AdminMemberDrawerProps> = ({
                     className="flex-1 border border-red-200 text-red-600 bg-red-50 rounded-xl py-2.5 text-sm font-medium hover:bg-red-100 transition">Rechazar</button>
                 </div>
               )}
+            </div>
+          )}
+          {/* Error de carga */}
+          {memberHistoryError && !isLoadingMemberHistory && (
+            <div className="mx-4 my-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 flex items-center gap-2">
+              <CircleAlert size={14} className="text-red-500 shrink-0" />
+              <p className="text-[12px] text-red-700">{memberHistoryError}</p>
             </div>
           )}
           {/* Citas */}

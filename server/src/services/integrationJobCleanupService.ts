@@ -2,6 +2,7 @@ import cron from "node-cron";
 import { prisma } from "../db/prisma";
 import { logger } from "../utils/logger";
 import { sendAdminNotificationEmail } from "./notificationEmailService";
+import { notifyAdmins } from "./notificationService";
 
 const DONE_MAX_DAYS = 7;
 const FAILED_MAX_DAYS = 14;
@@ -97,6 +98,11 @@ export const expireCustomCharges = async (): Promise<void> => {
     const count = pending.count + accepted.count;
     if (count > 0) {
       logger.info({ pending: pending.count, accepted: accepted.count }, "[charge-cleanup] Marked expired CustomCharges as EXPIRED");
+      notifyAdmins(
+        "custom_charge_expired",
+        `${count} cobro(s) vencidos sin pago`,
+        `${pending.count} sin aceptar · ${accepted.count} aceptados pero sin completar pago.`
+      ).catch((err) => logger.error({ err }, "[charge-cleanup] admin notification failed"));
     }
   } catch (err) {
     logger.error({ err }, "[charge-cleanup] Failed to expire CustomCharges");

@@ -165,6 +165,7 @@ export const Admin: React.FC = () => {
   const [memberAppointments, setMemberAppointments] = useState<Appointment[]>([]);
   const [memberPayments, setMemberPayments] = useState<any[]>([]);
   const [isLoadingMemberHistory, setIsLoadingMemberHistory] = useState(false);
+  const [memberHistoryError, setMemberHistoryError] = useState<string | null>(null);
   const [serverReports, setServerReports] = useState<{ users: number; activeMemberships: number; pastDueMemberships: number; pendingDocuments: number } | null>(null);
 
   // Payment history with filters + pagination
@@ -560,6 +561,7 @@ export const Admin: React.FC = () => {
 
   const loadMemberHistory = async (member: Member) => {
     setIsLoadingMemberHistory(true);
+    setMemberHistoryError(null);
     try {
       const [sessionsResp, appointmentsResp, paymentsResp] = await Promise.all([
         apiFetch<any>(`/v1/sessions/admin?userId=${encodeURIComponent(member.id)}`).catch(() => null),
@@ -577,6 +579,7 @@ export const Admin: React.FC = () => {
       setMemberSessions([]);
       setMemberAppointments([]);
       setMemberPayments([]);
+      setMemberHistoryError("No se pudo cargar el historial. Intenta cerrar y abrir el perfil.");
     } finally {
       setIsLoadingMemberHistory(false);
     }
@@ -590,6 +593,7 @@ export const Admin: React.FC = () => {
     setMemberSessions([]);
     setMemberAppointments([]);
     setMemberPayments([]);
+    setMemberHistoryError(null);
     void loadMemberHistory(member);
   };
 
@@ -2808,6 +2812,7 @@ export const Admin: React.FC = () => {
           onOpenIntakeModal={(m) => { void openIntakeModal(m); setSelectedMember(null); }}
           onUpdateMember={handleUpdateMember}
           isLoadingMemberHistory={isLoadingMemberHistory}
+          memberHistoryError={memberHistoryError}
           memberAppointments={memberAppointments}
           memberPayments={memberPayments}
           memberSessions={memberSessions}

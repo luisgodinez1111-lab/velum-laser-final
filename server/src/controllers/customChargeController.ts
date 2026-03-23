@@ -37,21 +37,41 @@ function formatAmount(cents: number, currency: string): string {
   return new Intl.NumberFormat("es-MX", { style: "currency", currency: currency.toUpperCase() }).format(amount);
 }
 
-// ── Admin: List all custom charges ───────────────────────────────────
+// ── Admin: List all custom charges (paginated) ───────────────────────
 export const listCustomCharges = async (req: AuthRequest, res: Response) => {
-  const charges = await prisma.customCharge.findMany({
-    orderBy: { createdAt: "desc" },
-    include: {
-      user: {
-        select: {
-          id: true,
-          email: true,
-          profile: { select: { firstName: true, lastName: true } },
+  const rawPage  = Number(req.query.page  ?? 1);
+  const rawLimit = Number(req.query.limit ?? 50);
+  const page  = Math.max(1, Number.isFinite(rawPage)  ? Math.floor(rawPage)  : 1);
+  const limit = Math.min(Math.max(1, Number.isFinite(rawLimit) ? Math.floor(rawLimit) : 50), 200);
+  const skip  = (page - 1) * limit;
+
+  const userId = typeof req.query.userId === "string" ? req.query.userId : undefined;
+  const status = typeof req.query.status === "string" ? req.query.status : undefined;
+  const where = {
+    ...(userId ? { userId } : {}),
+    ...(status ? { status: status as "PENDING_ACCEPTANCE" | "ACCEPTED" | "PAID" | "CANCELLED" | "EXPIRED" } : {}),
+  };
+
+  const [total, charges] = await Promise.all([
+    prisma.customCharge.count({ where }),
+    prisma.customCharge.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      include: {
+        user: {
+          select: {
+            id: true,
+            email: true,
+            profile: { select: { firstName: true, lastName: true } },
+          },
         },
       },
-    },
-  });
-  return res.json({ charges });
+      take: limit,
+      skip,
+    }),
+  ]);
+
+  return res.json({ charges, total, page, limit, pages: Math.ceil(total / limit) });
 };
 
 // ── Admin: Create a custom charge ────────────────────────────────────

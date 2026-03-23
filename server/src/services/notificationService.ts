@@ -22,7 +22,8 @@ export type NotificationType =
   | "new_member"
   | "intake_approved"
   | "intake_rejected"
-  | "intake_submitted";
+  | "intake_submitted"
+  | "custom_charge_expired";
 
 export interface CreateNotificationParams {
   userId: string;

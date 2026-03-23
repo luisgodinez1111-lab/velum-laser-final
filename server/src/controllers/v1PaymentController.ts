@@ -29,8 +29,10 @@ export const getMyPayments = async (req: AuthRequest, res: Response) => {
 };
 
 export const listPaymentsAdmin = async (req: AuthRequest, res: Response) => {
-  const page  = Math.max(1, Number(req.query.page ?? 1));
-  const limit = Math.min(Math.max(1, Number(req.query.limit ?? 50)), 200);
+  const rawPage  = Number(req.query.page  ?? 1);
+  const rawLimit = Number(req.query.limit ?? 50);
+  const page  = Math.max(1, Number.isFinite(rawPage)  ? Math.floor(rawPage)  : 1);
+  const limit = Math.min(Math.max(1, Number.isFinite(rawLimit) ? Math.floor(rawLimit) : 50), 200);
   const where = buildPaymentWhere(req);
 
   const [total, payments] = await Promise.all([

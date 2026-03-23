@@ -552,6 +552,23 @@ export const deleteUser = async (req: AuthRequest, res: Response) => {
       }
     }
 
+    // Cancel Stripe subscriptions from RECURRING custom charges (avoid ghost subscriptions)
+    const recurringCharges = await prisma.customCharge.findMany({
+      where: { userId: targetUserId, type: "RECURRING", stripeSubscriptionId: { not: null } },
+      select: { id: true, stripeSubscriptionId: true },
+    });
+    for (const rc of recurringCharges) {
+      if (rc.stripeSubscriptionId) {
+        try {
+          await stripe.subscriptions.cancel(rc.stripeSubscriptionId);
+        } catch (stripeErr: unknown) {
+          if ((stripeErr as { code?: string })?.code !== "resource_missing") {
+            logger.warn({ subscriptionId: rc.stripeSubscriptionId }, "[delete-user] Failed to cancel recurring custom charge subscription");
+          }
+        }
+      }
+    }
+
     // Reassign Restrict FK relations before deleting
     await prisma.appointment.updateMany({
       where: { createdByUserId: targetUserId },
