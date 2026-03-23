@@ -206,6 +206,11 @@ export const Agenda: React.FC = () => {
 
   useEffect(() => {
     if (isAuthenticated && !pendingEmailVerify) {
+      // Admin/staff/system users have no medical intake — send them to the admin panel
+      if (user && ['admin', 'staff', 'system'].includes(user.role)) {
+        navigate('/admin');
+        return;
+      }
       refreshIntake();
     }
   }, [isAuthenticated]);
@@ -278,6 +283,11 @@ export const Agenda: React.FC = () => {
     setAppointmentMessage(null);
     try {
       const userData = await login(email, password);
+      // Admin/staff/system users don't have a medical intake — redirect to admin panel
+      if (['admin', 'staff', 'system'].includes(userData.role)) {
+        navigate('/admin');
+        return;
+      }
       await refreshIntake({ fullName: userData.name, phone: userData.phone, birthDate: userData.birthDate });
     } catch {
       toast.error("Credenciales incorrectas. Verifica tu correo y contraseña.");

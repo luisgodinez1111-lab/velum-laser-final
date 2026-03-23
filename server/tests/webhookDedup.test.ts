@@ -105,7 +105,7 @@ describe("Stripe webhook deduplication — race condition fix", () => {
   });
 
   it("devuelve duplicate=true cuando create lanza P2002 (race condition)", async () => {
-    const p2002 = new Prisma.PrismaClientKnownRequestError("Unique constraint", { code: "P2002" });
+    const p2002 = new Prisma.PrismaClientKnownRequestError("Unique constraint", { code: "P2002", clientVersion: "5.0.0" });
     vi.mocked(prisma.webhookEvent.create).mockRejectedValueOnce(p2002);
     const app = buildApp();
     const res = await request(app).post("/webhook").set("stripe-signature", "sig_test").send({});

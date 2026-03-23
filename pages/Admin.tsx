@@ -561,14 +561,18 @@ export const Admin: React.FC = () => {
   const loadMemberHistory = async (member: Member) => {
     setIsLoadingMemberHistory(true);
     try {
-      const [sessions, appointments, paymentsData] = await Promise.all([
+      const [sessions, appointments, paymentsResp] = await Promise.all([
         clinicalService.getMemberSessions(member.id),
         clinicalService.listAppointments({ userId: member.id }),
-        apiFetch<any[]>(`/v1/payments?userId=${encodeURIComponent(member.id)}`).catch(() => [])
+        apiFetch<any>(`/v1/payments?userId=${encodeURIComponent(member.id)}`).catch(() => null)
       ]);
+      // API returns { payments: [], total, ... } — extract the array defensively
+      const paymentsData: any[] = Array.isArray(paymentsResp)
+        ? paymentsResp
+        : (paymentsResp?.payments ?? []);
       setMemberSessions(sessions);
       setMemberAppointments(appointments);
-      setMemberPayments(paymentsData ?? []);
+      setMemberPayments(paymentsData);
     } catch {
       setMemberSessions([]);
       setMemberAppointments([]);
