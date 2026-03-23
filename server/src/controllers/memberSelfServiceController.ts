@@ -4,6 +4,7 @@ import crypto from "crypto";
 import { prisma } from "../db/prisma";
 import { AuthRequest } from "../middlewares/auth";
 import { normalizePhone, sendWhatsappOtpCode } from "../services/whatsappMetaService";
+import { recordPasswordHistory, isPasswordReused } from "../utils/auth";
 
 const OTP_TTL_MS = 10 * 60 * 1000;
 const OTP_MAX_ATTEMPTS = 5;
@@ -93,7 +94,10 @@ export const updateMyProfile = async (req: AuthRequest, res: Response) => {
   }
 
   if (email !== user.email) {
-    await prisma.user.update({ where: { id: userId }, data: { email } });
+    // Block email changes — require a dedicated email-change verification flow
+    return res.status(400).json({
+      message: "El cambio de correo electrónico requiere verificación adicional. Contacta al equipo de Velum Laser para actualizarlo.",
+    });
   }
 
   await upsertProfileRecord(userId, email, fullName, phone);
@@ -196,11 +200,18 @@ export const changeMyPassword = async (req: AuthRequest, res: Response) => {
   // Consume OTP before updating password (prevent replay)
   await prisma.whatsappOtp.delete({ where: { userId } }).catch(() => {});
 
+  // Prevent reuse of recent passwords
+  const reused = await isPasswordReused(userId, newPassword);
+  if (reused) {
+    return res.status(400).json({ message: "No puedes reutilizar una contraseña reciente. Elige una diferente." });
+  }
+
   const passwordHash = await bcrypt.hash(newPassword, 12);
   await prisma.user.update({
     where: { id: userId },
     data: { passwordHash, passwordChangedAt: new Date() }
   });
+  await recordPasswordHistory(userId, passwordHash);
 
   return res.json({ message: "Contrasena actualizada correctamente" });
 };

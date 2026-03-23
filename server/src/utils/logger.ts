@@ -28,4 +28,12 @@ export const httpLogger = pinoHttp({
   },
   customAttributeKeys: { reqId: "requestId" },
   genReqId: (req) => (req.headers["x-request-id"] as string | undefined) ?? crypto.randomUUID(),
+  customProps: (req) => {
+    // Include authenticated userId in all request logs for traceability
+    const authReq = req as { user?: { id?: string; role?: string } };
+    if (authReq.user?.id) {
+      return { userId: authReq.user.id, userRole: authReq.user.role };
+    }
+    return {};
+  },
 });

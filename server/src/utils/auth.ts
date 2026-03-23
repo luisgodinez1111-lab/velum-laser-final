@@ -87,3 +87,50 @@ export const revokeRefreshToken = async (rawToken: string): Promise<void> => {
 export const revokeAllRefreshTokens = async (userId: string): Promise<void> => {
   await prisma.refreshToken.deleteMany({ where: { userId } });
 };
+
+// ── Password history ─────────────────────────────────────────────────────────
+// NOTE: requires running `prisma generate` after applying migration 20260323000000_add_password_history
+const PASSWORD_HISTORY_DEPTH = 5; // prevent reuse of last 5 passwords
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const passwordHistoryDelegate = (): any => (prisma as unknown as Record<string, unknown>).passwordHistory;
+
+export const recordPasswordHistory = async (userId: string, passwordHash: string): Promise<void> => {
+  const delegate = passwordHistoryDelegate();
+  if (!delegate) return; // model not yet migrated
+  try {
+    await delegate.create({ data: { userId, passwordHash } });
+    // Purge oldest entries beyond the history depth
+    const entries: { id: string }[] = await delegate.findMany({
+      where: { userId },
+      orderBy: { createdAt: "desc" },
+      select: { id: true },
+    });
+    if (entries.length > PASSWORD_HISTORY_DEPTH) {
+      const toDelete = entries.slice(PASSWORD_HISTORY_DEPTH).map((e: { id: string }) => e.id);
+      await delegate.deleteMany({ where: { id: { in: toDelete } } });
+    }
+  } catch {
+    // Non-fatal: history table may not exist until migration runs
+  }
+};
+
+export const isPasswordReused = async (userId: string, newPassword: string): Promise<boolean> => {
+  const delegate = passwordHistoryDelegate();
+  if (!delegate) return false; // model not yet migrated — allow any password
+  try {
+    const history: { passwordHash: string }[] = await delegate.findMany({
+      where: { userId },
+      orderBy: { createdAt: "desc" },
+      take: PASSWORD_HISTORY_DEPTH,
+      select: { passwordHash: true },
+    });
+    for (const entry of history) {
+      const match = await bcrypt.compare(newPassword, entry.passwordHash);
+      if (match) return true;
+    }
+  } catch {
+    // Non-fatal: history table may not exist until migration runs
+  }
+  return false;
+};

@@ -1,4 +1,5 @@
 import { Response } from "express";
+import crypto from "crypto";
 import { AuthRequest } from "../middlewares/auth";
 import { prisma } from "../db/prisma";
 import { resolveStripeConfig } from "../services/stripeConfigService";
@@ -75,9 +76,19 @@ export const createAppointmentDepositCheckout = async (req: AuthRequest, res: Re
     if (treatmentId) params.set("metadata[treatmentId]", treatmentId);
     if (interestedPlanCode) params.set("metadata[interestedPlanCode]", interestedPlanCode);
 
+    // Idempotency key: scoped to userId + slot to prevent duplicate deposits on retry
+    const idempotencyKey = crypto
+      .createHash("sha256")
+      .update(`deposit:${req.user.id}:${startAt}:${Math.floor(Date.now() / 60_000)}`)
+      .digest("hex");
+
     const rsp = await fetch("https://api.stripe.com/v1/checkout/sessions", {
       method: "POST",
-      headers: { Authorization: `Bearer ${secret}`, "Content-Type": "application/x-www-form-urlencoded" },
+      headers: {
+        Authorization: `Bearer ${secret}`,
+        "Content-Type": "application/x-www-form-urlencoded",
+        "Idempotency-Key": idempotencyKey,
+      },
       body: params.toString(),
     });
 

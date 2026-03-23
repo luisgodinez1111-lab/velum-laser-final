@@ -54,7 +54,7 @@ describe("medicalIntakeUpdateSchema", () => {
 import { registerSchema, loginSchema } from "../src/validators/auth";
 
 describe("registerSchema", () => {
-  // registerSchema requires password min 12 characters (no additional complexity rules)
+  // registerSchema requires min 12 chars + uppercase + lowercase + number + symbol
   const base = { email: "test@velum.mx", password: "SecurePass@123", firstName: "Ana" };
 
   it("acepta registro válido", () => {
@@ -73,12 +73,20 @@ describe("registerSchema", () => {
     expect(registerSchema.safeParse({ ...base, password: "Abcdefghij1" }).success).toBe(false);
   });
 
-  it("acepta contraseña de exactamente 12 caracteres", () => {
-    expect(registerSchema.safeParse({ ...base, password: "Abcdefghij12" }).success).toBe(true);
+  it("acepta contraseña de exactamente 12 caracteres con complejidad", () => {
+    expect(registerSchema.safeParse({ ...base, password: "Abcdefgh@12!" }).success).toBe(true);
+  });
+
+  it("rechaza contraseña sin símbolo", () => {
+    expect(registerSchema.safeParse({ ...base, password: "Abcdefghij12" }).success).toBe(false);
+  });
+
+  it("rechaza contraseña sin mayúscula", () => {
+    expect(registerSchema.safeParse({ ...base, password: "abcdefgh@12!" }).success).toBe(false);
   });
 
   it("acepta registro sin firstName (campo opcional)", () => {
-    expect(registerSchema.safeParse({ email: "a@b.com", password: "ValidPassword123" }).success).toBe(true);
+    expect(registerSchema.safeParse({ email: "a@b.com", password: "ValidPassword@123" }).success).toBe(true);
   });
 });
 

@@ -804,6 +804,99 @@ const processSubscriptionEvent = async (event: Stripe.Event): Promise<void> => {
   logger.info({ eventId: event.id, type: event.type, subscriptionId: stripeSubscriptionId }, "[stripe-webhook] subscription event processed");
 };
 
+const processCustomerDeleted = async (event: Stripe.Event): Promise<void> => {
+  const customer = event.data.object as Stripe.Customer;
+  const stripeCustomerId = cleanString(customer.id);
+  if (!stripeCustomerId) return;
+
+  try {
+    // Mark all active memberships for this customer as canceled
+    const delegateName = pickDelegateName(["membership", "userMembership", "subscription", "subscriptions"]);
+    if (delegateName) {
+      const delegate = getDelegate(delegateName);
+      const fields = getDelegateFieldSet(delegateName);
+      if (delegate?.update && fields.has("stripeCustomerId")) {
+        // Find membership by stripeCustomerId
+        const existing = delegate.findFirst
+          ? ((await delegate.findFirst({ where: { stripeCustomerId } })) as { id: string } | null)
+          : null;
+        if (existing?.id && delegate.update) {
+          await delegate.update({
+            where: { id: existing.id },
+            data: filterDataByFields(delegateName, { status: "canceled", updatedAt: new Date() }),
+          });
+        }
+      }
+    }
+
+    // Clear stripeCustomerId on the user record so they can re-subscribe
+    const userDelegate = getDelegate("user");
+    const userFields = getDelegateFieldSet("user");
+    if (userDelegate?.update && userFields.has("stripeCustomerId")) {
+      // Find user by stripeCustomerId
+      const userRow = userDelegate.findFirst
+        ? ((await userDelegate.findFirst({ where: { stripeCustomerId } })) as { id: string } | null)
+        : null;
+      if (userRow?.id) {
+        await userDelegate.update({
+          where: { id: userRow.id },
+          data: { stripeCustomerId: null },
+        });
+      }
+    }
+
+    logger.info({ eventId: event.id, stripeCustomerId }, "[stripe-webhook] customer.deleted processed");
+  } catch (err) {
+    logger.error({ err }, "[stripe-webhook] customer.deleted handling failed");
+  }
+};
+
+const processChargeRefunded = async (event: Stripe.Event): Promise<void> => {
+  const charge = event.data.object as Stripe.Charge;
+  const paymentIntentId = extractExpandableId(charge.payment_intent);
+  const amount = centsToMajor(charge.amount_refunded);
+
+  try {
+    if (paymentIntentId) {
+      await prisma.payment.updateMany({
+        where: { stripePaymentIntentId: paymentIntentId },
+        data: { status: "refunded" },
+      });
+    }
+    logger.info(
+      { eventId: event.id, paymentIntentId, amount },
+      "[stripe-webhook] charge.refunded processed"
+    );
+  } catch (err) {
+    logger.error({ err }, "[stripe-webhook] charge.refunded handling failed");
+  }
+};
+
+const processChargeDisputeCreated = async (event: Stripe.Event): Promise<void> => {
+  const dispute = event.data.object as Stripe.Dispute;
+  const chargeId = extractExpandableId(dispute.charge);
+  const amount = centsToMajor(dispute.amount);
+  const reason = cleanString(dispute.reason);
+
+  logger.warn(
+    { eventId: event.id, chargeId, amount, reason, status: dispute.status },
+    "[stripe-webhook] ⚠️ charge.dispute.created — manual review required"
+  );
+
+  // Notify admins via notification service
+  try {
+    const { notifyAdmins } = await import("./notificationService");
+    await notifyAdmins(
+      "membership_past_due" as const,
+      `Disputa de cargo recibida`,
+      `Stripe reportó una disputa por $${amount ?? "?"} MXN. Razón: ${reason || "desconocida"}. Revisa el panel de Stripe.`,
+      { chargeId, reason, amount }
+    );
+  } catch (err) {
+    logger.error({ err }, "[stripe-webhook] Failed to send dispute notification");
+  }
+};
+
 export const handleBusinessStripeEvent = async (event: Stripe.Event, stripe: Stripe): Promise<void> => {
   switch (event.type) {
     case "checkout.session.completed":
@@ -818,7 +911,18 @@ export const handleBusinessStripeEvent = async (event: Stripe.Event, stripe: Str
     case "customer.subscription.created":
     case "customer.subscription.updated":
     case "customer.subscription.deleted":
+    case "customer.subscription.paused":
+    case "customer.subscription.resumed":
       await processSubscriptionEvent(event);
+      return;
+    case "customer.deleted":
+      await processCustomerDeleted(event);
+      return;
+    case "charge.refunded":
+      await processChargeRefunded(event);
+      return;
+    case "charge.dispute.created":
+      await processChargeDisputeCreated(event);
       return;
     default:
       logger.info({ eventId: event.id, type: event.type }, "[stripe-webhook] ignored");

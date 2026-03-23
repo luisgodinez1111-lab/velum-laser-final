@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { MEMBERSHIPS, ZONES, MASTER_ZONES, SMALL_ZONE_IDS, MEDIUM_ZONE_IDS, SELECT_MAX_SMALL, SELECT_MAX_MEDIUM } from '../constants';
 import { MembershipTier, ZoneId } from '../types';
@@ -19,6 +19,8 @@ export const Memberships: React.FC = () => {
   const [selectedZones, setSelectedZones] = useState<ZoneId[]>([]);
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [isCheckingOut, setIsCheckingOut] = useState(false);
+  const mountedRef = useRef(true);
+  useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
 
   // Recuperar plan pendiente de localStorage (regreso desde registro/intake)
   useEffect(() => {
@@ -41,6 +43,7 @@ export const Memberships: React.FC = () => {
   useEffect(() => {
     if (!isAuthenticated) return;
     apiFetch<any>("/membership/status").then((data) => {
+      if (!mountedRef.current) return;
       const code = data?.interestedPlanCode;
       if (!code) return;
       const tier = MEMBERSHIPS.find((t) => t.stripePriceId === code);

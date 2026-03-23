@@ -116,6 +116,7 @@ model User {
   customCharges               CustomCharge[]
   notifications               Notification[]
   refreshTokens               RefreshToken[]
+  passwordHistory             PasswordHistory[]
 
   @@index([clinicId])
 }
@@ -200,9 +201,11 @@ model AuditLog {
   @@index([actorUserId])
   @@index([targetUserId])
   @@index([resourceType])
+  @@index([action])
   @@index([createdAt])
   @@index([resourceType, createdAt])
   @@index([userId, createdAt])
+  @@index([actorUserId, createdAt])
 }
 
 model Lead {
@@ -282,7 +285,7 @@ model Appointment {
   id                String            @id @default(cuid())
   clinicId          String            @default("default")
   userId            String
-  createdByUserId   String
+  createdByUserId   String?
   cabinId           String?
   treatmentId       String?
   startAt           DateTime
@@ -305,7 +308,7 @@ model Appointment {
   createdAt         DateTime          @default(now())
   updatedAt         DateTime          @updatedAt
   user              User              @relation("AppointmentMember", fields: [userId], references: [id], onDelete: Cascade)
-  createdBy         User              @relation("AppointmentCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  createdBy         User              @relation("AppointmentCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
   cabin             AgendaCabin?      @relation(fields: [cabinId], references: [id], onDelete: SetNull)
   treatment         AgendaTreatment?  @relation(fields: [treatmentId], references: [id], onDelete: SetNull)
   rescheduledFrom   Appointment?      @relation("AppointmentReschedule", fields: [rescheduledFromId], references: [id], onDelete: SetNull)
@@ -569,6 +572,7 @@ model Notification {
 
   @@index([userId, read])
   @@index([userId, createdAt])
+  @@index([userId, read, createdAt]) // composite for unread badge + pagination
 }
 
 model WebhookEvent {
@@ -621,6 +625,16 @@ model DeleteOtp {
 
   @@index([actorUserId])
   @@index([expiresAt])
+}
+
+model PasswordHistory {
+  id           String   @id @default(cuid())
+  userId       String
+  passwordHash String
+  createdAt    DateTime @default(now())
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
 }
 
 model WhatsappOtp {

@@ -97,7 +97,6 @@ export const NotificationBell: React.FC = () => {
       esRef.current = null;
       if (unmountedRef.current) return;
       const delay = backoffRef.current;
-      console.warn(`[NotificationBell] SSE desconectado — reintentando en ${delay / 1000}s`);
       backoffRef.current = Math.min(delay * 2, SSE_BACKOFF_MAX_MS);
       reconnectTimerRef.current = setTimeout(connectSSE, delay);
     };

@@ -11,8 +11,8 @@ import {
 import { runGoogleIntegrationJobByType } from "./googleCalendarIntegrationService";
 import { isGoogleCalendarConfigured } from "./googleCalendarClient";
 
-const JOB_POLL_INTERVAL_MS = 2000;
-const WATCH_SWEEP_INTERVAL_MS = 15 * 60 * 1000;
+const JOB_POLL_INTERVAL_MS = env.integrationJobPollMs;
+const WATCH_SWEEP_INTERVAL_MS = env.integrationWatchSweepMs;
 
 let started = false;
 let isTickInProgress = false;

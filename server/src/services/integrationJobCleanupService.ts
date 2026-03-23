@@ -80,7 +80,7 @@ export const checkWhatsappTokenExpiry = async (): Promise<void> => {
   const WARNING_DAYS = [10, 5];
   try {
     const rows = await prisma.$queryRaw<Array<{ updatedAt: Date }>>`
-      SELECT "updatedAt" FROM "SystemSetting" WHERE "key" = 'whatsapp_meta_config' LIMIT 1
+      SELECT "updatedAt" FROM "AppSetting" WHERE "key" = 'whatsapp_meta_config' LIMIT 1
     `;
     if (!rows?.length) return;
 

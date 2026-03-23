@@ -17,6 +17,7 @@ import { stripe } from "../services/stripeService";
 import { sendDeleteUserOtpEmail, sendAdminInvitationEmail } from "../services/emailService";
 import { onNewMember } from "../services/notificationService";
 import { logger } from "../utils/logger";
+import { revokeAllRefreshTokens } from "../utils/auth";
 
 const MAX_OTP_ATTEMPTS = 5;
 
@@ -235,9 +236,16 @@ export const updateAdminAccessUser = async (req: AuthRequest, res: Response) => 
 
     const updated = await prisma.user.update({
       where: { id: userId },
-      data: { role: nextRole },
+      data: { role: nextRole, passwordChangedAt: new Date() },
       select: { id: true, email: true, role: true, createdAt: true },
     });
+
+    // Invalidate all existing sessions so the new role takes effect immediately
+    if (nextRoleRaw && nextRole !== current.role) {
+      await revokeAllRefreshTokens(userId).catch((err: unknown) =>
+        logger.warn({ err }, "[admin-access] Failed to revoke refresh tokens on role change")
+      );
+    }
 
     if (nextRole === "admin" || nextRole === "staff") {
       if (Array.isArray(incomingPerms)) {
@@ -282,7 +290,12 @@ export const resetAdminAccessPassword = async (req: AuthRequest, res: Response) 
     if (!found) return res.status(404).json({ message: "Usuario no encontrado" });
 
     const passwordHash = await bcrypt.hash(newPassword, 10);
-    await prisma.user.update({ where: { id: userId }, data: { passwordHash, passwordChangedAt: new Date() } });
+    await prisma.user.update({ where: { id: userId }, data: { passwordHash, passwordChangedAt: new Date(), mustChangePassword: true } });
+
+    // Revoke all sessions so the new password takes effect immediately
+    await revokeAllRefreshTokens(userId).catch((err: unknown) =>
+      logger.warn({ err }, "[admin-access] Failed to revoke refresh tokens on password reset")
+    );
 
     await createAuditLog({
       userId: req.user!.id,

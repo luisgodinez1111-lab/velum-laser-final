@@ -66,6 +66,11 @@ const fetchWithRetry = async (
   }
 };
 
+const generateRequestId = (): string => {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
+  return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+};
+
 export const apiFetch = async <T>(
   path: string,
   options: RequestInit = {},
@@ -82,6 +87,7 @@ export const apiFetch = async <T>(
       ...options,
       headers: {
         ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
+        'x-request-id': generateRequestId(),
         ...(options.headers ?? {}),
       },
     };

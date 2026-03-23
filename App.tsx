@@ -1,5 +1,5 @@
 import React, { lazy, Suspense } from 'react';
-import { HashRouter as Router, Routes, Route } from 'react-router-dom';
+import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Layout } from './components/Layout';
 import { AuthProvider } from './context/AuthContext';
 import { ToastProvider } from './context/ToastContext';
@@ -21,7 +21,6 @@ const Admin             = lazy(() => import('./pages/Admin').then(m => ({ defaul
 const AdminWhatsApp     = lazy(() => import('./pages/AdminWhatsAppSettings').then(m => ({ default: m.AdminWhatsAppSettings })));
 const AdminStripe       = lazy(() => import('./pages/AdminStripeSettings').then(m => ({ default: m.AdminStripeSettings })));
 const AdminUsers        = lazy(() => import('./pages/AdminUsersPermissions').then(m => ({ default: m.AdminUsersPermissions })));
-const AgendaIntegrations = lazy(() => import('./pages/settings/AgendaIntegrations').then(m => ({ default: m.AgendaIntegrations })));
 const OnboardingAdmin   = lazy(() => import('./pages/OnboardingAdmin').then(m => ({ default: m.OnboardingAdmin })));
 const ResetPassword     = lazy(() => import('./pages/ResetPassword').then(m => ({ default: m.ResetPassword })));
 const CustomCharge      = lazy(() => import('./pages/CustomChargePage').then(m => ({ default: m.CustomChargePage })));
@@ -44,7 +43,7 @@ const InnerApp: React.FC = () => {
                 <Route path="/admin/whatsapp"                element={<AdminWhatsApp />} />
                 <Route path="/admin/stripe"                  element={<AdminStripe />} />
                 <Route path="/admin/users-permissions"       element={<AdminUsers />} />
-                <Route path="/settings/agenda-integrations"  element={<AgendaIntegrations />} />
+                <Route path="/settings/agenda-integrations"  element={<Navigate to="/admin" replace />} />
                 <Route path="/admin/onboarding"              element={<OnboardingAdmin />} />
                 <Route path="/reset-password"               element={<ResetPassword />} />
                 <Route path="/custom-charge/:id"            element={<CustomCharge />} />

@@ -519,7 +519,7 @@ export const Agenda: React.FC = () => {
     const ok = await saveIntakeDraft(true);
     if (ok) {
       // Si el usuario vino desde /memberships, regresar allí
-      const pendingPlan = localStorage.getItem('velum_pending_plan');
+      const pendingPlan = (() => { try { return localStorage.getItem('velum_pending_plan'); } catch { return null; } })();
       if (pendingPlan) {
         navigate('/memberships');
       } else {
@@ -570,7 +570,7 @@ export const Agenda: React.FC = () => {
   const __effectiveViewState: "intro" | "login" | "register" =
     !isAuthenticated && (__guestMode === "login" || __guestMode === "register" || __guestMode === "intro")
       ? (__guestMode as "intro" | "login" | "register")
-      : viewState;
+      : (["intro", "login", "register"].includes(viewState) ? (viewState as "intro" | "login" | "register") : "intro");
 
   if (!isAuthenticated && __effectiveViewState === "intro") {
     return (

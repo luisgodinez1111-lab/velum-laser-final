@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { AuditLogEntry, Member } from '../types';
 import { memberService, auditService } from '../services/dataService';
 import {
@@ -45,10 +45,15 @@ export function useAdminData({
   hasAccess,
 }: UseAdminDataOptions) {
   const [state, setState] = useState<AdminDataState>(INITIAL_STATE);
+  const abortRef = useRef<AbortController | null>(null);
 
   const isPrivileged = userRole === 'admin' || userRole === 'system';
 
   const load = useCallback(async () => {
+    // Cancel any in-flight load before starting a new one
+    abortRef.current?.abort();
+    abortRef.current = new AbortController();
+
     setState((s) => ({ ...s, isLoading: true, error: '' }));
     try {
       const [membersData, logsData, configData, dayData, integrationData] =
@@ -67,13 +72,14 @@ export function useAdminData({
       setState({
         isLoading: false,
         error: '',
-        members: membersData,
+        members: membersData.members,
         auditLogs: logsData,
         agendaConfig: configData,
         agendaSnapshot: dayData,
         googleIntegrationStatus: integrationData,
       });
     } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') return;
       const message =
         err instanceof Error ? err.message : 'No se pudo cargar los datos del panel.';
       setState((s) => ({ ...s, isLoading: false, error: message }));
@@ -82,6 +88,7 @@ export function useAdminData({
 
   useEffect(() => {
     if (isAuthenticated && hasAccess) void load();
+    return () => { abortRef.current?.abort(); };
   }, [isAuthenticated, hasAccess, load]);
 
   return { ...state, reload: load };

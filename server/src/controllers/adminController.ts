@@ -12,6 +12,7 @@ import crypto from "crypto";
 import { sendPatientWelcomeEmail } from "../services/emailService";
 import { onNewMember } from "../services/notificationService";
 import { logger } from "../utils/logger";
+import { revokeAllRefreshTokens } from "../utils/auth";
 
 function generateTempPassword(): string {
   const upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
@@ -135,28 +136,45 @@ export const reports = async (req: AuthRequest, res: Response) => {
 };
 
 export const exportUsers = async (req: AuthRequest, res: Response) => {
-  const users = await prisma.user.findMany({
-    where: { role: "member" },
-    include: { profile: true, memberships: true },
-    orderBy: { createdAt: "desc" },
-    take: 10_000,
-  });
-
+  const BATCH = 500;
   const bom = "\uFEFF";
   const header = "Nombre,Email,Teléfono,Plan,Estado membresía,Registrada\n";
-  const rows = users.map((u) => {
-    const ms = u.memberships[0];
-    const name = [u.profile?.firstName, u.profile?.lastName].filter(Boolean).join(" ") || "";
-    const phone = u.profile?.phone ?? "";
-    const plan = ms?.planId ?? "";
-    const status = ms?.status ?? "inactive";
-    const created = u.createdAt.toISOString().slice(0, 10);
-    return [name, u.email, phone, plan, status, created].map((v) => `"${String(v).replace(/"/g, '""')}"`).join(",");
-  });
 
   res.setHeader("Content-Type", "text/csv; charset=utf-8");
   res.setHeader("Content-Disposition", `attachment; filename="velum-pacientes-${new Date().toISOString().slice(0, 10)}.csv"`);
-  return res.send(bom + header + rows.join("\n"));
+  res.write(bom + header);
+
+  let cursor: string | undefined;
+  let hasMore = true;
+
+  while (hasMore) {
+    const batch = await prisma.user.findMany({
+      where: { role: "member" },
+      select: { id: true, email: true, createdAt: true, profile: { select: { firstName: true, lastName: true, phone: true } }, memberships: { select: { planId: true, status: true }, take: 1 } },
+      orderBy: { createdAt: "asc" },
+      take: BATCH,
+      ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
+    });
+
+    for (const u of batch) {
+      const ms = u.memberships[0];
+      const name = [u.profile?.firstName, u.profile?.lastName].filter(Boolean).join(" ") || "";
+      const phone = u.profile?.phone ?? "";
+      const plan = ms?.planId ?? "";
+      const status = ms?.status ?? "inactive";
+      const created = u.createdAt.toISOString().slice(0, 10);
+      const row = [name, u.email, phone, plan, status, created].map((v) => `"${String(v).replace(/"/g, '""')}"`).join(",");
+      res.write(row + "\n");
+    }
+
+    if (batch.length < BATCH) {
+      hasMore = false;
+    } else {
+      cursor = batch[batch.length - 1].id;
+    }
+  }
+
+  return res.end();
 };
 
 export const listAuditLogs = async (req: AuthRequest, res: Response) => {
@@ -246,9 +264,14 @@ export const updateUserRole = async (req: AuthRequest, res: Response) => {
 
   const updated = await prisma.user.update({
     where: { id: targetUser.id },
-    data: { role: payload.role },
+    data: { role: payload.role, passwordChangedAt: new Date() },
     select: { id: true, email: true, role: true }
   });
+
+  // Revoke all sessions so the new role is enforced immediately
+  await revokeAllRefreshTokens(targetUser.id).catch((err: unknown) =>
+    logger.warn({ err }, "[admin] Failed to revoke refresh tokens on role change")
+  );
 
   await createAuditLog({
     userId: req.user?.id,

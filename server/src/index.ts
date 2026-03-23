@@ -26,7 +26,7 @@ import { billingCheckoutRoutes } from "./routes/billingCheckoutRoutes";
 import { customChargeRoutes } from "./routes/customChargeRoutes";
 import { notificationRoutes } from "./routes/notificationRoutes";
 import { stripeWebhookRouter } from "./routes/stripeWebhookRoutes";
-import { startIntegrationWorker } from "./services/integrationWorker";
+import { startIntegrationWorker, stopIntegrationWorker } from "./services/integrationWorker";
 import { startPaymentReminderCron } from "./services/paymentReminderService";
 import { startAppointmentReminderCron } from "./services/appointmentReminderService";
 import { startIntegrationJobCleanupCron } from "./services/integrationJobCleanupService";
@@ -248,7 +248,7 @@ app.post("/api/v1/errors/client", express.json({ limit: "16kb" }), (req, res) =>
 app.use(errorHandler);
 
 // ── Servidor ─────────────────────────────────────────────────────────
-app.listen(env.port, () => {
+const server = app.listen(env.port, () => {
   logger.info(`API running on :${env.port}`);
   void startIntegrationWorker().catch((error) => {
     logger.error({ err: error }, "Unable to start integration worker");
@@ -257,3 +257,23 @@ app.listen(env.port, () => {
   startAppointmentReminderCron();
   startIntegrationJobCleanupCron();
 });
+
+// ── Graceful shutdown ─────────────────────────────────────────────────
+const shutdown = (signal: string) => {
+  logger.info(`[shutdown] ${signal} received — stopping gracefully`);
+  stopIntegrationWorker();
+  server.close(() => {
+    prisma.$disconnect().then(() => {
+      logger.info("[shutdown] Clean shutdown complete");
+      process.exit(0);
+    }).catch(() => process.exit(1));
+  });
+  // Force exit after 10 s if server doesn't close cleanly
+  setTimeout(() => {
+    logger.error("[shutdown] Forced exit after timeout");
+    process.exit(1);
+  }, 10_000).unref();
+};
+
+process.on("SIGTERM", () => shutdown("SIGTERM"));
+process.on("SIGINT", () => shutdown("SIGINT"));

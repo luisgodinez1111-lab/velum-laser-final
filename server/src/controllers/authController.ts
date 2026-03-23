@@ -2,7 +2,7 @@ import { Request, Response } from "express";
 import { AuthRequest } from "../middlewares/auth";
 import { registerSchema, loginSchema, forgotSchema, resetSchema, verifyEmailSchema, consentOtpVerifySchema } from "../validators/auth";
 import { createUser, getUserByEmail } from "../services/userService";
-import { hashPassword, signToken, verifyPassword, createRefreshToken, rotateRefreshToken, revokeRefreshToken, revokeAllRefreshTokens } from "../utils/auth";
+import { hashPassword, signToken, verifyPassword, createRefreshToken, rotateRefreshToken, revokeRefreshToken, revokeAllRefreshTokens, recordPasswordHistory, isPasswordReused } from "../utils/auth";
 import { env, isProduction } from "../utils/env";
 import { createEmailVerification, createPasswordReset, consumeEmailVerification, consumePasswordReset, createConsentOtp, consumeConsentOtp } from "../services/authService";
 import { prisma } from "../db/prisma";
@@ -10,6 +10,36 @@ import { createAuditLog } from "../services/auditService";
 import { sendPasswordResetEmail, sendEmailVerificationEmail, sendConsentOtpEmail } from "../services/emailService";
 import { onNewMember } from "../services/notificationService";
 import { logger } from "../utils/logger";
+
+// ── Per-account brute force protection ───────────────────────────────────────
+// Simple in-memory counter. For multi-instance deployments use Redis.
+const LOGIN_MAX_FAILURES = 10;
+const LOGIN_LOCKOUT_MS = 15 * 60 * 1000; // 15 minutes
+
+type FailureEntry = { count: number; lockedUntil: number };
+const loginFailures = new Map<string, FailureEntry>();
+
+const checkAccountLocked = (email: string): boolean => {
+  const entry = loginFailures.get(email);
+  if (!entry) return false;
+  if (entry.lockedUntil > Date.now()) return true;
+  // Lockout expired — reset
+  loginFailures.delete(email);
+  return false;
+};
+
+const recordLoginFailure = (email: string): void => {
+  const entry = loginFailures.get(email) ?? { count: 0, lockedUntil: 0 };
+  entry.count += 1;
+  if (entry.count >= LOGIN_MAX_FAILURES) {
+    entry.lockedUntil = Date.now() + LOGIN_LOCKOUT_MS;
+  }
+  loginFailures.set(email, entry);
+};
+
+const clearLoginFailures = (email: string): void => {
+  loginFailures.delete(email);
+};
 
 const setAccessCookie = (res: Response, token: string) => {
   res.cookie(env.cookieName, token, {
@@ -97,17 +127,27 @@ export const register = async (req: Request, res: Response) => {
 
 export const login = async (req: Request, res: Response) => {
   const payload = loginSchema.parse(req.body);
+
+  // Per-account lockout check (prevents credential stuffing)
+  if (checkAccountLocked(payload.email)) {
+    return res.status(429).json({ message: "Demasiados intentos fallidos. Intenta de nuevo en 15 minutos." });
+  }
+
   const user = await getUserByEmail(payload.email);
   if (!user) {
+    recordLoginFailure(payload.email);
     return res.status(401).json({ message: "Credenciales inválidas" });
   }
   const valid = await verifyPassword(payload.password, user.passwordHash);
   if (!valid) {
+    recordLoginFailure(payload.email);
     return res.status(401).json({ message: "Credenciales inválidas" });
   }
   if (user.isActive === false) {
     return res.status(403).json({ message: "Tu cuenta ha sido desactivada. Contacta a la clínica para más información." });
   }
+
+  clearLoginFailures(payload.email);
   const token = signToken({ sub: user.id, role: user.role });
   setAccessCookie(res, token);
   const rawRefresh = await createRefreshToken(user.id);
@@ -166,19 +206,20 @@ export const refreshToken = async (req: Request, res: Response) => {
 
 export const forgotPassword = async (req: Request, res: Response) => {
   const payload = forgotSchema.parse(req.body);
-  const user = await getUserByEmail(payload.email);
 
-  if (!user) {
-    return res.status(404).json({ message: "No encontramos una cuenta con ese correo electrónico." });
+  // Always return the same response to prevent user enumeration
+  const genericMsg = "Si el correo está registrado, recibirás un enlace para restablecer tu contraseña.";
+
+  const user = await getUserByEmail(payload.email);
+  if (user) {
+    const reset = await createPasswordReset(user.id);
+    const resetUrl = `${env.appUrl}/#/reset-password?token=${reset.token}`;
+    sendPasswordResetEmail(user.email, resetUrl).catch((err: unknown) => {
+      logger.warn({ err, email: user.email }, "[auth] No se pudo enviar correo de recuperación");
+    });
   }
 
-  const reset = await createPasswordReset(user.id);
-  const resetUrl = `${env.appUrl}/#/reset-password?token=${reset.token}`;
-  sendPasswordResetEmail(user.email, resetUrl).catch((err: unknown) => {
-    logger.warn({ err, email: user.email }, "[auth] No se pudo enviar correo de recuperación");
-  });
-
-  return res.json({ message: "Te enviamos un enlace a tu correo para restablecer tu contraseña." });
+  return res.json({ message: genericMsg });
 };
 
 export const resetPassword = async (req: Request, res: Response) => {
@@ -189,10 +230,18 @@ export const resetPassword = async (req: Request, res: Response) => {
     return res.status(400).json({ message: "El enlace es inválido o ya expiró." });
   }
 
+  // Prevent reuse of recent passwords
+  const reused = await isPasswordReused(reset.userId, payload.password);
+  if (reused) {
+    return res.status(400).json({ message: "No puedes reutilizar una contraseña reciente. Elige una diferente." });
+  }
+
+  const newHash = await hashPassword(payload.password);
   await prisma.user.update({
     where: { id: reset.userId },
-    data: { passwordHash: await hashPassword(payload.password), passwordChangedAt: new Date() }
+    data: { passwordHash: newHash, passwordChangedAt: new Date() }
   });
+  await recordPasswordHistory(reset.userId, newHash);
 
   await createAuditLog({
     userId: reset.userId,
@@ -307,6 +356,12 @@ export const changeInitialPassword = async (req: AuthRequest, res: Response) => 
     return res.status(400).json({ message: "No hay contraseña temporal pendiente de cambio" });
   }
 
+  // Prevent reuse of recent passwords
+  const reusedInitial = await isPasswordReused(userId, newPassword);
+  if (reusedInitial) {
+    return res.status(400).json({ message: "No puedes reutilizar una contraseña reciente. Elige una diferente." });
+  }
+
   const passwordHash = await hashPassword(newPassword);
   await prisma.user.update({
     where: { id: userId },
@@ -316,6 +371,7 @@ export const changeInitialPassword = async (req: AuthRequest, res: Response) => 
       passwordChangedAt: new Date()
     }
   });
+  await recordPasswordHistory(userId, passwordHash);
 
   await createAuditLog({
     userId,

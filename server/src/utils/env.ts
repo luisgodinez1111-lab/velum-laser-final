@@ -86,6 +86,8 @@ export const env = {
   errorWebhookUrl: process.env.ERROR_WEBHOOK_URL ?? "",
   healthApiKey: process.env.HEALTH_API_KEY ?? "",
   stripeCheckoutBaseUrl: process.env.STRIPE_CHECKOUT_BASE_URL ?? "",
+  integrationJobPollMs: Number(process.env.INTEGRATION_JOB_POLL_MS ?? 2000),
+  integrationWatchSweepMs: Number(process.env.INTEGRATION_WATCH_SWEEP_MS ?? 15 * 60 * 1000),
 };
 
 export const isProduction = env.nodeEnv === "production";

@@ -1,8 +1,16 @@
 import { z } from "zod";
 
+const strongPassword = z
+  .string()
+  .min(12, "La contraseña debe tener al menos 12 caracteres")
+  .refine((p) => /[A-Z]/.test(p), { message: "Debe incluir al menos una letra mayúscula" })
+  .refine((p) => /[a-z]/.test(p), { message: "Debe incluir al menos una letra minúscula" })
+  .refine((p) => /[0-9]/.test(p), { message: "Debe incluir al menos un número" })
+  .refine((p) => /[^A-Za-z0-9]/.test(p), { message: "Debe incluir al menos un símbolo" });
+
 export const registerSchema = z.object({
   email: z.string().email(),
-  password: z.string().min(12),
+  password: strongPassword,
   firstName: z.string().min(1).optional(),
   lastName: z.string().min(1).optional(),
   phone: z.string().min(7).optional(),
@@ -20,7 +28,7 @@ export const forgotSchema = z.object({
 
 export const resetSchema = z.object({
   token: z.string().min(32),
-  password: z.string().min(12)
+  password: strongPassword,
 });
 
 export const verifyEmailSchema = z.object({

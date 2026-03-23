@@ -382,7 +382,7 @@ export const AdminUsersPermissions: React.FC<Props> = ({ embedded = false }) => 
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           <p className="text-[10px] font-bold uppercase tracking-widest text-velum-400">Usuarios del sistema</p>
-          <button onClick={load} disabled={loading} className="flex items-center gap-1 text-xs text-velum-400 hover:text-velum-700 transition">
+          <button onClick={() => void load()} disabled={loading} className="flex items-center gap-1 text-xs text-velum-400 hover:text-velum-700 transition">
             <RefreshCw size={12} className={loading ? "animate-spin" : ""} />Actualizar
           </button>
         </div>

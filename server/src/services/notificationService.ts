@@ -36,6 +36,7 @@ export interface CreateNotificationParams {
 // NOTE: single-process only. For multi-instance deployments add Redis pub/sub.
 const sseClients = new Map<string, Set<Response>>();
 const MAX_SSE_PER_USER = 3; // prevent memory exhaustion from many open tabs
+const SSE_MAX_SESSION_MS = 4 * 60 * 60 * 1000; // 4 h max lifetime — force reconnect
 
 export const registerSseClient = (userId: string, res: Response): void => {
   if (!sseClients.has(userId)) sseClients.set(userId, new Set());
@@ -50,6 +51,13 @@ export const registerSseClient = (userId: string, res: Response): void => {
     }
   }
   clients.add(res);
+
+  // Force reconnect after max session lifetime to prevent zombie connections
+  const maxSessionTimer = setTimeout(() => {
+    try { res.end(); } catch { /* already closed */ }
+    unregisterSseClient(userId, res);
+  }, SSE_MAX_SESSION_MS);
+  if (maxSessionTimer.unref) maxSessionTimer.unref();
 };
 
 export const unregisterSseClient = (userId: string, res: Response): void => {

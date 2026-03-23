@@ -271,7 +271,7 @@ export const Dashboard: React.FC = () => {
         }
         const me = await apiFetch<any>("/v1/users/me/profile");
         setProfile({ fullName: asString(me?.fullName), email: asString(me?.email, asString(user?.email)), phone: asString(me?.phone) });
-      } catch (e) { console.error(e); }
+      } catch { /* network or auth error — handled by apiFetch */ }
       finally { setIsLoadingData(false); }
 
       setIsLoadingSessions(true);
@@ -1378,7 +1378,7 @@ export const Dashboard: React.FC = () => {
               <button key={key} type="button" onClick={() => switchTab(key)}
                 className={`flex-1 flex flex-col items-center justify-center gap-0.5 py-3 transition-all duration-150 ${pressBtn} ${isActive ? "text-velum-900" : "text-velum-400"}`}>
                 <span className={`transition-all duration-200 ${isActive ? "scale-110" : "scale-100"}`}>
-                  {React.cloneElement(tabIcons[key] as React.ReactElement, { size: 20 })}
+                  {React.cloneElement(tabIcons[key] as React.ReactElement, { size: 20 } as Record<string, unknown>)}
                 </span>
                 <span className={`text-[9px] leading-none mt-0.5 ${isActive ? "font-black" : "font-medium"}`}>{tab.short}</span>
                 {isActive && <span className="w-4 h-[3px] rounded-full bg-velum-900 mt-0.5" />}

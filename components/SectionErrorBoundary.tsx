@@ -16,8 +16,6 @@ interface State {
  * Catches render-time errors so a broken widget doesn't crash the whole page.
  */
 export class SectionErrorBoundary extends React.Component<Props, State> {
-  declare readonly props: Readonly<Props>;
-  declare setState: (s: Partial<State> | ((prev: State) => Partial<State>)) => void;
   state: State = { error: null };
 
   static getDerivedStateFromError(error: Error): State {

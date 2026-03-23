@@ -1,4 +1,5 @@
 import { Request, Response } from "express";
+import crypto from "crypto";
 import { AuthRequest } from "../middlewares/auth";
 import { prisma } from "../db/prisma";
 import { resolveStripeConfig } from "../services/stripeConfigService";
@@ -61,6 +62,8 @@ export const createCharge = async (req: AuthRequest, res: Response) => {
   if (!userId) return res.status(400).json({ message: "userId es obligatorio" });
   if (!title) return res.status(400).json({ message: "title es obligatorio" });
   if (!amountPesos || amountPesos <= 0) return res.status(400).json({ message: "amount debe ser mayor a 0 (en pesos)" });
+  if (amountPesos > 500_000) return res.status(400).json({ message: "amount no puede exceder $500,000 pesos por cobro" });
+  if (amountPesos < 1) return res.status(400).json({ message: "El monto mínimo es $1 peso" });
 
   const user = await prisma.user.findUnique({
     where: { id: userId },
@@ -264,11 +267,18 @@ export const verifyOtpAndCheckout = async (req: Request, res: Response) => {
     params.delete("customer_email");
   }
 
+  // Idempotency key: scoped to charge ID to prevent duplicate sessions on network retry
+  const idempotencyKey = crypto
+    .createHash("sha256")
+    .update(`custom-charge:${id}:${Math.floor(Date.now() / 60_000)}`)
+    .digest("hex");
+
   const rsp = await fetch("https://api.stripe.com/v1/checkout/sessions", {
     method: "POST",
     headers: {
       Authorization: `Bearer ${secret}`,
       "Content-Type": "application/x-www-form-urlencoded",
+      "Idempotency-Key": idempotencyKey,
     },
     body: params.toString(),
   });
