@@ -288,8 +288,8 @@ model Appointment {
   createdByUserId   String?
   cabinId           String?
   treatmentId       String?
-  startAt           DateTime
-  endAt             DateTime
+  startAt           DateTime          @db.Timestamptz
+  endAt             DateTime          @db.Timestamptz
   status            AppointmentStatus @default(scheduled)
   reason            String?
   canceledReason    String?
@@ -487,41 +487,44 @@ model EmailVerificationToken {
   id        String   @id @default(cuid())
   userId    String
   token     String   @unique
-  expiresAt DateTime
-  createdAt DateTime @default(now())
+  expiresAt DateTime @db.Timestamptz
+  createdAt DateTime @default(now()) @db.Timestamptz
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+  @@index([expiresAt])
 }
 
 model PasswordResetToken {
   id        String   @id @default(cuid())
   userId    String
   token     String   @unique
-  expiresAt DateTime
-  createdAt DateTime @default(now())
+  expiresAt DateTime @db.Timestamptz
+  createdAt DateTime @default(now()) @db.Timestamptz
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+  @@index([expiresAt])
 }
 
 model ConsentOtpToken {
   id        String   @id @default(cuid())
   userId    String   @unique
   token     String   @unique
-  expiresAt DateTime
-  createdAt DateTime @default(now())
+  expiresAt DateTime @db.Timestamptz
+  createdAt DateTime @default(now()) @db.Timestamptz
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+  @@index([expiresAt])
 }
 
 model RefreshToken {
   id        String   @id @default(cuid())
   userId    String
   tokenHash String   @unique  // SHA-256 of raw token — never store plain
-  expiresAt DateTime
-  createdAt DateTime @default(now())
+  expiresAt DateTime @db.Timestamptz
+  createdAt DateTime @default(now()) @db.Timestamptz
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
@@ -621,8 +624,8 @@ model DeleteOtp {
   targetUserId String
   otpHash      String
   attempts     Int      @default(0)
-  expiresAt    DateTime
-  createdAt    DateTime @default(now())
+  expiresAt    DateTime @db.Timestamptz
+  createdAt    DateTime @default(now()) @db.Timestamptz
 
   @@index([actorUserId])
   @@index([expiresAt])
@@ -644,8 +647,8 @@ model WhatsappOtp {
   codeHash  String
   phone     String
   attempts  Int      @default(0)
-  expiresAt DateTime
-  createdAt DateTime @default(now())
+  expiresAt DateTime @db.Timestamptz
+  createdAt DateTime @default(now()) @db.Timestamptz
 
   @@index([userId])
   @@index([expiresAt])

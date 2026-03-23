@@ -6,6 +6,7 @@ import { sendAdminNotificationEmail } from "./notificationEmailService";
 const DONE_MAX_DAYS = 7;
 const FAILED_MAX_DAYS = 14;
 const WEBHOOK_EVENT_MAX_DAYS = 30;
+const NOTIFICATION_READ_MAX_DAYS = 90;
 
 export const pruneOldIntegrationJobs = async (): Promise<void> => {
   const sevenDaysAgo  = new Date(Date.now() - DONE_MAX_DAYS   * 86400000);
@@ -102,6 +103,20 @@ export const expireCustomCharges = async (): Promise<void> => {
   }
 };
 
+export const pruneOldNotifications = async (): Promise<void> => {
+  const cutoff = new Date(Date.now() - NOTIFICATION_READ_MAX_DAYS * 86400000);
+  try {
+    const { count } = await prisma.notification.deleteMany({
+      where: { read: true, createdAt: { lte: cutoff } },
+    });
+    if (count > 0) {
+      logger.info({ count }, "[notification-cleanup] Pruned old read Notifications");
+    }
+  } catch (err) {
+    logger.error({ err }, "[notification-cleanup] Failed to prune Notifications");
+  }
+};
+
 export const pruneOldWebhookEvents = async (): Promise<void> => {
   const cutoff = new Date(Date.now() - WEBHOOK_EVENT_MAX_DAYS * 86400000);
   try {
@@ -169,6 +184,7 @@ export const startIntegrationJobCleanupCron = (): void => {
     runWithRetry(expireCustomCharges, "charge-cleanup");
     runWithRetry(pruneExpiredRefreshTokens, "refresh-cleanup");
     runWithRetry(prunePasswordHistory, "pwd-history-cleanup");
+    runWithRetry(pruneOldNotifications, "notification-cleanup");
     runWithRetry(checkWhatsappTokenExpiry, "whatsapp-token-check");
   }, { timezone: "America/Mexico_City" });
 
@@ -178,6 +194,7 @@ export const startIntegrationJobCleanupCron = (): void => {
   runWithRetry(expireCustomCharges, "charge-cleanup");
   runWithRetry(pruneExpiredRefreshTokens, "refresh-cleanup");
   runWithRetry(prunePasswordHistory, "pwd-history-cleanup");
+  runWithRetry(pruneOldNotifications, "notification-cleanup");
 
   logger.info("[integration-cleanup] Cron scheduled — daily at 03:00 AM (jobs + webhook events + charge expiry)");
 };

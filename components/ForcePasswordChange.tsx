@@ -4,7 +4,7 @@ import { authService } from "../services/authService";
 import { useAuth } from "../context/AuthContext";
 
 const getChecks = (v: string) => ({
-  length: v.length >= 8,
+  length: v.length >= 12,
   upper: /[A-Z]/.test(v),
   lower: /[a-z]/.test(v),
   number: /[0-9]/.test(v),
@@ -47,7 +47,7 @@ export const ForcePasswordChange: React.FC = () => {
   const strengthBar = score <= 2 ? "bg-red-400" : score <= 4 ? "bg-amber-400" : "bg-green-500";
 
   const CHECK_LABELS = [
-    { key: "length", label: "Mínimo 8 caracteres" },
+    { key: "length", label: "Mínimo 12 caracteres" },
     { key: "upper", label: "Una mayúscula" },
     { key: "lower", label: "Una minúscula" },
     { key: "number", label: "Un número" },
@@ -96,7 +96,7 @@ export const ForcePasswordChange: React.FC = () => {
                     type={showNew ? "text" : "password"}
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
-                    placeholder="Mín. 8 caracteres"
+                    placeholder="Mín. 12 caracteres"
                     className="w-full rounded-2xl bg-velum-50 border border-velum-200/60 px-5 py-4 pr-12 text-[15px] text-velum-900 placeholder:text-velum-400 outline-none transition-all focus:bg-white focus:border-velum-900 focus:ring-4 focus:ring-velum-900/[0.07]"
                     autoFocus
                   />

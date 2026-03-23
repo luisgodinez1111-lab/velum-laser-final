@@ -100,6 +100,10 @@ app.get("/api/v1/health/detailed", async (req: express.Request, res: express.Res
   // SSE connections count (informational)
   checks.sse = { ok: true, ...({ connections: getSseConnectionCount() } as any) };
 
+  // Node.js memory usage
+  const mem = process.memoryUsage();
+  checks.memory = { ok: true, ...({ heapUsedMB: Math.round(mem.heapUsed / 1024 / 1024), heapTotalMB: Math.round(mem.heapTotal / 1024 / 1024), rssMB: Math.round(mem.rss / 1024 / 1024) } as any) };
+
   const allOk = Object.values(checks).every((c) => c.ok);
 
   return res.status(allOk ? 200 : 503).json({
@@ -111,6 +115,7 @@ app.get("/api/v1/health/detailed", async (req: express.Request, res: express.Res
     timestamp: new Date().toISOString(),
     latencyMs: Date.now() - start,
     nodeEnv: env.nodeEnv,
+    nodeVersion: process.version,
     checks,
     _hint: isKeyAuth ? "key-auth" : "open",
   });
@@ -142,6 +147,9 @@ app.use(helmet({
     },
   },
   crossOriginEmbedderPolicy: false, // needed for SSE EventSource in some browsers
+  hsts: env.nodeEnv === "production"
+    ? { maxAge: 31536000, includeSubDomains: true, preload: true }
+    : false,
 }));
 app.use(cors({ origin: env.corsOrigin.split(",").map((s) => s.trim()), credentials: true }));
 app.use(cookieParser());
@@ -186,6 +194,11 @@ app.use(
 app.use(
   ["/api/v1/custom-charges/:id/resend-otp", "/api/v1/users/me/password/request-whatsapp-code"],
   rateLimit({ windowMs: 15 * 60 * 1000, limit: 3, standardHeaders: true, legacyHeaders: false, message: { message: "Demasiadas solicitudes de código. Intenta de nuevo en 15 minutos." } })
+);
+// Consent OTP send + verify — rate limit agresivo para evitar spam de correos OTP
+app.use(
+  ["/auth/consent-otp/send", "/auth/consent-otp/verify"],
+  rateLimit({ windowMs: 15 * 60 * 1000, limit: 5, standardHeaders: true, legacyHeaders: false, message: { message: "Demasiadas solicitudes de OTP. Intenta de nuevo en 15 minutos." } })
 );
 // Custom charges OTP — public endpoint, stricter limit
 app.use(

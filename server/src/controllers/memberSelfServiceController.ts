@@ -5,6 +5,7 @@ import { prisma } from "../db/prisma";
 import { AuthRequest } from "../middlewares/auth";
 import { normalizePhone, sendWhatsappOtpCode } from "../services/whatsappMetaService";
 import { recordPasswordHistory, isPasswordReused } from "../utils/auth";
+import { safeIp } from "../utils/request";
 
 const OTP_TTL_MS = 10 * 60 * 1000;
 const OTP_MAX_ATTEMPTS = 5;

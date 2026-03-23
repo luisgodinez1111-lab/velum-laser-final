@@ -178,7 +178,7 @@ const AppointmentCard: React.FC<{
 };
 
 const getPasswordChecks = (value: string) => ({
-  length: value.length >= 8,
+  length: value.length >= 12,
   upper: /[A-Z]/.test(value),
   lower: /[a-z]/.test(value),
   number: /[0-9]/.test(value),
@@ -1009,7 +1009,7 @@ export const Dashboard: React.FC = () => {
                         {[0,1,2,3,4].map(i => { const s = Object.values(passwordChecks).filter(Boolean).length; return <div key={i} className={`h-1 flex-1 rounded-full transition-colors ${i < s ? s <= 2 ? "bg-red-400" : s <= 4 ? "bg-amber-400" : "bg-emerald-400" : "bg-velum-100"}`} />; })}
                       </div>
                       <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1">
-                        {([[passwordChecks.length,"8+ caracteres"],[passwordChecks.upper,"1 mayúscula"],[passwordChecks.lower,"1 minúscula"],[passwordChecks.number,"1 número"],[passwordChecks.special,"1 símbolo"]] as [boolean,string][]).map(([ok,txt],i) => (
+                        {([[passwordChecks.length,"12+ caracteres"],[passwordChecks.upper,"1 mayúscula"],[passwordChecks.lower,"1 minúscula"],[passwordChecks.number,"1 número"],[passwordChecks.special,"1 símbolo"]] as [boolean,string][]).map(([ok,txt],i) => (
                           <span key={i} className={`flex items-center gap-1.5 text-[11px] ${ok ? "text-emerald-600" : "text-velum-400"}`}>
                             <span className={`w-1.5 h-1.5 rounded-full ${ok ? "bg-emerald-500" : "bg-velum-200"}`} />{txt}
                           </span>

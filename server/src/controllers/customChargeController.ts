@@ -262,9 +262,11 @@ export const verifyOtpAndCheckout = async (req: Request, res: Response) => {
   params.set("metadata[customChargeId]", id);
   params.set("metadata[userId]", charge.user.id);
 
-  if (charge.user.stripeCustomerId) {
+  if (charge.user.stripeCustomerId && charge.user.stripeCustomerId.startsWith("cus_")) {
     params.set("customer", charge.user.stripeCustomerId);
     params.delete("customer_email");
+  } else if (charge.user.stripeCustomerId) {
+    logger.warn({ userId: charge.user.id, stripeCustomerId: charge.user.stripeCustomerId }, "[custom-charge] stripeCustomerId has unexpected format — skipping");
   }
 
   // Idempotency key: scoped to charge ID to prevent duplicate sessions on network retry

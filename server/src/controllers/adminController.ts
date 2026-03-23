@@ -198,35 +198,52 @@ export const exportUsers = async (req: AuthRequest, res: Response) => {
 
 export const listAuditLogs = async (req: AuthRequest, res: Response) => {
   const parsed = auditFilterSchema.parse(req.query);
+  const pageSize = parsed.limit ?? 50;
+  const page = parsed.page ?? 1;
+  const skip = (page - 1) * pageSize;
 
-  const logs = await prisma.auditLog.findMany({
-    where: {
-      ...(parsed.actorUserId ? { actorUserId: parsed.actorUserId } : {}),
-      ...(parsed.targetUserId ? { targetUserId: parsed.targetUserId } : {}),
-      ...(parsed.userId ? { userId: parsed.userId } : {}),
-      ...(parsed.action ? { action: parsed.action } : {}),
-      ...(parsed.resourceType ? { resourceType: parsed.resourceType } : {}),
-      ...(parsed.resourceId ? { resourceId: parsed.resourceId } : {}),
-      ...(parsed.result ? { result: parsed.result } : {}),
-      ...(parsed.startDate || parsed.endDate
-        ? {
-            createdAt: {
-              ...(parsed.startDate ? { gte: new Date(parsed.startDate) } : {}),
-              ...(parsed.endDate ? { lte: new Date(parsed.endDate) } : {})
-            }
+  const where = {
+    ...(parsed.actorUserId ? { actorUserId: parsed.actorUserId } : {}),
+    ...(parsed.targetUserId ? { targetUserId: parsed.targetUserId } : {}),
+    ...(parsed.userId ? { userId: parsed.userId } : {}),
+    ...(parsed.action ? { action: parsed.action } : {}),
+    ...(parsed.resourceType ? { resourceType: parsed.resourceType } : {}),
+    ...(parsed.resourceId ? { resourceId: parsed.resourceId } : {}),
+    ...(parsed.result ? { result: parsed.result } : {}),
+    ...(parsed.startDate || parsed.endDate
+      ? {
+          createdAt: {
+            ...(parsed.startDate ? { gte: new Date(parsed.startDate) } : {}),
+            ...(parsed.endDate ? { lte: new Date(parsed.endDate) } : {})
           }
-        : {})
-    },
-    include: {
-      user: { select: { id: true, email: true, role: true } },
-      actorUser: { select: { id: true, email: true, role: true } },
-      targetUser: { select: { id: true, email: true, role: true } }
-    },
-    orderBy: { createdAt: "desc" },
-    take: parsed.limit ?? 200
-  });
+        }
+      : {})
+  };
 
-  return res.json(logs);
+  const [logs, total] = await Promise.all([
+    prisma.auditLog.findMany({
+      where,
+      include: {
+        user: { select: { id: true, email: true, role: true } },
+        actorUser: { select: { id: true, email: true, role: true } },
+        targetUser: { select: { id: true, email: true, role: true } }
+      },
+      orderBy: { createdAt: "desc" },
+      take: pageSize,
+      skip,
+    }),
+    prisma.auditLog.count({ where }),
+  ]);
+
+  return res.json({
+    data: logs,
+    pagination: {
+      page,
+      pageSize,
+      total,
+      totalPages: Math.ceil(total / pageSize),
+    }
+  });
 };
 
 export const updateMembershipStatus = async (req: AuthRequest, res: Response) => {

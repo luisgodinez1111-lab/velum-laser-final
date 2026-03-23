@@ -10,14 +10,20 @@ import { createAuditLog } from "../services/auditService";
 import { sendPasswordResetEmail, sendEmailVerificationEmail, sendConsentOtpEmail } from "../services/emailService";
 import { onNewMember } from "../services/notificationService";
 import { logger } from "../utils/logger";
+import { safeIp } from "../utils/request";
 
 // ── Per-account brute force protection ───────────────────────────────────────
 // Simple in-memory counter. For multi-instance deployments use Redis.
 const LOGIN_MAX_FAILURES = 10;
-const LOGIN_LOCKOUT_MS = 15 * 60 * 1000; // 15 minutes
+export const LOGIN_LOCKOUT_MS = 15 * 60 * 1000; // 15 minutes
 
 type FailureEntry = { count: number; lockedUntil: number };
 const loginFailures = new Map<string, FailureEntry>();
+
+/** @internal — only for unit tests: pre-populate lockout state */
+export const _forceLoginLockout = (email: string): void => {
+  loginFailures.set(email, { count: LOGIN_MAX_FAILURES, lockedUntil: Date.now() + LOGIN_LOCKOUT_MS });
+};
 
 const checkAccountLocked = (email: string): boolean => {
   const entry = loginFailures.get(email);
@@ -116,7 +122,7 @@ export const register = async (req: Request, res: Response) => {
     action: "auth.register",
     resourceType: "user",
     resourceId: user.id,
-    ip: req.ip,
+    ip: safeIp(req),
     metadata: { email: user.email }
   });
   return res.status(201).json({
@@ -158,7 +164,7 @@ export const login = async (req: Request, res: Response) => {
     action: "auth.login",
     resourceType: "user",
     resourceId: user.id,
-    ip: req.ip,
+    ip: safeIp(req),
     metadata: { email: user.email }
   });
   return res.json({ user: { id: user.id, email: user.email, role: user.role } });
@@ -239,7 +245,7 @@ export const resetPassword = async (req: Request, res: Response) => {
       action: "auth.password_reset_reuse_blocked",
       resourceType: "user",
       resourceId: reset.userId,
-      ip: req.ip,
+      ip: safeIp(req),
       metadata: {}
     });
     return res.status(400).json({ message: "No puedes reutilizar una contraseña reciente. Elige una diferente." });
@@ -257,7 +263,7 @@ export const resetPassword = async (req: Request, res: Response) => {
     action: "auth.password_reset",
     resourceType: "user",
     resourceId: reset.userId,
-    ip: req.ip,
+    ip: safeIp(req),
     metadata: {}
   });
 
@@ -282,7 +288,7 @@ export const verifyEmail = async (req: Request, res: Response) => {
     action: "auth.email_verified",
     resourceType: "user",
     resourceId: user.id,
-    ip: req.ip,
+    ip: safeIp(req),
     metadata: { email: user.email }
   });
 
@@ -340,7 +346,7 @@ export const verifyConsentOtp = async (req: AuthRequest, res: Response) => {
     action: "auth.consent_signed",
     resourceType: "medicalIntake",
     resourceId: userId,
-    ip: req.ip,
+    ip: safeIp(req),
     metadata: { signedAt }
   });
 
@@ -385,7 +391,7 @@ export const changeInitialPassword = async (req: AuthRequest, res: Response) => 
       action: "auth.initial_password_reuse_blocked",
       resourceType: "user",
       resourceId: userId,
-      ip: req.ip,
+      ip: safeIp(req),
       metadata: {}
     });
     return res.status(400).json({ message: "No puedes reutilizar una contraseña reciente. Elige una diferente." });
@@ -407,7 +413,7 @@ export const changeInitialPassword = async (req: AuthRequest, res: Response) => 
     action: "auth.initial_password_changed",
     resourceType: "user",
     resourceId: userId,
-    ip: req.ip,
+    ip: safeIp(req),
     metadata: {}
   });
 

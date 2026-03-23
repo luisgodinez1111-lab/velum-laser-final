@@ -6,6 +6,7 @@ import { createAuditLog } from "../services/auditService";
 import { medicalIntakeApproveSchema, medicalIntakeUpdateSchema } from "../validators/medicalIntake";
 import { onIntakeApproved, onIntakeRejected } from "../services/notificationService";
 import { logger } from "../utils/logger";
+import { safeIp } from "../utils/request";
 
 const ensureIntake = async (userId: string) => {
   return prisma.medicalIntake.upsert({
@@ -64,7 +65,7 @@ export const updateMyMedicalIntake = async (req: AuthRequest, res: Response) => 
     action: "medical_intake.update",
     resourceType: "medical_intake",
     resourceId: updated.id,
-    ip: req.ip,
+    ip: safeIp(req),
     metadata: { status: updated.status }
   });
 
@@ -119,7 +120,7 @@ export const approveMedicalIntake = async (req: AuthRequest, res: Response) => {
     action: payload.approved ? "medical_intake.approve" : "medical_intake.reject",
     resourceType: "medical_intake",
     resourceId: intake.id,
-    ip: req.ip,
+    ip: safeIp(req),
     metadata: {
       approved: payload.approved,
       rejectionReason: payload.rejectionReason

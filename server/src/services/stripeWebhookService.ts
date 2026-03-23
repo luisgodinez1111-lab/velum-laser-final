@@ -45,6 +45,7 @@ type MembershipUpsertInput = {
   status: string;
   currentPeriodEnd: Date | null;
   cancelAtPeriodEnd: boolean | null;
+  gracePeriodEndsAt?: Date | null;
   amount: number | null;
   currency: string | null;
 };
@@ -334,6 +335,7 @@ const upsertMembership = async (input: MembershipUpsertInput): Promise<void> => 
     planId: input.stripePriceId ?? input.planCode ?? null,
     currentPeriodEnd: input.currentPeriodEnd,
     cancelAtPeriodEnd: input.cancelAtPeriodEnd,
+    ...(input.gracePeriodEndsAt !== undefined ? { gracePeriodEndsAt: input.gracePeriodEndsAt } : {}),
     amount: input.amount,
     currency: input.currency,
     lastStripeEventId: input.eventId,
@@ -703,6 +705,11 @@ const processInvoiceEvent = async (event: Stripe.Event, stripe: Stripe, success:
   const user = await findUserBySignals(null, email || null, subCtx?.stripeCustomerId ?? stripeCustomerId);
   const userId = getUserIdFromRow(user);
 
+  const GRACE_PERIOD_DAYS = 7;
+  const gracePeriodEndsAt = !success
+    ? new Date(Date.now() + GRACE_PERIOD_DAYS * 86_400_000)
+    : null;
+
   await upsertMembership({
     eventId: event.id,
     eventType: event.type,
@@ -714,6 +721,7 @@ const processInvoiceEvent = async (event: Stripe.Event, stripe: Stripe, success:
     status: success ? "active" : "past_due",
     currentPeriodEnd: subCtx?.currentPeriodEnd ?? null,
     cancelAtPeriodEnd: subCtx?.cancelAtPeriodEnd ?? null,
+    gracePeriodEndsAt,
     amount: centsToMajor(success ? invoice.amount_paid : invoice.amount_due),
     currency: cleanString(invoice.currency) || null,
   });
