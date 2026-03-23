@@ -14,7 +14,7 @@ function hashOtp(otp: string): string {
 
 export const createCustomCharge = async (params: {
   userId: string;
-  createdByAdminId: string;
+  createdByAdminId?: string;
   title: string;
   description?: string;
   amount: number; // in cents
@@ -97,19 +97,68 @@ export const verifyCustomChargeOtp = async (chargeId: string, otp: string) => {
   return { charge: updated };
 };
 
+const computeNextChargeAt = (interval: string | null | undefined): Date | undefined => {
+  if (!interval || interval === "once") return undefined;
+  const next = new Date();
+  switch (interval) {
+    case "day":   next.setDate(next.getDate() + 1); break;
+    case "week":  next.setDate(next.getDate() + 7); break;
+    case "month": next.setMonth(next.getMonth() + 1); break;
+    case "year":  next.setFullYear(next.getFullYear() + 1); break;
+    default: return undefined;
+  }
+  return next;
+};
+
 export const markCustomChargePaid = async (chargeId: string, params: {
   stripePaymentIntentId?: string;
   stripeSubscriptionId?: string;
   stripeSessionId?: string;
 }) => {
+  const charge = await prisma.customCharge.findUnique({ where: { id: chargeId }, select: { type: true, interval: true } });
+  const nextChargeAt = charge?.type === "RECURRING" ? computeNextChargeAt(charge.interval) : undefined;
+
   return prisma.customCharge.update({
     where: { id: chargeId },
     data: {
       status: "PAID",
       paidAt: new Date(),
+      nextChargeAt: nextChargeAt ?? null,
       ...params,
     },
   });
+};
+
+/** Called by cron: creates renewal charges for RECURRING charges whose nextChargeAt is due. */
+export const renewRecurringCharges = async (): Promise<number> => {
+  const due = await prisma.customCharge.findMany({
+    where: { type: "RECURRING", status: "PAID", nextChargeAt: { lte: new Date() } },
+    include: { user: { select: { id: true, email: true, profile: { select: { firstName: true, lastName: true } } } } },
+  });
+
+  let count = 0;
+  for (const charge of due) {
+    try {
+      await createCustomCharge({
+        userId: charge.userId,
+        createdByAdminId: charge.createdByAdminId ?? undefined,
+        title: charge.title,
+        description: charge.description ?? undefined,
+        amount: charge.amount,
+        currency: charge.currency,
+        type: "RECURRING",
+        interval: charge.interval ?? undefined,
+      });
+      // Clear nextChargeAt so we don't re-process this record
+      await prisma.customCharge.update({ where: { id: charge.id }, data: { nextChargeAt: null } });
+      count++;
+    } catch (err) {
+      // log but continue — don't block other renewals
+      const { logger } = await import("../utils/logger");
+      logger.error({ err, chargeId: charge.id }, "[recurring-charges] renewal failed");
+    }
+  }
+  return count;
 };
 
 export const cancelCustomCharge = async (chargeId: string) => {

@@ -30,6 +30,7 @@ import { startIntegrationWorker, stopIntegrationWorker } from "./services/integr
 import { startPaymentReminderCron } from "./services/paymentReminderService";
 import { startAppointmentReminderCron } from "./services/appointmentReminderService";
 import { startIntegrationJobCleanupCron } from "./services/integrationJobCleanupService";
+import { renewRecurringCharges } from "./services/customChargeService";
 import { env } from "./utils/env";
 import { httpLogger, logger } from "./utils/logger";
 import { errorHandler } from "./middlewares/error";
@@ -286,6 +287,15 @@ app.use(billingCheckoutRoutes);
 app.use(customChargeRoutes);
 app.use(notificationRoutes);
 
+// ── Public clinic config ──────────────────────────────────────────────
+app.get("/api/v1/clinic/config", (_req, res) => {
+  res.json({
+    phone:    env.clinicContactPhone,
+    whatsapp: env.clinicContactWhatsapp,
+    email:    env.clinicContactEmail,
+  });
+});
+
 // ── Client-side error ingest — fires from AppErrorBoundary ───────────
 app.post("/api/v1/errors/client", express.json({ limit: "16kb" }), (req, res) => {
   const { message, stack, componentStack, url } = req.body as Record<string, string>;
@@ -323,6 +333,12 @@ const server = app.listen(env.port, () => {
   startPaymentReminderCron();
   startAppointmentReminderCron();
   startIntegrationJobCleanupCron();
+  // Recurring charge renewal — runs every env.recurringChargeRenewMs (default 1 h)
+  setInterval(() => {
+    renewRecurringCharges()
+      .then((n) => { if (n > 0) logger.info({ renewed: n }, "[recurring-charges] renewed charges"); })
+      .catch((err) => logger.error({ err }, "[recurring-charges] cron error"));
+  }, env.recurringChargeRenewMs).unref();
 });
 
 // ── Graceful shutdown ─────────────────────────────────────────────────

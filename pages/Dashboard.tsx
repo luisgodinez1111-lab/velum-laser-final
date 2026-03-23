@@ -245,6 +245,7 @@ export const Dashboard: React.FC = () => {
   const [markingAllRead, setMarkingAllRead] = useState(false);
   const [intakeDraft, setIntakeDraft]   = useState({ fullName: "", phone: "", birthDate: "", allergies: "", medications: "", skinConditions: "" });
   const [isSavingIntake, setIsSavingIntake] = useState(false);
+  const [clinicConfig, setClinicConfig] = useState({ phone: "+52 55 1234 5678", whatsapp: "5215512345678", email: "concierge@velumlaser.com" });
 
   const passwordChecks = useMemo(() => getPasswordChecks(newPassword), [newPassword]);
 
@@ -304,6 +305,13 @@ export const Dashboard: React.FC = () => {
     }, 60_000);
     return () => clearInterval(pollInterval);
   }, [isAuthLoading, isAuthenticated, navigate, user?.email, user?.id, user?.role]);
+
+  // Fetch clinic contact config (public endpoint, no auth required)
+  useEffect(() => {
+    apiFetch<{ phone: string; whatsapp: string; email: string }>("/v1/clinic/config")
+      .then((cfg) => { if (cfg) setClinicConfig(cfg); })
+      .catch(() => { /* keep defaults */ });
+  }, []);
 
   // Detect Stripe checkout return URLs
   useEffect(() => {
@@ -1301,9 +1309,9 @@ export const Dashboard: React.FC = () => {
                   <h2 className="font-serif text-2xl italic text-white mb-5">Estamos para ayudarte</h2>
                   <div className="grid sm:grid-cols-3 gap-3">
                     {[
-                      { href: "https://wa.me/5215512345678", icon: <MessageCircle size={15} className="text-white" />, label: "WhatsApp", value: "Escríbenos" },
-                      { href: "tel:+5215512345678",          icon: <Phone size={15} className="text-white" />,         label: "Teléfono",  value: "+52 55 1234 5678" },
-                      { href: "mailto:concierge@velumlaser.com", icon: <Mail size={15} className="text-white" />,      label: "Correo",    value: "concierge@…" },
+                      { href: `https://wa.me/${clinicConfig.whatsapp}`, icon: <MessageCircle size={15} className="text-white" />, label: "WhatsApp", value: "Escríbenos" },
+                      { href: `tel:${clinicConfig.phone.replace(/\s/g, "")}`, icon: <Phone size={15} className="text-white" />, label: "Teléfono", value: clinicConfig.phone },
+                      { href: `mailto:${clinicConfig.email}`, icon: <Mail size={15} className="text-white" />, label: "Correo", value: clinicConfig.email },
                     ].map(({ href, icon, label, value }) => (
                       <a key={label} href={href} target={href.startsWith("http") ? "_blank" : undefined} rel="noreferrer"
                         className={`flex items-center gap-3 bg-velum-800/80 rounded-2xl px-4 py-4 hover:bg-velum-700 transition-colors group ${pressBtn}`}>
@@ -1440,18 +1448,24 @@ export const Dashboard: React.FC = () => {
               </button>
             </div>
             <div className="px-6 py-5 space-y-4 overflow-y-auto max-h-[70vh]">
+              {intakeStatus === "approved" && (
+                <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 flex items-start gap-3">
+                  <CheckCircle size={15} className="text-emerald-600 mt-0.5 shrink-0" />
+                  <p className="text-[12px] text-emerald-800 leading-snug">Tu expediente fue <strong>aprobado</strong> por la clínica. Para modificarlo contacta al personal.</p>
+                </div>
+              )}
               <p className="text-[13px] text-velum-500 leading-snug">Mantén tu información clínica actualizada para garantizar parámetros de tratamiento seguros.</p>
-              <div><label className={lbl}>Nombre completo</label><input value={intakeDraft.fullName} onChange={e => setIntakeDraft(p=>({...p,fullName:e.target.value}))} className={fld} placeholder="Nombre completo" /></div>
+              <div><label className={lbl}>Nombre completo</label><input value={intakeDraft.fullName} onChange={e => setIntakeDraft(p=>({...p,fullName:e.target.value}))} className={fld} placeholder="Nombre completo" disabled={intakeStatus === "approved"} /></div>
               <div className="grid grid-cols-2 gap-3">
-                <div><label className={lbl}>Teléfono</label><input value={intakeDraft.phone} onChange={e => setIntakeDraft(p=>({...p,phone:e.target.value}))} className={fld} placeholder="55 1234 5678" /></div>
-                <div><label className={lbl}>Nacimiento</label><input type="date" value={intakeDraft.birthDate} onChange={e => setIntakeDraft(p=>({...p,birthDate:e.target.value}))} className={fld} /></div>
+                <div><label className={lbl}>Teléfono</label><input value={intakeDraft.phone} onChange={e => setIntakeDraft(p=>({...p,phone:e.target.value}))} className={fld} placeholder="55 1234 5678" disabled={intakeStatus === "approved"} /></div>
+                <div><label className={lbl}>Nacimiento</label><input type="date" value={intakeDraft.birthDate} onChange={e => setIntakeDraft(p=>({...p,birthDate:e.target.value}))} className={fld} disabled={intakeStatus === "approved"} /></div>
               </div>
-              <div><label className={lbl}>Alergias</label><textarea value={intakeDraft.allergies} onChange={e => setIntakeDraft(p=>({...p,allergies:e.target.value}))} rows={2} className={`${fld} resize-none`} placeholder="Medicamentos, alimentos, contacto…" /></div>
-              <div><label className={lbl}>Medicamentos actuales</label><textarea value={intakeDraft.medications} onChange={e => setIntakeDraft(p=>({...p,medications:e.target.value}))} rows={2} className={`${fld} resize-none`} placeholder="Nombre y dosis" /></div>
-              <div><label className={lbl}>Condiciones de piel</label><textarea value={intakeDraft.skinConditions} onChange={e => setIntakeDraft(p=>({...p,skinConditions:e.target.value}))} rows={2} className={`${fld} resize-none`} placeholder="Acné, dermatitis, sensibilidad…" /></div>
+              <div><label className={lbl}>Alergias</label><textarea value={intakeDraft.allergies} onChange={e => setIntakeDraft(p=>({...p,allergies:e.target.value}))} rows={2} className={`${fld} resize-none`} placeholder="Medicamentos, alimentos, contacto…" disabled={intakeStatus === "approved"} /></div>
+              <div><label className={lbl}>Medicamentos actuales</label><textarea value={intakeDraft.medications} onChange={e => setIntakeDraft(p=>({...p,medications:e.target.value}))} rows={2} className={`${fld} resize-none`} placeholder="Nombre y dosis" disabled={intakeStatus === "approved"} /></div>
+              <div><label className={lbl}>Condiciones de piel</label><textarea value={intakeDraft.skinConditions} onChange={e => setIntakeDraft(p=>({...p,skinConditions:e.target.value}))} rows={2} className={`${fld} resize-none`} placeholder="Acné, dermatitis, sensibilidad…" disabled={intakeStatus === "approved"} /></div>
             </div>
             <div className="flex gap-3 px-6 py-4 border-t border-velum-50">
-              <button type="button" onClick={handleSaveIntake} disabled={isSavingIntake}
+              <button type="button" onClick={handleSaveIntake} disabled={isSavingIntake || intakeStatus === "approved"}
                 className={`flex-1 rounded-2xl bg-velum-900 py-3.5 text-[14px] font-semibold text-white hover:bg-velum-800 disabled:opacity-50 transition-colors ${pressBtn}`}>
                 {isSavingIntake ? "Guardando…" : "Guardar cambios"}
               </button>

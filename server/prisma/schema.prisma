@@ -308,7 +308,7 @@ model Appointment {
   createdAt         DateTime          @default(now())
   updatedAt         DateTime          @updatedAt
   user              User              @relation("AppointmentMember", fields: [userId], references: [id], onDelete: Cascade)
-  createdBy         User              @relation("AppointmentCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  createdBy         User?             @relation("AppointmentCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
   cabin             AgendaCabin?      @relation(fields: [cabinId], references: [id], onDelete: SetNull)
   treatment         AgendaTreatment?  @relation(fields: [treatmentId], references: [id], onDelete: SetNull)
   rescheduledFrom   Appointment?      @relation("AppointmentReschedule", fields: [rescheduledFromId], references: [id], onDelete: SetNull)
@@ -551,6 +551,7 @@ model CustomCharge {
   status                CustomChargeStatus @default(PENDING_ACCEPTANCE)
   acceptedAt            DateTime?
   paidAt                DateTime?
+  nextChargeAt          DateTime?  // set on PAID for RECURRING — triggers auto-renewal
   expiresAt             DateTime?
   createdAt             DateTime           @default(now())
   updatedAt             DateTime           @updatedAt
@@ -561,6 +562,7 @@ model CustomCharge {
   @@index([createdAt])
   @@index([status, expiresAt])
   @@index([userId, status])
+  @@index([nextChargeAt])
 }
 
 model Notification {

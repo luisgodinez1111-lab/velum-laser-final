@@ -4,7 +4,7 @@ import { prisma } from "../db/prisma";
 import { AuthRequest } from "../middlewares/auth";
 import { createAuditLog } from "../services/auditService";
 import { medicalIntakeApproveSchema, medicalIntakeUpdateSchema } from "../validators/medicalIntake";
-import { onIntakeApproved, onIntakeRejected } from "../services/notificationService";
+import { onIntakeApproved, onIntakeRejected, notifyAdmins } from "../services/notificationService";
 import { logger } from "../utils/logger";
 import { safeIp } from "../utils/request";
 
@@ -68,6 +68,16 @@ export const updateMyMedicalIntake = async (req: AuthRequest, res: Response) => 
     ip: safeIp(req),
     metadata: { status: updated.status }
   });
+
+  if (requestedStatus === "submitted") {
+    const patient = await prisma.user.findUnique({
+      where: { id: req.user!.id },
+      select: { email: true, profile: { select: { firstName: true, lastName: true } } }
+    });
+    const name = [patient?.profile?.firstName, patient?.profile?.lastName].filter(Boolean).join(" ") || patient?.email || "Paciente";
+    notifyAdmins("intake_submitted", "Expediente médico enviado", `${name} envió su expediente para revisión.`, { userId: req.user!.id })
+      .catch((err) => logger.error({ err }, "[intake] admin notification failed"));
+  }
 
   return res.json(updated);
 };

@@ -88,6 +88,10 @@ export const env = {
   stripeCheckoutBaseUrl: process.env.STRIPE_CHECKOUT_BASE_URL ?? "",
   integrationJobPollMs: Number(process.env.INTEGRATION_JOB_POLL_MS ?? 2000),
   integrationWatchSweepMs: Number(process.env.INTEGRATION_WATCH_SWEEP_MS ?? 15 * 60 * 1000),
+  clinicContactPhone:    process.env.CLINIC_CONTACT_PHONE    ?? "+52 55 1234 5678",
+  clinicContactWhatsapp: process.env.CLINIC_CONTACT_WHATSAPP ?? "5215512345678",
+  clinicContactEmail:    process.env.CLINIC_CONTACT_EMAIL    ?? "concierge@velumlaser.com",
+  recurringChargeRenewMs: Number(process.env.RECURRING_CHARGE_RENEW_MS ?? 60 * 60 * 1000), // hourly
 };
 
 export const isProduction = env.nodeEnv === "production";
