@@ -1,21 +1,9 @@
 import { Router } from "express";
 import { requireAuth, requireRole } from "../middlewares/auth";
-import {
-  listAuditLogs,
-  exportAuditLogsCSV,
-  listDocumentsAdmin,
-  listMemberships,
-  listUsers,
-  getUserById,
-  reports,
-  updateMembershipStatus,
-  updateUserRole,
-  createPatient,
-  adminUpdatePatientIntake,
-  adminActivateMembership,
-  exportUsers,
-  getMemberHistory,
-} from "../controllers/adminController";
+import { listUsers, getUserById, updateUserRole, createPatient, getMemberHistory, exportUsers } from "../controllers/userAdminController";
+import { listMemberships, updateMembershipStatus, adminActivateMembership } from "../controllers/membershipAdminController";
+import { adminUpdatePatientIntake } from "../controllers/intakeAdminController";
+import { listAuditLogs, exportAuditLogsCSV, reports, listDocumentsAdmin } from "../controllers/auditAdminController";
 
 export const adminRoutes = Router();
 

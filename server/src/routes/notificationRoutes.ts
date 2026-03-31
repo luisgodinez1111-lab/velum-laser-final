@@ -47,16 +47,20 @@ notificationRoutes.get("/api/v1/notifications/stream", requireAuth, async (req, 
 
   registerSseClient(userId, res);
 
+  // Limpieza centralizada para cierre limpio o error de escritura
+  const cleanup = () => {
+    clearInterval(heartbeat);
+    unregisterSseClient(userId, res);
+  };
+
   // Heartbeat every 25s to keep connection alive through proxies/load balancers
   const heartbeat = setInterval(() => {
     try { res.write(": heartbeat\n\n"); }
-    catch { clearInterval(heartbeat); }
+    catch { cleanup(); }
   }, 25_000);
 
-  req.on("close", () => {
-    clearInterval(heartbeat);
-    unregisterSseClient(userId, res);
-  });
+  req.on("close", cleanup);
+  res.on("error", cleanup);
 });
 
 notificationRoutes.get("/api/v1/notifications", requireAuth, getNotifications);
