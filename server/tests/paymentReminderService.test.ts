@@ -142,7 +142,10 @@ describe("runPaymentReminders — envío", () => {
   });
 
   it("envía email, WhatsApp y notificación in-app para cada membresía", async () => {
-    mockMembershipFindMany.mockResolvedValue([baseMembership]);
+    // Solo la primera ventana (3 días) retorna la membresía; la segunda (1 día) vacía
+    mockMembershipFindMany
+      .mockResolvedValueOnce([baseMembership])
+      .mockResolvedValueOnce([]);
 
     await runPaymentReminders();
 
@@ -189,7 +192,10 @@ describe("runPaymentReminders — envío", () => {
       ...baseMembership,
       user: { ...baseMembership.user, profile: { firstName: "Ana", lastName: "G", phone: null } },
     };
-    mockMembershipFindMany.mockResolvedValue([msNoPhone]);
+    // Solo la primera ventana retorna membresía para que el email se llame exactamente una vez
+    mockMembershipFindMany
+      .mockResolvedValueOnce([msNoPhone])
+      .mockResolvedValueOnce([]);
 
     await runPaymentReminders();
 

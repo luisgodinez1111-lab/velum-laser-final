@@ -2,6 +2,7 @@
  * Tests para controllers/v1SessionController.ts
  * Cubre: createSessionTreatment, listMySessions, adminListSessions, addSessionFeedback
  */
+import "express-async-errors"; // parche global para que Express reenvíe async throws al error middleware
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import express from "express";
 import request from "supertest";
@@ -72,6 +73,7 @@ const buildApp = async (role: Role = "staff", userId: string = STAFF_ID) => {
     adminListSessions,
     addSessionFeedback,
   } = await import("../src/controllers/v1SessionController");
+  const { errorHandler } = await import("../src/middlewares/error");
 
   const app = express();
   app.use(express.json());
@@ -84,6 +86,8 @@ const buildApp = async (role: Role = "staff", userId: string = STAFF_ID) => {
   app.get("/sessions/me",        listMySessions);
   app.get("/sessions/admin",     adminListSessions);
   app.patch("/sessions/:sessionId/feedback", addSessionFeedback);
+
+  app.use(errorHandler);
 
   return app;
 };

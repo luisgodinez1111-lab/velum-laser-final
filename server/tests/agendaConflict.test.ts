@@ -146,6 +146,7 @@ describe("resolveAppointmentPlacement — conflicto de cabina", () => {
 
     mockAppointmentFindMany.mockResolvedValue([{
       id: "existing_appt",
+      cabinId: "cabin1",
       startAt: existingStart,
       endAt: existingEnd,
       treatment: { prepBufferMinutes: 0, cleanupBufferMinutes: 0 },

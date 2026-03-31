@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import crypto from "crypto";
 import { AuthRequest } from "../middlewares/auth";
 import { prisma } from "../db/prisma";
+import { parsePagination } from "../utils/pagination";
 import { resolveStripeConfig } from "../services/stripeConfigService";
 import { resolveBaseUrl } from "../utils/baseUrl";
 import {
@@ -12,6 +13,7 @@ import {
 } from "../services/customChargeService";
 import { sendCustomChargeOtpEmail } from "../services/emailService";
 import { logger } from "../utils/logger";
+import { AppError, notFound, badRequest, unauthorized } from "../utils/AppError";
 import {
   onCustomChargeCreated,
   onCustomChargeAccepted,
@@ -39,11 +41,7 @@ function formatAmount(cents: number, currency: string): string {
 
 // ── Admin: List all custom charges (paginated) ───────────────────────
 export const listCustomCharges = async (req: AuthRequest, res: Response) => {
-  const rawPage  = Number(req.query.page  ?? 1);
-  const rawLimit = Number(req.query.limit ?? 50);
-  const page  = Math.max(1, Number.isFinite(rawPage)  ? Math.floor(rawPage)  : 1);
-  const limit = Math.min(Math.max(1, Number.isFinite(rawLimit) ? Math.floor(rawLimit) : 50), 200);
-  const skip  = (page - 1) * limit;
+  const { page, limit, skip } = parsePagination(req.query as Record<string, unknown>, { maxLimit: 200 });
 
   const userId = typeof req.query.userId === "string" ? req.query.userId : undefined;
   const status = typeof req.query.status === "string" ? req.query.status : undefined;
@@ -76,7 +74,7 @@ export const listCustomCharges = async (req: AuthRequest, res: Response) => {
 
 // ── Admin: Create a custom charge ────────────────────────────────────
 export const createCharge = async (req: AuthRequest, res: Response) => {
-  if (!req.user?.id) return res.status(401).json({ message: "No autorizado" });
+  if (!req.user?.id) throw unauthorized("No autorizado");
 
   const body = req.body as Record<string, unknown>;
   const userId = asString(body?.userId);
@@ -87,17 +85,17 @@ export const createCharge = async (req: AuthRequest, res: Response) => {
   const type = asString(body?.type) === "RECURRING" ? "RECURRING" : "ONE_TIME";
   const interval = asString(body?.interval) || "month";
 
-  if (!userId) return res.status(400).json({ message: "userId es obligatorio" });
-  if (!title) return res.status(400).json({ message: "title es obligatorio" });
-  if (!amountPesos || amountPesos <= 0) return res.status(400).json({ message: "amount debe ser mayor a 0 (en pesos)" });
-  if (amountPesos > 500_000) return res.status(400).json({ message: "amount no puede exceder $500,000 pesos por cobro" });
-  if (amountPesos < 1) return res.status(400).json({ message: "El monto mínimo es $1 peso" });
+  if (!userId) throw badRequest("userId es obligatorio");
+  if (!title) throw badRequest("title es obligatorio");
+  if (!amountPesos || amountPesos <= 0) throw badRequest("amount debe ser mayor a 0 (en pesos)");
+  if (amountPesos > 500_000) throw badRequest("amount no puede exceder $500,000 pesos por cobro");
+  if (amountPesos < 1) throw badRequest("El monto mínimo es $1 peso");
 
   const user = await prisma.user.findUnique({
     where: { id: userId },
     select: { id: true, email: true, profile: { select: { firstName: true, lastName: true } } },
   });
-  if (!user) return res.status(404).json({ message: "Usuario no encontrado" });
+  if (!user) throw notFound("Usuario");
 
   const amountCents = Math.round(amountPesos * 100);
 
@@ -167,8 +165,8 @@ export const createCharge = async (req: AuthRequest, res: Response) => {
 export const cancelCharge = async (req: AuthRequest, res: Response) => {
   const { id } = req.params;
   const existing = await prisma.customCharge.findUnique({ where: { id } });
-  if (!existing) return res.status(404).json({ message: "Cobro no encontrado" });
-  if (existing.status === "PAID") return res.status(400).json({ message: "No se puede cancelar un cobro ya pagado" });
+  if (!existing) throw notFound("Cobro");
+  if (existing.status === "PAID") throw badRequest("No se puede cancelar un cobro ya pagado");
 
   const charge = await cancelCustomCharge(id);
   return res.json({ message: "Cobro cancelado", charge });
@@ -177,15 +175,15 @@ export const cancelCharge = async (req: AuthRequest, res: Response) => {
 // ── Admin: Resend OTP email ───────────────────────────────────────────
 export const resendOtp = async (req: AuthRequest, res: Response) => {
   const { id } = req.params;
-  if (!isValidId(id)) return res.status(400).json({ message: "ID de cobro inválido" });
+  if (!isValidId(id)) throw badRequest("ID de cobro inválido");
   const result = await resendCustomChargeOtp(id);
 
   if ("error" in result) {
-    if (result.error === "not_found") return res.status(404).json({ message: "Cobro no encontrado" });
-    if (result.error === "not_pending") return res.status(400).json({ message: "El cobro no está pendiente de aceptación" });
+    if (result.error === "not_found") throw notFound("Cobro");
+    if (result.error === "not_pending") throw badRequest("El cobro no está pendiente de aceptación");
   }
 
-  if (!("charge" in result)) return res.status(500).json({ message: "Error interno reenviando OTP" });
+  if (!("charge" in result)) throw new AppError("Error interno reenviando OTP", "INTERNAL_ERROR", 500);
   const { charge, otp } = result;
   const user = charge.user;
   const name = [user?.profile?.firstName, user?.profile?.lastName].filter(Boolean).join(" ") || user?.email;

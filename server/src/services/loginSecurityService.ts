@@ -8,6 +8,7 @@
  * Extraído de authController para que sea testeable de forma aislada y reutilizable.
  */
 import { prisma } from "../db/prisma";
+import { logger } from "../utils/logger";
 
 export const LOGIN_MAX_FAILURES = 10;
 export const LOGIN_LOCKOUT_MS = 15 * 60 * 1000; // 15 minutos
@@ -71,7 +72,9 @@ export const recordLoginFailure = async (email: string): Promise<void> => {
       // Sincronizar fast-path en memoria
       inMemoryLockout.set(email.toLowerCase(), expiresAt.getTime());
     }
-  } catch { /* usuario no encontrado — ignorar */ }
+  } catch (err) {
+    logger.warn({ err, email }, "[login-security] recordLoginFailure DB update failed — usuario no encontrado o error de DB");
+  }
 };
 
 /**

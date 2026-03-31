@@ -177,7 +177,8 @@ const readAppSettingValue = async (key: string): Promise<unknown> => {
     const row = (await delegate.findUnique({ where: { key } })) as JsonObject | null;
     if (!row) return null;
     return row.value ?? null;
-  } catch {
+  } catch (err) {
+    logger.warn({ err, key }, "[stripe-webhook] readAppSettingValue DB read failed");
     return null;
   }
 };

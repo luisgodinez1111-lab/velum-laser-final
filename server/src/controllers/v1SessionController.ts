@@ -4,6 +4,7 @@ import { prisma } from "../db/prisma";
 import { AuthRequest } from "../middlewares/auth";
 import { createAuditLog } from "../services/auditService";
 import { sessionCreateSchema, sessionFeedbackSchema } from "../validators/sessions";
+import { parsePagination } from "../utils/pagination";
 
 const privilegedRoles = new Set(["staff", "admin", "system"]);
 
@@ -66,9 +67,7 @@ export const listMySessions = async (req: AuthRequest, res: Response) => {
     ? req.user!.id
     : (typeof req.query.userId === "string" ? req.query.userId : undefined);
 
-  const page  = Math.max(1, parseInt(String(req.query.page  ?? "1"),  10) || 1);
-  const limit = Math.min(100, Math.max(1, parseInt(String(req.query.limit ?? "50"), 10) || 50));
-  const skip  = (page - 1) * limit;
+  const { page, limit, skip } = parsePagination(req.query as Record<string, unknown>, { maxLimit: 100 });
   const where = filterUserId ? { userId: filterUserId } : undefined;
 
   const [sessions, total] = await Promise.all([
@@ -93,9 +92,7 @@ export const adminListSessions = async (req: AuthRequest, res: Response) => {
   const userId = typeof req.query.userId === "string" ? req.query.userId : undefined;
   const appointmentId = typeof req.query.appointmentId === "string" ? req.query.appointmentId : undefined;
 
-  const page  = Math.max(1, parseInt(String(req.query.page  ?? "1"),  10) || 1);
-  const limit = Math.min(200, Math.max(1, parseInt(String(req.query.limit ?? "100"), 10) || 100));
-  const skip  = (page - 1) * limit;
+  const { page, limit, skip } = parsePagination(req.query as Record<string, unknown>, { maxLimit: 200, defaultLimit: 100 });
   const where = {
     ...(userId ? { userId } : {}),
     ...(appointmentId ? { appointmentId } : {})

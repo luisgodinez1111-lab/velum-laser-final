@@ -2,17 +2,20 @@ import { Router } from "express";
 import {
   confirmAppointmentByToken,
   createAppointment,
+  getMemberAgendaPolicy,
+  getMemberAvailableSlots,
+  listAppointments,
+  triggerAppointmentSync,
+  updateAppointment
+} from "../controllers/v1AppointmentController";
+import {
   deleteAdminAgendaBlock,
   getAdminAgendaConfig,
   getAdminAgendaDay,
   getAdminAgendaReport,
-  getMemberAgendaPolicy,
-  getMemberAvailableSlots,
-  listAppointments,
   postAdminAgendaBlock,
-  putAdminAgendaConfig,
-  updateAppointment
-} from "../controllers/v1AppointmentController";
+  putAdminAgendaConfig
+} from "../controllers/agendaAdminController";
 import { requireAuth, requireRole } from "../middlewares/auth";
 
 export const v1AppointmentRoutes = Router();
@@ -20,6 +23,9 @@ export const v1AppointmentRoutes = Router();
 v1AppointmentRoutes.get("/api/v1/appointments", requireAuth, listAppointments);
 v1AppointmentRoutes.post("/api/v1/appointments", requireAuth, createAppointment);
 v1AppointmentRoutes.patch("/api/v1/appointments/:appointmentId", requireAuth, updateAppointment);
+
+// Sync explícito — POST para respetar REST (GET sin side effects)
+v1AppointmentRoutes.post("/api/v1/appointments/sync", requireAuth, requireRole(["staff", "admin", "system"]), triggerAppointmentSync);
 
 // Member-accessible endpoints
 v1AppointmentRoutes.get("/api/v1/agenda/public/policy", requireAuth, getMemberAgendaPolicy);

@@ -1,6 +1,7 @@
 import { Response } from "express";
 import { prisma } from "../db/prisma";
 import { AuthRequest } from "../middlewares/auth";
+import { parsePagination } from "../utils/pagination";
 
 const buildPaymentWhere = (req: AuthRequest) => {
   const userId   = typeof req.query.userId   === "string" ? req.query.userId   : undefined;
@@ -20,11 +21,7 @@ const buildPaymentWhere = (req: AuthRequest) => {
 };
 
 export const getMyPayments = async (req: AuthRequest, res: Response) => {
-  const rawPage  = Number(req.query.page  ?? 1);
-  const rawLimit = Number(req.query.limit ?? 50);
-  const page  = Number.isFinite(rawPage)  && rawPage  > 0 ? Math.floor(rawPage)  : 1;
-  const limit = Number.isFinite(rawLimit) && rawLimit > 0 ? Math.min(Math.floor(rawLimit), 100) : 50;
-  const skip  = (page - 1) * limit;
+  const { page, limit, skip } = parsePagination(req.query as Record<string, unknown>, { maxLimit: 100 });
 
   const where = { userId: req.user!.id };
 
@@ -42,10 +39,7 @@ export const getMyPayments = async (req: AuthRequest, res: Response) => {
 };
 
 export const listPaymentsAdmin = async (req: AuthRequest, res: Response) => {
-  const rawPage  = Number(req.query.page  ?? 1);
-  const rawLimit = Number(req.query.limit ?? 50);
-  const page  = Math.max(1, Number.isFinite(rawPage)  ? Math.floor(rawPage)  : 1);
-  const limit = Math.min(Math.max(1, Number.isFinite(rawLimit) ? Math.floor(rawLimit) : 50), 200);
+  const { page, limit, skip } = parsePagination(req.query as Record<string, unknown>, { maxLimit: 200 });
   const where = buildPaymentWhere(req);
 
   const [total, payments] = await Promise.all([
@@ -57,7 +51,7 @@ export const listPaymentsAdmin = async (req: AuthRequest, res: Response) => {
         membership: { select: { id: true, status: true, planId: true } }
       },
       orderBy: { createdAt: "desc" },
-      skip: (page - 1) * limit,
+      skip,
       take: limit
     })
   ]);

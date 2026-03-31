@@ -1,7 +1,7 @@
 import { Appointment, AgendaPolicy, AgendaCabin, AgendaBlockedSlot, AgendaWeeklyRule, AgendaSpecialDateRule } from "@prisma/client";
 import { prisma } from "../db/prisma";
 import { toZonedParts, overlapsRange, dayOfWeekForDateKey, appointmentRangeForDateKey, activeAgendaStatuses } from "./agendaTimezoneUtils";
-import { isBlockOverlapping, hasCabinConflict, AgendaValidationError } from "./agendaConflictService";
+import { isBlockOverlapping, hasCabinConflictBatch, AgendaValidationError } from "./agendaConflictService";
 import { getAgendaConfig } from "./agendaConfigService";
 
 export const getEffectiveRule = ({
@@ -160,6 +160,16 @@ export const resolveAppointmentPlacement = async ({
     throw new AgendaValidationError("La cabina seleccionada no está disponible");
   }
 
+  // Una sola query para todas las cabinas candidatas (evita N+1)
+  const conflictMap = await hasCabinConflictBatch({
+    startAt,
+    endAt,
+    cabinIds: candidateCabins.map((c) => c.id),
+    excludeAppointmentId,
+    incomingPrepBufferMinutes: prepBufferMinutes ?? 0,
+    incomingCleanupBufferMinutes: cleanupBufferMinutes ?? 0
+  });
+
   for (const cabin of candidateCabins) {
     const blocked = isBlockOverlapping({
       blocks,
@@ -173,14 +183,7 @@ export const resolveAppointmentPlacement = async ({
       continue;
     }
 
-    const overlap = await hasCabinConflict({
-      startAt,
-      endAt,
-      cabinId: cabin.id,
-      excludeAppointmentId,
-      incomingPrepBufferMinutes: prepBufferMinutes ?? 0,
-      incomingCleanupBufferMinutes: cleanupBufferMinutes ?? 0
-    });
+    const overlap = conflictMap.get(cabin.id) ?? false;
 
     if (!overlap) {
       return {

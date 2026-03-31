@@ -27,13 +27,16 @@ async function acquireLock(): Promise<boolean> {
       update: { value: { lockedAt: now.toISOString(), expiresAt: lockExpiry.toISOString() } },
     });
     return true;
-  } catch {
+  } catch (err) {
+    logger.warn({ err }, "[appointment-reminder] acquireLock DB write failed — skipping run");
     return false;
   }
 }
 
 async function releaseLock(): Promise<void> {
-  await prisma.appSetting.delete({ where: { key: LOCK_KEY } }).catch(() => {});
+  await prisma.appSetting.delete({ where: { key: LOCK_KEY } }).catch((err: unknown) => {
+    logger.warn({ err }, "[appointment-reminder] releaseLock failed — lock may expire naturally");
+  });
 }
 
 function formatDate(d: Date): string {

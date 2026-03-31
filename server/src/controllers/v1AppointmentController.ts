@@ -5,14 +5,10 @@ import { createAuditLog } from "../services/auditService";
 import { enqueueGoogleAppointmentSync } from "../services/googleCalendarIntegrationService";
 import {
   AgendaValidationError,
-  createAgendaBlock,
-  deleteAgendaBlock,
   getAgendaConfig,
-  getAgendaDailyReport,
   getAgendaDaySnapshot,
   resolveAppointmentPlacement,
-  syncAppointmentWorkflow,
-  updateAgendaConfig
+  syncAppointmentWorkflow
 } from "../services/agendaService";
 import {
   hasClinicalEligibility,
@@ -27,7 +23,7 @@ import { generateAppointmentConfirmToken as _genToken, verifyAppointmentConfirmT
 import { getClinicIdByUserId } from "../utils/resolveClinicId";
 import { logger } from "../utils/logger";
 import { onAppointmentBooked, onAppointmentConfirmed, onAppointmentCancelledByClinic, onAppointmentCancelledByPatient } from "../services/notificationService";
-import { agendaBlockCreateSchema, agendaConfigUpdateSchema, agendaDateParamSchema } from "../validators/agenda";
+import { agendaDateParamSchema } from "../validators/agenda";
 import { appointmentCreateSchema, appointmentUpdateSchema } from "../validators/appointments";
 import type { z } from "zod";
 
@@ -372,9 +368,6 @@ export const createAppointment = async (req: AuthRequest, res: Response) => {
 export const listAppointments = async (req: AuthRequest, res: Response) => {
   const clinicId = await getClinicIdByUserId(req.user!.id);
   const isPrivileged = hasPrivilegedRole(req.user!.role);
-  if (isPrivileged) {
-    await syncAppointmentWorkflow();
-  }
 
   const queryUserId = typeof req.query.userId === "string" ? req.query.userId : undefined;
   const targetUserId = isPrivileged ? queryUserId : req.user!.id;
@@ -415,6 +408,13 @@ export const listAppointments = async (req: AuthRequest, res: Response) => {
   });
 
   return res.json(appointments);
+};
+
+// Endpoint dedicado para disparar la sincronización de citas (POST /api/v1/appointments/sync)
+// Separa el side effect del GET /api/v1/appointments — respeta REST
+export const triggerAppointmentSync = async (_req: AuthRequest, res: Response) => {
+  await syncAppointmentWorkflow();
+  return res.json({ ok: true });
 };
 
 export const updateAppointment = async (req: AuthRequest, res: Response) => {
@@ -756,92 +756,6 @@ export const updateAppointment = async (req: AuthRequest, res: Response) => {
   return res.json(updated);
 };
 
-export const getAdminAgendaConfig = async (_req: AuthRequest, res: Response) => {
-  const config = await getAgendaConfig();
-  return res.json(config);
-};
-
-export const putAdminAgendaConfig = async (req: AuthRequest, res: Response) => {
-  const payload = agendaConfigUpdateSchema.parse(req.body) as Parameters<typeof updateAgendaConfig>[0];
-  const config = await updateAgendaConfig(payload);
-
-  await createAuditLog({
-    userId: req.user!.id,
-    targetUserId: req.user!.id,
-    action: "agenda.config.update",
-    resourceType: "agenda",
-    resourceId: config.policy.id,
-    ip: req.ip,
-    metadata: payload
-  });
-
-  return res.json(config);
-};
-
-export const getAdminAgendaDay = async (req: AuthRequest, res: Response) => {
-  const params = agendaDateParamSchema.parse(req.params);
-  const snapshot = await getAgendaDaySnapshot(params.dateKey);
-  return res.json(snapshot);
-};
-
-export const postAdminAgendaBlock = async (req: AuthRequest, res: Response) => {
-  const payload = agendaBlockCreateSchema.parse(req.body);
-
-  let block;
-  try {
-    block = await createAgendaBlock({
-      ...(payload as { dateKey: string; startMinute: number; endMinute: number; cabinId?: string | null; reason?: string }),
-      actorUserId: req.user!.id
-    });
-  } catch (error) {
-    if (respondIfAgendaError(error, res)) {
-      return;
-    }
-    throw error;
-  }
-
-  await createAuditLog({
-    userId: req.user!.id,
-    targetUserId: req.user!.id,
-    action: "agenda.block.create",
-    resourceType: "agenda_block",
-    resourceId: block.id,
-    ip: req.ip,
-    metadata: payload
-  });
-
-  return res.status(201).json(block);
-};
-
-export const deleteAdminAgendaBlock = async (req: AuthRequest, res: Response) => {
-  let block;
-  try {
-    block = await deleteAgendaBlock(req.params.blockId);
-  } catch (error) {
-    if (respondIfAgendaError(error, res)) {
-      return;
-    }
-    throw error;
-  }
-
-  await createAuditLog({
-    userId: req.user!.id,
-    targetUserId: req.user!.id,
-    action: "agenda.block.delete",
-    resourceType: "agenda_block",
-    resourceId: block.id,
-    ip: req.ip,
-    metadata: {
-      dateKey: block.dateKey,
-      startMinute: block.startMinute,
-      endMinute: block.endMinute,
-      cabinId: block.cabinId
-    }
-  });
-
-  return res.status(204).send();
-};
-
 export const generateAppointmentConfirmToken = _genToken;
 
 export const confirmAppointmentByToken = async (req: Request, res: Response) => {
@@ -866,12 +780,6 @@ export const confirmAppointmentByToken = async (req: Request, res: Response) => 
   return res.json({ ok: true, message: "Cita confirmada correctamente", appointmentId });
 };
 
-export const getAdminAgendaReport = async (req: AuthRequest, res: Response) => {
-  const params = agendaDateParamSchema.parse(req.params);
-  const report = await getAgendaDailyReport(params.dateKey);
-  return res.json(report);
-};
-
 // ── Member-accessible endpoints (any authenticated user) ────────────────────
 
 export const getMemberAgendaPolicy = async (_req: AuthRequest, res: Response) => {
@@ -893,7 +801,7 @@ export const getMemberAvailableSlots = async (req: AuthRequest, res: Response) =
 
   const isOpen = snapshot.effectiveRule.isOpen;
   const slots = isOpen
-    ? snapshot.slots.map((s) => ({
+    ? snapshot.slots.map((s: (typeof snapshot.slots)[number]) => ({
         label: s.label,
         startMinute: s.startMinute,
         endMinute: s.endMinute,
