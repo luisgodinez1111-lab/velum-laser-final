@@ -69,3 +69,97 @@ export interface UserProfile {
   email: string;
   phone: string;
 }
+
+// ── Auth endpoints ────────────────────────────────────────────────────────────
+
+/** Respuesta de GET /users/me */
+export interface MeApiResponse {
+  id: string;
+  email: string;
+  role: string;
+  mustChangePassword?: boolean;
+  profile?: {
+    firstName?: string | null;
+    lastName?: string | null;
+    phone?: string | null;
+    birthDate?: string | null;
+  } | null;
+}
+
+// ── Admin users endpoints ─────────────────────────────────────────────────────
+
+/** Documento raw tal como lo devuelve el backend */
+export interface RawApiDocument {
+  id: string;
+  type: string;
+  status: string;
+  signedAt: string | null;
+  signatureKey?: string | null;
+  version?: string | null;
+}
+
+/** Usuario raw tal como lo devuelve GET /admin/users o GET /admin/users/:id */
+export interface RawApiUser {
+  id: string;
+  email: string;
+  role: string;
+  createdAt: string;
+  isActive: boolean;
+  deletedAt: string | null;
+  mustChangePassword?: boolean;
+  profile?: {
+    firstName?: string | null;
+    lastName?: string | null;
+    phone?: string | null;
+    birthDate?: string | null;
+  } | null;
+  memberships?: Array<{
+    id?: string;
+    status?: string | null;
+    planId?: string | null;
+    planCode?: string | null;
+    amount?: number | null;
+    currentPeriodEnd?: string | null;
+    source?: string | null;
+    catalogEntry?: {
+      name?: string;
+      amount?: number;
+      interval?: string;
+    } | null;
+  }>;
+  documents?: RawApiDocument[];
+  medicalIntake?: { status?: string | null } | null;
+}
+
+/** Respuesta paginada de GET /admin/users */
+export interface AdminUsersApiResponse {
+  data: RawApiUser[];
+  total: number;
+  page: number | null;
+  limit: number;
+  pages: number;
+  nextCursor: string | null;
+}
+
+/** Respuesta de GET /admin/audit-logs */
+export interface AdminAuditLogsApiResponse {
+  data: Array<{
+    id: string;
+    action: string;
+    result?: string | null;
+    createdAt: string;
+    ip?: string | null;
+    resourceId?: string | null;
+    resourceType?: string | null;
+    metadata?: Record<string, unknown> | null;
+    actorUser?: { id: string; email: string; role: string } | null;
+    user?: { id: string; email: string; role: string } | null;
+    targetUser?: { id: string; email: string; role: string } | null;
+  }>;
+  pagination?: {
+    page: number;
+    pageSize: number;
+    total: number;
+    totalPages: number;
+  };
+}

@@ -1,5 +1,6 @@
 import { UserRole } from "../types";
 import { apiFetch } from "./apiClient";
+import type { MeApiResponse } from "./apiTypes";
 
 export interface AuthUser {
   id: string;
@@ -11,7 +12,7 @@ export interface AuthUser {
   mustChangePassword?: boolean;
 }
 
-const mapUser = (user: any): AuthUser => {
+const mapUser = (user: MeApiResponse): AuthUser => {
   const firstName = user?.profile?.firstName ?? "";
   const lastName = user?.profile?.lastName ?? "";
   const name = `${firstName} ${lastName}`.trim() || user.email;
@@ -26,7 +27,7 @@ const mapUser = (user: any): AuthUser => {
     id: user.id,
     name,
     email: user.email,
-    role: user.role,
+    role: user.role as UserRole,
     phone: user?.profile?.phone ?? undefined,
     birthDate,
     mustChangePassword: user?.mustChangePassword ?? false,
@@ -39,7 +40,7 @@ export const authService = {
       method: "POST",
       body: JSON.stringify({ email, password })
     });
-    const me = await apiFetch<any>("/users/me");
+    const me = await apiFetch<MeApiResponse>("/users/me");
     return mapUser(me);
   },
 
@@ -48,7 +49,7 @@ export const authService = {
       method: "POST",
       body: JSON.stringify(payload)
     });
-    const me = await apiFetch<any>("/users/me");
+    const me = await apiFetch<MeApiResponse>("/users/me");
     return mapUser(me);
   },
 
@@ -58,7 +59,7 @@ export const authService = {
 
   verifySession: async (): Promise<AuthUser | null> => {
     try {
-      const me = await apiFetch<any>("/users/me");
+      const me = await apiFetch<MeApiResponse>("/users/me");
       return mapUser(me);
     } catch {
       return null;

@@ -9,6 +9,7 @@ import { PageSkeleton } from './components/PageSkeleton';
 import { ForcePasswordChange } from './components/ForcePasswordChange';
 import { MemberOnboardingFlow } from './components/MemberOnboardingFlow';
 import { useAuth } from './context/AuthContext';
+import type { UserRole } from './types';
 
 // Eager — critical for first paint
 import { Home } from './pages/Home';
@@ -26,6 +27,14 @@ const ResetPassword     = lazy(() => import('./pages/ResetPassword').then(m => (
 const CustomCharge      = lazy(() => import('./pages/CustomChargePage').then(m => ({ default: m.CustomChargePage })));
 const NotFound          = lazy(() => import('./pages/NotFound').then(m => ({ default: m.NotFound })));
 
+// Redirige a "/" si el usuario no tiene alguno de los roles requeridos
+const RequireRole: React.FC<{ roles: UserRole[]; children: React.ReactNode }> = ({ roles, children }) => {
+  const { isSessionLoading, hasRole } = useAuth();
+  if (isSessionLoading) return <PageSkeleton />;
+  if (!hasRole(roles)) return <Navigate to="/" replace />;
+  return <>{children}</>;
+};
+
 const InnerApp: React.FC = () => {
   const { mustChangePassword, needsOnboarding } = useAuth();
   return (
@@ -39,12 +48,12 @@ const InnerApp: React.FC = () => {
                 <Route path="/memberships"                   element={<Memberships />} />
                 <Route path="/agenda"                        element={<Agenda />} />
                 <Route path="/dashboard"                     element={<Dashboard />} />
-                <Route path="/admin"                         element={<Admin />} />
-                <Route path="/admin/whatsapp"                element={<AdminWhatsApp />} />
-                <Route path="/admin/stripe"                  element={<AdminStripe />} />
-                <Route path="/admin/users-permissions"       element={<AdminUsers />} />
+                <Route path="/admin"                         element={<RequireRole roles={['admin', 'staff']}><Admin /></RequireRole>} />
+                <Route path="/admin/whatsapp"                element={<RequireRole roles={['admin']}><AdminWhatsApp /></RequireRole>} />
+                <Route path="/admin/stripe"                  element={<RequireRole roles={['admin']}><AdminStripe /></RequireRole>} />
+                <Route path="/admin/users-permissions"       element={<RequireRole roles={['admin']}><AdminUsers /></RequireRole>} />
                 <Route path="/settings/agenda-integrations"  element={<Navigate to="/admin" replace />} />
-                <Route path="/admin/onboarding"              element={<OnboardingAdmin />} />
+                <Route path="/admin/onboarding"              element={<RequireRole roles={['admin', 'staff']}><OnboardingAdmin /></RequireRole>} />
                 <Route path="/reset-password"               element={<ResetPassword />} />
                 <Route path="/custom-charge/:id"            element={<CustomCharge />} />
                 <Route path="*"                              element={<NotFound />} />

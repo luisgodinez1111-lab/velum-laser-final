@@ -6,7 +6,6 @@ import { AgendaIntegrations } from './settings/AgendaIntegrations';
 import {
   CalendarDays,
   Menu,
-  X,
   ChevronLeft,
   ChevronRight,
   Search,
@@ -19,7 +18,6 @@ import {
   Shield,
   HandCoins,
   Trash2,
-  Zap,
   CheckCheck,
   XCircle,
   Plus,
@@ -50,7 +48,10 @@ import { useToast } from "../context/ToastContext";
 import { apiFetch } from "../services/apiClient";
 import { AdminMemberDrawer } from "../components/AdminMemberDrawer";
 import { AdminIntakeModal } from "../components/AdminIntakeModal";
+import { TotpSetup } from "../components/TotpSetup";
 import { SectionErrorBoundary } from "../components/SectionErrorBoundary";
+import { ExportButton } from "../components/ExportButton";
+import { SessionModal, SessionForm } from "../components/admin/SessionModal";
 import {
   formatMoney, statusLabel, statusPill, intakeStatusLabel, apptStatusLabel, Pill
 } from "./adminShared";
@@ -69,46 +70,11 @@ import {
   GoogleEventFormatMode,
   googleCalendarIntegrationService
 } from '../services/googleCalendarIntegrationService';
-
-
-
-const parseMxDate = (value?: string) => {
-  if (!value) return null;
-  // Strings ISO de solo fecha ("YYYY-MM-DD") se parsean en UTC si no tienen hora,
-  // lo que puede mostrar el día anterior en zona horaria local. Forzamos hora local.
-  const direct = /^\d{4}-\d{2}-\d{2}$/.test(value)
-    ? new Date(`${value}T00:00:00`)
-    : new Date(value);
-  if (!Number.isNaN(direct.getTime())) {
-    return direct;
-  }
-
-  const match = value.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-  if (!match) return null;
-
-  const [, day, month, year] = match;
-  const parsed = new Date(Number(year), Number(month) - 1, Number(day));
-  return Number.isNaN(parsed.getTime()) ? null : parsed;
-};
-
-const toLocalDateKey = (date: Date) => {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-};
-
-const plusDays = (date: Date, days: number) => {
-  const next = new Date(date);
-  next.setDate(next.getDate() + days);
-  return next;
-};
-
-const weekDayForDateKey = (dateKey: string) => {
-  const [year, month, day] = dateKey.split('-').map(Number);
-  const date = new Date(year, (month ?? 1) - 1, day ?? 1);
-  return date.getDay();
-};
+import { parseMxDate, toLocalDateKey, plusDays, weekDayForDateKey } from '../utils/date';
+import { usePaymentHistory, HIST_LIMIT } from './admin/hooks/usePaymentHistory';
+import { useIntegrationJobs } from './admin/hooks/useIntegrationJobs';
+import { useAdminData } from './admin/hooks/useAdminData';
+import { useAgendaConfig } from './admin/hooks/useAgendaConfig';
 
 
 
@@ -136,16 +102,70 @@ export const Admin: React.FC = () => {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [activeSection, setActiveSection] = useState<AdminSection>('panel');
   const [settingsCategory, setSettingsCategory] = useState<SettingsCategory>('agenda');
+  const [totpEnabled, setTotpEnabled] = useState(false);
+  const [totpStatusLoaded, setTotpStatusLoaded] = useState(false);
 
-  const [isLoadingData, setIsLoadingData] = useState(false);
-  const [dataLoadError, setDataLoadError] = useState('');
-  const [members, setMembers] = useState<Member[]>([]);
-  const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
+  // ── Hooks de datos ────────────────────────────────────────────────────────
+  const {
+    members, setMembers, membersTotal, auditLogs, serverReports,
+    isLoadingData, dataLoadError, loadData,
+  } = useAdminData();
+
+  const {
+    histPayments, histLoading, histLoaded, histError,
+    histDateFrom, setHistDateFrom, histDateTo, setHistDateTo,
+    histStatus, setHistStatus, histPage, histTotal, histPages,
+    loadHistPayments, handleDownloadHistCSV,
+  } = usePaymentHistory();
+
+  const {
+    integrationJobs, integrationJobsLoading, integrationJobsLoaded,
+    integrationJobsStatus, setIntegrationJobsStatus, integrationJobsError,
+    webhookEvents, webhookEventsLoading, webhookEventsLoaded, webhookEventsError,
+    loadIntegrationJobs, loadWebhookEvents,
+  } = useIntegrationJobs();
+
+  const agenda = useAgendaConfig(members);
+  // Aliases planos para compatibilidad con el JSX existente
+  const {
+    agendaDate, setAgendaDate, agendaConfig, agendaSnapshot,
+    agendaPolicyDraft, agendaCabinsDraft, agendaTreatmentsDraft,
+    agendaWeeklyRulesDraft, agendaSpecialDateRulesDraft,
+    selectedAgendaMemberId, setSelectedAgendaMemberId,
+    selectedAgendaCabinId, setSelectedAgendaCabinId,
+    selectedAgendaTreatmentId, setSelectedAgendaTreatmentId,
+    templateRangeStart, setTemplateRangeStart,
+    templateRangeEnd, setTemplateRangeEnd,
+    templatePreset, setTemplatePreset, templateDaysOfWeek,
+    weekBulkAction, setWeekBulkAction, weekBulkScope, setWeekBulkScope,
+    weekBulkSelectedDays, setWeekBulkSelectedDays,
+    weekBulkPreset, setWeekBulkPreset,
+    weekBulkStart, setWeekBulkStart, weekBulkEnd, setWeekBulkEnd,
+    weekBulkNote, setWeekBulkNote,
+    isAgendaSaving, isAgendaConfigSaving, agendaMessage, setAgendaMessage,
+    cancelConfirmApptId, setCancelConfirmApptId,
+    googleIntegrationStatus, isGoogleIntegrationSaving,
+    googleIntegrationMessage, setGoogleIntegrationMessage,
+    // Funciones de edición de draft
+    updateAgendaPolicyField, updateWeeklyRuleField,
+    updateCabinDraftField, removeCabinDraft, addCabinDraft,
+    updateTreatmentDraftField, addTreatmentDraft, removeTreatmentDraft,
+    toggleTreatmentCabinAllowed, moveTreatmentCabinPriority,
+    toggleTemplateDay, applySpecialTemplate,
+    setSpecialRuleForDate, clearSpecialRuleForDate,
+    // Acciones de agenda
+    applyWeekBulk, saveAgendaConfiguration, toggleAgendaSlotBlock,
+    handleAgendaCreateAppointment, handleAgendaAppointmentAction,
+    handleAgendaCancelAppointment, confirmCancelAppointment,
+    // Acciones de Google Calendar
+    handleGoogleConnect: handleGoogleConnectBase,
+    handleGoogleDisconnect: handleGoogleDisconnectBase,
+    handleGoogleModeChange: handleGoogleModeChangeBase,
+  } = agenda;
 
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'issue'>('all');
   const [tablePage, setTablePage] = useState(1);
-  const [membersTotal, setMembersTotal] = useState(0);
   const [serverSearchResults, setServerSearchResults] = useState<Member[] | null>(null);
   const [isSearchingServer, setIsSearchingServer] = useState(false);
   const [auditStatusFilter, setAuditStatusFilter] = useState<'all' | 'success' | 'failed'>('all');
@@ -153,9 +173,8 @@ export const Admin: React.FC = () => {
 
   // Session registration
   const [sessionModalMember, setSessionModalMember] = useState<Member | null>(null);
-  const [sessionForm, setSessionForm] = useState({ appointmentId: '', zona: '', fluencia: '', frecuencia: '', spot: '', passes: '', notes: '', adverseEvents: '' });
+  const [sessionForm, setSessionForm] = useState<SessionForm>({ appointmentId: '', zona: '', fluencia: '', frecuencia: '', spot: '', passes: '', notes: '', adverseEvents: '' });
   const [isSessionSaving, setIsSessionSaving] = useState(false);
-  const [cancelConfirmApptId, setCancelConfirmApptId] = useState<string | null>(null);
   const [confirmCancelMemberId, setConfirmCancelMemberId] = useState<string | null>(null);
   const [patientDrawerOpen, setPatientDrawerOpen] = useState(false);
 
@@ -167,88 +186,6 @@ export const Admin: React.FC = () => {
   const [isLoadingMemberHistory, setIsLoadingMemberHistory] = useState(false);
   const [memberHistoryError, setMemberHistoryError] = useState<string | null>(null);
   const [isUpdatingMember, setIsUpdatingMember] = useState(false);
-  const [serverReports, setServerReports] = useState<{ users: number; activeMemberships: number; pastDueMemberships: number; pendingDocuments: number } | null>(null);
-
-  // Payment history with filters + pagination
-  const [histPayments, setHistPayments] = useState<any[]>([]);
-  const [histLoading, setHistLoading] = useState(false);
-  const [histDateFrom, setHistDateFrom] = useState('');
-  const [histDateTo, setHistDateTo] = useState('');
-  const [histStatus, setHistStatus] = useState('');
-  const [histLoaded, setHistLoaded] = useState(false);
-  const [histError, setHistError] = useState('');
-  const [histPage, setHistPage] = useState(1);
-  const [histTotal, setHistTotal] = useState(0);
-  const [histPages, setHistPages] = useState(1);
-  const HIST_LIMIT = 50;
-
-  const loadHistPayments = async (page = 1) => {
-    setHistLoading(true);
-    setHistError('');
-    try {
-      const params = new URLSearchParams();
-      if (histDateFrom) params.set('dateFrom', histDateFrom);
-      if (histDateTo) params.set('dateTo', histDateTo);
-      if (histStatus) params.set('status', histStatus);
-      params.set('page', String(page));
-      params.set('limit', String(HIST_LIMIT));
-      const data = await apiFetch<any>(`/v1/payments?${params.toString()}`);
-      setHistPayments(data?.payments ?? []);
-      setHistTotal(data?.total ?? 0);
-      setHistPages(data?.pages ?? 1);
-      setHistPage(page);
-      setHistLoaded(true);
-    } catch (e: any) {
-      setHistError(e?.message ?? 'No se pudo cargar el historial');
-    } finally {
-      setHistLoading(false);
-    }
-  };
-
-  // Integration jobs monitoring
-  const [integrationJobs, setIntegrationJobs] = useState<any[]>([]);
-  const [integrationJobsLoading, setIntegrationJobsLoading] = useState(false);
-  const [integrationJobsLoaded, setIntegrationJobsLoaded] = useState(false);
-  const [integrationJobsStatus, setIntegrationJobsStatus] = useState('');
-
-  const [integrationJobsError, setIntegrationJobsError] = useState('');
-
-  const loadIntegrationJobs = async (status?: string) => {
-    setIntegrationJobsLoading(true);
-    setIntegrationJobsError('');
-    try {
-      const params = new URLSearchParams();
-      if (status) params.set('status', status);
-      const data = await apiFetch<any>(`/v1/admin/integrations/jobs?${params.toString()}`);
-      setIntegrationJobs(data?.jobs ?? []);
-      setIntegrationJobsLoaded(true);
-    } catch (e: any) {
-      setIntegrationJobsError(e?.message ?? 'No se pudo cargar los trabajos');
-    } finally {
-      setIntegrationJobsLoading(false);
-    }
-  };
-
-  // Webhook events
-  const [webhookEvents, setWebhookEvents] = useState<any[]>([]);
-  const [webhookEventsLoading, setWebhookEventsLoading] = useState(false);
-  const [webhookEventsLoaded, setWebhookEventsLoaded] = useState(false);
-
-  const [webhookEventsError, setWebhookEventsError] = useState('');
-
-  const loadWebhookEvents = async () => {
-    setWebhookEventsLoading(true);
-    setWebhookEventsError('');
-    try {
-      const data = await apiFetch<any>('/v1/admin/stripe/webhook-events');
-      setWebhookEvents(data?.events ?? []);
-      setWebhookEventsLoaded(true);
-    } catch (e: any) {
-      setWebhookEventsError(e?.message ?? 'No se pudo cargar los eventos');
-    } finally {
-      setWebhookEventsLoading(false);
-    }
-  };
 
   // Drawer: deactivate / delete with OTP
   const [criticalActionsOpen, setCriticalActionsOpen] = useState(false);
@@ -277,45 +214,6 @@ export const Admin: React.FC = () => {
   const [intakeModal, setIntakeModal] = useState<{ member: Member; intake: MedicalIntake | null } | null>(null);
   const [intakeModalLoading, setIntakeModalLoading] = useState(false);
 
-  const [agendaDate, setAgendaDate] = useState(() => toLocalDateKey(new Date()));
-  const [agendaConfig, setAgendaConfig] = useState<AgendaConfig | null>(null);
-  const [agendaSnapshot, setAgendaSnapshot] = useState<AgendaDaySnapshot | null>(null);
-  const [agendaPolicyDraft, setAgendaPolicyDraft] = useState<AgendaPolicyDraft>({
-    timezone: 'America/Chihuahua',
-    slotMinutes: 30,
-    autoConfirmHours: 12,
-    noShowGraceMinutes: 30,
-    maxActiveAppointmentsPerWeek: 4,
-    maxActiveAppointmentsPerMonth: 12,
-    minAdvanceMinutes: 120,
-    maxAdvanceDays: 60
-  });
-  const [agendaCabinsDraft, setAgendaCabinsDraft] = useState<AgendaCabin[]>([]);
-  const [agendaTreatmentsDraft, setAgendaTreatmentsDraft] = useState<AgendaTreatment[]>([]);
-  const [agendaWeeklyRulesDraft, setAgendaWeeklyRulesDraft] = useState<AgendaWeeklyRule[]>([]);
-  const [agendaSpecialDateRulesDraft, setAgendaSpecialDateRulesDraft] = useState<AgendaSpecialDateRule[]>([]);
-  const [selectedAgendaMemberId, setSelectedAgendaMemberId] = useState('');
-  const [selectedAgendaCabinId, setSelectedAgendaCabinId] = useState('');
-  const [selectedAgendaTreatmentId, setSelectedAgendaTreatmentId] = useState('');
-  const [templateRangeStart, setTemplateRangeStart] = useState(() => toLocalDateKey(new Date()));
-  const [templateRangeEnd, setTemplateRangeEnd] = useState(() => toLocalDateKey(new Date()));
-  const [templatePreset, setTemplatePreset] = useState<AgendaTemplatePreset>('weekly_copy');
-  const [templateDaysOfWeek, setTemplateDaysOfWeek] = useState<number[]>([0, 1, 2, 3, 4, 5, 6]);
-  const [weekBulkAction, setWeekBulkAction] = useState<'open' | 'close' | 'clear'>('open');
-  const [weekBulkScope, setWeekBulkScope] = useState<'week' | 'workdays' | 'weekend' | 'custom'>('week');
-  const [weekBulkSelectedDays, setWeekBulkSelectedDays] = useState<number[]>([1,2,3,4,5,6,0]);
-  const [weekBulkPreset, setWeekBulkPreset] = useState<'morning' | 'afternoon' | 'full' | 'custom'>('full');
-  const [weekBulkStart, setWeekBulkStart] = useState(8);
-  const [weekBulkEnd, setWeekBulkEnd] = useState(20);
-  const [weekBulkNote, setWeekBulkNote] = useState('');
-  const [isAgendaSaving, setIsAgendaSaving] = useState(false);
-  const [isAgendaConfigSaving, setIsAgendaConfigSaving] = useState(false);
-  const [agendaMessage, setAgendaMessage] = useState<{ type: 'ok' | 'error'; text: string } | null>(null);
-  const [googleIntegrationStatus, setGoogleIntegrationStatus] = useState<GoogleCalendarIntegrationStatus | null>(null);
-  const [isGoogleIntegrationLoading, setIsGoogleIntegrationLoading] = useState(false);
-  const [isGoogleIntegrationSaving, setIsGoogleIntegrationSaving] = useState(false);
-  const [googleIntegrationMessage, setGoogleIntegrationMessage] = useState<{ type: 'ok' | 'error'; text: string } | null>(null);
-
   const hasAccess = !!user && allowedRoles.includes(user.role);
   const canManageGoogleIntegration = user?.role === 'admin' || user?.role === 'system';
 
@@ -329,69 +227,25 @@ export const Admin: React.FC = () => {
     return () => window.removeEventListener('resize', update);
   }, []);
 
-  const normalizeTreatmentDrafts = (items: AgendaTreatment[]) =>
-    items.map((treatment) => ({
-      ...treatment,
-      prepBufferMinutes: treatment.prepBufferMinutes ?? 0,
-      cleanupBufferMinutes: treatment.cleanupBufferMinutes ?? 0,
-      allowedCabinIds: treatment.allowedCabinIds ?? (treatment.cabinId ? [treatment.cabinId] : [])
-    }));
+  // Wrappers de Google Calendar — inyectan canManageGoogleIntegration
+  const handleGoogleConnect = () => handleGoogleConnectBase(canManageGoogleIntegration);
+  const handleGoogleDisconnect = () => handleGoogleDisconnectBase(canManageGoogleIntegration);
+  const handleGoogleModeChange = (mode: GoogleEventFormatMode) => handleGoogleModeChangeBase(mode, canManageGoogleIntegration);
 
-  const loadData = async () => {
-    setIsLoadingData(true);
-    setDataLoadError('');
-    try {
-      const [membersResult, logsData, configData, dayData, integrationData, reportsData] = await Promise.all([
-        memberService.getAll({ limit: 200 }),
-        user?.role === 'admin' || user?.role === 'system'
-          ? auditService.getLogs().catch(() => [] as AuditLogEntry[])
-          : Promise.resolve([] as AuditLogEntry[]),
-        clinicalService.getAdminAgendaConfig().catch(() => null),
-        clinicalService.getAdminAgendaDay(agendaDate).catch(() => null),
-        user?.role === 'admin' || user?.role === 'system'
-          ? googleCalendarIntegrationService.getStatus().catch(() => null)
-          : Promise.resolve(null),
-        apiFetch<any>('/admin/reports').catch(() => null),
-      ]);
-      setMembers(membersResult.members);
-      setMembersTotal(membersResult.total);
-      setAuditLogs(logsData);
-      setGoogleIntegrationStatus(integrationData);
-      if (reportsData) setServerReports(reportsData);
-      if (configData) {
-        setAgendaConfig(configData);
-        setAgendaPolicyDraft({
-          timezone: configData.policy.timezone,
-          slotMinutes: configData.policy.slotMinutes,
-          autoConfirmHours: configData.policy.autoConfirmHours,
-          noShowGraceMinutes: configData.policy.noShowGraceMinutes,
-          maxActiveAppointmentsPerWeek: configData.policy.maxActiveAppointmentsPerWeek,
-          maxActiveAppointmentsPerMonth: configData.policy.maxActiveAppointmentsPerMonth,
-          minAdvanceMinutes: configData.policy.minAdvanceMinutes,
-          maxAdvanceDays: configData.policy.maxAdvanceDays
-        });
-        setAgendaCabinsDraft(configData.cabins);
-        setAgendaTreatmentsDraft(normalizeTreatmentDrafts(configData.treatments ?? []));
-        setAgendaWeeklyRulesDraft(configData.weeklyRules);
-        setAgendaSpecialDateRulesDraft(configData.specialDateRules);
-      }
-      if (dayData) {
-        setAgendaSnapshot(dayData);
-      }
-
-      if (!selectedAgendaMemberId && membersResult.members.length > 0) {
-        setSelectedAgendaMemberId(membersResult.members[0].id);
-      }
-    } catch (err: any) {
-      setDataLoadError(err?.message || 'No se pudo cargar los datos del panel.');
-    } finally {
-      setIsLoadingData(false);
-    }
-  };
+  // Helper para llamar loadData con los parámetros actuales
+  const triggerLoadData = () => loadData({
+    agendaDate,
+    userRole: user?.role,
+    selectedAgendaMemberId,
+    onAgendaConfigLoaded: agenda.applyConfigData,
+    onAgendaDayLoaded: agenda.applyDayData,
+    onGoogleStatusLoaded: agenda.applyGoogleStatus,
+    onFirstMemberIdLoaded: setSelectedAgendaMemberId,
+  });
 
   useEffect(() => {
     if (isAuthenticated && hasAccess) {
-      loadData();
+      void triggerLoadData();
     }
   }, [isAuthenticated, hasAccess, user?.id, user?.role]);
 
@@ -438,7 +292,7 @@ export const Admin: React.FC = () => {
 
     if (integration === 'google' && status === 'success') {
       setGoogleIntegrationMessage({ type: 'ok', text: 'Google Calendar conectado correctamente.' });
-      void loadData();
+      void triggerLoadData();
     }
 
     if (integration === 'google' && status === 'error') {
@@ -471,65 +325,15 @@ export const Admin: React.FC = () => {
     const loadDaySnapshot = async () => {
       try {
         const data = await clinicalService.getAdminAgendaDay(agendaDate);
-        if (!cancelled) {
-          setAgendaSnapshot(data);
-        }
+        if (!cancelled) agenda.applyDayData(data);
       } catch (_error) {
         // Keep admin panel usable even if agenda endpoint fails.
       }
     };
-    loadDaySnapshot();
-    return () => {
-      cancelled = true;
-    };
+    void loadDaySnapshot();
+    return () => { cancelled = true; };
   }, [agendaDate, isAuthenticated, hasAccess]);
 
-  useEffect(() => {
-    if (members.length === 0) return;
-    if (selectedAgendaMemberId && members.some((member) => member.id === selectedAgendaMemberId)) return;
-    setSelectedAgendaMemberId(members[0].id);
-  }, [members, selectedAgendaMemberId]);
-
-  useEffect(() => {
-    const activeCabins = agendaSnapshot?.cabins ?? agendaConfig?.cabins.filter((cabin) => cabin.isActive) ?? [];
-    if (activeCabins.length === 0) {
-      setSelectedAgendaCabinId('');
-      return;
-    }
-    if (selectedAgendaCabinId && activeCabins.some((cabin) => cabin.id === selectedAgendaCabinId)) {
-      return;
-    }
-    setSelectedAgendaCabinId(activeCabins[0].id);
-  }, [agendaSnapshot?.cabins, agendaConfig?.cabins, selectedAgendaCabinId]);
-
-  useEffect(() => {
-    const activeTreatments = agendaTreatmentsDraft
-      .filter((treatment) => treatment.isActive)
-      .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
-
-    if (activeTreatments.length === 0) {
-      setSelectedAgendaTreatmentId('');
-      return;
-    }
-
-    if (selectedAgendaTreatmentId && activeTreatments.some((treatment) => treatment.id === selectedAgendaTreatmentId)) {
-      return;
-    }
-
-    setSelectedAgendaTreatmentId(activeTreatments[0].id);
-  }, [agendaTreatmentsDraft, selectedAgendaTreatmentId]);
-
-  useEffect(() => {
-    const selectedTreatment = agendaTreatmentsDraft.find((treatment) => treatment.id === selectedAgendaTreatmentId);
-    const preferredCabinId = selectedTreatment?.allowedCabinIds?.[0] ?? selectedTreatment?.cabinId;
-    if (!selectedTreatment?.requiresSpecificCabin || !preferredCabinId) {
-      return;
-    }
-    if (selectedAgendaCabinId === preferredCabinId) {
-      return;
-    }
-    setSelectedAgendaCabinId(preferredCabinId);
-  }, [agendaTreatmentsDraft, selectedAgendaTreatmentId, selectedAgendaCabinId]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -545,7 +349,7 @@ export const Admin: React.FC = () => {
     setIsUpdatingMember(true);
     try {
       await memberService.updateMembershipStatus(id, status);
-      await loadData();
+      await triggerLoadData();
       setSelectedMember((prev) => prev?.id === id ? { ...prev, subscriptionStatus: status } : prev);
       toast.success('Membresía actualizada.');
     } catch {
@@ -602,7 +406,7 @@ export const Admin: React.FC = () => {
       const out = await apiFetch<any>(`/v1/admin/access/users/${memberId}/deactivate`, { method: 'PATCH' });
       toast.success(out?.message ?? 'Usuario desactivado y suscripción cancelada');
       setSelectedMember(null);
-      await loadData();
+      await triggerLoadData();
     } catch (e: any) {
       toast.error(e?.message ?? 'No se pudo desactivar el usuario');
     } finally {
@@ -639,7 +443,7 @@ export const Admin: React.FC = () => {
       setCriticalActionsOpen(false);
       setDrawerDeleteStep('idle');
       setDrawerDeleteOtp('');
-      await loadData();
+      await triggerLoadData();
     } catch (e: any) {
       setDrawerDeleteMsg(e?.message ?? 'Código incorrecto o expirado');
     } finally {
@@ -690,7 +494,7 @@ export const Admin: React.FC = () => {
       toast.success("Sesión registrada correctamente.");
       setSessionForm({ appointmentId: '', zona: '', fluencia: '', frecuencia: '', spot: '', passes: '', notes: '', adverseEvents: '' });
       setSessionModalMember(null);
-      await loadData();
+      await triggerLoadData();
     } catch (err: any) {
       toast.error(err?.message ?? "No se pudo registrar la sesión.");
     } finally {
@@ -719,7 +523,7 @@ export const Admin: React.FC = () => {
       setIntakeToApprove(null);
       setIntakeToReject(null);
       setIntakeRejectReason('');
-      await loadData();
+      await triggerLoadData();
       if (selectedMember?.id === userId) {
         setSelectedMember((prev) => prev ? { ...prev, intakeStatus: approved ? 'approved' : 'rejected' } : prev);
       }
@@ -925,774 +729,9 @@ export const Admin: React.FC = () => {
     return appointment.user?.email ?? appointment.userId;
   };
 
-  const updateAgendaPolicyField = (field: keyof AgendaPolicyDraft, value: string | number) => {
-    setAgendaPolicyDraft((current) => {
-      const next = { ...current, [field]: value };
-      return {
-        timezone: String(next.timezone),
-        slotMinutes: [10, 15, 20, 30, 45, 60, 90, 120].includes(Number(next.slotMinutes)) ? Number(next.slotMinutes) : 30,
-        autoConfirmHours: Math.min(Math.max(Number(next.autoConfirmHours), 0), 72),
-        noShowGraceMinutes: Math.min(Math.max(Number(next.noShowGraceMinutes), 5), 240),
-        maxActiveAppointmentsPerWeek: Math.min(Math.max(Number(next.maxActiveAppointmentsPerWeek), 1), 50),
-        maxActiveAppointmentsPerMonth: Math.min(Math.max(Number(next.maxActiveAppointmentsPerMonth), 1), 200),
-        minAdvanceMinutes: Math.min(Math.max(Number(next.minAdvanceMinutes), 0), 10080),
-        maxAdvanceDays: Math.min(Math.max(Number(next.maxAdvanceDays), 1), 365)
-      };
-    });
-  };
-
-  const updateWeeklyRuleField = (dayOfWeek: number, changes: Partial<AgendaWeeklyRule>) => {
-    setAgendaWeeklyRulesDraft((current) =>
-      current.map((rule) => (rule.dayOfWeek === dayOfWeek ? { ...rule, ...changes } : rule))
-    );
-  };
-
-  const updateCabinDraftField = (cabinId: string, changes: Partial<AgendaCabin>) => {
-    setAgendaCabinsDraft((current) => current.map((cabin) => (cabin.id === cabinId ? { ...cabin, ...changes } : cabin)));
-  };
-
-  const removeCabinDraft = (cabinId: string) => {
-    setAgendaCabinsDraft((current) => current.filter((cabin) => cabin.id !== cabinId));
-    setAgendaTreatmentsDraft((current) =>
-      current.map((treatment) => ({
-          ...treatment,
-          cabinId: treatment.cabinId === cabinId ? null : treatment.cabinId,
-          allowedCabinIds: (treatment.allowedCabinIds ?? []).filter((candidate) => candidate !== cabinId),
-          requiresSpecificCabin:
-            treatment.requiresSpecificCabin &&
-            (treatment.allowedCabinIds ?? []).filter((candidate) => candidate !== cabinId).length > 0
-        }))
-    );
-    if (selectedAgendaCabinId === cabinId) {
-      setSelectedAgendaCabinId('');
-    }
-  };
-
-  const addCabinDraft = () => {
-    setAgendaCabinsDraft((current) => [
-      ...current,
-      {
-        id: `draft-${Date.now()}`,
-        name: `Cabina ${current.length + 1}`,
-        isActive: true,
-        sortOrder: current.length + 1
-      }
-    ]);
-  };
-
-  const updateTreatmentDraftField = (treatmentId: string, changes: Partial<AgendaTreatment>) => {
-    setAgendaTreatmentsDraft((current) =>
-      current.map((treatment) => (treatment.id === treatmentId ? { ...treatment, ...changes } : treatment))
-    );
-  };
-
-  const addTreatmentDraft = () => {
-    setAgendaTreatmentsDraft((current) => [
-      ...current,
-      {
-        id: `draft-treatment-${Date.now()}`,
-        name: `Tratamiento ${current.length + 1}`,
-        code: `treatment_${current.length + 1}`,
-        description: null,
-        durationMinutes: 45,
-        prepBufferMinutes: 0,
-        cleanupBufferMinutes: 0,
-        cabinId: null,
-        allowedCabinIds: [],
-        requiresSpecificCabin: false,
-        isActive: true,
-        sortOrder: current.length + 1
-      }
-    ]);
-  };
-
-  const removeTreatmentDraft = (treatmentId: string) => {
-    setAgendaTreatmentsDraft((current) => current.filter((treatment) => treatment.id !== treatmentId));
-    if (selectedAgendaTreatmentId === treatmentId) {
-      setSelectedAgendaTreatmentId('');
-    }
-  };
-
-  const toggleTreatmentCabinAllowed = (treatmentId: string, cabinId: string, checked: boolean) => {
-    setAgendaTreatmentsDraft((current) =>
-      current.map((treatment) => {
-        if (treatment.id !== treatmentId) return treatment;
-        const currentAllowed = treatment.allowedCabinIds ?? [];
-        const nextAllowed = checked
-          ? currentAllowed.includes(cabinId)
-            ? currentAllowed
-            : [...currentAllowed, cabinId]
-          : currentAllowed.filter((candidate) => candidate !== cabinId);
-        return {
-          ...treatment,
-          allowedCabinIds: nextAllowed,
-          cabinId: nextAllowed[0] ?? null,
-          requiresSpecificCabin: treatment.requiresSpecificCabin ? nextAllowed.length > 0 : false
-        };
-      })
-    );
-  };
-
-  const moveTreatmentCabinPriority = (treatmentId: string, cabinId: string, direction: -1 | 1) => {
-    setAgendaTreatmentsDraft((current) =>
-      current.map((treatment) => {
-        if (treatment.id !== treatmentId) return treatment;
-        const allowed = [...(treatment.allowedCabinIds ?? [])];
-        const index = allowed.indexOf(cabinId);
-        if (index < 0) return treatment;
-        const nextIndex = index + direction;
-        if (nextIndex < 0 || nextIndex >= allowed.length) return treatment;
-        [allowed[index], allowed[nextIndex]] = [allowed[nextIndex], allowed[index]];
-        return {
-          ...treatment,
-          allowedCabinIds: allowed,
-          cabinId: allowed[0] ?? null
-        };
-      })
-    );
-  };
-
-  const toggleTemplateDay = (dayOfWeek: number) => {
-    setTemplateDaysOfWeek((current) => {
-      if (current.includes(dayOfWeek)) {
-        return current.filter((day) => day !== dayOfWeek);
-      }
-      return [...current, dayOfWeek].sort((a, b) => a - b);
-    });
-  };
-
-  const applySpecialTemplate = () => {
-    const [startYear, startMonth, startDay] = templateRangeStart.split('-').map(Number);
-    const [endYear, endMonth, endDay] = templateRangeEnd.split('-').map(Number);
-    const start = new Date(startYear, (startMonth ?? 1) - 1, startDay ?? 1);
-    const end = new Date(endYear, (endMonth ?? 1) - 1, endDay ?? 1);
-
-    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
-      setAgendaMessage({ type: 'error', text: 'El rango de plantilla no es válido.' });
-      return;
-    }
-    if (start > end) {
-      setAgendaMessage({ type: 'error', text: 'La fecha inicial debe ser menor o igual a la final.' });
-      return;
-    }
-    if (templateDaysOfWeek.length === 0) {
-      setAgendaMessage({ type: 'error', text: 'Selecciona al menos un día de semana para aplicar la plantilla.' });
-      return;
-    }
-
-    const draftByDate = new Map<string, AgendaSpecialDateRule>(
-      agendaSpecialDateRulesDraft.map((rule) => [rule.dateKey, rule])
-    );
-    let cursor = start;
-    let updatedCount = 0;
-    let safety = 0;
-    while (cursor <= end && safety < 370) {
-      const dateKey = toLocalDateKey(cursor);
-      const dayOfWeek = weekDayForDateKey(dateKey);
-      safety += 1;
-      if (!templateDaysOfWeek.includes(dayOfWeek)) {
-        cursor = plusDays(cursor, 1);
-        continue;
-      }
-
-      const existing = draftByDate.get(dateKey);
-      let nextRule: AgendaSpecialDateRule | null = null;
-
-      if (templatePreset === 'weekly_copy') {
-        const weekly = agendaWeeklyRulesDraft.find((rule) => rule.dayOfWeek === dayOfWeek);
-        if (weekly) {
-          nextRule = {
-            id: existing?.id ?? `draft-template-${dateKey}`,
-            dateKey,
-            isOpen: weekly.isOpen,
-            startHour: weekly.isOpen ? weekly.startHour : null,
-            endHour: weekly.isOpen ? weekly.endHour : null,
-            note: existing?.note ?? 'Aplicado desde plantilla semanal'
-          };
-        }
-      }
-
-      if (templatePreset === 'holiday_closed') {
-        nextRule = {
-          id: existing?.id ?? `draft-template-${dateKey}`,
-          dateKey,
-          isOpen: false,
-          startHour: null,
-          endHour: null,
-          note: 'Feriado / cierre especial'
-        };
-      }
-
-      if (templatePreset === 'season_extended') {
-        nextRule = {
-          id: existing?.id ?? `draft-template-${dateKey}`,
-          dateKey,
-          isOpen: true,
-          startHour: 8,
-          endHour: 22,
-          note: 'Temporada alta'
-        };
-      }
-
-      if (templatePreset === 'season_compact') {
-        nextRule = {
-          id: existing?.id ?? `draft-template-${dateKey}`,
-          dateKey,
-          isOpen: true,
-          startHour: 10,
-          endHour: 18,
-          note: 'Temporada baja'
-        };
-      }
-
-      if (nextRule) {
-        draftByDate.set(dateKey, nextRule);
-        updatedCount += 1;
-      }
-
-      cursor = plusDays(cursor, 1);
-    }
-
-    setAgendaSpecialDateRulesDraft(
-      [...draftByDate.values()].sort((a, b) => a.dateKey.localeCompare(b.dateKey))
-    );
-    setAgendaMessage({
-      type: 'ok',
-      text: `Plantilla aplicada a ${updatedCount} fecha(s). Guarda configuración para confirmar.`
-    });
-  };
-
-  const setSpecialRuleForDate = (isOpen: boolean, startHour?: number, endHour?: number) => {
-    setAgendaSpecialDateRulesDraft((current) => {
-      const next = [...current];
-      const index = next.findIndex((rule) => rule.dateKey === agendaDate);
-      const incoming: AgendaSpecialDateRule = index >= 0
-        ? { ...next[index], isOpen, startHour: startHour ?? next[index].startHour, endHour: endHour ?? next[index].endHour }
-        : {
-            id: `draft-${agendaDate}`,
-            dateKey: agendaDate,
-            isOpen,
-            startHour: startHour ?? 9,
-            endHour: endHour ?? 20,
-            note: null
-          };
-      if (index >= 0) {
-        next[index] = incoming;
-      } else {
-        next.push(incoming);
-      }
-      return next;
-    });
-  };
-
-  const clearSpecialRuleForDate = () => {
-    setAgendaSpecialDateRulesDraft((current) => current.filter((rule) => rule.dateKey !== agendaDate));
-  };
-
-  // ── Acciones masivas de agenda — aplica Y guarda en una sola operación ──
-  const applyWeekBulk = async () => {
-    const ref = new Date(agendaDate + 'T12:00:00');
-    const dow = ref.getDay();
-    const offsetToMonday = (dow === 0 ? -6 : 1 - dow);
-    const monday = plusDays(ref, offsetToMonday);
-
-    let targetDays: number[];
-    if (weekBulkScope === 'week') targetDays = [1,2,3,4,5,6,0];
-    else if (weekBulkScope === 'workdays') targetDays = [1,2,3,4,5];
-    else if (weekBulkScope === 'weekend') targetDays = [6,0];
-    else targetDays = weekBulkSelectedDays;
-
-    const note = weekBulkNote.trim() ||
-      (weekBulkAction === 'open' ? `Abierto ${weekBulkStart}:00–${weekBulkEnd}:00` :
-       weekBulkAction === 'close' ? 'Cerrado' : 'Horario base');
-
-    // Calcular nuevas reglas directamente (sin depender del estado stale)
-    const byDate = new Map<string, AgendaSpecialDateRule>(agendaSpecialDateRulesDraft.map((r) => [r.dateKey, r]));
-    for (let i = 0; i < 7; i++) {
-      const d = plusDays(monday, i);
-      const dayOfWeek = d.getDay();
-      if (!targetDays.includes(dayOfWeek)) continue;
-      const dateKey = toLocalDateKey(d);
-      if (weekBulkAction === 'clear') {
-        byDate.delete(dateKey);
-      } else {
-        const existing = byDate.get(dateKey);
-        byDate.set(dateKey, {
-          id: existing?.id ?? `draft-week-${dateKey}`,
-          dateKey,
-          isOpen: weekBulkAction === 'open',
-          startHour: weekBulkAction === 'open' ? weekBulkStart : null,
-          endHour: weekBulkAction === 'open' ? weekBulkEnd : null,
-          note
-        });
-      }
-    }
-    const newSpecialRules = [...byDate.values()].sort((a, b) => a.dateKey.localeCompare(b.dateKey));
-    setAgendaSpecialDateRulesDraft(newSpecialRules);
-
-    // Guardar inmediatamente con las reglas recién calculadas
-    setIsAgendaConfigSaving(true);
-    setAgendaMessage(null);
-    try {
-      const payload = {
-        timezone: agendaPolicyDraft.timezone,
-        slotMinutes: agendaPolicyDraft.slotMinutes,
-        autoConfirmHours: agendaPolicyDraft.autoConfirmHours,
-        noShowGraceMinutes: agendaPolicyDraft.noShowGraceMinutes,
-        maxActiveAppointmentsPerWeek: agendaPolicyDraft.maxActiveAppointmentsPerWeek,
-        maxActiveAppointmentsPerMonth: agendaPolicyDraft.maxActiveAppointmentsPerMonth,
-        minAdvanceMinutes: agendaPolicyDraft.minAdvanceMinutes,
-        maxAdvanceDays: agendaPolicyDraft.maxAdvanceDays,
-        cabins: agendaCabinsDraft.map((c, i) => ({
-          id: c.id.startsWith('draft-') ? undefined : c.id,
-          name: c.name, isActive: c.isActive, sortOrder: c.sortOrder ?? i + 1
-        })),
-        treatments: agendaTreatmentsDraft.map((t, i) => ({
-          id: t.id.startsWith('draft-treatment-') ? undefined : t.id,
-          name: t.name.trim(), code: t.code.trim().toLowerCase(),
-          description: t.description ?? null,
-          durationMinutes: t.durationMinutes,
-          prepBufferMinutes: t.prepBufferMinutes ?? 0,
-          cleanupBufferMinutes: t.cleanupBufferMinutes ?? 0,
-          cabinId: (t.allowedCabinIds ?? [])[0] ?? t.cabinId ?? null,
-          allowedCabinIds: t.allowedCabinIds ?? [],
-          requiresSpecificCabin: t.requiresSpecificCabin,
-          isActive: t.isActive, sortOrder: t.sortOrder ?? i + 1
-        })),
-        weeklyRules: agendaWeeklyRulesDraft.map((r) => ({
-          dayOfWeek: r.dayOfWeek, isOpen: r.isOpen, startHour: r.startHour, endHour: r.endHour
-        })),
-        specialDateRules: newSpecialRules.map((r) => ({
-          dateKey: r.dateKey, isOpen: r.isOpen,
-          startHour: r.startHour ?? null, endHour: r.endHour ?? null, note: r.note ?? null
-        }))
-      };
-      const updatedConfig = await clinicalService.updateAdminAgendaConfig(payload);
-      setAgendaConfig(updatedConfig);
-      setAgendaWeeklyRulesDraft(updatedConfig.weeklyRules);
-      setAgendaSpecialDateRulesDraft(updatedConfig.specialDateRules);
-      const snapshot = await clinicalService.getAdminAgendaDay(agendaDate);
-      setAgendaSnapshot(snapshot);
-
-      const scopeLabel = weekBulkScope === 'week' ? 'toda la semana' : weekBulkScope === 'workdays' ? 'Lun–Vie' : weekBulkScope === 'weekend' ? 'Sáb–Dom' : `${targetDays.length} días`;
-      const actionLabel = weekBulkAction === 'open' ? `abierto ${weekBulkStart}:00–${weekBulkEnd}:00` : weekBulkAction === 'close' ? 'cerrado' : 'horario base restaurado';
-      setAgendaMessage({ type: 'ok', text: `✓ Guardado: ${scopeLabel} → ${actionLabel}` });
-    } catch (error: any) {
-      setAgendaMessage({ type: 'error', text: error?.message ?? 'No fue posible guardar la configuración.' });
-    } finally {
-      setIsAgendaConfigSaving(false);
-    }
-  };
-
-  const saveAgendaConfiguration = async () => {
-    if (!agendaCabinsDraft.some((cabin) => cabin.isActive)) {
-      setAgendaMessage({ type: 'error', text: 'Debes mantener al menos una cabina activa.' });
-      return;
-    }
-    if (agendaPolicyDraft.maxActiveAppointmentsPerMonth < agendaPolicyDraft.maxActiveAppointmentsPerWeek) {
-      setAgendaMessage({
-        type: 'error',
-        text: 'El límite mensual de citas activas debe ser mayor o igual al límite semanal.'
-      });
-      return;
-    }
-
-    const normalizedCodes = agendaTreatmentsDraft.map((treatment) => treatment.code.trim().toLowerCase());
-    const duplicateCode = normalizedCodes.find((code, index) => code && normalizedCodes.indexOf(code) !== index);
-    if (duplicateCode) {
-      setAgendaMessage({ type: 'error', text: `El código "${duplicateCode}" está repetido en tratamientos.` });
-      return;
-    }
-
-    const missingCode = normalizedCodes.find((code) => code.length === 0);
-    if (missingCode !== undefined) {
-      setAgendaMessage({ type: 'error', text: 'Todos los tratamientos deben tener código.' });
-      return;
-    }
-
-    const invalidCode = normalizedCodes.find((code) => code.length > 0 && !/^[a-z0-9_]+$/.test(code));
-    if (invalidCode) {
-      setAgendaMessage({ type: 'error', text: 'El código del tratamiento solo acepta letras minúsculas, números y guion bajo.' });
-      return;
-    }
-
-    const invalidTreatmentName = agendaTreatmentsDraft.find((treatment) => treatment.name.trim().length === 0);
-    if (invalidTreatmentName) {
-      setAgendaMessage({ type: 'error', text: 'Todos los tratamientos deben tener nombre.' });
-      return;
-    }
-
-    const invalidDuration = agendaTreatmentsDraft.find(
-      (treatment) => treatment.durationMinutes % agendaPolicyDraft.slotMinutes !== 0
-    );
-    if (invalidDuration) {
-      setAgendaMessage({
-        type: 'error',
-        text: `La duración de "${invalidDuration.name}" debe ser múltiplo del intervalo (${agendaPolicyDraft.slotMinutes} min).`
-      });
-      return;
-    }
-
-    const cabinIdSet = new Set(agendaCabinsDraft.map((cabin) => cabin.id));
-    const activeCabinIdSet = new Set(agendaCabinsDraft.filter((cabin) => cabin.isActive).map((cabin) => cabin.id));
-    const treatmentWithoutCabin = agendaTreatmentsDraft.find(
-      (treatment) => treatment.requiresSpecificCabin && (treatment.allowedCabinIds ?? []).length === 0
-    );
-    if (treatmentWithoutCabin) {
-      setAgendaMessage({
-        type: 'error',
-        text: `El tratamiento "${treatmentWithoutCabin.name}" requiere cabina específica, pero no tiene cabinas permitidas.`
-      });
-      return;
-    }
-
-    const treatmentWithInactiveCabin = agendaTreatmentsDraft.find(
-      (treatment) =>
-        treatment.requiresSpecificCabin &&
-        (treatment.allowedCabinIds ?? []).some((cabinId) => !activeCabinIdSet.has(cabinId))
-    );
-    if (treatmentWithInactiveCabin) {
-      setAgendaMessage({
-        type: 'error',
-        text: `El tratamiento "${treatmentWithInactiveCabin.name}" solo puede usar cabinas activas.`
-      });
-      return;
-    }
-
-    const treatmentWithMissingCabin = agendaTreatmentsDraft.find(
-      (treatment) => (treatment.allowedCabinIds ?? []).some((cabinId) => !cabinIdSet.has(cabinId))
-    );
-    if (treatmentWithMissingCabin) {
-      setAgendaMessage({
-        type: 'error',
-        text: `El tratamiento "${treatmentWithMissingCabin.name}" apunta a una cabina que ya no existe.`
-      });
-      return;
-    }
-
-    setIsAgendaConfigSaving(true);
-    setAgendaMessage(null);
-    try {
-      const payload = {
-        timezone: agendaPolicyDraft.timezone,
-        slotMinutes: agendaPolicyDraft.slotMinutes,
-        autoConfirmHours: agendaPolicyDraft.autoConfirmHours,
-        noShowGraceMinutes: agendaPolicyDraft.noShowGraceMinutes,
-        maxActiveAppointmentsPerWeek: agendaPolicyDraft.maxActiveAppointmentsPerWeek,
-        maxActiveAppointmentsPerMonth: agendaPolicyDraft.maxActiveAppointmentsPerMonth,
-        minAdvanceMinutes: agendaPolicyDraft.minAdvanceMinutes,
-        maxAdvanceDays: agendaPolicyDraft.maxAdvanceDays,
-        cabins: agendaCabinsDraft.map((cabin, index) => ({
-          id: cabin.id.startsWith('draft-') ? undefined : cabin.id,
-          name: cabin.name,
-          isActive: cabin.isActive,
-          sortOrder: cabin.sortOrder ?? index + 1
-        })),
-        treatments: agendaTreatmentsDraft.map((treatment, index) => ({
-          id: treatment.id.startsWith('draft-treatment-') ? undefined : treatment.id,
-          name: treatment.name.trim(),
-          code: treatment.code.trim().toLowerCase(),
-          description: treatment.description ?? null,
-          durationMinutes: treatment.durationMinutes,
-          prepBufferMinutes: treatment.prepBufferMinutes ?? 0,
-          cleanupBufferMinutes: treatment.cleanupBufferMinutes ?? 0,
-          cabinId: (treatment.allowedCabinIds ?? [])[0] ?? treatment.cabinId ?? null,
-          allowedCabinIds: treatment.allowedCabinIds ?? [],
-          requiresSpecificCabin: treatment.requiresSpecificCabin,
-          isActive: treatment.isActive,
-          sortOrder: treatment.sortOrder ?? index + 1
-        })),
-        weeklyRules: agendaWeeklyRulesDraft.map((rule) => ({
-          dayOfWeek: rule.dayOfWeek,
-          isOpen: rule.isOpen,
-          startHour: rule.startHour,
-          endHour: rule.endHour
-        })),
-        specialDateRules: agendaSpecialDateRulesDraft.map((rule) => ({
-          dateKey: rule.dateKey,
-          isOpen: rule.isOpen,
-          startHour: rule.startHour ?? null,
-          endHour: rule.endHour ?? null,
-          note: rule.note ?? null
-        }))
-      };
-
-      const updatedConfig = await clinicalService.updateAdminAgendaConfig(payload);
-      setAgendaConfig(updatedConfig);
-      setAgendaPolicyDraft({
-        timezone: updatedConfig.policy.timezone,
-        slotMinutes: updatedConfig.policy.slotMinutes,
-        autoConfirmHours: updatedConfig.policy.autoConfirmHours,
-        noShowGraceMinutes: updatedConfig.policy.noShowGraceMinutes,
-        maxActiveAppointmentsPerWeek: updatedConfig.policy.maxActiveAppointmentsPerWeek,
-        maxActiveAppointmentsPerMonth: updatedConfig.policy.maxActiveAppointmentsPerMonth,
-        minAdvanceMinutes: updatedConfig.policy.minAdvanceMinutes,
-        maxAdvanceDays: updatedConfig.policy.maxAdvanceDays
-      });
-      setAgendaCabinsDraft(updatedConfig.cabins);
-      setAgendaTreatmentsDraft(normalizeTreatmentDrafts(updatedConfig.treatments ?? []));
-      setAgendaWeeklyRulesDraft(updatedConfig.weeklyRules);
-      setAgendaSpecialDateRulesDraft(updatedConfig.specialDateRules);
-      const snapshot = await clinicalService.getAdminAgendaDay(agendaDate);
-      setAgendaSnapshot(snapshot);
-      setAgendaMessage({ type: 'ok', text: 'Configuración de agenda guardada.' });
-    } catch (error: any) {
-      setAgendaMessage({ type: 'error', text: error?.message ?? 'No fue posible guardar la configuración.' });
-    } finally {
-      setIsAgendaConfigSaving(false);
-    }
-  };
-
-  const toggleAgendaSlotBlock = async (slot: { startMinute: number; endMinute: number }) => {
-    const cabinId = selectedAgendaCabinId || null;
-    const block = (agendaSnapshot?.blocks ?? []).find(
-      (candidate) =>
-        candidate.dateKey === agendaDate &&
-        candidate.startMinute === slot.startMinute &&
-        candidate.endMinute === slot.endMinute &&
-        (candidate.cabinId ?? null) === cabinId
-    );
-
-    setIsAgendaSaving(true);
-    setAgendaMessage(null);
-    try {
-      if (block) {
-        await clinicalService.deleteAdminAgendaBlock(block.id);
-      } else {
-        await clinicalService.createAdminAgendaBlock({
-          dateKey: agendaDate,
-          startMinute: slot.startMinute,
-          endMinute: slot.endMinute,
-          cabinId,
-          reason: cabinId ? 'Bloqueo por cabina desde panel admin' : 'Bloqueo general desde panel admin'
-        });
-      }
-      const snapshot = await clinicalService.getAdminAgendaDay(agendaDate);
-      setAgendaSnapshot(snapshot);
-      setAgendaMessage({ type: 'ok', text: block ? 'Bloqueo removido.' : 'Bloqueo aplicado.' });
-    } catch (error: any) {
-      setAgendaMessage({ type: 'error', text: error?.message ?? 'No fue posible actualizar el bloqueo.' });
-    } finally {
-      setIsAgendaSaving(false);
-    }
-  };
-
-  const handleAgendaCreateAppointment = async (slot: { label: string; blocked: boolean; available: number; startMinute: number; endMinute: number }) => {
-    if (!selectedAgendaMemberId) {
-      setAgendaMessage({ type: 'error', text: 'Selecciona un socio para agendar.' });
-      return;
-    }
-
-    if (slot.blocked || slot.available <= 0) {
-      setAgendaMessage({ type: 'error', text: 'El slot seleccionado no tiene capacidad disponible.' });
-      return;
-    }
-
-    setIsAgendaSaving(true);
-    setAgendaMessage(null);
-    try {
-      const slotStart = new Date(`${agendaDate}T00:00:00`);
-      slotStart.setHours(0, slot.startMinute, 0, 0);
-      const selectedTreatment = agendaTreatmentsDraft.find((treatment) => treatment.id === selectedAgendaTreatmentId);
-      const preferredCabinIds = selectedTreatment?.allowedCabinIds ?? (selectedTreatment?.cabinId ? [selectedTreatment.cabinId] : []);
-      const requestedCabinId = selectedTreatment?.requiresSpecificCabin
-        ? preferredCabinIds[0] ?? undefined
-        : selectedAgendaCabinId || preferredCabinIds[0] || undefined;
-      const durationMinutes = selectedTreatment?.durationMinutes ?? slot.endMinute - slot.startMinute;
-      const slotEnd = new Date(slotStart.getTime() + durationMinutes * 60 * 1000);
-
-      if (selectedTreatment?.requiresSpecificCabin && preferredCabinIds.length === 0) {
-        setAgendaMessage({
-          type: 'error',
-          text: `El tratamiento "${selectedTreatment.name}" requiere cabina específica, pero no tiene cabinas configuradas.`
-        });
-        return;
-      }
-
-      await clinicalService.createAppointment({
-        userId: selectedAgendaMemberId,
-        cabinId: requestedCabinId,
-        treatmentId: selectedTreatment?.id,
-        startAt: slotStart.toISOString(),
-        endAt: slotEnd.toISOString(),
-        reason: selectedTreatment?.code ?? (selectedAgendaCabinId ? 'admin.manual_schedule.cabin' : 'admin.manual_schedule')
-      });
-      const snapshot = await clinicalService.getAdminAgendaDay(agendaDate);
-      setAgendaSnapshot(snapshot);
-      setAgendaMessage({ type: 'ok', text: `Cita creada en ${slot.label}.` });
-    } catch (error: any) {
-      setAgendaMessage({ type: 'error', text: error?.message ?? 'No fue posible agendar en ese horario.' });
-    } finally {
-      setIsAgendaSaving(false);
-    }
-  };
-
-  const handleAgendaAppointmentAction = async (
-    appointmentId: string,
-    action: 'cancel' | 'confirm' | 'complete' | 'mark_no_show',
-    successMessage: string
-  ) => {
-    setIsAgendaSaving(true);
-    setAgendaMessage(null);
-    try {
-      await clinicalService.updateAppointment(appointmentId, {
-        action,
-        canceledReason: action === 'cancel' ? 'Cancelación operativa desde panel admin' : undefined
-      });
-      const snapshot = await clinicalService.getAdminAgendaDay(agendaDate);
-      setAgendaSnapshot(snapshot);
-      setAgendaMessage({ type: 'ok', text: successMessage });
-    } catch (error: any) {
-      setAgendaMessage({ type: 'error', text: error?.message ?? 'No fue posible ejecutar la acción de agenda.' });
-    } finally {
-      setIsAgendaSaving(false);
-    }
-  };
-
-  const handleAgendaCancelAppointment = (appointmentId: string) => {
-    setCancelConfirmApptId(appointmentId);
-  };
-
-  const confirmCancelAppointment = async (appointmentId: string) => {
-    setCancelConfirmApptId(null);
-    await handleAgendaAppointmentAction(appointmentId, 'cancel', 'Cita cancelada correctamente.');
-  };
-
-  const handleGoogleConnect = async () => {
-    if (!canManageGoogleIntegration) return;
-    setIsGoogleIntegrationSaving(true);
-    setGoogleIntegrationMessage(null);
-    try {
-      const response = await googleCalendarIntegrationService.connect();
-      if (typeof window !== 'undefined') {
-        window.location.href = response.url;
-      }
-    } catch (error: any) {
-      setGoogleIntegrationMessage({
-        type: 'error',
-        text: error?.message ?? 'No fue posible iniciar la conexión con Google Calendar.'
-      });
-    } finally {
-      setIsGoogleIntegrationSaving(false);
-    }
-  };
-
-  const handleGoogleDisconnect = async () => {
-    if (!canManageGoogleIntegration) return;
-    setIsGoogleIntegrationSaving(true);
-    setGoogleIntegrationMessage(null);
-    try {
-      await googleCalendarIntegrationService.disconnect();
-      const status = await googleCalendarIntegrationService.getStatus();
-      setGoogleIntegrationStatus(status);
-      setGoogleIntegrationMessage({ type: 'ok', text: 'Google Calendar desconectado.' });
-    } catch (error: any) {
-      setGoogleIntegrationMessage({
-        type: 'error',
-        text: error?.message ?? 'No fue posible desconectar Google Calendar.'
-      });
-    } finally {
-      setIsGoogleIntegrationSaving(false);
-    }
-  };
-
-  const handleGoogleModeChange = async (mode: GoogleEventFormatMode) => {
-    if (!canManageGoogleIntegration) return;
-    setIsGoogleIntegrationSaving(true);
-    setGoogleIntegrationMessage(null);
-    try {
-      const response = await googleCalendarIntegrationService.updateSettings(mode);
-      setGoogleIntegrationStatus((current) => ({
-        connected: current?.connected ?? true,
-        email: current?.email ?? null,
-        calendarId: current?.calendarId ?? null,
-        eventFormatMode: response.eventFormatMode,
-        lastSyncAt: current?.lastSyncAt ?? null,
-        watchExpiration: current?.watchExpiration ?? null
-      }));
-      setGoogleIntegrationMessage({ type: 'ok', text: 'Preferencias de privacidad actualizadas.' });
-    } catch (error: any) {
-      setGoogleIntegrationMessage({
-        type: 'error',
-        text: error?.message ?? 'No fue posible actualizar el formato del evento.'
-      });
-    } finally {
-      setIsGoogleIntegrationSaving(false);
-    }
-  };
 
   // ─── Session Modal ────────────────────────────────────────────────────────
-
-  const renderSessionModal = () => {
-    if (!sessionModalMember) return null;
-    return (
-      <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-        <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl border border-velum-100 overflow-hidden flex flex-col max-h-[90vh]">
-          <div className="px-6 py-5 border-b border-velum-100 flex items-center justify-between">
-            <div>
-              <p className="text-[10px] font-bold uppercase tracking-widest text-velum-500">Registro clínico</p>
-              <h3 className="font-serif text-lg text-velum-900 mt-0.5">{sessionModalMember.name}</h3>
-            </div>
-            <button onClick={() => setSessionModalMember(null)} aria-label="Cerrar registro clínico" className="text-velum-400 hover:text-velum-900 p-1 rounded-xl hover:bg-velum-50 transition"><X size={20} /></button>
-          </div>
-          <div className="p-6 space-y-5 overflow-y-auto">
-            {memberAppointments.length > 0 && (
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-widest text-velum-500 mb-2">Cita asociada</label>
-                <select value={sessionForm.appointmentId} onChange={(e) => setSessionForm((f) => ({ ...f, appointmentId: e.target.value }))}
-                  className="w-full rounded-xl border border-velum-200 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-velum-900/20 focus:border-velum-900 transition bg-white">
-                  <option value="">Sin cita específica</option>
-                  {memberAppointments.map((a) => (
-                    <option key={a.id} value={a.id}>
-                      {new Date(a.startAt).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })} — {a.treatment?.name ?? 'Sin tratamiento'}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
-            <div>
-              <p className="text-xs font-bold uppercase tracking-widest text-velum-500 mb-3">Parámetros láser</p>
-              <div className="grid grid-cols-2 gap-3">
-                {([['zona', 'Zona tratada', 'Ej. Zona I', 'text'], ['fluencia', 'Fluencia (J/cm²)', 'Ej. 14', 'number'], ['frecuencia', 'Frecuencia (Hz)', 'Ej. 2', 'number'], ['spot', 'Spot (mm)', 'Ej. 12', 'number']] as const).map(([field, label, placeholder, type]) => (
-                  <div key={field}>
-                    <label className="block text-xs text-velum-500 mb-1">{label}</label>
-                    <input value={sessionForm[field]} onChange={(e) => setSessionForm((f) => ({ ...f, [field]: e.target.value }))}
-                      placeholder={placeholder} type={type} min="0" step={field === 'fluencia' ? '0.1' : field === 'frecuencia' ? '0.5' : '1'}
-                      className="w-full rounded-xl border border-velum-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-velum-900/20 focus:border-velum-900 transition" />
-                  </div>
-                ))}
-                <div className="col-span-2">
-                  <label className="block text-xs text-velum-500 mb-1">Pasadas</label>
-                  <input value={sessionForm.passes} onChange={(e) => setSessionForm((f) => ({ ...f, passes: e.target.value }))}
-                    placeholder="Ej. 3" type="number" min="1"
-                    className="w-full rounded-xl border border-velum-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-velum-900/20 focus:border-velum-900 transition" />
-                </div>
-              </div>
-            </div>
-            <div>
-              <label className="block text-xs font-bold uppercase tracking-widest text-velum-500 mb-2">Notas clínicas</label>
-              <textarea value={sessionForm.notes} onChange={(e) => setSessionForm((f) => ({ ...f, notes: e.target.value }))}
-                rows={3} placeholder="Observaciones, tolerancia del cliente, respuesta al tratamiento..."
-                className="w-full rounded-xl border border-velum-200 px-3 py-2.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-velum-900/20 focus:border-velum-900 transition" />
-            </div>
-            <div>
-              <label className="block text-xs font-bold uppercase tracking-widest text-velum-500 mb-2">Eventos adversos</label>
-              <textarea value={sessionForm.adverseEvents} onChange={(e) => setSessionForm((f) => ({ ...f, adverseEvents: e.target.value }))}
-                rows={2} placeholder="Eritema, edema... (dejar vacío si no aplica)"
-                className={`w-full rounded-xl border px-3 py-2.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-velum-900/20 transition ${sessionForm.adverseEvents ? 'border-amber-300 bg-amber-50/40' : 'border-velum-200 focus:border-velum-900'}`} />
-            </div>
-          </div>
-          <div className="px-6 py-4 border-t border-velum-100 flex gap-3 bg-velum-50/50">
-            <button onClick={handleSubmitSession} disabled={isSessionSaving}
-              className="flex-1 bg-velum-900 text-white rounded-xl py-2.5 text-sm font-medium hover:bg-velum-800 transition disabled:opacity-50 flex items-center justify-center gap-2">
-              <Zap size={14} />{isSessionSaving ? 'Registrando...' : 'Registrar sesión'}
-            </button>
-            <button onClick={() => setSessionModalMember(null)} className="px-4 py-2.5 rounded-xl border border-velum-200 text-sm text-velum-700 hover:bg-velum-100 transition">Cancelar</button>
-          </div>
-        </div>
-      </div>
-    );
-  };
+  // renderSessionModal → extraído a components/admin/SessionModal.tsx
 
   // renderPanel → AdminPanelSection
   // renderSocios → AdminSociasSection
@@ -2062,26 +1101,6 @@ export const Admin: React.FC = () => {
 
   // ─── Section: Pagos ───────────────────────────────────────────────────────
 
-  const handleDownloadHistCSV = async () => {
-    try {
-      const params = new URLSearchParams();
-      if (histDateFrom) params.set('dateFrom', histDateFrom);
-      if (histDateTo) params.set('dateTo', histDateTo);
-      if (histStatus) params.set('status', histStatus);
-      const resp = await fetch(`/api/v1/payments/export?${params.toString()}`, { credentials: 'include' });
-      if (!resp.ok) throw new Error('Error al exportar');
-      const blob = await resp.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `pagos-${new Date().toISOString().slice(0, 10)}.csv`;
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch {
-      toast.error('No se pudo descargar el CSV');
-    }
-  };
-
   // renderPagos → AdminPagosSection
 
   // renderRiesgos y renderCumplimiento → AdminRiesgosSection / AdminCumplimientoSection
@@ -2093,14 +1112,34 @@ export const Admin: React.FC = () => {
     { id: 'sistema',       label: 'Sistema' },
     { id: 'integraciones', label: 'Integraciones' },
     { id: 'auditoria',     label: 'Auditoría' },
+    { id: 'seguridad',     label: 'Seguridad' },
   ];
+
+  const loadTotpStatus = async () => {
+    try {
+      // GET /api/v1/me/totp/setup retorna 409 si ya está habilitado, 200 si no
+      // Para saber el estado actual consultamos el endpoint de setup sin efecto secundario
+      // usando una ruta dedicada; como no existe GET de estado, infereimos desde setup:
+      // Si responde 409 → habilitado. Si responde 200 → deshabilitado (guarda secreto temporal)
+      // Para evitar generar secretos temporales en cada carga, chequeamos via el perfil del usuario
+      const r = await apiFetch<{ totpEnabled?: boolean }>('/v1/me/profile');
+      if ('totpEnabled' in r) {
+        setTotpEnabled(r.totpEnabled ?? false);
+      }
+    } catch {
+      // si el endpoint no expone totpEnabled aún, asumimos false
+      setTotpEnabled(false);
+    } finally {
+      setTotpStatusLoaded(true);
+    }
+  };
 
   const renderAgendaSettings = () => (
     <div className="space-y-8">
       {/* Google Calendar */}
       <AgendaIntegrations
         status={googleIntegrationStatus}
-        isLoading={isGoogleIntegrationLoading}
+        isLoading={isGoogleIntegrationSaving}
         isSaving={isGoogleIntegrationSaving}
         message={googleIntegrationMessage}
         canManage={canManageGoogleIntegration}
@@ -2382,7 +1421,7 @@ export const Admin: React.FC = () => {
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <p className="text-[10px] font-bold uppercase tracking-widest text-velum-400">Bitácora de auditoría</p>
-            <button onClick={() => void loadData()} className="flex items-center gap-1.5 text-xs text-velum-400 hover:text-velum-900 transition">
+            <button onClick={() => void triggerLoadData()} className="flex items-center gap-1.5 text-xs text-velum-400 hover:text-velum-900 transition">
               <RefreshCw size={12} className={isLoadingData ? 'animate-spin' : ''} />Actualizar
             </button>
           </div>
@@ -2428,22 +1467,28 @@ export const Admin: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredAuditLogs.map((log, i) => (
-                      <tr key={log.id ?? i} className={`${i < filteredAuditLogs.length - 1 ? 'border-b border-velum-50' : ''} hover:bg-velum-50/50 transition`}>
-                        <td className="px-4 py-2.5 text-velum-400 whitespace-nowrap">
-                          {new Date(log.timestamp).toLocaleString('es-MX', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
-                        </td>
-                        <td className="px-4 py-2.5 text-velum-700 font-medium max-w-[140px] truncate">{log.user ?? '—'}</td>
-                        <td className="px-4 py-2.5 text-velum-500 font-mono">{log.action}</td>
-                        <td className="px-4 py-2.5 text-velum-400 font-mono">{log.ip ?? '—'}</td>
-                        <td className="px-4 py-2.5">
-                          <span className={`inline-flex items-center gap-1.5 text-xs font-medium ${log.status === 'success' ? 'text-emerald-600' : 'text-red-600'}`}>
-                            <span className={`w-1.5 h-1.5 rounded-full ${log.status === 'success' ? 'bg-emerald-500' : 'bg-red-500'}`} />
-                            {log.status === 'success' ? 'OK' : 'Error'}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
+                    {filteredAuditLogs.map((log, i) => {
+                      const d = new Date(log.timestamp);
+                      const dateStr = !isNaN(d.getTime())
+                        ? d.toLocaleString('es-MX', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
+                        : '—';
+                      const userEmail = (log.user && log.user !== 'system') ? log.user : '—';
+                      const isOk = log.status === 'success';
+                      return (
+                        <tr key={log.id ?? i} className={`${i < filteredAuditLogs.length - 1 ? 'border-b border-velum-50' : ''} hover:bg-velum-50/50 transition`}>
+                          <td className="px-4 py-2.5 text-velum-400 whitespace-nowrap">{dateStr}</td>
+                          <td className="px-4 py-2.5 text-velum-700 font-medium max-w-[140px] truncate">{userEmail}</td>
+                          <td className="px-4 py-2.5 text-velum-500 font-mono">{log.action}</td>
+                          <td className="px-4 py-2.5 text-velum-400 font-mono">{log.ip}</td>
+                          <td className="px-4 py-2.5">
+                            <span className={`inline-flex items-center gap-1.5 text-xs font-medium ${isOk ? 'text-emerald-600' : 'text-red-600'}`}>
+                              <span className={`w-1.5 h-1.5 rounded-full ${isOk ? 'bg-emerald-500' : 'bg-red-500'}`} />
+                              {isOk ? 'OK' : 'Error'}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -2524,7 +1569,7 @@ export const Admin: React.FC = () => {
             <p className="text-sm font-semibold text-velum-900">Error al cargar datos</p>
             <p className="text-xs text-velum-400 mt-1 max-w-xs">{dataLoadError}</p>
           </div>
-          <button onClick={() => void loadData()}
+          <button onClick={() => void triggerLoadData()}
             className="flex items-center gap-2 px-4 py-2 rounded-xl bg-velum-900 text-white text-sm font-medium hover:bg-velum-800 transition">
             <RefreshCw size={14} />Reintentar
           </button>
@@ -2568,7 +1613,11 @@ export const Admin: React.FC = () => {
           />
         </SectionErrorBoundary>
       );
-      case 'agenda':       return renderAgenda();
+      case 'agenda':       return (
+        <SectionErrorBoundary section="Agenda">
+          {renderAgenda()}
+        </SectionErrorBoundary>
+      );
       case 'expedientes':  return (
         <SectionErrorBoundary section="Expedientes">
           <AdminExpedientesSection
@@ -2586,27 +1635,36 @@ export const Admin: React.FC = () => {
       );
       case 'pagos':        return (
         <SectionErrorBoundary section="Pagos">
-          <AdminPagosSection
-            analytics={analytics}
-            serverReports={serverReports}
-            histPayments={histPayments}
-            histTotal={histTotal}
-            histPage={histPage}
-            histPages={histPages}
-            histLoading={histLoading}
-            histLoaded={histLoaded}
-            histError={histError}
-            histDateFrom={histDateFrom}
-            histDateTo={histDateTo}
-            histStatus={histStatus}
-            onDateFromChange={setHistDateFrom}
-            onDateToChange={setHistDateTo}
-            onStatusChange={setHistStatus}
-            onSearch={(page) => void loadHistPayments(page)}
-            onDownloadCSV={() => void handleDownloadHistCSV()}
-            onOpenMember={handleOpenMemberDrawer}
-            onRegularize={(id, status) => handleUpdateMember(id, status)}
-          />
+          <div className="space-y-4">
+            <div className="flex justify-end">
+              <ExportButton
+                endpoint="/api/v1/admin/export/payments"
+                label="Exportar pagos CSV"
+                params={{ from: histDateFrom, to: histDateTo }}
+              />
+            </div>
+            <AdminPagosSection
+              analytics={analytics}
+              serverReports={serverReports}
+              histPayments={histPayments}
+              histTotal={histTotal}
+              histPage={histPage}
+              histPages={histPages}
+              histLoading={histLoading}
+              histLoaded={histLoaded}
+              histError={histError}
+              histDateFrom={histDateFrom}
+              histDateTo={histDateTo}
+              histStatus={histStatus}
+              onDateFromChange={setHistDateFrom}
+              onDateToChange={setHistDateTo}
+              onStatusChange={setHistStatus}
+              onSearch={(page) => void loadHistPayments(page)}
+              onDownloadCSV={() => void handleDownloadHistCSV()}
+              onOpenMember={handleOpenMemberDrawer}
+              onRegularize={(id, status) => handleUpdateMember(id, status)}
+            />
+          </div>
         </SectionErrorBoundary>
       );
       case 'kpis':         return (
@@ -2616,7 +1674,15 @@ export const Admin: React.FC = () => {
       );
       case 'finanzas':     return (
         <SectionErrorBoundary section="Finanzas">
-          <AdminFinanzasSection members={members} analytics={analytics} onOpenMember={handleOpenMemberDrawer} />
+          <div className="space-y-4">
+            <div className="flex justify-end">
+              <ExportButton
+                endpoint="/api/v1/admin/export/payments"
+                label="Exportar pagos CSV"
+              />
+            </div>
+            <AdminFinanzasSection members={members} analytics={analytics} onOpenMember={handleOpenMemberDrawer} />
+          </div>
         </SectionErrorBoundary>
       );
       case 'riesgos':      return (
@@ -2635,11 +1701,15 @@ export const Admin: React.FC = () => {
             failedAudits={analytics.failedAudits}
             sensitiveEvents={analytics.sensitiveEvents}
             staffCount={members.filter((m) => m.role !== 'member').length + 1}
-            onRefresh={() => void loadData()}
+            onRefresh={() => void triggerLoadData()}
           />
         </SectionErrorBoundary>
       );
-      case 'ajustes':      return renderConfiguraciones();
+      case 'ajustes':      return (
+        <SectionErrorBoundary section="Ajustes">
+          {renderConfiguraciones()}
+        </SectionErrorBoundary>
+      );
       default:             return null;
     }
   };
@@ -2760,7 +1830,7 @@ export const Admin: React.FC = () => {
           </div>
           <div className="flex items-center gap-2">
             <button
-              onClick={() => void loadData()}
+              onClick={() => void triggerLoadData()}
               className="p-2 rounded-xl text-velum-400 hover:text-velum-700 hover:bg-velum-50 transition"
               title="Actualizar datos"
             >
@@ -2783,7 +1853,17 @@ export const Admin: React.FC = () => {
       </div>
 
       {/* Modals */}
-      {renderSessionModal()}
+      {sessionModalMember && (
+        <SessionModal
+          member={sessionModalMember}
+          appointments={memberAppointments}
+          form={sessionForm}
+          isSaving={isSessionSaving}
+          onFormChange={setSessionForm}
+          onSubmit={handleSubmitSession}
+          onClose={() => setSessionModalMember(null)}
+        />
+      )}
       {selectedMember && (
         <SectionErrorBoundary section="Perfil">
         <AdminMemberDrawer
@@ -2840,7 +1920,7 @@ export const Admin: React.FC = () => {
       <AdminCreatePatientDrawer
         open={patientDrawerOpen}
         onClose={() => setPatientDrawerOpen(false)}
-        onCreated={() => { setPatientDrawerOpen(false); void loadData(); }}
+        onCreated={() => { setPatientDrawerOpen(false); void triggerLoadData(); }}
         actorEmail={user?.email}
       />
 

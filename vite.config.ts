@@ -31,6 +31,47 @@ export default defineConfig(({ mode }) => {
         alias: {
           '@': path.resolve(__dirname, '.'),
         }
-      }
+      },
+      build: {
+        rollupOptions: {
+          output: {
+            manualChunks: (id: string) => {
+              // Vendor: React core
+              if (id.includes('node_modules/react/') || id.includes('node_modules/react-dom/')) {
+                return 'vendor-react';
+              }
+              // Vendor: Router
+              if (id.includes('node_modules/react-router')) {
+                return 'vendor-router';
+              }
+              // Vendor: Icons
+              if (id.includes('node_modules/lucide-react')) {
+                return 'vendor-icons';
+              }
+              // Admin panel — lazy chunks (solo se cargan cuando el usuario entra al admin)
+              if (
+                id.includes('/pages/admin/') ||
+                id.includes('AdminKPIs') ||
+                id.includes('AdminFinanzas') ||
+                id.includes('AdminPagos') ||
+                id.includes('AdminExpedientes') ||
+                id.includes('AdminCumplimiento') ||
+                id.includes('AdminRiesgos') ||
+                id.includes('AdminSocias') ||
+                id.includes('AdminPanel')
+              ) {
+                return 'admin-sections';
+              }
+              if (
+                id.includes('AdminStripeSettings') ||
+                id.includes('AdminWhatsAppSettings') ||
+                id.includes('AdminUsersPermissions')
+              ) {
+                return 'admin-settings';
+              }
+            },
+          },
+        },
+      },
     };
 });

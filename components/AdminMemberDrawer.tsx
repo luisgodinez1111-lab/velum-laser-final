@@ -91,8 +91,9 @@ export const AdminMemberDrawer: React.FC<AdminMemberDrawerProps> = ({
 }) => {
   const [showAllAppointments, setShowAllAppointments] = React.useState(false);
   const [showAllSessions, setShowAllSessions] = React.useState(false);
+  const [showDeactivateConfirm, setShowDeactivateConfirm] = React.useState(false);
+  const [confirmDeactivateEmail, setConfirmDeactivateEmail] = React.useState('');
   const intake = intakeStatusLabel(member.intakeStatus);
-  const mem = member;
 
   return (
     <>
@@ -102,17 +103,17 @@ export const AdminMemberDrawer: React.FC<AdminMemberDrawerProps> = ({
         <div className="px-6 py-5 border-b border-velum-100 flex items-start justify-between">
           <div>
             <p className="text-[10px] font-bold uppercase tracking-widest text-velum-400">Perfil del socio</p>
-            <h2 className="font-serif text-xl text-velum-900 mt-1">{mem.name}</h2>
-            <p className="text-xs text-velum-500 mt-0.5">{mem.email}</p>
+            <h2 className="font-serif text-xl text-velum-900 mt-1">{member.name}</h2>
+            <p className="text-xs text-velum-500 mt-0.5">{member.email}</p>
           </div>
           <button onClick={onClose} aria-label="Cerrar perfil de paciente" className="p-2 rounded-xl hover:bg-velum-50 text-velum-400 hover:text-velum-700 transition"><X size={18} /></button>
         </div>
         {/* Stats */}
         <div className="grid grid-cols-2 gap-3 p-4 border-b border-velum-100">
           {[
-            { label: 'Plan', value: mem.plan ?? '—' },
-            { label: 'Estado', value: <Pill label={statusLabel(mem.subscriptionStatus)} cls={statusPill(mem.subscriptionStatus)} /> },
-            { label: 'Cobro', value: mem.amount ? `${formatMoney(mem.amount)}${mem.interval === 'year' ? '/año' : mem.interval === 'week' ? '/sem' : '/mes'}` : '—' },
+            { label: 'Plan', value: member.plan ?? '—' },
+            { label: 'Estado', value: <Pill label={statusLabel(member.subscriptionStatus)} cls={statusPill(member.subscriptionStatus)} /> },
+            { label: 'Cobro', value: member.amount ? `${formatMoney(member.amount)}${member.interval === 'year' ? '/año' : member.interval === 'week' ? '/sem' : '/mes'}` : '—' },
             { label: 'Expediente', value: <Pill label={intake.label} cls={intake.cls} /> }
           ].map(({ label, value }) => (
             <div key={label} className="bg-velum-50 rounded-xl p-3">
@@ -122,14 +123,14 @@ export const AdminMemberDrawer: React.FC<AdminMemberDrawerProps> = ({
           ))}
         </div>
         {/* Payment status banner */}
-        <div className={`mx-4 mt-3 mb-0 px-4 py-2.5 rounded-xl flex items-center gap-2 border ${mem.subscriptionStatus === 'active' ? 'bg-emerald-50 border-emerald-200' : 'bg-red-50 border-red-200'}`}>
-          <span className={`w-2 h-2 rounded-full shrink-0 ${mem.subscriptionStatus === 'active' ? 'bg-emerald-500' : 'bg-red-500'}`} />
-          <span className={`text-sm font-semibold ${mem.subscriptionStatus === 'active' ? 'text-emerald-800' : 'text-red-800'}`}>
-            {mem.subscriptionStatus === 'active' ? 'Al corriente' : 'Pago vencido / no regularizada'}
+        <div className={`mx-4 mt-3 mb-0 px-4 py-2.5 rounded-xl flex items-center gap-2 border ${member.subscriptionStatus === 'active' ? 'bg-emerald-50 border-emerald-200' : 'bg-red-50 border-red-200'}`}>
+          <span className={`w-2 h-2 rounded-full shrink-0 ${member.subscriptionStatus === 'active' ? 'bg-emerald-500' : 'bg-red-500'}`} />
+          <span className={`text-sm font-semibold ${member.subscriptionStatus === 'active' ? 'text-emerald-800' : 'text-red-800'}`}>
+            {member.subscriptionStatus === 'active' ? 'Al corriente' : 'Pago vencido / no regularizada'}
           </span>
-          {mem.nextBillingDate && (
+          {member.nextBillingDate && (
             <span className="text-xs text-velum-400 ml-auto shrink-0">
-              {mem.subscriptionStatus === 'active' ? 'Renueva:' : 'Desde:'} {mem.nextBillingDate}
+              {member.subscriptionStatus === 'active' ? 'Renueva:' : 'Desde:'} {member.nextBillingDate}
             </span>
           )}
         </div>
@@ -138,24 +139,24 @@ export const AdminMemberDrawer: React.FC<AdminMemberDrawerProps> = ({
           {/* Acciones */}
           <div className="p-4 border-b border-velum-100 space-y-2">
             <p className="text-[10px] font-bold uppercase tracking-widest text-velum-400 mb-3">Acciones</p>
-            <button onClick={() => { onOpenSessionModal(mem); onClose(); }}
+            <button onClick={() => { onOpenSessionModal(member); onClose(); }}
               className="w-full flex items-center gap-2 px-4 py-2.5 bg-velum-900 text-white rounded-xl text-sm font-medium hover:bg-velum-800 transition">
               <Zap size={14} />Registrar sesión
             </button>
-            {mem.subscriptionStatus !== 'active' && (
-              <button onClick={() => onUpdateMember(mem.id, 'active')} disabled={isUpdatingMember}
+            {member.subscriptionStatus !== 'active' && (
+              <button onClick={() => onUpdateMember(member.id, 'active')} disabled={isUpdatingMember}
                 className="w-full flex items-center gap-2 px-4 py-2.5 bg-emerald-600 text-white rounded-xl text-sm font-medium hover:bg-emerald-700 transition disabled:opacity-50 disabled:cursor-not-allowed">
                 <CheckCircle2 size={14} />{isUpdatingMember ? 'Actualizando...' : 'Activar cuenta'}
               </button>
             )}
-            {mem.subscriptionStatus === 'active' && (
-              <button onClick={() => onUpdateMember(mem.id, 'past_due')} disabled={isUpdatingMember}
+            {member.subscriptionStatus === 'active' && (
+              <button onClick={() => onUpdateMember(member.id, 'past_due')} disabled={isUpdatingMember}
                 className="w-full flex items-center gap-2 px-4 py-2.5 border border-amber-300 text-amber-700 bg-amber-50 rounded-xl text-sm font-medium hover:bg-amber-100 transition disabled:opacity-50 disabled:cursor-not-allowed">
                 <CircleAlert size={14} />{isUpdatingMember ? 'Actualizando...' : 'Marcar pago vencido'}
               </button>
             )}
-            {mem.subscriptionStatus !== 'canceled' && (
-              <button onClick={() => onUpdateMember(mem.id, 'canceled')} disabled={isUpdatingMember}
+            {member.subscriptionStatus !== 'canceled' && (
+              <button onClick={() => onUpdateMember(member.id, 'canceled')} disabled={isUpdatingMember}
                 className="w-full flex items-center gap-2 px-4 py-2.5 border border-red-200 text-red-600 bg-red-50 rounded-xl text-sm font-medium hover:bg-red-100 transition disabled:opacity-50 disabled:cursor-not-allowed">
                 <XCircle size={14} />{isUpdatingMember ? 'Actualizando...' : 'Cancelar membresía'}
               </button>
@@ -184,7 +185,7 @@ export const AdminMemberDrawer: React.FC<AdminMemberDrawerProps> = ({
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-[10px] font-bold uppercase tracking-widest text-red-500">Zona de peligro</p>
-                      <p className="font-semibold text-velum-900 text-sm mt-0.5 truncate max-w-[220px]">{mem.email}</p>
+                      <p className="font-semibold text-velum-900 text-sm mt-0.5 truncate max-w-[220px]">{member.email}</p>
                     </div>
                     <button onClick={onCloseCriticalActions} className="p-1.5 rounded-lg hover:bg-velum-100 text-velum-400 hover:text-velum-700 transition">
                       <XCircle size={18} />
@@ -192,17 +193,52 @@ export const AdminMemberDrawer: React.FC<AdminMemberDrawerProps> = ({
                   </div>
 
                   {/* Desactivar */}
-                  <button
-                    onClick={async () => { await onDrawerDeactivate(mem.id); onCloseCriticalActions(); }}
-                    disabled={drawerDeactivating}
-                    className="w-full flex items-center gap-3 px-4 py-3 border border-amber-300 text-amber-700 bg-amber-50 rounded-xl text-sm font-medium hover:bg-amber-100 transition disabled:opacity-50"
-                  >
-                    <CircleAlert size={15} className="shrink-0" />
-                    <span className="text-left">
-                      <span className="block font-semibold">{drawerDeactivating ? 'Desactivando...' : 'Desactivar y cancelar suscripción'}</span>
-                      <span className="block text-xs opacity-70 mt-0.5">Bloquea acceso y cancela cobro en Stripe</span>
-                    </span>
-                  </button>
+                  {!showDeactivateConfirm ? (
+                    <button
+                      onClick={() => setShowDeactivateConfirm(true)}
+                      disabled={drawerDeactivating}
+                      className="w-full flex items-center gap-3 px-4 py-3 border border-amber-300 text-amber-700 bg-amber-50 rounded-xl text-sm font-medium hover:bg-amber-100 transition disabled:opacity-50"
+                    >
+                      <CircleAlert size={15} className="shrink-0" />
+                      <span className="text-left">
+                        <span className="block font-semibold">Desactivar y cancelar suscripción</span>
+                        <span className="block text-xs opacity-70 mt-0.5">Bloquea acceso y cancela cobro en Stripe</span>
+                      </span>
+                    </button>
+                  ) : (
+                    <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-3">
+                      <p className="text-xs text-amber-700 font-medium leading-relaxed">
+                        Escribe el correo del miembro para confirmar la desactivación:
+                      </p>
+                      <input
+                        type="email"
+                        placeholder={member.email}
+                        value={confirmDeactivateEmail}
+                        onChange={(e) => setConfirmDeactivateEmail(e.target.value)}
+                        className="w-full rounded-xl border border-amber-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-300 transition bg-white"
+                      />
+                      <div className="flex gap-2">
+                        <button
+                          onClick={async () => {
+                            await onDrawerDeactivate(member.id);
+                            setShowDeactivateConfirm(false);
+                            setConfirmDeactivateEmail('');
+                            onCloseCriticalActions();
+                          }}
+                          disabled={drawerDeactivating || confirmDeactivateEmail.toLowerCase() !== member.email.toLowerCase()}
+                          className="flex-1 bg-amber-600 text-white rounded-xl py-2 text-xs font-bold hover:bg-amber-700 transition disabled:opacity-50"
+                        >
+                          {drawerDeactivating ? 'Desactivando...' : 'Confirmar desactivación'}
+                        </button>
+                        <button
+                          onClick={() => { setShowDeactivateConfirm(false); setConfirmDeactivateEmail(''); }}
+                          className="px-3 rounded-xl border border-velum-200 text-xs text-velum-500 hover:bg-velum-50 transition"
+                        >
+                          Cancelar
+                        </button>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Eliminar — paso 1: botón inicial */}
                   {drawerDeleteStep === 'idle' && (
@@ -222,11 +258,11 @@ export const AdminMemberDrawer: React.FC<AdminMemberDrawerProps> = ({
                   {drawerDeleteStep === 'otp-send' && (
                     <div className="rounded-xl border border-red-200 bg-red-50 p-4 space-y-3">
                       <p className="text-xs text-red-700 font-medium leading-relaxed">
-                        Se enviará un código OTP a tu correo electrónico para confirmar la eliminación de <strong>{mem.email}</strong>.
+                        Se enviará un código OTP a tu correo electrónico para confirmar la eliminación de <strong>{member.email}</strong>.
                       </p>
                       {drawerDeleteMsg && <p className="text-xs text-red-600">{drawerDeleteMsg}</p>}
                       <div className="flex gap-2">
-                        <button onClick={() => void onRequestOtp(mem.id)} disabled={drawerDeleteSending}
+                        <button onClick={() => void onRequestOtp(member.id)} disabled={drawerDeleteSending}
                           className="flex-1 bg-red-600 text-white rounded-xl py-2 text-xs font-bold hover:bg-red-700 transition disabled:opacity-50">
                           {drawerDeleteSending ? 'Enviando...' : 'Enviar OTP por correo'}
                         </button>
@@ -254,11 +290,11 @@ export const AdminMemberDrawer: React.FC<AdminMemberDrawerProps> = ({
                         placeholder="Código OTP (6 dígitos)"
                         value={drawerDeleteOtp}
                         onChange={(e) => onSetDrawerDeleteOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                        onKeyDown={(e) => { if (e.key === 'Enter' && drawerDeleteOtp.length === 6) void onConfirmDelete(mem.id, mem.email); }}
+                        onKeyDown={(e) => { if (e.key === 'Enter' && drawerDeleteOtp.length === 6) void onConfirmDelete(member.id, member.email); }}
                         className="w-full rounded-xl border border-red-300 px-3 py-2.5 text-center text-lg font-bold tracking-[0.4em] focus:outline-none focus:ring-2 focus:ring-red-300 transition bg-white"
                       />
                       <div className="flex gap-2">
-                        <button onClick={() => void onConfirmDelete(mem.id, mem.email)} disabled={drawerDeleting || drawerDeleteOtp.length !== 6}
+                        <button onClick={() => void onConfirmDelete(member.id, member.email)} disabled={drawerDeleting || drawerDeleteOtp.length !== 6}
                           className="flex-1 bg-red-600 text-white rounded-xl py-2 text-xs font-bold hover:bg-red-700 transition disabled:opacity-50">
                           {drawerDeleting ? 'Eliminando...' : 'Confirmar eliminación'}
                         </button>
@@ -276,37 +312,37 @@ export const AdminMemberDrawer: React.FC<AdminMemberDrawerProps> = ({
           {/* Expediente viewer button */}
           {member.intakeStatus && member.intakeStatus !== 'draft' && (
             <div className="px-4 pt-4 pb-0">
-              <button onClick={() => { onOpenIntakeModal(mem); onClose(); }}
+              <button onClick={() => { onOpenIntakeModal(member); onClose(); }}
                 className="w-full flex items-center justify-center gap-2 px-4 py-2.5 border border-velum-200 text-velum-700 rounded-xl text-sm font-medium hover:bg-velum-50 transition">
                 <FolderOpen size={14} />Ver expediente completo
               </button>
             </div>
           )}
           {/* Intake approval */}
-          {(member.intakeStatus === 'submitted' || intakeToReject === mem.id) && (
+          {(member.intakeStatus === 'submitted' || intakeToReject === member.id) && (
             <div className="p-4 border-b border-velum-100">
               <p className="text-[10px] font-bold uppercase tracking-widest text-velum-400 mb-3">Revisión de expediente</p>
-              {intakeToReject === mem.id ? (
+              {intakeToReject === member.id ? (
                 <div className="space-y-3">
                   <textarea value={intakeRejectReason} onChange={(e) => onSetIntakeRejectReason(e.target.value)}
                     placeholder="Motivo del rechazo (requerido)" rows={3}
                     className="w-full rounded-xl border border-red-200 bg-red-50/30 px-3 py-2.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-red-300 transition" />
                   <div className="flex gap-2">
-                    <button onClick={() => onApproveIntake(mem.id, false)} disabled={!intakeRejectReason.trim() || isApprovingIntake === mem.id}
+                    <button onClick={() => onApproveIntake(member.id, false)} disabled={!intakeRejectReason.trim() || isApprovingIntake === member.id}
                       className="flex-1 bg-red-600 text-white rounded-xl py-2 text-sm font-medium hover:bg-red-700 transition disabled:opacity-50">
-                      {isApprovingIntake === mem.id ? 'Procesando...' : 'Confirmar rechazo'}
+                      {isApprovingIntake === member.id ? 'Procesando...' : 'Confirmar rechazo'}
                     </button>
                     <button onClick={() => { onSetIntakeToReject(null); onSetIntakeRejectReason(''); }}
                       className="px-3 py-2 rounded-xl border border-velum-200 text-sm text-velum-600 hover:bg-velum-50 transition">Cancelar</button>
                   </div>
                 </div>
-              ) : intakeToApprove === mem.id ? (
+              ) : intakeToApprove === member.id ? (
                 <div className="space-y-2">
                   <p className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-xl px-3 py-2">¿Confirmas que el expediente cumple los requisitos clínicos?</p>
                   <div className="flex gap-2">
-                    <button onClick={() => { onSetIntakeToApprove(null); onApproveIntake(mem.id, true); }} disabled={isApprovingIntake === mem.id}
+                    <button onClick={() => { onSetIntakeToApprove(null); onApproveIntake(member.id, true); }} disabled={isApprovingIntake === member.id}
                       className="flex-1 bg-emerald-600 text-white rounded-xl py-2.5 text-sm font-medium hover:bg-emerald-700 transition disabled:opacity-50">
-                      {isApprovingIntake === mem.id ? 'Procesando...' : 'Confirmar aprobación'}
+                      {isApprovingIntake === member.id ? 'Procesando...' : 'Confirmar aprobación'}
                     </button>
                     <button onClick={() => onSetIntakeToApprove(null)}
                       className="px-3 py-2.5 rounded-xl border border-velum-200 text-sm text-velum-600 hover:bg-velum-50 transition">Cancelar</button>
@@ -314,11 +350,11 @@ export const AdminMemberDrawer: React.FC<AdminMemberDrawerProps> = ({
                 </div>
               ) : (
                 <div className="flex gap-2">
-                  <button onClick={() => onSetIntakeToApprove(mem.id)}
+                  <button onClick={() => onSetIntakeToApprove(member.id)}
                     className="flex-1 bg-emerald-600 text-white rounded-xl py-2.5 text-sm font-medium hover:bg-emerald-700 transition">
                     Aprobar
                   </button>
-                  <button onClick={() => onSetIntakeToReject(mem.id)}
+                  <button onClick={() => onSetIntakeToReject(member.id)}
                     className="flex-1 border border-red-200 text-red-600 bg-red-50 rounded-xl py-2.5 text-sm font-medium hover:bg-red-100 transition">Rechazar</button>
                 </div>
               )}

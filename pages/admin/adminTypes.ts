@@ -40,4 +40,4 @@ export type AgendaTemplatePreset =
   | 'season_extended'
   | 'season_compact';
 
-export type SettingsCategory = 'agenda' | 'sistema' | 'integraciones' | 'auditoria';
+export type SettingsCategory = 'agenda' | 'sistema' | 'integraciones' | 'auditoria' | 'seguridad';

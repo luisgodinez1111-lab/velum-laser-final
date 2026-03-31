@@ -1,3 +1,7 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 /* ── VELUM LASER — Global Styles ───────────────────────────────────────────── */
 
 /* Reset tap highlight on all touch devices */

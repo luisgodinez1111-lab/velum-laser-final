@@ -115,8 +115,8 @@ export const apiFetch = async <T>(
             return retryResp.json() as Promise<T>;
           }
         }
-        if (!window.location.pathname.includes('/login')) {
-          window.location.replace('/login');
+        if (!window.location.hash.includes('/login')) {
+          window.location.replace('/#/login');
         }
       }
 

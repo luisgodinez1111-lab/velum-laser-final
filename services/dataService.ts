@@ -1,6 +1,7 @@
 import { AuditLogEntry, LegalDocument, Member, UserRole } from "../types";
 import { apiFetch } from "./apiClient";
 import { MEMBERSHIPS } from "../constants";
+import type { RawApiDocument, RawApiUser, AdminUsersApiResponse, AdminAuditLogsApiResponse } from "./apiTypes";
 
 const toTitle = (type: string) => {
   switch (type) {
@@ -15,7 +16,7 @@ const toTitle = (type: string) => {
   }
 };
 
-const mapDocuments = (documents: any[]): LegalDocument[] =>
+const mapDocuments = (documents: RawApiDocument[]): LegalDocument[] =>
   (documents ?? []).map((doc) => ({
     id: doc.id,
     type: doc.type as LegalDocument["type"],
@@ -26,7 +27,7 @@ const mapDocuments = (documents: any[]): LegalDocument[] =>
     signatureUrl: doc.signatureKey
   }));
 
-const mapMember = (user: any): Member => {
+const mapMember = (user: RawApiUser): Member => {
   const membership = user.memberships?.[0];
   const catalog = membership?.catalogEntry; // enriched by listUsers endpoint
   const tier = MEMBERSHIPS.find((t) => t.stripePriceId === membership?.planId);
@@ -42,16 +43,16 @@ const mapMember = (user: any): Member => {
     interval: catalog?.interval ?? "month",
     subscriptionStatus: membership?.status ?? "inactive",
     nextBillingDate: membership?.currentPeriodEnd ? new Date(membership.currentPeriodEnd).toLocaleDateString("es-MX") : undefined,
-    intakeStatus: user.medicalIntake?.status ?? "draft",
+    intakeStatus: (user.medicalIntake?.status ?? "draft") as Member["intakeStatus"],
     clinical: {
-      consentFormSigned: user.documents?.some((doc: any) => doc.status === "signed" && doc.type === "informed_consent"),
+      consentFormSigned: user.documents?.some((doc) => doc.status === "signed" && doc.type === "informed_consent"),
       documents: mapDocuments(user.documents ?? [])
     }
   };
 };
 
-// Unwrap paginated or legacy array response
-const extractUsers = (resp: any): any[] => {
+// Unwrap paginated o legacy array response del endpoint /admin/users
+const extractUsers = (resp: AdminUsersApiResponse | RawApiUser[]): RawApiUser[] => {
   if (Array.isArray(resp)) return resp;
   if (resp && Array.isArray(resp.data)) return resp.data;
   return [];
@@ -66,18 +67,19 @@ export const memberService = {
     if (params?.role)   qs.set("role",   params.role);
     if (params?.status) qs.set("status", params.status);
     const query = qs.toString() ? `?${qs.toString()}` : "";
-    const resp = await apiFetch<any>(`/admin/users${query}`);
+    const resp = await apiFetch<AdminUsersApiResponse | RawApiUser[]>(`/admin/users${query}`);
     const users = extractUsers(resp);
+    const paginatedResp = Array.isArray(resp) ? null : resp;
     return {
-      members: users.filter((u: any) => u.role === "member").map(mapMember),
-      total: resp?.total ?? users.length,
-      pages: resp?.pages ?? 1,
+      members: users.filter((u) => u.role === "member").map(mapMember),
+      total: paginatedResp?.total ?? users.length,
+      pages: paginatedResp?.pages ?? 1,
     };
   },
 
   getById: async (id: string): Promise<Member | undefined> => {
     try {
-      const user = await apiFetch<any>(`/admin/users/${id}`);
+      const user = await apiFetch<RawApiUser>(`/admin/users/${id}`);
       if (!user) return undefined;
       return mapMember(user);
     } catch {
@@ -158,9 +160,9 @@ export const documentService = {
 
 export const auditService = {
   getLogs: async (): Promise<AuditLogEntry[]> => {
-    const resp = await apiFetch<any>("/admin/audit-logs");
-    // Backend returns { data: logs[], pagination } — extract array defensively
-    const logs: any[] = Array.isArray(resp) ? resp : (resp?.data ?? []);
+    const resp = await apiFetch<AdminAuditLogsApiResponse>("/admin/audit-logs");
+    // Backend devuelve { data: logs[], pagination } — extraer el array defensivamente
+    const logs = Array.isArray(resp) ? resp : (resp?.data ?? []);
     return logs.map((log) => ({
       id: log.id,
       timestamp: log.createdAt,
