@@ -41,16 +41,66 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [needsOnboarding, setNeedsOnboarding] = useState(false);
 
   useEffect(() => {
+    let isMounted = true;
     authService.verifySession()
       .then((userData) => {
+        if (!isMounted) return;
         if (userData) {
           setUser(userData);
           setMustChangePassword(userData.mustChangePassword ?? false);
         }
       })
       .catch(() => { /* Session expired or network error — user is unauthenticated */ })
-      .finally(() => setIsSessionLoading(false));
+      .finally(() => { if (isMounted) setIsSessionLoading(false); });
+    return () => { isMounted = false; };
   }, []);
+
+  // Re-verificar sesión cada 5 min: detecta cambios de rol o cuenta desactivada
+  useEffect(() => {
+    if (!user) return;
+    const interval = setInterval(() => {
+      authService.verifySession()
+        .then((userData) => {
+          if (!userData) {
+            setUser(null);
+            return;
+          }
+          // Actualizar solo si el rol o estado activo cambió
+          setUser((prev) => {
+            if (!prev) return userData;
+            if (prev.role !== userData.role) return userData;
+            return prev;
+          });
+        })
+        .catch(() => { /* Error de red — mantener sesión actual */ });
+    }, 5 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [user?.id]);
+
+  // Auto-logout por inactividad (30 min sin actividad del usuario)
+  useEffect(() => {
+    if (!user) return;
+
+    const INACTIVITY_MS = 30 * 60 * 1000;
+    let timer: ReturnType<typeof setTimeout>;
+
+    const resetTimer = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        authService.logout().catch(() => {});
+        setUser(null);
+      }, INACTIVITY_MS);
+    };
+
+    const events = ["mousedown", "keydown", "touchstart", "scroll"] as const;
+    events.forEach(e => window.addEventListener(e, resetTimer, { passive: true }));
+    resetTimer(); // inicia el timer al montar
+
+    return () => {
+      clearTimeout(timer);
+      events.forEach(e => window.removeEventListener(e, resetTimer));
+    };
+  }, [user?.id]);
 
   const login = useCallback(async (email: string, pass: string): Promise<AuthUser> => {
     setIsActionLoading(true);

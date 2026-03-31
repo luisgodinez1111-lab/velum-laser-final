@@ -1,6 +1,9 @@
 import crypto from "crypto";
 import { env } from "./env";
 
+/** OTP numérico de 6 dígitos generado con CSPRNG (no Math.random). */
+export const generateOtp = (): string => String(100000 + crypto.randomInt(900000));
+
 const ALGORITHM = "aes-256-gcm";
 const IV_LENGTH = 12;
 

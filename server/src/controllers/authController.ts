@@ -2,7 +2,8 @@ import { Request, Response } from "express";
 import { AuthRequest } from "../middlewares/auth";
 import { registerSchema, loginSchema, forgotSchema, resetSchema, verifyEmailSchema, consentOtpVerifySchema } from "../validators/auth";
 import { createUser, getUserByEmail } from "../services/userService";
-import { hashPassword, signToken, verifyPassword, createRefreshToken, rotateRefreshToken, revokeRefreshToken, revokeAllRefreshTokens, recordPasswordHistory, isPasswordReused } from "../utils/auth";
+import { verifyTotpCode } from "../utils/totp";
+import { hashPassword, signToken, verifyPassword, createRefreshToken, rotateRefreshToken, revokeRefreshToken, revokeAllRefreshTokens, recordPasswordHistory, isPasswordReused, validatePasswordStrength } from "../utils/auth";
 import { env, isProduction } from "../utils/env";
 import { createEmailVerification, createPasswordReset, consumeEmailVerification, consumePasswordReset, createConsentOtp, consumeConsentOtp } from "../services/authService";
 import { prisma } from "../db/prisma";
@@ -11,48 +12,24 @@ import { sendPasswordResetEmail, sendEmailVerificationEmail, sendConsentOtpEmail
 import { onNewMember } from "../services/notificationService";
 import { logger } from "../utils/logger";
 import { safeIp } from "../utils/request";
+import {
+  LOGIN_LOCKOUT_MS,
+  _forceLoginLockout,
+  isAccountLocked,
+  recordLoginFailure,
+  clearLoginFailures,
+} from "../services/loginSecurityService";
+import { parseDurationMs } from "../utils/time";
 
-// ── Per-account brute force protection ───────────────────────────────────────
-// Simple in-memory counter. For multi-instance deployments use Redis.
-const LOGIN_MAX_FAILURES = 10;
-export const LOGIN_LOCKOUT_MS = 15 * 60 * 1000; // 15 minutes
-
-type FailureEntry = { count: number; lockedUntil: number };
-const loginFailures = new Map<string, FailureEntry>();
-
-/** @internal — only for unit tests: pre-populate lockout state */
-export const _forceLoginLockout = (email: string): void => {
-  loginFailures.set(email, { count: LOGIN_MAX_FAILURES, lockedUntil: Date.now() + LOGIN_LOCKOUT_MS });
-};
-
-const checkAccountLocked = (email: string): boolean => {
-  const entry = loginFailures.get(email);
-  if (!entry) return false;
-  if (entry.lockedUntil > Date.now()) return true;
-  // Lockout expired — reset
-  loginFailures.delete(email);
-  return false;
-};
-
-const recordLoginFailure = (email: string): void => {
-  const entry = loginFailures.get(email) ?? { count: 0, lockedUntil: 0 };
-  entry.count += 1;
-  if (entry.count >= LOGIN_MAX_FAILURES) {
-    entry.lockedUntil = Date.now() + LOGIN_LOCKOUT_MS;
-  }
-  loginFailures.set(email, entry);
-};
-
-const clearLoginFailures = (email: string): void => {
-  loginFailures.delete(email);
-};
+// Re-exportar para compatibilidad con tests que importan desde este módulo
+export { LOGIN_LOCKOUT_MS, _forceLoginLockout };
 
 const setAccessCookie = (res: Response, token: string) => {
   res.cookie(env.cookieName, token, {
     httpOnly: true,
     secure: isProduction,
     sameSite: "strict",
-    maxAge: 1000 * 60 * 60 * 24, // 1d (set JWT_EXPIRES_IN=15m in production with refresh tokens)
+    maxAge: parseDurationMs(env.jwtExpiresIn),
   });
 };
 
@@ -65,9 +42,6 @@ const setRefreshCookie = (res: Response, raw: string) => {
     path: "/auth/refresh", // restrict cookie to the refresh endpoint only
   });
 };
-
-// Keep old name for backward compat
-const setAuthCookie = setAccessCookie;
 
 export const register = async (req: Request, res: Response) => {
   const payload = registerSchema.parse(req.body);
@@ -135,26 +109,37 @@ export const login = async (req: Request, res: Response) => {
   const payload = loginSchema.parse(req.body);
 
   // Per-account lockout check (prevents credential stuffing)
-  if (checkAccountLocked(payload.email)) {
+  if (await isAccountLocked(payload.email)) {
     res.set("Retry-After", String(Math.ceil(LOGIN_LOCKOUT_MS / 1000)));
     return res.status(429).json({ message: "Demasiados intentos fallidos. Intenta de nuevo en 15 minutos." });
   }
 
   const user = await getUserByEmail(payload.email);
   if (!user) {
-    recordLoginFailure(payload.email);
+    await recordLoginFailure(payload.email);
     return res.status(401).json({ message: "Credenciales inválidas" });
   }
   const valid = await verifyPassword(payload.password, user.passwordHash);
   if (!valid) {
-    recordLoginFailure(payload.email);
+    await recordLoginFailure(payload.email);
     return res.status(401).json({ message: "Credenciales inválidas" });
   }
   if (user.isActive === false) {
     return res.status(403).json({ message: "Tu cuenta ha sido desactivada. Contacta a la clínica para más información." });
   }
 
-  clearLoginFailures(payload.email);
+  // Verificar 2FA si está habilitado
+  if (user.totpEnabled) {
+    const totpCode = String((req.body as Record<string, unknown>)?.totpCode ?? "").trim();
+    if (!totpCode) {
+      return res.status(200).json({ requiresTotp: true });
+    }
+    if (!user.totpSecret || !verifyTotpCode(user.totpSecret, totpCode)) {
+      return res.status(401).json({ message: "Código 2FA incorrecto" });
+    }
+  }
+
+  await clearLoginFailures(payload.email);
   const token = signToken({ sub: user.id, role: user.role });
   setAccessCookie(res, token);
   const rawRefresh = await createRefreshToken(user.id);
@@ -174,7 +159,7 @@ export const logout = async (req: Request, res: Response) => {
   // Revoke refresh token so it can't be used after logout
   const rawRefresh = (req.cookies as Record<string, string>)?.[env.refreshCookieName];
   if (rawRefresh) {
-    await revokeRefreshToken(rawRefresh).catch(() => {});
+    await revokeRefreshToken(rawRefresh).catch((err) => logger.warn({ err }, "[auth] logout: failed to revoke refresh token"));
   }
   res.clearCookie(env.cookieName);
   res.clearCookie(env.refreshCookieName, { path: "/auth/refresh" });
@@ -200,7 +185,7 @@ export const refreshToken = async (req: Request, res: Response) => {
   });
 
   if (!user || !user.isActive) {
-    await revokeAllRefreshTokens(result.userId).catch(() => {});
+    await revokeAllRefreshTokens(result.userId).catch((err) => logger.warn({ err, userId: result.userId }, "[auth] refresh: failed to revoke all tokens for inactive user"));
     return res.status(401).json({ message: "Cuenta inactiva o no encontrada" });
   }
 
@@ -362,17 +347,8 @@ export const changeInitialPassword = async (req: AuthRequest, res: Response) => 
     return res.status(400).json({ message: "La contraseña es obligatoria" });
   }
   // Reutilizar el mismo validador fuerte que en registro/reset
-  const strengthCheck = ((): string | null => {
-    if (newPassword.length < 12) return "La contraseña debe tener al menos 12 caracteres";
-    if (!/[A-Z]/.test(newPassword)) return "Debe incluir al menos una letra mayúscula";
-    if (!/[a-z]/.test(newPassword)) return "Debe incluir al menos una letra minúscula";
-    if (!/[0-9]/.test(newPassword)) return "Debe incluir al menos un número";
-    if (!/[^A-Za-z0-9]/.test(newPassword)) return "Debe incluir al menos un símbolo";
-    return null;
-  })();
-  if (strengthCheck) {
-    return res.status(400).json({ message: strengthCheck });
-  }
+  const strengthError = validatePasswordStrength(newPassword);
+  if (strengthError) return res.status(400).json({ message: strengthError });
 
   const user = await prisma.user.findUnique({
     where: { id: userId },

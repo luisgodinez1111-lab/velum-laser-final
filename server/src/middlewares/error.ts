@@ -2,6 +2,7 @@ import { NextFunction, Request, Response } from "express";
 import { logger } from "../utils/logger";
 import { ZodError } from "zod";
 import { reportError } from "../utils/errorReporter";
+import { AppError } from "../utils/AppError";
 
 export const errorHandler = (err: Error, req: Request, res: Response, _next: NextFunction) => {
   const requestId = req.headers["x-request-id"] as string | undefined;
@@ -16,6 +17,21 @@ export const errorHandler = (err: Error, req: Request, res: Response, _next: Nex
     });
   }
 
+  // AppError: error de dominio tipado con statusCode y code explícitos
+  if (err instanceof AppError) {
+    if (err.statusCode >= 500) {
+      reportError(err, { method: req.method, path: req.path, requestId, context: err.context });
+    } else {
+      logger.warn({ err, statusCode: err.statusCode, code: err.code }, "AppError client");
+    }
+    return res.status(err.statusCode).json({
+      message: err.message,
+      code: err.code,
+      requestId,
+    });
+  }
+
+  // Compatibilidad con errores legacy que llevan `.status` como propiedad
   const status = (err as Error & { status?: number }).status;
   if (typeof status === "number" && status >= 400 && status < 500) {
     logger.warn({ err, status }, "Client error");

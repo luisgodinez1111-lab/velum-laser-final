@@ -9,9 +9,17 @@ import {
   activateUser,
   requestDeleteUserOtp,
   deleteUser,
+  getTotpSetup,
+  enableTotp,
+  disableTotp,
 } from "../controllers/adminAccessController";
 
 export const adminAccessRoutes = Router();
+
+// Rutas TOTP — self-service, cualquier usuario autenticado
+adminAccessRoutes.get("/api/v1/me/totp/setup", requireAuth, getTotpSetup);
+adminAccessRoutes.post("/api/v1/me/totp/enable", requireAuth, enableTotp);
+adminAccessRoutes.delete("/api/v1/me/totp", requireAuth, disableTotp);
 
 adminAccessRoutes.get("/api/v1/admin/access/users", requireAuth, requireRole(["admin", "system"]), listAdminAccessUsers);
 adminAccessRoutes.post("/api/v1/admin/access/users", requireAuth, requireRole(["admin", "system"]), createAdminAccessUser);

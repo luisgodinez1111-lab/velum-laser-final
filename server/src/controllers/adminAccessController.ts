@@ -1,10 +1,10 @@
 import { Response } from "express";
 import bcrypt from "bcryptjs";
-import crypto from "crypto";
 import type { Role } from "@prisma/client";
 import { prisma } from "../db/prisma";
 import { AuthRequest } from "../middlewares/auth";
 import { createAuditLog } from "../services/auditService";
+import { generateTotpSecret, verifyTotpCode, getTotpUri } from "../utils/totp";
 import {
   PERMISSIONS_CATALOG,
   readAccessStore,
@@ -12,62 +12,76 @@ import {
   setUserPermissions,
   defaultPermissionsByRole,
 } from "../services/adminAccessService";
-import { sendWhatsappOtpCode, getEffectiveWhatsappMetaConfig, normalizePhone } from "../services/whatsappMetaService";
 import { stripe } from "../services/stripeService";
 import { sendDeleteUserOtpEmail, sendAdminInvitationEmail } from "../services/emailService";
 import { onNewMember, invalidateAdminIdCache } from "../services/notificationService";
 import { logger } from "../utils/logger";
-import { revokeAllRefreshTokens } from "../utils/auth";
+import { revokeAllRefreshTokens, hashPassword, validatePasswordStrength, generateTempPassword } from "../utils/auth";
+import { generateOtp } from "../utils/crypto";
+import { clean, validEmail } from "../utils/strings";
+import { parsePagination } from "../utils/pagination";
+import { resolveClinicId } from "../utils/resolveClinicId";
 
 const MAX_OTP_ATTEMPTS = 5;
-
-function generateOtp(): string {
-  return String(100000 + crypto.randomInt(900000));
-}
-
-function generateTempPassword(): string {
-  const upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
-  const lower = 'abcdefghjkmnpqrstuvwxyz';
-  const digits = '23456789';
-  const special = '@#$!';
-  const pool = upper + lower + digits + special;
-  const arr = Array.from({ length: 12 }, () => pool[crypto.randomInt(pool.length)]);
-  arr[0] = upper[crypto.randomInt(upper.length)];
-  arr[1] = lower[crypto.randomInt(lower.length)];
-  arr[2] = digits[crypto.randomInt(digits.length)];
-  arr[3] = special[crypto.randomInt(special.length)];
-  for (let i = arr.length - 1; i > 0; i--) {
-    const j = crypto.randomInt(i + 1);
-    [arr[i], arr[j]] = [arr[j], arr[i]];
-  }
-  return arr.join('');
-}
+const roleAllowed = new Set(["admin", "staff", "member"]);
 
 async function pruneExpiredOtps(): Promise<void> {
   await prisma.deleteOtp.deleteMany({ where: { expiresAt: { lt: new Date() } } });
 }
 
-const isAdminUser = (req: AuthRequest) => {
-  const role = req.user?.role ?? "";
-  return role === "admin" || role === "system";
+/** GET /api/v1/me/totp/setup — genera secreto temporal (no lo guarda aún) */
+export const getTotpSetup = async (req: AuthRequest, res: Response) => {
+  const userId = req.user?.id;
+  if (!userId) return res.status(401).json({ message: "No autorizado" });
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { email: true, totpEnabled: true } });
+  if (!user) return res.status(404).json({ message: "Usuario no encontrado" });
+  if (user.totpEnabled) return res.status(409).json({ message: "2FA ya está habilitado" });
+  const secret = generateTotpSecret();
+  const uri = getTotpUri(secret, user.email);
+  // Almacena secreto temporal para verificación — se activa solo tras confirmar
+  await prisma.user.update({ where: { id: userId }, data: { totpSecret: secret } });
+  return res.json({ secret, uri });
 };
 
-const clean = (v: unknown) => (typeof v === "string" ? v.trim() : "");
-const validEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-const roleAllowed = new Set(["admin", "staff", "member"]);
+/** POST /api/v1/me/totp/enable — activa 2FA tras verificar el primer código */
+export const enableTotp = async (req: AuthRequest, res: Response) => {
+  const userId = req.user?.id;
+  if (!userId) return res.status(401).json({ message: "No autorizado" });
+  const code = String(req.body?.code ?? "").trim();
+  if (!code) return res.status(400).json({ message: "Código requerido" });
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { totpSecret: true, totpEnabled: true } });
+  if (!user?.totpSecret) return res.status(400).json({ message: "Inicia el setup primero con GET /totp/setup" });
+  if (user.totpEnabled) return res.status(409).json({ message: "2FA ya está habilitado" });
+  if (!verifyTotpCode(user.totpSecret, code)) return res.status(400).json({ message: "Código incorrecto" });
+  await prisma.user.update({ where: { id: userId }, data: { totpEnabled: true } });
+  await createAuditLog({ userId, actorUserId: userId, action: "auth.totp_enabled", resourceType: "user", resourceId: userId, ip: req.ip, metadata: {} });
+  return res.json({ message: "2FA activado correctamente" });
+};
+
+/** DELETE /api/v1/me/totp — desactiva 2FA (requiere código válido) */
+export const disableTotp = async (req: AuthRequest, res: Response) => {
+  const userId = req.user?.id;
+  if (!userId) return res.status(401).json({ message: "No autorizado" });
+  const code = String(req.body?.code ?? "").trim();
+  if (!code) return res.status(400).json({ message: "Código requerido para desactivar 2FA" });
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { totpSecret: true, totpEnabled: true } });
+  if (!user?.totpEnabled || !user.totpSecret) return res.status(400).json({ message: "2FA no está habilitado" });
+  if (!verifyTotpCode(user.totpSecret, code)) return res.status(400).json({ message: "Código incorrecto" });
+  await prisma.user.update({ where: { id: userId }, data: { totpEnabled: false, totpSecret: null } });
+  await createAuditLog({ userId, actorUserId: userId, action: "auth.totp_disabled", resourceType: "user", resourceId: userId, ip: req.ip, metadata: {} });
+  return res.json({ message: "2FA desactivado" });
+};
 
 export const listAdminAccessUsers = async (req: AuthRequest, res: Response) => {
   try {
-    if (!isAdminUser(req)) return res.status(403).json({ message: "No autorizado" });
-
-    const page  = Math.max(1, parseInt(String(req.query.page  ?? "1"),   10));
-    const limit = Math.min(200, Math.max(1, parseInt(String(req.query.limit ?? "100"), 10)));
+    const { page, limit, skip } = parsePagination(req.query as Record<string, unknown>, { maxLimit: 200, defaultLimit: 100 });
 
     const [total, users] = await Promise.all([
-      prisma.user.count(),
+      prisma.user.count({ where: { deletedAt: null } }),
       prisma.user.findMany({
+        where: { deletedAt: null },
         orderBy: { createdAt: "desc" },
-        skip: (page - 1) * limit,
+        skip,
         take: limit,
         select: {
           id: true,
@@ -107,13 +121,12 @@ export const listAdminAccessUsers = async (req: AuthRequest, res: Response) => {
     });
   } catch (error: unknown) {
     logger.error({ err: error }, "listAdminAccessUsers");
-    return res.status(500).json({ message: "Error al listar usuarios", detail: error instanceof Error ? error.message : "unknown" });
+    return res.status(500).json({ message: "Error interno del servidor" });
   }
 };
 
 export const createAdminAccessUser = async (req: AuthRequest, res: Response) => {
   try {
-    if (!isAdminUser(req)) return res.status(403).json({ message: "No autorizado" });
 
     const body = req.body as Record<string, unknown>;
     const email = clean(body?.email).toLowerCase();
@@ -134,22 +147,21 @@ export const createAdminAccessUser = async (req: AuthRequest, res: Response) => 
       mustChangePassword = true;
     } else {
       password = clean(body?.password);
-      if (password.length < 8) return res.status(400).json({ message: "La contraseña debe tener al menos 8 caracteres" });
+      const strengthError = validatePasswordStrength(password);
+      if (strengthError) return res.status(400).json({ message: strengthError });
     }
 
     const actor = await prisma.user.findUnique({
       where: { id: req.user!.id },
       select: { clinicId: true, email: true, profile: { select: { firstName: true, lastName: true } } },
     });
-    const seed = await prisma.user.findFirst({ select: { clinicId: true } });
-    const clinicId = actor?.clinicId || seed?.clinicId;
-
+    const clinicId = await resolveClinicId(actor?.clinicId);
     if (!clinicId) return res.status(400).json({ message: "No se pudo resolver clinicId" });
 
     const exists = await prisma.user.findUnique({ where: { email }, select: { id: true } });
     if (exists) return res.status(409).json({ message: "Ya existe un usuario con ese correo" });
 
-    const passwordHash = await bcrypt.hash(password, 10);
+    const passwordHash = await hashPassword(password);
 
     const created = await prisma.user.create({
       data: {
@@ -209,13 +221,12 @@ export const createAdminAccessUser = async (req: AuthRequest, res: Response) => 
     });
   } catch (error: unknown) {
     logger.error({ err: error }, "createAdminAccessUser");
-    return res.status(500).json({ message: "Error al crear usuario", detail: error instanceof Error ? error.message : "unknown" });
+    return res.status(500).json({ message: "Error interno del servidor" });
   }
 };
 
 export const updateAdminAccessUser = async (req: AuthRequest, res: Response) => {
   try {
-    if (!isAdminUser(req)) return res.status(403).json({ message: "No autorizado" });
 
     const userId = clean(req.params.userId);
     const updateBody = req.body as Record<string, unknown>;
@@ -271,25 +282,22 @@ export const updateAdminAccessUser = async (req: AuthRequest, res: Response) => 
     });
   } catch (error: unknown) {
     logger.error({ err: error }, "updateAdminAccessUser");
-    return res.status(500).json({ message: "Error al actualizar usuario", detail: error instanceof Error ? error.message : "unknown" });
+    return res.status(500).json({ message: "Error interno del servidor" });
   }
 };
 
 export const resetAdminAccessPassword = async (req: AuthRequest, res: Response) => {
   try {
-    if (!isAdminUser(req)) return res.status(403).json({ message: "No autorizado" });
-
     const userId = clean(req.params.userId);
     const newPassword = clean((req.body as Record<string, unknown>)?.newPassword);
 
-    if (newPassword.length < 8) {
-      return res.status(400).json({ message: "La contraseña debe tener al menos 8 caracteres" });
-    }
+    const strengthError = validatePasswordStrength(newPassword);
+    if (strengthError) return res.status(400).json({ message: strengthError });
 
     const found = await prisma.user.findUnique({ where: { id: userId }, select: { id: true } });
     if (!found) return res.status(404).json({ message: "Usuario no encontrado" });
 
-    const passwordHash = await bcrypt.hash(newPassword, 10);
+    const passwordHash = await hashPassword(newPassword);
     await prisma.user.update({ where: { id: userId }, data: { passwordHash, passwordChangedAt: new Date(), mustChangePassword: true } });
 
     // Revoke all sessions so the new password takes effect immediately
@@ -310,14 +318,13 @@ export const resetAdminAccessPassword = async (req: AuthRequest, res: Response) 
     return res.json({ message: "Contraseña actualizada" });
   } catch (error: unknown) {
     logger.error({ err: error }, "resetAdminAccessPassword");
-    return res.status(500).json({ message: "Error al actualizar contraseña", detail: error instanceof Error ? error.message : "unknown" });
+    return res.status(500).json({ message: "Error interno del servidor" });
   }
 };
 
 // ── Deactivate user (cancel Stripe + block login) ──────────────────────────
 export const deactivateUser = async (req: AuthRequest, res: Response) => {
   try {
-    if (!isAdminUser(req)) return res.status(403).json({ message: "No autorizado" });
 
     const actorId = req.user!.id;
     const targetUserId = clean(req.params.userId);
@@ -379,14 +386,13 @@ export const deactivateUser = async (req: AuthRequest, res: Response) => {
     });
   } catch (error: unknown) {
     logger.error({ err: error }, "deactivateUser");
-    return res.status(500).json({ message: "Error al desactivar usuario", detail: error instanceof Error ? error.message : "unknown" });
+    return res.status(500).json({ message: "Error interno del servidor" });
   }
 };
 
 // ── Activate user (re-enable login) ────────────────────────────────────────
 export const activateUser = async (req: AuthRequest, res: Response) => {
   try {
-    if (!isAdminUser(req)) return res.status(403).json({ message: "No autorizado" });
 
     const actorId = req.user!.id;
     const targetUserId = clean(req.params.userId);
@@ -418,14 +424,13 @@ export const activateUser = async (req: AuthRequest, res: Response) => {
     return res.json({ message: `Usuario ${target.email} activado. Deberá iniciar sesión nuevamente.` });
   } catch (error: unknown) {
     logger.error({ err: error }, "activateUser");
-    return res.status(500).json({ message: "Error al activar usuario", detail: error instanceof Error ? error.message : "unknown" });
+    return res.status(500).json({ message: "Error interno del servidor" });
   }
 };
 
 // ── OTP request for user deletion (sent via email to the acting admin) ─────
 export const requestDeleteUserOtp = async (req: AuthRequest, res: Response) => {
   try {
-    if (!isAdminUser(req)) return res.status(403).json({ message: "No autorizado" });
 
     const actorId = req.user!.id;
     const targetUserId = clean(req.params.userId);
@@ -476,14 +481,14 @@ export const requestDeleteUserOtp = async (req: AuthRequest, res: Response) => {
       expiresInMinutes: 10,
     });
   } catch (error: unknown) {
-    return res.status(500).json({ message: "Error al enviar código de autorización", detail: error instanceof Error ? error.message : "unknown" });
+    logger.error({ err: error }, "[adminAccess] requestDeleteUserOtp");
+    return res.status(500).json({ message: "Error interno del servidor" });
   }
 };
 
 // ── Delete user with OTP verification ──────────────────────────────────────
 export const deleteUser = async (req: AuthRequest, res: Response) => {
   try {
-    if (!isAdminUser(req)) return res.status(403).json({ message: "No autorizado" });
 
     const actorId = req.user!.id;
     const targetUserId = clean(req.params.userId);
@@ -556,6 +561,7 @@ export const deleteUser = async (req: AuthRequest, res: Response) => {
     const recurringCharges = await prisma.customCharge.findMany({
       where: { userId: targetUserId, type: "RECURRING", stripeSubscriptionId: { not: null } },
       select: { id: true, stripeSubscriptionId: true },
+      take: 500,
     });
     for (const rc of recurringCharges) {
       if (rc.stripeSubscriptionId) {
@@ -605,6 +611,7 @@ export const deleteUser = async (req: AuthRequest, res: Response) => {
 
     return res.json({ message: `Usuario ${target.email} eliminado correctamente` });
   } catch (error: unknown) {
-    return res.status(500).json({ message: "Error al eliminar usuario", detail: error instanceof Error ? error.message : "unknown" });
+    logger.error({ err: error }, "[adminAccess] deleteUser");
+    return res.status(500).json({ message: "Error interno del servidor" });
   }
 };

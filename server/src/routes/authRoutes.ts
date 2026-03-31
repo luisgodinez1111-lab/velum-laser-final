@@ -1,10 +1,21 @@
 import { Router } from "express";
+import rateLimit from "express-rate-limit";
 import { forgotPassword, login, logout, register, resendVerification, resetPassword, verifyEmail, sendConsentOtp, verifyConsentOtp, changeInitialPassword, refreshToken } from "../controllers/authController";
 import { requireAuth } from "../middlewares/auth";
 
 export const authRoutes = Router();
 
-authRoutes.post("/register", register);
+// Rate limiter específico para registro — 5 intentos por IP por hora
+const registerLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hora
+  max: 5,                    // máximo 5 registros por IP por hora
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: "Demasiados registros desde esta IP. Intenta de nuevo en 1 hora." },
+  skipSuccessfulRequests: false,
+});
+
+authRoutes.post("/register", registerLimiter, register);
 authRoutes.post("/login", login);
 authRoutes.post("/logout", logout);
 authRoutes.post("/forgot-password", forgotPassword);

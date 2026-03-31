@@ -47,8 +47,20 @@ export const env = {
   jwtSecret: requireSecret("JWT_SECRET", 32),
   jwtExpiresIn: process.env.JWT_EXPIRES_IN ?? "1d",
   cookieName: process.env.COOKIE_NAME ?? "velum_token",
-  stripeSecretKey: process.env.STRIPE_SECRET_KEY ?? "",
-  stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET ?? "",
+  stripeSecretKey: (() => {
+    const key = process.env.STRIPE_SECRET_KEY ?? "";
+    if (!key && process.env.NODE_ENV === "production") {
+      throw new Error("[env] STRIPE_SECRET_KEY es obligatoria en producción");
+    }
+    return key;
+  })(),
+  stripeWebhookSecret: (() => {
+    const key = process.env.STRIPE_WEBHOOK_SECRET ?? "";
+    if (!key && process.env.NODE_ENV === "production") {
+      throw new Error("[env] STRIPE_WEBHOOK_SECRET es obligatoria en producción");
+    }
+    return key;
+  })(),
   stripePortalReturnUrl: process.env.STRIPE_PORTAL_RETURN_URL ?? "http://localhost:5173/account",
   uploadDir: process.env.UPLOAD_DIR ?? "/var/velum/uploads",
   uploadMaxSize: Number(process.env.UPLOAD_MAX_SIZE ?? 10 * 1024 * 1024),

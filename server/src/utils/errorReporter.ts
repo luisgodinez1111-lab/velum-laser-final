@@ -18,7 +18,7 @@ import { logger } from "./logger";
 const RATE_LIMIT_PER_MIN = 10;
 let recentCount = 0;
 
-setInterval(() => { recentCount = 0; }, 60_000);
+setInterval(() => { recentCount = 0; }, 60_000).unref();
 
 export const reportError = (err: Error, context?: Record<string, unknown>): void => {
   logger.error({ err, ...context }, "[error-reporter] Unhandled error");
