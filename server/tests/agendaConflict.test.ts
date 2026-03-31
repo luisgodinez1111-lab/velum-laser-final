@@ -3,10 +3,17 @@
  * Cubre: cita en el pasado, fin antes del inicio, fuera de horario,
  * conflicto de cabina, slot inválido, cita el mismo día.
  */
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterAll } from "vitest";
 
 process.env.JWT_SECRET = "test-secret-32-bytes-minimum-len";
 process.env.DATABASE_URL = "postgresql://x:x@localhost/x";
+
+// Anclar la fecha a un lunes conocido para que futureSlot(N) no caiga en domingo
+// independientemente del día real en que se ejecuten los tests.
+const FIXED_NOW = new Date("2026-03-30T16:00:00.000Z"); // lunes 30-mar-2026 09:00 Chihuahua
+vi.useFakeTimers();
+vi.setSystemTime(FIXED_NOW);
+afterAll(() => vi.useRealTimers());
 
 // ── Helpers para fechas relativas ────────────────────────────────────────────
 const fromNow = (deltaMinutes: number): Date =>

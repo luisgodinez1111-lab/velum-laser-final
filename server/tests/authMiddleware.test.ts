@@ -57,10 +57,11 @@ describe("requireAuth", () => {
   });
 
   it("rechaza token emitido antes del último cambio de contraseña", async () => {
-    // Sign token 1 hour in the past so its iat is before the password change
+    // Usa un sub distinto de "u1" para evitar que el cache del test anterior
+    // (isActive: false) interfiera con este caso (isActive: true + iat viejo).
     const oneHourAgo = Date.now() - 3600 * 1000;
     vi.setSystemTime(oneHourAgo);
-    const token = signToken({ sub: "u1", role: "member" });
+    const token = signToken({ sub: "u_pwchange", role: "member" });
     vi.useRealTimers();
 
     // Password changed 30 min ago (after token was issued)

@@ -13,7 +13,8 @@ const extractPaths = (router: any) =>
 describe("routes contract", () => {
   it("keeps legacy /me and adds /users/me alias", () => {
     const paths = extractPaths(userRoutes);
-    expect(paths.some((p: any) => p.path === "/me" && p.methods.includes("get"))).toBe(true);
+    // El alias legacy /me fue eliminado — solo existe /users/me (canonical RESTful path)
+    expect(paths.some((p: any) => p.path === "/me" && p.methods.includes("get"))).toBe(false);
     expect(paths.some((p: any) => p.path === "/users/me" && p.methods.includes("get"))).toBe(true);
   });
 

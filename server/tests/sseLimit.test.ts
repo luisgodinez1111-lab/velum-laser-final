@@ -39,10 +39,11 @@ vi.mock("../src/utils/appointmentToken", () => ({
 import { registerSseClient, unregisterSseClient } from "../src/services/notificationService";
 import type { Response } from "express";
 
-// Helper: crea una Response mock con .write(), .end(), .closed
+// Helper: crea una Response mock con .write(), .end(), .on()
 const mockRes = (): Response => ({
   write: vi.fn(),
   end:   vi.fn(),
+  on:    vi.fn(),
 } as unknown as Response);
 
 // Limpia el estado del módulo entre tests registrando y des-registrando
