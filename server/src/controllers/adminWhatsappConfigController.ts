@@ -43,7 +43,7 @@ export const getAdminWhatsappConfig = async (_req: AuthRequest, res: Response) =
 };
 
 export const putAdminWhatsappConfig = async (req: AuthRequest, res: Response) => {
-  const body: any = req.body ?? {};
+  const body: Record<string, unknown> = req.body ?? {};
 
   const saved = await saveWhatsappMetaConfig({
     accessToken: asString(body.accessToken),
@@ -74,7 +74,7 @@ export const putAdminWhatsappConfig = async (req: AuthRequest, res: Response) =>
 };
 
 export const postAdminWhatsappTest = async (req: AuthRequest, res: Response) => {
-  const body: any = req.body ?? {};
+  const body: Record<string, unknown> = req.body ?? {};
   const to = normalizePhone(asString(body.to));
   const previewCode = asString(body.previewCode || "123456");
 
@@ -88,10 +88,10 @@ export const postAdminWhatsappTest = async (req: AuthRequest, res: Response) => 
       message: "Mensaje de prueba enviado",
       to
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     return res.status(502).json({
       message: "No se pudo enviar mensaje de prueba",
-      detail: asString(error?.message || "Error desconocido")
+      detail: error instanceof Error ? error.message : "Error desconocido"
     });
   }
 };

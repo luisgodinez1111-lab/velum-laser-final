@@ -8,7 +8,7 @@ import {
   handleGoogleCalendarOAuthCallback,
   updateGoogleCalendarIntegrationSettings
 } from "../services/googleCalendarIntegrationService";
-import { getClinicIdByUserId } from "../utils/clinic";
+import { getClinicIdByUserId } from "../utils/resolveClinicId";
 
 const settingsSchema = z.object({
   eventFormatMode: z.enum(["complete", "private"])

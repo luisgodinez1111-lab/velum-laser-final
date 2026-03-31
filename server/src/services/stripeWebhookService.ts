@@ -10,6 +10,8 @@ import {
   onMembershipPaymentFailed,
 } from "./notificationService";
 import { sendPaymentReceiptEmail } from "./emailService";
+import { inc } from "./metricsService";
+import { reportError } from "../utils/errorReporter";
 
 type JsonObject = Record<string, unknown>;
 type Delegate = {
@@ -275,7 +277,11 @@ const findUserBySignals = async (
       if (row) return row;
     }
   } catch (error) {
-    logger.error({ err: error }, "[stripe-webhook] user lookup failed");
+    // Re-throw para que el webhook handler devuelva 500 a Stripe.
+    // Stripe reintentará hasta 72h — mejor perder la respuesta inmediata que silenciar
+    // un error de BD que dejaría la membresía sin activar y el pago sin registrar.
+    logger.error({ err: error }, "[stripe-webhook] user lookup failed — re-throwing for Stripe retry");
+    throw error;
   }
 
   return null;
@@ -323,7 +329,9 @@ const upsertMembership = async (input: MembershipUpsertInput): Promise<void> => 
       })) as JsonObject | null;
     }
   } catch (error) {
-    logger.error({ err: error }, "[stripe-webhook] membership lookup failed");
+    // Re-throw: si el lookup de membresía falla por BD, propagamos para que Stripe reintente
+    logger.error({ err: error }, "[stripe-webhook] membership lookup failed — re-throwing for Stripe retry");
+    throw error;
   }
 
   const data: JsonObject = {
@@ -371,7 +379,11 @@ const upsertMembership = async (input: MembershipUpsertInput): Promise<void> => 
       await delegate.create({ data: filtered });
     }
   } catch (error) {
-    logger.error({ err: error }, "[stripe-webhook] membership upsert failed");
+    // Re-throw: si el write de membresía falla, el webhook debe devolver 500 a Stripe
+    // para que reintente. Un catch silencioso aquí dejaría al usuario sin membresía activa
+    // aunque Stripe procesó el pago correctamente.
+    logger.error({ err: error }, "[stripe-webhook] membership upsert failed — re-throwing for Stripe retry");
+    throw error;
   }
 };
 
@@ -737,19 +749,21 @@ const processInvoiceEvent = async (event: Stripe.Event, stripe: Stripe, success:
       where: { stripeSubscriptionId: subscriptionId },
       select: { id: true },
     }).catch(() => null);
-    const invoiceObj = invoice as any;
+    // last_payment_error no está en el tipo estático de Stripe.Invoice pero puede venir en el webhook
+    const invoiceRaw = invoice as unknown as Record<string, unknown>;
+    const lastPaymentError = invoiceRaw.last_payment_error as Record<string, unknown> | undefined;
     await upsertPaymentRecord({
       stripeEventId: event.id,
       stripeInvoiceId: cleanString(invoice.id) || null,
-      stripePaymentIntentId: extractExpandableId(invoiceObj.payment_intent),
+      stripePaymentIntentId: extractExpandableId(invoice.payment_intent),
       stripeSubscriptionId: subscriptionId,
       userId,
       membershipId: membership?.id ?? null,
       amount: centsToMajor(success ? invoice.amount_paid : invoice.amount_due),
       currency: cleanString(invoice.currency) || null,
       status: success ? "paid" : "failed",
-      failureCode: !success ? (cleanString(invoiceObj.last_payment_error?.code) || null) : null,
-      failureMessage: !success ? (cleanString(invoiceObj.last_payment_error?.message) || null) : null,
+      failureCode: !success ? (cleanString(lastPaymentError?.code as string | undefined) || null) : null,
+      failureMessage: !success ? (cleanString(lastPaymentError?.message as string | undefined) || null) : null,
     });
   }
 
@@ -922,15 +936,22 @@ const processChargeDisputeCreated = async (event: Stripe.Event): Promise<void> =
 };
 
 export const handleBusinessStripeEvent = async (event: Stripe.Event, stripe: Stripe): Promise<void> => {
+  // Registrar el tipo de evento recibido como contador de métricas
+  inc(`stripe|${event.type.replace(/\./g, "_")}`);
+
+  try {
   switch (event.type) {
     case "checkout.session.completed":
       await processCheckoutCompleted(event, stripe);
+      inc("stripe|payment_success");
       return;
     case "invoice.payment_succeeded":
       await processInvoiceEvent(event, stripe, true);
+      inc("stripe|payment_success");
       return;
     case "invoice.payment_failed":
       await processInvoiceEvent(event, stripe, false);
+      inc("stripe|payment_failed");
       return;
     case "customer.subscription.created":
     case "customer.subscription.updated":
@@ -950,5 +971,14 @@ export const handleBusinessStripeEvent = async (event: Stripe.Event, stripe: Str
       return;
     default:
       logger.info({ eventId: event.id, type: event.type }, "[stripe-webhook] ignored");
+  }
+  } catch (err: unknown) {
+    logger.error({ err, eventId: event.id, eventType: event.type }, "[stripe-webhook] unhandled error in event handler");
+    reportError(err instanceof Error ? err : new Error(String(err)), {
+      source: "stripe-webhook",
+      eventId: event.id,
+      eventType: event.type,
+    });
+    throw err;
   }
 };

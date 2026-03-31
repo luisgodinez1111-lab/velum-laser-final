@@ -119,9 +119,14 @@ model User {
   passwordHistory             PasswordHistory[]
   deletedAt                   DateTime?
   deletedBy                   String?
+  loginFailedCount            Int       @default(0)
+  loginLockedUntil            DateTime?
+  totpSecret                  String?
+  totpEnabled                 Boolean   @default(false)
 
   @@index([clinicId])
   @@index([deletedAt])
+  @@index([deletedAt, createdAt])
 }
 
 model Profile {
@@ -328,6 +333,7 @@ model Appointment {
   @@index([status])
   @@index([status, startAt])
   @@index([userId, startAt])
+  @@index([clinicId, userId, startAt, status])
   @@index([googleEventId])
 }
 

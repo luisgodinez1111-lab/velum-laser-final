@@ -4,8 +4,8 @@ import cors from "cors";
 import helmet from "helmet";
 import compression from "compression";
 import cookieParser from "cookie-parser";
-import rateLimit from "express-rate-limit";
 import swaggerUi from "swagger-ui-express";
+import { applyRateLimits } from "./config/rateLimits";
 import { authRoutes } from "./routes/authRoutes";
 import { userRoutes } from "./routes/userRoutes";
 import { membershipRoutes } from "./routes/membershipRoutes";
@@ -35,12 +35,17 @@ import { renewRecurringCharges } from "./services/customChargeService";
 import { env } from "./utils/env";
 import { httpLogger, logger } from "./utils/logger";
 import { errorHandler } from "./middlewares/error";
+import { metricsMiddleware } from "./middlewares/metrics";
+import { getSnapshot } from "./services/metricsService";
+import { exportRoutes } from "./routes/exportRoutes";
 import { reportError } from "./utils/errorReporter";
 import { openApiSpec } from "./openapi";
 import { prisma } from "./db/prisma";
 import { getSseConnectionCount } from "./services/notificationService";
 import { requestContext } from "./utils/requestContext";
 import { getWorkerStatus } from "./utils/workerRegistry";
+import { requireAuth, requireRole } from "./middlewares/auth";
+import type { AuthRequest } from "./middlewares/auth";
 
 if (!env.jwtSecret) {
   throw new Error("JWT_SECRET is required");
@@ -61,18 +66,27 @@ const healthHandler = async (_req: express.Request, res: express.Response) => {
 app.get("/health", healthHandler);
 app.get("/api/health", healthHandler);
 
-// ── Detailed health — requires HEALTH_API_KEY or admin session ────────
-app.get("/api/v1/health/detailed", async (req: express.Request, res: express.Response) => {
-  // Auth: accept either HEALTH_API_KEY header or admin cookie (checked inline to avoid circular imports)
+// ── Detailed health — requires HEALTH_API_KEY o sesión de admin ───────
+// Middleware que permite acceso con HEALTH_API_KEY (header x-health-key) o con sesión de admin/system
+const healthKeyOrAdmin = (req: express.Request, res: express.Response, next: express.NextFunction) => {
   const apiKey = env.healthApiKey;
-  const providedKey = req.headers["x-health-key"] as string | undefined;
-  const isKeyAuth = apiKey && providedKey === apiKey;
-  // If no api-key configured or not matching, require auth cookie check is done by caller
-  // For simplicity, we accept any authenticated request from any source here
-  // The route is internal — add reverse-proxy restrictions in nginx for extra safety
+  if (apiKey && req.headers["x-health-key"] === apiKey) {
+    // Acceso por API key: marcar para el hint y continuar sin verificar JWT
+    (req as AuthRequest & { _healthKeyAuth?: boolean })._healthKeyAuth = true;
+    return next();
+  }
+  // Sin API key válida: exigir JWT de admin o system
+  requireAuth(req as AuthRequest, res, (err?: unknown) => {
+    if (err) return next(err);
+    requireRole(["admin", "system"])(req as AuthRequest, res, next);
+  });
+};
+
+app.get("/api/v1/health/detailed", healthKeyOrAdmin, async (req: express.Request, res: express.Response) => {
+  const isKeyAuth = !!(req as AuthRequest & { _healthKeyAuth?: boolean })._healthKeyAuth;
 
   const start = Date.now();
-  const checks: Record<string, { ok: boolean; latencyMs?: number; error?: string }> = {};
+  const checks: Record<string, { ok: boolean; [key: string]: unknown }> = {};
 
   // Database
   try {
@@ -102,19 +116,38 @@ app.get("/api/v1/health/detailed", async (req: express.Request, res: express.Res
   checks.stripe = { ok: !!env.stripeSecretKey };
 
   // SSE connections count (informational)
-  checks.sse = { ok: true, ...({ connections: getSseConnectionCount() } as any) };
+  checks.sse = { ok: true, connections: getSseConnectionCount() };
+
+  // Métricas de negocio (informacional — no afectan el estado ok/503)
+  try {
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const todayEnd = new Date();
+    todayEnd.setHours(23, 59, 59, 999);
+
+    const [activeMembers, appointmentsToday, pendingIntakes] = await Promise.all([
+      prisma.membership.count({ where: { status: "active" } }),
+      prisma.appointment.count({
+        where: { startAt: { gte: todayStart, lte: todayEnd }, status: { not: "canceled" } },
+      }),
+      prisma.medicalIntake.count({ where: { status: "submitted" } }),
+    ]);
+    checks.businessMetrics = { ok: true, activeMembers, appointmentsToday, pendingIntakes };
+  } catch {
+    checks.businessMetrics = { ok: true, error: "metrics_unavailable" };
+  }
 
   // Worker last-run timestamps
   try {
     const workerStatus = await getWorkerStatus();
-    (checks as any).workers = { ok: true, lastRuns: workerStatus };
+    checks.workers = { ok: true, lastRuns: workerStatus };
   } catch {
-    (checks as any).workers = { ok: true, lastRuns: {} };
+    checks.workers = { ok: true, lastRuns: {} };
   }
 
   // Node.js memory usage
   const mem = process.memoryUsage();
-  checks.memory = { ok: true, ...({ heapUsedMB: Math.round(mem.heapUsed / 1024 / 1024), heapTotalMB: Math.round(mem.heapTotal / 1024 / 1024), rssMB: Math.round(mem.rss / 1024 / 1024) } as any) };
+  checks.memory = { ok: true, heapUsedMB: Math.round(mem.heapUsed / 1024 / 1024), heapTotalMB: Math.round(mem.heapTotal / 1024 / 1024), rssMB: Math.round(mem.rss / 1024 / 1024) };
 
   const allOk = Object.values(checks).every((c) => c.ok);
 
@@ -129,8 +162,12 @@ app.get("/api/v1/health/detailed", async (req: express.Request, res: express.Res
     nodeEnv: env.nodeEnv,
     nodeVersion: process.version,
     checks,
-    _hint: isKeyAuth ? "key-auth" : "open",
+    _hint: isKeyAuth ? "key-auth" : "admin-session",
   });
+});
+
+app.get("/api/v1/health/metrics", healthKeyOrAdmin, (_req, res) => {
+  return res.json(getSnapshot());
 });
 
 app.set("trust proxy", 1);
@@ -173,136 +210,10 @@ app.use(cors({
   allowedHeaders: ["Content-Type", "Authorization", "X-Request-ID", "X-Health-Key"],
 }));
 app.use(cookieParser());
+app.use(metricsMiddleware);
 
 // ── Rate limiting ────────────────────────────────────────────────────
-// Login specifically: max 5 attempts per 15 min (brute-force protection)
-app.use(
-  "/auth/login",
-  rateLimit({ windowMs: 15 * 60 * 1000, limit: 5, standardHeaders: true, legacyHeaders: false, message: { message: "Demasiados intentos. Intenta de nuevo en 15 minutos." } })
-);
-app.use(
-  "/auth",
-  rateLimit({ windowMs: 10 * 60 * 1000, limit: 20, standardHeaders: true, legacyHeaders: false })
-);
-app.use(
-  [
-    "/admin",
-    "/api/v1/audit-logs",
-    "/api/v1/marketing/events",
-    "/api/v1/payments",
-    "/api/v1/agenda/admin",
-    "/api/integrations/google-calendar"
-  ],
-  rateLimit({ windowMs: 10 * 60 * 1000, limit: 60, standardHeaders: true, legacyHeaders: false })
-);
-// Documents/uploads: tighter limit to prevent abuse
-app.use(
-  ["/documents", "/api/v1/documents"],
-  rateLimit({ windowMs: 10 * 60 * 1000, limit: 30, standardHeaders: true, legacyHeaders: false })
-);
-// API docs: prevent scraping/enumeration
-app.use(
-  "/docs",
-  rateLimit({ windowMs: 60 * 1000, limit: 30, standardHeaders: true, legacyHeaders: false })
-);
-// Google Calendar webhook: prevent replay floods
-app.use(
-  "/api/webhooks/google-calendar",
-  rateLimit({ windowMs: 60 * 1000, limit: 60, standardHeaders: true, legacyHeaders: false })
-);
-// OTP resend endpoints — muy restrictivos para evitar spam/abuso
-app.use(
-  ["/api/v1/custom-charges/:id/resend-otp", "/api/v1/users/me/password/request-whatsapp-code"],
-  rateLimit({ windowMs: 15 * 60 * 1000, limit: 3, standardHeaders: true, legacyHeaders: false, message: { message: "Demasiadas solicitudes de código. Intenta de nuevo en 15 minutos." } })
-);
-// Consent OTP send + verify — rate limit agresivo para evitar spam de correos OTP
-app.use(
-  ["/auth/consent-otp/send", "/auth/consent-otp/verify"],
-  rateLimit({ windowMs: 15 * 60 * 1000, limit: 5, standardHeaders: true, legacyHeaders: false, message: { message: "Demasiadas solicitudes de OTP. Intenta de nuevo en 15 minutos." } })
-);
-// Custom charges OTP — public endpoint, stricter limit
-app.use(
-  "/api/v1/custom-charges",
-  rateLimit({ windowMs: 10 * 60 * 1000, limit: 15, standardHeaders: true, legacyHeaders: false })
-);
-// Notifications — authenticated but still rate-limited
-app.use(
-  "/api/v1/notifications",
-  rateLimit({ windowMs: 10 * 60 * 1000, limit: 120, standardHeaders: true, legacyHeaders: false })
-);
-// Medical intakes — prevent form spam (15 req/hour)
-app.use(
-  "/api/v1/medical-intakes",
-  rateLimit({ windowMs: 60 * 60 * 1000, limit: 15, standardHeaders: true, legacyHeaders: false, message: { message: "Demasiadas solicitudes de expediente médico. Intenta de nuevo más tarde." } })
-);
-// Appointment confirmation token — 5 attempts per 5 min per IP
-app.use(
-  "/api/v1/appointments/confirm",
-  rateLimit({ windowMs: 5 * 60 * 1000, limit: 5, standardHeaders: true, legacyHeaders: false, message: { message: "Demasiados intentos de confirmación. Intenta de nuevo en 5 minutos." } })
-);
-// Admin delete OTP — very strict (3 requests/15 min per authenticated admin)
-app.use(
-  "/api/v1/admin/access/users",
-  rateLimit({
-    windowMs: 15 * 60 * 1000,
-    limit: 10,
-    standardHeaders: true,
-    legacyHeaders: false,
-    message: { message: "Demasiados intentos. Intenta de nuevo en 15 minutos." },
-    skip: (req) => req.method === "GET",
-    keyGenerator: (req) => {
-      try {
-        const token = (req as { cookies?: Record<string, string> }).cookies?.accessToken;
-        if (token) {
-          const payload = JSON.parse(Buffer.from(token.split(".")[1], "base64url").toString()) as { sub?: string };
-          if (typeof payload.sub === "string") return `admin-delete:${payload.sub}`;
-        }
-      } catch { /* fall through */ }
-      return req.ip ?? "unknown";
-    },
-  })
-);
-// Per-admin rate limit: max 20 patient creations per hour per admin
-app.use(
-  "/admin/patients",
-  rateLimit({
-    windowMs: 60 * 60 * 1000,
-    limit: 20,
-    standardHeaders: true,
-    legacyHeaders: false,
-    message: { message: "Límite de creación de pacientes alcanzado. Intenta de nuevo en 1 hora." },
-    keyGenerator: (req) => {
-      try {
-        const token = (req as { cookies?: Record<string, string> }).cookies?.accessToken;
-        if (token) {
-          const payload = JSON.parse(Buffer.from(token.split(".")[1], "base64url").toString()) as { sub?: string };
-          if (typeof payload.sub === "string") return `admin:${payload.sub}`;
-        }
-      } catch { /* fall through */ }
-      return req.ip ?? "unknown";
-    },
-    skip: (req) => req.method !== "POST",
-  })
-);
-// Rate limiter global de fallback — cubre cualquier ruta sin limitador explícito
-// Uses authenticated user ID (from JWT cookie) when available; falls back to IP.
-app.use(rateLimit({
-  windowMs: 10 * 60 * 1000,
-  limit: 300,
-  standardHeaders: true,
-  legacyHeaders: false,
-  skip: (req) => req.path === "/api/v1/notifications/stream" || req.path === "/health" || req.path === "/api/health" || req.path === "/api/v1/health/detailed",
-  keyGenerator: (req) => {
-    try {
-      const token = (req as { cookies?: Record<string, string> }).cookies?.accessToken;
-      if (token) {
-        const payload = JSON.parse(Buffer.from(token.split(".")[1], "base64url").toString()) as { sub?: string };
-        if (typeof payload.sub === "string") return `user:${payload.sub}`;
-      }
-    } catch { /* fall through */ }
-    return req.ip ?? "unknown";
-  },
-}));
+applyRateLimits(app);
 
 // ── Stripe webhook — raw body antes de express.json ──────────────────
 // Solo un webhook activo: la versión v1
@@ -337,6 +248,7 @@ app.use(adminStripeConfigRoutes);
 app.use(billingCheckoutRoutes);
 app.use(customChargeRoutes);
 app.use(notificationRoutes);
+app.use(exportRoutes);
 
 // ── Public clinic config ──────────────────────────────────────────────
 app.get("/api/v1/clinic/config", (_req, res) => {

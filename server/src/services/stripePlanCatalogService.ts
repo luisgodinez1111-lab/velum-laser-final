@@ -1,4 +1,6 @@
+import { Prisma } from "@prisma/client";
 import { prisma } from "../db/prisma";
+import { logger } from "../utils/logger";
 
 export type StripePlanMapping = {
   planCode: string;
@@ -36,7 +38,7 @@ const normalizeInterval = (v: unknown): "day" | "week" | "month" | "year" => {
 
 const normalizePlan = (v: unknown): StripePlanMapping | null => {
   if (!v || typeof v !== "object") return null;
-  const x = v as any;
+  const x = v as Record<string, unknown>;
   const planCode = asString(x.planCode).toLowerCase();
   const name = asString(x.name);
   const stripePriceId = asString(x.stripePriceId);
@@ -62,6 +64,7 @@ const dedupe = (plans: StripePlanMapping[]): StripePlanMapping[] => {
   return Array.from(out.values());
 };
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- duck typing: appSetting puede no existir en todas las versiones del schema
 const getAppSettingModel = (): any | null => {
   const model = prisma.appSetting;
   if (!model) return null;
@@ -84,9 +87,8 @@ export const readStripePlanCatalog = async (): Promise<StripePlanMapping[]> => {
       select: { value: true },
     });
 
-    const rawPlans: unknown[] = Array.isArray((row?.value as any)?.plans)
-      ? ((row?.value as any).plans as unknown[])
-      : [];
+    const rowValue = row?.value as Record<string, unknown> | null | undefined;
+    const rawPlans: unknown[] = Array.isArray(rowValue?.plans) ? (rowValue.plans as unknown[]) : [];
 
     const mapped: Array<StripePlanMapping | null> = rawPlans.map((item: unknown) => normalizePlan(item));
     const plans = dedupe(
@@ -96,7 +98,8 @@ export const readStripePlanCatalog = async (): Promise<StripePlanMapping[]> => {
     memoryPlans = plans;
     cacheAt = Date.now();
     return plans;
-  } catch {
+  } catch (err) {
+    logger.warn({ err }, "[stripePlanCatalog] error leyendo catálogo desde DB — usando cache en memoria");
     return memoryPlans;
   }
 };
@@ -116,11 +119,11 @@ export const saveStripePlanCatalog = async (incoming: StripePlanMapping[]): Prom
   try {
     await model.upsert({
       where: { key: SETTING_KEY },
-      update: { value: { plans } as any },
-      create: { key: SETTING_KEY, value: { plans } as any },
+      update: { value: { plans } as Prisma.InputJsonValue },
+      create: { key: SETTING_KEY, value: { plans } as Prisma.InputJsonValue },
     });
-  } catch {
-    // fallback memoria
+  } catch (err) {
+    logger.warn({ err }, "[stripePlanCatalog] error guardando catálogo en DB — solo se actualizó el cache en memoria");
   }
 
   return plans;

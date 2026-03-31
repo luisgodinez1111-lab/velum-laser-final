@@ -1,5 +1,6 @@
 import { env } from "../utils/env";
 import { logger } from "../utils/logger";
+import { reportError } from "../utils/errorReporter";
 import {
   claimIntegrationJobsBatch,
   enqueueIntegrationJob,
@@ -29,6 +30,7 @@ const processQueueTick = async () => {
   isTickInProgress = true;
   try {
     const jobs = await claimIntegrationJobsBatch();
+    let failedCount = 0;
 
     for (const job of jobs) {
       try {
@@ -40,16 +42,26 @@ const processQueueTick = async () => {
         );
         await markIntegrationJobDone(job.id);
       } catch (error: unknown) {
+        failedCount += 1;
         await markIntegrationJobError(job, error);
       }
+    }
+
+    if (failedCount > 0) {
+      logger.warn({ failedCount, totalJobs: jobs.length }, "[integration-worker] tick completed with failures");
     }
   } catch (error: unknown) {
     consecutiveTickFailures += 1;
     logger.error({ err: error, consecutiveFailures: consecutiveTickFailures }, "Integration worker tick failed");
-    if (consecutiveTickFailures >= MAX_CONSECUTIVE_FAILURES) {
+    if (consecutiveTickFailures === MAX_CONSECUTIVE_FAILURES) {
+      // Disparar alerta una sola vez al alcanzar el umbral (=== evita spam en ticks subsecuentes)
       logger.error(
         { consecutiveFailures: consecutiveTickFailures },
         `[integration-worker] ${consecutiveTickFailures} consecutive tick failures — check DB connectivity and GCal config`
+      );
+      reportError(
+        new Error(`[integration-worker] ${MAX_CONSECUTIVE_FAILURES} consecutive tick failures`),
+        { consecutiveFailures: consecutiveTickFailures, hint: "Revisar conectividad DB y configuración Google Calendar" }
       );
     }
     return;

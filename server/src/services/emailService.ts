@@ -1,6 +1,9 @@
 import { Resend } from "resend";
 import { env } from "../utils/env";
 import { getRequestId } from "../utils/requestContext";
+import { withRetry } from "../utils/retry";
+import { emailCircuit } from "../utils/circuitBreaker";
+import { escapeHtml as esc } from "../utils/html";
 
 // ──────────────────────────────────────────────────────────────────────
 // 4 clientes Resend dedicados, uno por propósito
@@ -19,36 +22,23 @@ const getResendTags = (): Array<{ name: string; value: string }> => {
   return requestId ? [{ name: "requestId", value: requestId }] : [];
 };
 
-// ── Retry helper — exponential backoff, max 3 attempts ─────────────────────
-async function withRetry<T>(fn: () => Promise<T>, attempts = 3, baseDelayMs = 500): Promise<T> {
-  let lastErr: unknown;
-  for (let i = 0; i < attempts; i++) {
-    try {
-      return await fn();
-    } catch (err) {
-      lastErr = err;
-      if (i < attempts - 1) {
-        await new Promise((r) => setTimeout(r, baseDelayMs * 2 ** i));
-      }
-    }
-  }
-  throw lastErr;
-}
+// ── Helper de resiliencia — circuit breaker + retry con backoff ─────────────
+const sendWithResilience = (
+  client: Resend,
+  payload: Parameters<Resend["emails"]["send"]>[0]
+) =>
+  emailCircuit.execute(() =>
+    withRetry(() => client.emails.send(payload), {
+      maxAttempts: 3,
+      initialDelayMs: 500,
+      backoffFactor: 2,
+      context: "email",
+    })
+  );
 
 // ──────────────────────────────────────────────────────────────────────
 // Utilidad de layout base
 // ──────────────────────────────────────────────────────────────────────
-// ── HTML escape — prevents injection in email templates ───────────────────────
-function esc(str: string | undefined | null): string {
-  if (!str) return "";
-  return String(str)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
-}
-
 function baseHtml(content: string): string {
   return `<!DOCTYPE html>
 <html lang="es">
@@ -80,7 +70,7 @@ function baseHtml(content: string): string {
             <td style="background:#f8f6f3;padding:20px 32px;border-top:1px solid #ede8e2;">
               <p style="margin:0;font-size:11px;color:#a89b8c;line-height:1.6;">
                 Este mensaje fue generado automáticamente. Por favor no respondas a este correo.<br>
-                © 2025 Velum Laser · Todos los derechos reservados.
+                © ${new Date().getFullYear()} Velum Laser · Todos los derechos reservados.
               </p>
             </td>
           </tr>
@@ -123,12 +113,12 @@ export const sendEmailVerificationEmail = async (to: string, otp: string): Promi
     </p>
   `);
 
-  await withRetry(() => resendVerification.emails.send({
+  await sendWithResilience(resendVerification, {
     from: FROM,
     to,
     subject: "Tu código de verificación — Velum Laser",
     html
-  }));
+  });
 };
 
 // ──────────────────────────────────────────────────────────────────────
@@ -153,12 +143,12 @@ export const sendPasswordResetEmail = async (to: string, resetUrl: string): Prom
     </p>
   `);
 
-  await withRetry(() => resendReset.emails.send({
+  await sendWithResilience(resendReset, {
     from: FROM,
     to,
     subject: "Restablece tu contraseña — Velum Laser",
     html
-  }));
+  });
 };
 
 // ──────────────────────────────────────────────────────────────────────
@@ -218,12 +208,12 @@ export const sendPaymentReminderEmail = async (
     </p>
   `);
 
-  await withRetry(() => resendReminders.emails.send({
+  await sendWithResilience(resendReminders, {
     from: FROM,
     to,
     subject: `Recordatorio: tu membresía Velum se renueva el ${params.renewalDate}`,
     html,
-  }));
+  });
 };
 
 // ──────────────────────────────────────────────────────────────────────
@@ -270,12 +260,12 @@ export const sendAppointmentReminderEmail = async (
     </p>
   `);
 
-  await withRetry(() => resendReminders.emails.send({
+  await sendWithResilience(resendReminders, {
     from: FROM,
     to,
     subject: `Recordatorio: tu cita es el ${params.date} — Velum Laser`,
     html
-  }));
+  });
 };
 
 // ──────────────────────────────────────────────────────────────────────
@@ -329,12 +319,12 @@ export const sendAppointmentBookingEmail = async (
     </p>
   `);
 
-  await withRetry(() => resendReminders.emails.send({
+  await sendWithResilience(resendReminders, {
     from: FROM,
     to,
     subject: `Tu cita en Velum Laser — ${params.date}`,
     html,
-  }));
+  });
 };
 
 // ──────────────────────────────────────────────────────────────────────
@@ -388,12 +378,12 @@ export const sendAppointmentCancellationEmail = async (
     </p>
   `);
 
-  await withRetry(() => resendReminders.emails.send({
+  await sendWithResilience(resendReminders, {
     from: FROM,
     to,
     subject: `Tu cita del ${params.date} fue cancelada — Velum Laser`,
     html,
-  }));
+  });
 };
 
 // ──────────────────────────────────────────────────────────────────────
@@ -424,12 +414,12 @@ export const sendDeleteUserOtpEmail = async (
     </p>
   `);
 
-  await withRetry(() => resendReminders.emails.send({
+  await sendWithResilience(resendReminders, {
     from: FROM,
     to,
     subject: `⚠️ Código de autorización: eliminar paciente — Velum Laser`,
     html
-  }));
+  });
 };
 
 // ──────────────────────────────────────────────────────────────────────
@@ -464,12 +454,12 @@ export const sendConsentOtpEmail = async (
     </p>
   `);
 
-  await withRetry(() => resendReminders.emails.send({
+  await sendWithResilience(resendReminders, {
     from: FROM,
     to,
     subject: "Código para firmar tu consentimiento informado — Velum Laser",
     html
-  }));
+  });
 };
 
 // ──────────────────────────────────────────────────────────────────────
@@ -511,12 +501,12 @@ export const sendDocumentSignedEmail = async (
     </p>
   `);
 
-  await withRetry(() => resendDocuments.emails.send({
+  await sendWithResilience(resendDocuments, {
     from: FROM,
     to,
     subject: "Documento firmado — Velum Laser",
     html
-  }));
+  });
 };
 
 // ──────────────────────────────────────────────────────────────────────
@@ -567,12 +557,12 @@ export const sendAdminInvitationEmail = async (
     </p>
   `);
 
-  await withRetry(() => resendAdminInvite.emails.send({
+  await sendWithResilience(resendAdminInvite, {
     from: FROM,
     to,
     subject: `Acceso a Velum Admin — Tus credenciales de ingreso`,
     html
-  }));
+  });
 };
 
 // ──────────────────────────────────────────────────────────────────────
@@ -626,12 +616,12 @@ export const sendPatientWelcomeEmail = async (
     </p>
   `);
 
-  await withRetry(() => resendAdminInvite.emails.send({
+  await sendWithResilience(resendAdminInvite, {
     from: FROM,
     to,
     subject: `Bienvenida a Velum Laser — Tu cuenta está lista`,
     html
-  }));
+  });
 };
 
 // ──────────────────────────────────────────────────────────────────────
@@ -698,13 +688,13 @@ export const sendCustomChargeOtpEmail = async (
     </p>
   `);
 
-  await withRetry(() => resendReminders.emails.send({
+  await sendWithResilience(resendReminders, {
     from: FROM,
     to,
     subject: `Autoriza tu cobro personalizado — Velum Laser`,
     html,
     tags: getResendTags(),
-  }));
+  });
 };
 
 // ──────────────────────────────────────────────────────────────────────
@@ -763,11 +753,11 @@ export const sendPaymentReceiptEmail = async (
     </p>
   `);
 
-  await withRetry(() => resendReminders.emails.send({
+  await sendWithResilience(resendReminders, {
     from: FROM,
     to,
     subject: `Comprobante de pago — Velum Laser`,
     html,
     tags: getResendTags(),
-  }));
+  });
 };

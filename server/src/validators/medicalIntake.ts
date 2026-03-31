@@ -6,7 +6,10 @@ export const medicalIntakeUpdateSchema = z.object({
   phototype: z.number().int().min(1).max(6).nullish(),
   consentAccepted: z.boolean().optional(),
   signatureKey: z.string().min(3).max(200).optional(),
-  signatureImageData: z.string().min(10).max(2_000_000).optional(), // base64 PNG ≤ ~1.5 MB raw
+  signatureImageData: z.string().min(10).optional().refine(
+    (val) => val === undefined || val.length <= 3_145_728,
+    { message: "La firma excede el tamaño máximo permitido (3MB)." }
+  ),
   status: z.enum(["draft", "submitted"]).optional()
 });
 

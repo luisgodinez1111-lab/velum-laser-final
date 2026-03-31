@@ -1,14 +1,24 @@
 import Stripe from "stripe";
 import { env } from "../utils/env";
 import { prisma } from "../db/prisma";
+import { logger } from "../utils/logger";
 
-if (!env.stripeSecretKey) {
-  throw new Error("STRIPE_SECRET_KEY is required");
-}
+let _stripe: Stripe | null = null;
 
-export const stripe = new Stripe(env.stripeSecretKey, {
-  apiVersion: "2024-06-20",
-  typescript: true
+export const getStripe = (): Stripe => {
+  if (_stripe) return _stripe;
+  if (!env.stripeSecretKey) {
+    throw new Error("STRIPE_SECRET_KEY is required para operaciones de pago");
+  }
+  _stripe = new Stripe(env.stripeSecretKey, { apiVersion: "2024-06-20", typescript: true });
+  return _stripe;
+};
+
+// Re-exportar alias para compatibilidad con imports existentes
+export const stripe = new Proxy({} as Stripe, {
+  get(_target, prop) {
+    return (getStripe() as unknown as Record<string | symbol, unknown>)[prop];
+  },
 });
 
 export const ensureCustomer = async (userId: string, email: string) => {

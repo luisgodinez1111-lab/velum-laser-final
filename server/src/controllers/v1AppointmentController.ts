@@ -14,133 +14,26 @@ import {
   syncAppointmentWorkflow,
   updateAgendaConfig
 } from "../services/agendaService";
+import {
+  hasClinicalEligibility,
+  resolveTreatmentForAppointment,
+  preferredCabinIdsForTreatment,
+  deriveAppointmentEndAt,
+  type ResolvedAgendaTreatment,
+} from "../services/appointmentEligibilityService";
 import { Request } from "express";
 import { env } from "../utils/env";
 import { generateAppointmentConfirmToken as _genToken, verifyAppointmentConfirmToken } from "../utils/appointmentToken";
-import { getClinicIdByUserId } from "../utils/clinic";
+import { getClinicIdByUserId } from "../utils/resolveClinicId";
 import { logger } from "../utils/logger";
 import { onAppointmentBooked, onAppointmentConfirmed, onAppointmentCancelledByClinic, onAppointmentCancelledByPatient } from "../services/notificationService";
 import { agendaBlockCreateSchema, agendaConfigUpdateSchema, agendaDateParamSchema } from "../validators/agenda";
 import { appointmentCreateSchema, appointmentUpdateSchema } from "../validators/appointments";
+import type { z } from "zod";
 
 const privilegedRoles = new Set(["staff", "admin", "system"]);
 
 const hasPrivilegedRole = (role: string) => privilegedRoles.has(role);
-
-const hasClinicalEligibility = async (userId: string) => {
-  const [intake, membership] = await Promise.all([
-    prisma.medicalIntake.findUnique({
-      where: { userId },
-      select: { status: true }
-    }),
-    prisma.membership.findUnique({
-      where: { userId },
-      select: { status: true }
-    })
-  ]);
-
-  return {
-    intakeOk: Boolean(intake && ["submitted", "approved"].includes(intake.status)),
-    membershipOk: membership?.status === "active"
-  };
-};
-
-type ResolvedAgendaTreatment = {
-  id: string;
-  code: string;
-  durationMinutes: number;
-  prepBufferMinutes: number;
-  cleanupBufferMinutes: number;
-  cabinId: string | null;
-  requiresSpecificCabin: boolean;
-  isActive: boolean;
-  cabinRules: Array<{ cabinId: string; priority: number }>;
-};
-
-const resolveTreatmentForAppointment = async (args: { treatmentId?: string; reason?: string }) => {
-  if (args.treatmentId) {
-    const treatment = await prisma.agendaTreatment.findUnique({
-      where: { id: args.treatmentId },
-      select: {
-        id: true,
-        code: true,
-        durationMinutes: true,
-        prepBufferMinutes: true,
-        cleanupBufferMinutes: true,
-        cabinId: true,
-        requiresSpecificCabin: true,
-        isActive: true,
-        cabinRules: {
-          select: { cabinId: true, priority: true },
-          orderBy: [{ priority: "asc" }, { createdAt: "asc" }]
-        }
-      }
-    });
-
-    if (!treatment || !treatment.isActive) {
-      throw new AgendaValidationError("El tratamiento indicado no existe o está inactivo", 404);
-    }
-
-    return treatment as ResolvedAgendaTreatment;
-  }
-
-  const code = args.reason?.trim().toLowerCase();
-  if (!code) {
-    return null;
-  }
-
-  const treatment = await prisma.agendaTreatment.findFirst({
-    where: { code, isActive: true },
-    select: {
-      id: true,
-      code: true,
-      durationMinutes: true,
-      prepBufferMinutes: true,
-      cleanupBufferMinutes: true,
-      cabinId: true,
-      requiresSpecificCabin: true,
-      isActive: true,
-      cabinRules: {
-        select: { cabinId: true, priority: true },
-        orderBy: [{ priority: "asc" }, { createdAt: "asc" }]
-      }
-    }
-  });
-
-  return (treatment as ResolvedAgendaTreatment | null) ?? null;
-};
-
-const preferredCabinIdsForTreatment = (treatment: ResolvedAgendaTreatment | null) => {
-  if (!treatment) {
-    return [];
-  }
-  const ordered = treatment.cabinRules
-    .slice()
-    .sort((a, b) => a.priority - b.priority)
-    .map((rule) => rule.cabinId);
-  if (treatment.cabinId && !ordered.includes(treatment.cabinId)) {
-    ordered.unshift(treatment.cabinId);
-  }
-  return Array.from(new Set(ordered));
-};
-
-const deriveAppointmentEndAt = ({
-  startAt,
-  payloadEndAt,
-  treatment
-}: {
-  startAt: Date;
-  payloadEndAt?: string;
-  treatment: ResolvedAgendaTreatment | null;
-}) => {
-  if (treatment) {
-    return new Date(startAt.getTime() + treatment.durationMinutes * 60 * 1000);
-  }
-  if (!payloadEndAt) {
-    return null;
-  }
-  return new Date(payloadEndAt);
-};
 
 const zonedDateParts = (date: Date, timeZone: string) => {
   const formatter = new Intl.DateTimeFormat("en-US", {
@@ -241,73 +134,26 @@ const respondIfAgendaError = (error: unknown, res: Response) => {
 };
 
 export const createAppointment = async (req: AuthRequest, res: Response) => {
-  // phase1 onboarding gate
+  // phase1 onboarding gate — verifica expediente médico aprobado
   if (req.user?.role === "member") {
     const memberId = req.user.id;
 
-    const tableExists = async (tableName: string) => {
-      const rows = await prisma.$queryRawUnsafe<Array<{ exists: boolean }>>(
-        `SELECT to_regclass($1) IS NOT NULL AS "exists"`,
-        tableName
-      );
-      return Boolean(rows?.[0]?.exists);
-    };
-
-    const hasClinicalTable = await tableExists('"ClinicalHistory"');
-    const hasP2Table = await tableExists('"P2Assessment"');
-    const hasContractTable = await tableExists('"VelumContractSignature"');
-
-    let clinicalCompleted = false;
-    let p2Completed = false;
-    let contractSigned = false;
-
-    if (hasClinicalTable) {
-      const rows = await prisma.$queryRawUnsafe<Array<{ ok: boolean }>>(
-        `SELECT EXISTS(
-           SELECT 1 FROM "ClinicalHistory"
-           WHERE "userId" = $1 AND "completedAt" IS NOT NULL
-         ) AS "ok"`,
-        memberId
-      );
-      clinicalCompleted = Boolean(rows?.[0]?.ok);
-    }
-
-    if (hasP2Table) {
-      const rows = await prisma.$queryRawUnsafe<Array<{ ok: boolean }>>(
-        `SELECT EXISTS(
-           SELECT 1 FROM "P2Assessment"
-           WHERE "userId" = $1 AND "completedAt" IS NOT NULL
-         ) AS "ok"`,
-        memberId
-      );
-      p2Completed = Boolean(rows?.[0]?.ok);
-    }
-
-    if (hasContractTable) {
-      const rows = await prisma.$queryRawUnsafe<Array<{ ok: boolean }>>(
-        `SELECT EXISTS(
-           SELECT 1 FROM "VelumContractSignature"
-           WHERE "userId" = $1 AND "signedAt" IS NOT NULL
-         ) AS "ok"`,
-        memberId
-      );
-      contractSigned = Boolean(rows?.[0]?.ok);
-    }
-
-    const onboardingCompleted = clinicalCompleted && p2Completed && contractSigned;
-
-    if (!onboardingCompleted) {
+    const intake = await prisma.medicalIntake.findUnique({
+      where: { userId: memberId },
+      select: { status: true },
+    });
+    if (!intake || intake.status !== 'approved') {
       return res.status(403).json({
-        message: "Completa tu expediente clinico y documentos antes de agendar evaluacion.",
-        code: "ONBOARDING_INCOMPLETE"
+        message: "Completa tu expediente clínico antes de agendar.",
+        code: "ONBOARDING_INCOMPLETE",
       });
     }
   }
 
-  const payload: any = appointmentCreateSchema.parse(req.body);
+  const payload: z.infer<typeof appointmentCreateSchema> = appointmentCreateSchema.parse(req.body);
 
   // phase1.2 evaluation snapshot
-  const rawBody: any = req.body ?? {};
+  const rawBody: Record<string, unknown> = req.body ?? {};
   const evaluationZones = Array.isArray(rawBody.evaluationZones)
     ? rawBody.evaluationZones.map((z: unknown) => String(z).trim()).filter(Boolean)
     : [];
@@ -316,7 +162,7 @@ export const createAppointment = async (req: AuthRequest, res: Response) => {
   const evaluationCurrency = String(rawBody.evaluationCurrency ?? "MXN").trim().toUpperCase();
 
   const marker = String(
-    payload?.type ?? payload?.appointmentType ?? payload?.serviceType ?? payload?.reason ?? ""
+    rawBody.type ?? rawBody.appointmentType ?? rawBody.serviceType ?? payload?.reason ?? ""
   ).toLowerCase();
   const isEvaluation = marker.includes("evalu");
 
@@ -349,7 +195,7 @@ export const createAppointment = async (req: AuthRequest, res: Response) => {
       capturedAt: new Date().toISOString()
     };
     const line = `[EVAL_SNAPSHOT] ${JSON.stringify(snapshot)}`;
-    payload.notes = [payload?.notes, line].filter(Boolean).join("\n");
+    payload.reason = [payload?.reason, line].filter(Boolean).join("\n");
   }
   const startAt = new Date(payload.startAt);
 
@@ -483,7 +329,8 @@ export const createAppointment = async (req: AuthRequest, res: Response) => {
     }
   });
 
-  const TIMEZONE = "America/Mexico_City";
+  const agendaPolicy = await prisma.agendaPolicy.findFirst({ select: { timezone: true } });
+  const TIMEZONE = agendaPolicy?.timezone ?? "America/Chihuahua";
   const userName = [appointment.user.profile?.firstName, appointment.user.profile?.lastName].filter(Boolean).join(" ") || appointment.user.email;
   onAppointmentBooked({
     appointmentId: appointment.id,

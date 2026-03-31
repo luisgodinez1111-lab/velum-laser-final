@@ -8,7 +8,11 @@ import { resolveBaseUrl } from "../utils/baseUrl";
 const asString = (v: unknown): string => (typeof v === "string" ? v.trim() : "");
 
 // Configurable via env — default $200 MXN = 20000 centavos
-const DEPOSIT_AMOUNT_CENTS = Number(process.env.DEPOSIT_AMOUNT_CENTS ?? 20000);
+const rawDeposit = process.env.DEPOSIT_AMOUNT_CENTS;
+const DEPOSIT_AMOUNT_CENTS = rawDeposit !== undefined ? Number(rawDeposit) : 20000;
+if (!Number.isFinite(DEPOSIT_AMOUNT_CENTS) || DEPOSIT_AMOUNT_CENTS <= 0) {
+  throw new Error(`DEPOSIT_AMOUNT_CENTS inválido: "${rawDeposit}" — debe ser un número entero positivo`);
+}
 
 
 interface DepositBody {

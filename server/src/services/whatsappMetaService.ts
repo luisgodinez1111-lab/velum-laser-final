@@ -1,6 +1,8 @@
 import https from "node:https";
 import { prisma } from "../db/prisma";
 import { logger } from "../utils/logger";
+import { withRetry } from "../utils/retry";
+import { whatsappCircuit } from "../utils/circuitBreaker";
 
 export type WhatsappMetaConfig = {
   accessToken: string;
@@ -26,9 +28,9 @@ const asBoolean = (v: unknown, fallback = false): boolean => {
   return fallback;
 };
 
-const parseMaybeJson = (value: unknown): any => {
+const parseMaybeJson = (value: unknown): Record<string, unknown> | null => {
   if (!value) return null;
-  if (typeof value === "object") return value;
+  if (typeof value === "object") return value as Record<string, unknown>;
   if (typeof value === "string") {
     try {
       return JSON.parse(value);
@@ -138,7 +140,7 @@ export const saveWhatsappMetaConfig = async (
 const postJson = (
   url: string,
   token: string,
-  payload: Record<string, any>
+  payload: Record<string, unknown>
 ): Promise<{ status: number; body: string }> =>
   new Promise((resolve, reject) => {
     const u = new URL(url);
@@ -206,10 +208,15 @@ export const sendWhatsappOtpCode = async (
     }
   };
 
-  const resp = await postJson(
-    `https://graph.facebook.com/v25.0/${cfg.phoneNumberId}/messages`,
-    cfg.accessToken,
-    payload
+  const resp = await whatsappCircuit.execute(() =>
+    withRetry(
+      () => postJson(
+        `https://graph.facebook.com/v25.0/${cfg.phoneNumberId}/messages`,
+        cfg.accessToken,
+        payload
+      ),
+      { maxAttempts: 2, initialDelayMs: 1_000, context: "whatsapp" }
+    )
   );
 
   if (resp.status < 200 || resp.status >= 300) {
@@ -245,14 +252,16 @@ export const sendWhatsappAppointmentReminder = async (
     return;
   }
 
-  const components: any[] = [
+  type WhatsappTemplateParameter = { type: "text"; text: string };
+  type WhatsappTemplateComponent = { type: string; parameters: WhatsappTemplateParameter[] };
+  const components: WhatsappTemplateComponent[] = [
     {
       type: "body",
       parameters: [
         { type: "text", text: params.name },
         { type: "text", text: params.date },
         { type: "text", text: params.time },
-        ...(params.treatment ? [{ type: "text", text: params.treatment }] : []),
+        ...(params.treatment ? [{ type: "text" as const, text: params.treatment }] : []),
       ],
     },
   ];
@@ -268,10 +277,15 @@ export const sendWhatsappAppointmentReminder = async (
     },
   };
 
-  const resp = await postJson(
-    `https://graph.facebook.com/v25.0/${cfg.phoneNumberId}/messages`,
-    cfg.accessToken,
-    payload
+  const resp = await whatsappCircuit.execute(() =>
+    withRetry(
+      () => postJson(
+        `https://graph.facebook.com/v25.0/${cfg.phoneNumberId}/messages`,
+        cfg.accessToken,
+        payload
+      ),
+      { maxAttempts: 2, initialDelayMs: 1_000, context: "whatsapp" }
+    )
   );
 
   if (resp.status < 200 || resp.status >= 300) {
@@ -315,10 +329,15 @@ export const sendWhatsappPaymentReminder = async (
     },
   };
 
-  const resp = await postJson(
-    `https://graph.facebook.com/v25.0/${cfg.phoneNumberId}/messages`,
-    cfg.accessToken,
-    payload
+  const resp = await whatsappCircuit.execute(() =>
+    withRetry(
+      () => postJson(
+        `https://graph.facebook.com/v25.0/${cfg.phoneNumberId}/messages`,
+        cfg.accessToken,
+        payload
+      ),
+      { maxAttempts: 2, initialDelayMs: 1_000, context: "whatsapp" }
+    )
   );
 
   if (resp.status < 200 || resp.status >= 300) {

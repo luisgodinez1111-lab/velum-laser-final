@@ -1,7 +1,8 @@
 import { Response } from "express";
+import { IntegrationJobStatus } from "@prisma/client";
 import { prisma } from "../db/prisma";
 import { AuthRequest } from "../middlewares/auth";
-import { getClinicIdByUserId } from "../utils/clinic";
+import { getClinicIdByUserId } from "../utils/resolveClinicId";
 
 export const listIntegrationJobs = async (req: AuthRequest, res: Response) => {
   const clinicId = await getClinicIdByUserId(req.user!.id);
@@ -11,7 +12,7 @@ export const listIntegrationJobs = async (req: AuthRequest, res: Response) => {
   const jobs = await prisma.integrationJob.findMany({
     where: {
       clinicId,
-      ...(status ? { status: status as any } : {})
+      ...(status ? { status: status as IntegrationJobStatus } : {})
     },
     orderBy: { createdAt: "desc" },
     take: limit,

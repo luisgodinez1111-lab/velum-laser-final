@@ -7,6 +7,23 @@ import { medicalIntakeApproveSchema, medicalIntakeUpdateSchema } from "../valida
 import { onIntakeApproved, onIntakeRejected, notifyAdmins } from "../services/notificationService";
 import { logger } from "../utils/logger";
 import { safeIp } from "../utils/request";
+import { encrypt, decrypt } from "../utils/crypto";
+import { badRequest, notFound } from "../utils/AppError";
+
+// Prefijo que distingue valores encriptados de imágenes en texto plano (compatibilidad hacia atrás)
+const SIG_ENC_PREFIX = "enc1:";
+
+const encryptSignatureData = (plain: string): string =>
+  SIG_ENC_PREFIX + encrypt(plain);
+
+const decryptSignatureData = (val: string | null | undefined): string | null => {
+  if (!val) return null;
+  if (val.startsWith(SIG_ENC_PREFIX)) {
+    try { return decrypt(val.slice(SIG_ENC_PREFIX.length)); }
+    catch { return null; } // dato corrupto — no exponer basura al cliente
+  }
+  return val; // texto plano legacy (anterior a la encriptación)
+};
 
 const ensureIntake = async (userId: string) => {
   return prisma.medicalIntake.upsert({
@@ -18,7 +35,10 @@ const ensureIntake = async (userId: string) => {
 
 export const getMyMedicalIntake = async (req: AuthRequest, res: Response) => {
   const intake = await ensureIntake(req.user!.id);
-  return res.json(intake);
+  return res.json({
+    ...intake,
+    signatureImageData: decryptSignatureData(intake.signatureImageData),
+  });
 };
 
 export const updateMyMedicalIntake = async (req: AuthRequest, res: Response) => {
@@ -30,13 +50,8 @@ export const updateMyMedicalIntake = async (req: AuthRequest, res: Response) => 
   const requestedStatus = payload.status ?? current.status;
 
   if (requestedStatus === "submitted") {
-    if (!nextConsent) {
-      return res.status(400).json({ message: "No se puede enviar sin consentimiento" });
-    }
-
-    if (!nextPhototype) {
-      return res.status(400).json({ message: "No se puede enviar sin fototipo" });
-    }
+    if (!nextConsent) throw badRequest("No se puede enviar sin consentimiento");
+    if (!nextPhototype) throw badRequest("No se puede enviar sin fototipo");
   }
 
   // Auto-generate a short signatureKey when image data arrives (avoid storing full PNG as key)
@@ -52,7 +67,9 @@ export const updateMyMedicalIntake = async (req: AuthRequest, res: Response) => 
       phototype: payload.phototype ?? undefined,
       consentAccepted: payload.consentAccepted ?? undefined,
       signatureKey,
-      signatureImageData: payload.signatureImageData ?? undefined,
+      signatureImageData: payload.signatureImageData
+        ? encryptSignatureData(payload.signatureImageData)
+        : undefined,
       status: requestedStatus,
       submittedAt: requestedStatus === "submitted" ? new Date() : current.submittedAt,
       rejectedAt: requestedStatus === "submitted" ? null : current.rejectedAt,
@@ -79,15 +96,21 @@ export const updateMyMedicalIntake = async (req: AuthRequest, res: Response) => 
       .catch((err) => logger.error({ err }, "[intake] admin notification failed"));
   }
 
-  return res.json(updated);
+  return res.json({
+    ...updated,
+    signatureImageData: decryptSignatureData(updated.signatureImageData),
+  });
 };
 
 export const getMedicalIntakeByUserId = async (req: AuthRequest, res: Response) => {
   const userId = String(req.params.userId ?? "").trim();
-  if (!userId) return res.status(400).json({ message: "userId requerido" });
+  if (!userId) throw badRequest("userId requerido");
   const intake = await prisma.medicalIntake.findUnique({ where: { userId } });
-  if (!intake) return res.status(404).json({ message: "Expediente no encontrado" });
-  return res.json(intake);
+  if (!intake) throw notFound("Expediente");
+  return res.json({
+    ...intake,
+    signatureImageData: decryptSignatureData(intake.signatureImageData),
+  });
 };
 
 export const approveMedicalIntake = async (req: AuthRequest, res: Response) => {
@@ -150,5 +173,8 @@ export const approveMedicalIntake = async (req: AuthRequest, res: Response) => {
     notifyFn.catch((err) => logger.error({ err }, "[intake] notification failed"));
   }
 
-  return res.json(updated);
+  return res.json({
+    ...updated,
+    signatureImageData: decryptSignatureData(updated.signatureImageData),
+  });
 };

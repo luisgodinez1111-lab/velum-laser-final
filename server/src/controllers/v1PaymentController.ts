@@ -20,12 +20,25 @@ const buildPaymentWhere = (req: AuthRequest) => {
 };
 
 export const getMyPayments = async (req: AuthRequest, res: Response) => {
-  const payments = await prisma.payment.findMany({
-    where: { userId: req.user!.id },
-    orderBy: { createdAt: "desc" }
-  });
+  const rawPage  = Number(req.query.page  ?? 1);
+  const rawLimit = Number(req.query.limit ?? 50);
+  const page  = Number.isFinite(rawPage)  && rawPage  > 0 ? Math.floor(rawPage)  : 1;
+  const limit = Number.isFinite(rawLimit) && rawLimit > 0 ? Math.min(Math.floor(rawLimit), 100) : 50;
+  const skip  = (page - 1) * limit;
 
-  return res.json(payments);
+  const where = { userId: req.user!.id };
+
+  const [total, data] = await Promise.all([
+    prisma.payment.count({ where }),
+    prisma.payment.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      skip,
+      take: limit,
+    }),
+  ]);
+
+  return res.json({ data, pagination: { page, limit, total } });
 };
 
 export const listPaymentsAdmin = async (req: AuthRequest, res: Response) => {

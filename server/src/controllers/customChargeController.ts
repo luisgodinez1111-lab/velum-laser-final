@@ -128,7 +128,16 @@ export const createCharge = async (req: AuthRequest, res: Response) => {
       appBaseUrl: base,
     });
   } catch (err) {
-    logger.error({ err }, "[custom-charge] Failed to send OTP email");
+    // Si el email falla, el paciente nunca recibe el OTP y el cobro queda en PENDING_ACCEPTANCE
+    // indefinidamente. Cancelamos el cobro para evitar cargos zombie, y devolvemos 500 al admin
+    // para que intente de nuevo.
+    logger.error({ err, chargeId: charge.id }, "[custom-charge] OTP email failed — cancelling charge to avoid zombie");
+    await cancelCustomCharge(charge.id).catch((cancelErr: unknown) =>
+      logger.error({ err: cancelErr, chargeId: charge.id }, "[custom-charge] cleanup cancel also failed — charge may need manual review")
+    );
+    return res.status(500).json({
+      message: "No se pudo enviar el OTP al paciente. El cobro fue cancelado automáticamente. Intenta de nuevo.",
+    });
   }
 
   // Trigger in-app + email notification for the user
@@ -176,7 +185,8 @@ export const resendOtp = async (req: AuthRequest, res: Response) => {
     if (result.error === "not_pending") return res.status(400).json({ message: "El cobro no está pendiente de aceptación" });
   }
 
-  const { charge, otp } = result as { charge: any; otp: string };
+  if (!("charge" in result)) return res.status(500).json({ message: "Error interno reenviando OTP" });
+  const { charge, otp } = result;
   const user = charge.user;
   const name = [user?.profile?.firstName, user?.profile?.lastName].filter(Boolean).join(" ") || user?.email;
   const base = resolveBaseUrl();
@@ -187,7 +197,7 @@ export const resendOtp = async (req: AuthRequest, res: Response) => {
       otp,
       chargeId: charge.id,
       title: charge.title,
-      description: charge.description,
+      description: charge.description ?? undefined,
       amountFormatted: formatAmount(charge.amount, charge.currency),
       type: charge.type,
       intervalLabel: charge.type === "RECURRING" ? INTERVAL_LABELS[charge.interval ?? "month"] : undefined,

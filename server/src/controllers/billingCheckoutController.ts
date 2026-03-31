@@ -13,7 +13,7 @@ export const createBillingCheckout = async (req: AuthRequest, res: Response) => 
   try {
     if (!req.user?.id) return res.status(401).json({ message: "No autorizado" });
 
-    const planCode = asString((req.body as any)?.planCode).toLowerCase();
+    const planCode = asString((req.body as Record<string, unknown>)?.planCode).toLowerCase();
     if (!planCode) return res.status(400).json({ message: "planCode es obligatorio" });
 
     const plan = await findActivePlanByCode(planCode);
@@ -56,9 +56,9 @@ export const createBillingCheckout = async (req: AuthRequest, res: Response) => 
         body: couponParams.toString(),
         signal: AbortSignal.timeout(10_000),
       });
-      const couponJson: any = await couponRsp.json().catch(() => ({}));
+      const couponJson = await couponRsp.json().catch(() => ({})) as Record<string, unknown>;
       if (couponRsp.ok && couponJson?.id) {
-        couponId = couponJson.id;
+        couponId = String(couponJson.id);
       }
     }
 
@@ -100,10 +100,10 @@ export const createBillingCheckout = async (req: AuthRequest, res: Response) => 
       signal: AbortSignal.timeout(10_000),
     });
 
-    const json: any = await rsp.json().catch(() => ({}));
+    const json = await rsp.json().catch(() => ({})) as Record<string, unknown>;
 
     if (!rsp.ok) {
-      const detail = json?.error?.message || "Error creando checkout en Stripe";
+      const detail = (json?.error as Record<string, unknown> | undefined)?.message || "Error creando checkout en Stripe";
       return res.status(502).json({ message: "No se pudo crear checkout", detail });
     }
 
@@ -113,9 +113,9 @@ export const createBillingCheckout = async (req: AuthRequest, res: Response) => 
       sessionId: json?.id || "",
       checkoutUrl: json?.url || "",
     });
-  } catch (error: any) {
-    logger.error({ err: error }, "createBillingCheckout error");
-    return res.status(500).json({ message: "Error creando checkout", detail: error?.message ?? "unknown" });
+  } catch (error: unknown) {
+    logger.error({ err: error }, "[billing] createBillingCheckout error");
+    return res.status(500).json({ message: "Error interno del servidor" });
   }
 };
 
@@ -157,16 +157,16 @@ export const createBillingPortal = async (req: AuthRequest, res: Response) => {
       signal: AbortSignal.timeout(10_000),
     });
 
-    const json: any = await rsp.json().catch(() => ({}));
+    const json = await rsp.json().catch(() => ({})) as Record<string, unknown>;
 
     if (!rsp.ok) {
-      const detail = json?.error?.message || "Error creando sesión del portal";
+      const detail = (json?.error as Record<string, unknown> | undefined)?.message || "Error creando sesión del portal";
       return res.status(502).json({ message: "No se pudo abrir el portal de facturación", detail });
     }
 
     return res.json({ url: json?.url || "" });
-  } catch (error: any) {
-    logger.error({ err: error }, "createBillingPortal error");
-    return res.status(500).json({ message: "Error abriendo portal", detail: error?.message ?? "unknown" });
+  } catch (error: unknown) {
+    logger.error({ err: error }, "[billing] createBillingPortal error");
+    return res.status(500).json({ message: "Error interno del servidor" });
   }
 };

@@ -1,4 +1,4 @@
-import { createHash, randomInt } from "crypto";
+import { createHash, randomInt, timingSafeEqual } from "crypto";
 import { prisma } from "../db/prisma";
 import { addHours } from "../utils/date";
 import { logger } from "../utils/logger";
@@ -23,6 +23,12 @@ function generateOtp(): string {
 
 function hashOtp(otp: string): string {
   return createHash("sha256").update(otp).digest("hex");
+}
+
+function otpMatchesSafe(storedHash: string, inputOtp: string): boolean {
+  const a = Buffer.from(storedHash, "utf8");
+  const b = Buffer.from(hashOtp(inputOtp), "utf8");
+  return a.length === b.length && timingSafeEqual(a, b);
 }
 
 export const createCustomCharge = async (params: {
@@ -91,8 +97,7 @@ export const verifyCustomChargeOtp = async (chargeId: string, otp: string) => {
     return { error: "too_many_attempts" as const };
   }
 
-  const inputHash = hashOtp(otp);
-  if (inputHash !== charge.otpHash) {
+  if (!otpMatchesSafe(charge.otpHash!, otp)) {
     // increment is atomic at DB level — no race risk here
     await prisma.customCharge.update({
       where: { id: chargeId },
