@@ -5,6 +5,8 @@ import { AuthRequest } from "../middlewares/auth";
 import { createAuditLog } from "../services/auditService";
 import { sessionCreateSchema, sessionFeedbackSchema } from "../validators/sessions";
 import { parsePagination } from "../utils/pagination";
+import { paginated } from "../utils/response";
+import { queryParams } from "../utils/request";
 
 const privilegedRoles = new Set(["staff", "admin", "system"]);
 
@@ -67,7 +69,7 @@ export const listMySessions = async (req: AuthRequest, res: Response) => {
     ? req.user!.id
     : (typeof req.query.userId === "string" ? req.query.userId : undefined);
 
-  const { page, limit, skip } = parsePagination(req.query as Record<string, unknown>, { maxLimit: 100 });
+  const { page, limit, skip } = parsePagination(queryParams(req), { maxLimit: 100 });
   const where = filterUserId ? { userId: filterUserId } : undefined;
 
   const [sessions, total] = await Promise.all([
@@ -85,14 +87,14 @@ export const listMySessions = async (req: AuthRequest, res: Response) => {
     prisma.sessionTreatment.count({ where }),
   ]);
 
-  return res.json({ sessions, total, page, limit, pages: Math.ceil(total / limit) });
+  return paginated(res, sessions, { page, limit, total });
 };
 
 export const adminListSessions = async (req: AuthRequest, res: Response) => {
   const userId = typeof req.query.userId === "string" ? req.query.userId : undefined;
   const appointmentId = typeof req.query.appointmentId === "string" ? req.query.appointmentId : undefined;
 
-  const { page, limit, skip } = parsePagination(req.query as Record<string, unknown>, { maxLimit: 200, defaultLimit: 100 });
+  const { page, limit, skip } = parsePagination(queryParams(req), { maxLimit: 200, defaultLimit: 100 });
   const where = {
     ...(userId ? { userId } : {}),
     ...(appointmentId ? { appointmentId } : {})
@@ -113,7 +115,7 @@ export const adminListSessions = async (req: AuthRequest, res: Response) => {
     prisma.sessionTreatment.count({ where }),
   ]);
 
-  return res.json({ sessions, total, page, limit, pages: Math.ceil(total / limit) });
+  return paginated(res, sessions, { page, limit, total });
 };
 
 export const addSessionFeedback = async (req: AuthRequest, res: Response) => {

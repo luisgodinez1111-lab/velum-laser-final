@@ -9,12 +9,14 @@ export const safeIp = (req: Request): string =>
   req.ip ?? req.socket?.remoteAddress ?? "unknown";
 
 /**
- * Genera la clave de rate limit preferida para un usuario autenticado.
- * Extrae el userId del JWT en cookie sin pasar por el middleware de auth completo.
- * Si no hay token válido, usa la IP como fallback.
- *
- * @param prefix - Prefijo para diferenciar limiters (ej. "user", "admin", "admin-delete")
+ * Devuelve req.query con un tipo compatible con Record<string, unknown>.
+ * ParsedQs (el tipo de req.query) es estructuralmente compatible, pero el cast
+ * es necesario porque sus valores intermedios no asignan a unknown directamente.
+ * Centraliza el cast para no repetirlo en cada controller.
  */
+export const queryParams = (req: Request): Record<string, unknown> =>
+  req.query as unknown as Record<string, unknown>;
+
 export const rateLimitKeyByUser = (req: Request, prefix = "user"): string => {
   try {
     const token = (req as { cookies?: Record<string, string> }).cookies?.accessToken;

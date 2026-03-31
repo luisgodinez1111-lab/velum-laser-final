@@ -2,6 +2,7 @@ import { Response } from "express";
 import { prisma } from "../db/prisma";
 import { AuthRequest } from "../middlewares/auth";
 import { auditFilterSchema } from "../validators/audit";
+import { paginated } from "../utils/response";
 
 export const listAuditLogsV1 = async (req: AuthRequest, res: Response) => {
   const parsed = auditFilterSchema.parse(req.query);
@@ -46,5 +47,5 @@ export const listAuditLogsV1 = async (req: AuthRequest, res: Response) => {
     })
   ]);
 
-  return res.json({ logs, total, page, limit, pages: Math.ceil(total / limit) });
+  return paginated(res, logs, { page, limit, total });
 };

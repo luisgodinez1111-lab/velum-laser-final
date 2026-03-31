@@ -10,7 +10,9 @@ export const weekdayMap: Record<string, number> = {
   Sat: 6
 };
 
-export const comparableStatuses = ["scheduled", "confirmed"] as const;
+/** Tipo para los estados de cita que se comparan en conflictos de agenda. */
+export type AppointmentComparableStatus = "scheduled" | "confirmed";
+export const comparableStatuses: AppointmentComparableStatus[] = ["scheduled", "confirmed"];
 
 export const activeAgendaStatuses = ["scheduled", "confirmed", "completed", "no_show"] as const;
 

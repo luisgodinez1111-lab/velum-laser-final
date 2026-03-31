@@ -83,10 +83,10 @@ describe("listMemberships", () => {
     const res = await request(app).get("/admin/memberships");
 
     expect(res.status).toBe(200);
-    expect(res.body.total).toBe(2);
+    expect(res.body.pagination.total).toBe(2);
     expect(res.body.data).toHaveLength(2);
-    expect(res.body.page).toBe(1);
-    expect(res.body.limit).toBe(50);
+    expect(res.body.pagination.page).toBe(1);
+    expect(res.body.pagination.limit).toBe(50);
   });
 
   it("respeta parámetros de paginación", async () => {
@@ -97,8 +97,8 @@ describe("listMemberships", () => {
     const res = await request(app).get("/admin/memberships?page=3&limit=10");
 
     expect(res.status).toBe(200);
-    expect(res.body.page).toBe(3);
-    expect(res.body.limit).toBe(10);
+    expect(res.body.pagination.page).toBe(3);
+    expect(res.body.pagination.limit).toBe(10);
     expect(mockMembershipFindMany).toHaveBeenCalledWith(
       expect.objectContaining({ skip: 20, take: 10 })
     );
@@ -113,8 +113,8 @@ describe("listMemberships", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.data).toEqual([]);
-    expect(res.body.total).toBe(0);
-    expect(res.body.pages).toBe(0);
+    expect(res.body.pagination.total).toBe(0);
+    expect(res.body.pagination.pages).toBe(0);
   });
 
   it("calcula pages correctamente", async () => {
@@ -124,7 +124,7 @@ describe("listMemberships", () => {
     const app = await buildApp();
     const res = await request(app).get("/admin/memberships?limit=10");
 
-    expect(res.body.pages).toBe(6); // ceil(55/10)
+    expect(res.body.pagination.pages).toBe(6); // ceil(55/10)
   });
 });
 

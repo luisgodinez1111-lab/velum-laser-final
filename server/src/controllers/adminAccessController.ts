@@ -20,6 +20,7 @@ import { revokeAllRefreshTokens, hashPassword, validatePasswordStrength, generat
 import { generateOtp } from "../utils/crypto";
 import { clean, validEmail } from "../utils/strings";
 import { parsePagination } from "../utils/pagination";
+import { queryParams } from "../utils/request";
 import { resolveClinicId } from "../utils/resolveClinicId";
 
 const MAX_OTP_ATTEMPTS = 5;
@@ -74,7 +75,7 @@ export const disableTotp = async (req: AuthRequest, res: Response) => {
 
 export const listAdminAccessUsers = async (req: AuthRequest, res: Response) => {
   try {
-    const { page, limit, skip } = parsePagination(req.query as Record<string, unknown>, { maxLimit: 200, defaultLimit: 100 });
+    const { page, limit, skip } = parsePagination(queryParams(req), { maxLimit: 200, defaultLimit: 100 });
 
     const [total, users] = await Promise.all([
       prisma.user.count({ where: { deletedAt: null } }),
@@ -112,12 +113,14 @@ export const listAdminAccessUsers = async (req: AuthRequest, res: Response) => {
     }));
 
     return res.json({
-      users: rows,
+      data: rows,
+      pagination: {
+        page,
+        limit,
+        total,
+        pages: Math.ceil(total / limit),
+      },
       permissionsCatalog: PERMISSIONS_CATALOG,
-      total,
-      page,
-      limit,
-      pages: Math.ceil(total / limit),
     });
   } catch (error: unknown) {
     logger.error({ err: error }, "listAdminAccessUsers");

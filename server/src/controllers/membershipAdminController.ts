@@ -6,13 +6,14 @@ import { createAuditLog } from "../services/auditService";
 import { logger } from "../utils/logger";
 import { clean } from "../utils/strings";
 import { parsePagination } from "../utils/pagination";
-import { safeIp } from "../utils/request";
+import { safeIp, queryParams } from "../utils/request";
+import { paginated } from "../utils/response";
 
 const VALID_MEMBERSHIP_STATUSES = ['active', 'inactive', 'past_due', 'canceled', 'paused'] as const;
 type MembershipStatusValue = typeof VALID_MEMBERSHIP_STATUSES[number];
 
 export const listMemberships = async (req: AuthRequest, res: Response) => {
-  const { page, limit, skip } = parsePagination(req.query as Record<string, unknown>);
+  const { page, limit, skip } = parsePagination(queryParams(req));
   const [total, memberships] = await Promise.all([
     prisma.membership.count(),
     prisma.membership.findMany({
@@ -22,7 +23,7 @@ export const listMemberships = async (req: AuthRequest, res: Response) => {
       take: limit,
     }),
   ]);
-  return res.json({ data: memberships, total, page, limit, pages: Math.ceil(total / limit) });
+  return paginated(res, memberships, { page, limit, total });
 };
 
 export const updateMembershipStatus = async (req: AuthRequest, res: Response) => {

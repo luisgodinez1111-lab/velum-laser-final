@@ -9,7 +9,7 @@ import { sendPatientWelcomeEmail } from "../services/emailService";
 import { onNewMember, invalidateAdminIdCache } from "../services/notificationService";
 import { logger } from "../utils/logger";
 import { hashPassword, generateTempPassword, revokeAllRefreshTokens } from "../utils/auth";
-import { safeIp } from "../utils/request";
+import { safeIp, queryParams } from "../utils/request";
 import { clean, validEmail } from "../utils/strings";
 import { parsePagination } from "../utils/pagination";
 import { resolveClinicId } from "../utils/resolveClinicId";
@@ -23,7 +23,7 @@ const buildCatalogMaps = (catalog: StripePlanMapping[]) => ({
 
 export const listUsers = async (req: AuthRequest, res: Response) => {
   const cursor  = clean(req.query.cursor);  // ID del último elemento visto
-  const { page, limit, skip } = parsePagination(req.query as Record<string, unknown>);
+  const { page, limit, skip } = parsePagination(queryParams(req));
   const search  = String(req.query.search ?? "").trim();
   const roleFilter   = String(req.query.role   ?? "").trim();
   const statusFilter = String(req.query.status ?? "").trim();
@@ -84,10 +84,12 @@ export const listUsers = async (req: AuthRequest, res: Response) => {
 
   return res.json({
     data: enriched,
-    total,
-    page: cursor ? null : page,
-    limit,
-    pages: Math.ceil(total / limit),
+    pagination: {
+      page: cursor ? null : page,
+      limit,
+      total,
+      pages: Math.ceil(total / limit),
+    },
     nextCursor,
   });
 };

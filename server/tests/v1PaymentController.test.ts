@@ -141,9 +141,9 @@ describe("listPaymentsAdmin", () => {
     const res = await request(app).get("/payments/admin");
 
     expect(res.status).toBe(200);
-    expect(res.body.payments).toHaveLength(1);
-    expect(res.body.total).toBe(1);
-    expect(res.body.page).toBe(1);
+    expect(res.body.data).toHaveLength(1);
+    expect(res.body.pagination.total).toBe(1);
+    expect(res.body.pagination.page).toBe(1);
   });
 
   it("filtra por userId cuando se pasa como query param", async () => {
@@ -181,7 +181,7 @@ describe("listPaymentsAdmin", () => {
     const app = await buildApp("admin");
     const res = await request(app).get("/payments/admin?limit=10");
 
-    expect(res.body.pages).toBe(5); // ceil(45/10)
+    expect(res.body.pagination.pages).toBe(5); // ceil(45/10)
   });
 
   it("limita el máximo a 200 resultados por página", async () => {

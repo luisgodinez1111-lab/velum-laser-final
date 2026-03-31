@@ -45,10 +45,10 @@ describe("listAuditLogsV1", () => {
     const res = await request(app).get("/audit");
 
     expect(res.status).toBe(200);
-    expect(res.body.total).toBe(1);
-    expect(res.body.logs).toHaveLength(1);
-    expect(res.body.page).toBe(1);
-    expect(res.body.limit).toBe(50);
+    expect(res.body.pagination.total).toBe(1);
+    expect(res.body.data).toHaveLength(1);
+    expect(res.body.pagination.page).toBe(1);
+    expect(res.body.pagination.limit).toBe(50);
   });
 
   it("filtra por action cuando se pasa como query", async () => {
@@ -105,6 +105,6 @@ describe("listAuditLogsV1", () => {
     const app = await buildApp();
     const res = await request(app).get("/audit?limit=25");
 
-    expect(res.body.pages).toBe(3); // ceil(75/25)
+    expect(res.body.pagination.pages).toBe(3); // ceil(75/25)
   });
 });

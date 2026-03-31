@@ -56,7 +56,7 @@ export const hasCabinConflict = async ({
           }
         : {}),
       status: {
-        in: comparableStatuses as unknown as ("scheduled" | "confirmed")[]
+        in: comparableStatuses
       },
       startAt: {
         lt: new Date(incomingBuffered.endAt.getTime() + aroundWindowMs)
@@ -135,7 +135,7 @@ export const hasCabinConflictBatch = async ({
     where: {
       ...(excludeAppointmentId ? { id: { not: excludeAppointmentId } } : {}),
       status: {
-        in: comparableStatuses as unknown as ("scheduled" | "confirmed")[]
+        in: comparableStatuses
       },
       startAt: {
         lt: new Date(incomingBuffered.endAt.getTime() + aroundWindowMs)

@@ -2,6 +2,8 @@ import { Response } from "express";
 import { prisma } from "../db/prisma";
 import { AuthRequest } from "../middlewares/auth";
 import { parsePagination } from "../utils/pagination";
+import { paginated } from "../utils/response";
+import { queryParams } from "../utils/request";
 
 const buildPaymentWhere = (req: AuthRequest) => {
   const userId   = typeof req.query.userId   === "string" ? req.query.userId   : undefined;
@@ -21,7 +23,7 @@ const buildPaymentWhere = (req: AuthRequest) => {
 };
 
 export const getMyPayments = async (req: AuthRequest, res: Response) => {
-  const { page, limit, skip } = parsePagination(req.query as Record<string, unknown>, { maxLimit: 100 });
+  const { page, limit, skip } = parsePagination(queryParams(req), { maxLimit: 100 });
 
   const where = { userId: req.user!.id };
 
@@ -35,11 +37,11 @@ export const getMyPayments = async (req: AuthRequest, res: Response) => {
     }),
   ]);
 
-  return res.json({ data, pagination: { page, limit, total } });
+  return paginated(res, data, { page, limit, total });
 };
 
 export const listPaymentsAdmin = async (req: AuthRequest, res: Response) => {
-  const { page, limit, skip } = parsePagination(req.query as Record<string, unknown>, { maxLimit: 200 });
+  const { page, limit, skip } = parsePagination(queryParams(req), { maxLimit: 200 });
   const where = buildPaymentWhere(req);
 
   const [total, payments] = await Promise.all([
@@ -56,7 +58,7 @@ export const listPaymentsAdmin = async (req: AuthRequest, res: Response) => {
     })
   ]);
 
-  return res.json({ payments, total, page, limit, pages: Math.ceil(total / limit) });
+  return paginated(res, payments, { page, limit, total });
 };
 
 /**

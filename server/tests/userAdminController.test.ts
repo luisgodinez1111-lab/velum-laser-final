@@ -96,7 +96,7 @@ describe("listUsers", () => {
     const res = await request(app).get("/users");
 
     expect(res.status).toBe(200);
-    expect(res.body.total).toBe(1);
+    expect(res.body.pagination.total).toBe(1);
     expect(res.body.data).toHaveLength(1);
   });
 

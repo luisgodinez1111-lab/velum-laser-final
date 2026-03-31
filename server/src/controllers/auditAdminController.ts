@@ -4,6 +4,8 @@ import { AuthRequest } from "../middlewares/auth";
 import { auditFilterSchema } from "../validators/audit";
 import { parsePagination } from "../utils/pagination";
 import { escapeCsvField } from "../services/csvExportService";
+import { paginated } from "../utils/response";
+import { queryParams } from "../utils/request";
 
 // Construye el filtro where para consultas de AuditLog — compartido por listAuditLogs y exportAuditLogsCSV
 const buildAuditWhere = (parsed: ReturnType<typeof auditFilterSchema.parse>) => ({
@@ -45,15 +47,7 @@ export const listAuditLogs = async (req: AuthRequest, res: Response) => {
     prisma.auditLog.count({ where }),
   ]);
 
-  return res.json({
-    data: logs,
-    pagination: {
-      page,
-      pageSize,
-      total,
-      totalPages: Math.ceil(total / pageSize),
-    }
-  });
+  return paginated(res, logs, { page, limit: pageSize, total });
 };
 
 export const exportAuditLogsCSV = async (req: AuthRequest, res: Response) => {
@@ -126,7 +120,7 @@ export const reports = async (req: AuthRequest, res: Response) => {
 };
 
 export const listDocumentsAdmin = async (req: AuthRequest, res: Response) => {
-  const { page, limit, skip } = parsePagination(req.query as Record<string, unknown>);
+  const { page, limit, skip } = parsePagination(queryParams(req));
   const [total, documents] = await Promise.all([
     prisma.document.count(),
     prisma.document.findMany({
@@ -136,5 +130,5 @@ export const listDocumentsAdmin = async (req: AuthRequest, res: Response) => {
       take: limit,
     }),
   ]);
-  return res.json({ data: documents, total, page, limit, pages: Math.ceil(total / limit) });
+  return paginated(res, documents, { page, limit, total });
 };

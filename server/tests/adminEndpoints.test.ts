@@ -48,10 +48,11 @@ describe("listPaymentsAdmin — paginación y filtros", () => {
 
     const res = await request(app).get("/payments?page=1&limit=50");
     expect(res.status).toBe(200);
-    expect(res.body).toHaveProperty("payments");
-    expect(res.body).toHaveProperty("total");
-    expect(res.body).toHaveProperty("pages");
-    expect(Array.isArray(res.body.payments)).toBe(true);
+    expect(res.body).toHaveProperty("data");
+    expect(res.body).toHaveProperty("pagination");
+    expect(res.body.pagination).toHaveProperty("total");
+    expect(res.body.pagination).toHaveProperty("pages");
+    expect(Array.isArray(res.body.data)).toBe(true);
   });
 
   it("acepta filtros dateFrom y dateTo sin error", async () => {
@@ -62,7 +63,7 @@ describe("listPaymentsAdmin — paginación y filtros", () => {
 
     const res = await request(app).get("/payments?dateFrom=2025-01-01&dateTo=2025-01-31&status=paid");
     expect(res.status).toBe(200);
-    expect(res.body).toHaveProperty("payments");
+    expect(res.body).toHaveProperty("data");
   });
 });
 

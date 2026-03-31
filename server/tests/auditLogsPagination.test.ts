@@ -41,20 +41,20 @@ describe("GET /api/v1/audit-logs — paginación", () => {
     const app = buildApp();
     const res = await request(app).get("/api/v1/audit-logs?page=1&limit=10");
     expect(res.status).toBe(200);
-    expect(res.body).toHaveProperty("logs");
-    expect(res.body).toHaveProperty("total", 2);
-    expect(res.body).toHaveProperty("page", 1);
-    expect(res.body).toHaveProperty("limit", 10);
-    expect(res.body).toHaveProperty("pages", 1);
+    expect(res.body).toHaveProperty("data");
+    expect(res.body.pagination).toHaveProperty("total", 2);
+    expect(res.body.pagination).toHaveProperty("page", 1);
+    expect(res.body.pagination).toHaveProperty("limit", 10);
+    expect(res.body.pagination).toHaveProperty("pages", 1);
   });
 
   it("los logs tienen shape correcta", async () => {
     const app = buildApp();
     const res = await request(app).get("/api/v1/audit-logs");
     expect(res.status).toBe(200);
-    expect(Array.isArray(res.body.logs)).toBe(true);
-    expect(res.body.logs[0]).toHaveProperty("id");
-    expect(res.body.logs[0]).toHaveProperty("action");
+    expect(Array.isArray(res.body.data)).toBe(true);
+    expect(res.body.data[0]).toHaveProperty("id");
+    expect(res.body.data[0]).toHaveProperty("action");
   });
 
   it("sin ?include=relations no incluye joins de usuario", async () => {

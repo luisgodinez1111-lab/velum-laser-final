@@ -192,7 +192,7 @@ describe("listMySessions", () => {
     const res = await request(app).get("/sessions/me");
 
     expect(res.status).toBe(200);
-    expect(res.body.sessions).toHaveLength(1);
+    expect(res.body.data).toHaveLength(1);
 
     // where debe filtrar por userId del member
     const whereArg = mockSessionFindMany.mock.calls[0][0].where;
@@ -219,10 +219,10 @@ describe("listMySessions", () => {
     const res = await request(app).get("/sessions/me?page=1&limit=1");
 
     expect(res.status).toBe(200);
-    expect(res.body.total).toBe(3);
-    expect(res.body.pages).toBe(3);
-    expect(res.body.page).toBe(1);
-    expect(res.body.limit).toBe(1);
+    expect(res.body.pagination.total).toBe(3);
+    expect(res.body.pagination.pages).toBe(3);
+    expect(res.body.pagination.page).toBe(1);
+    expect(res.body.pagination.limit).toBe(1);
   });
 });
 
@@ -236,8 +236,8 @@ describe("adminListSessions", () => {
     const res = await request(app).get("/sessions/admin");
 
     expect(res.status).toBe(200);
-    expect(res.body.sessions).toHaveLength(1);
-    expect(res.body.total).toBe(1);
+    expect(res.body.data).toHaveLength(1);
+    expect(res.body.pagination.total).toBe(1);
   });
 
   it("filtra por appointmentId si se provee", async () => {

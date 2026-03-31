@@ -3,6 +3,8 @@ import crypto from "crypto";
 import { AuthRequest } from "../middlewares/auth";
 import { prisma } from "../db/prisma";
 import { parsePagination } from "../utils/pagination";
+import { paginated } from "../utils/response";
+import { queryParams } from "../utils/request";
 import { resolveStripeConfig } from "../services/stripeConfigService";
 import { resolveBaseUrl } from "../utils/baseUrl";
 import {
@@ -41,7 +43,7 @@ function formatAmount(cents: number, currency: string): string {
 
 // ── Admin: List all custom charges (paginated) ───────────────────────
 export const listCustomCharges = async (req: AuthRequest, res: Response) => {
-  const { page, limit, skip } = parsePagination(req.query as Record<string, unknown>, { maxLimit: 200 });
+  const { page, limit, skip } = parsePagination(queryParams(req), { maxLimit: 200 });
 
   const userId = typeof req.query.userId === "string" ? req.query.userId : undefined;
   const status = typeof req.query.status === "string" ? req.query.status : undefined;
@@ -69,7 +71,7 @@ export const listCustomCharges = async (req: AuthRequest, res: Response) => {
     }),
   ]);
 
-  return res.json({ charges, total, page, limit, pages: Math.ceil(total / limit) });
+  return paginated(res, charges, { page, limit, total });
 };
 
 // ── Admin: Create a custom charge ────────────────────────────────────
