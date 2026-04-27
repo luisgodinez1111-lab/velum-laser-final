@@ -72,8 +72,13 @@ jobs:
           cache: npm
           cache-dependency-path: package-lock.json
 
-      - name: Install dependencies
-        run: npm ci
+      - name: Install dependencies (root + server, server provee tsx para codegen)
+        run: |
+          npm ci --legacy-peer-deps
+          (cd server && npm ci --legacy-peer-deps --ignore-scripts)
+
+      - name: API types up-to-date with openapi.ts
+        run: npm run codegen:check
 
       - name: TypeScript check
         run: npx tsc --noEmit
