@@ -90,3 +90,9 @@ jobs:
         run: npm run build
         env:
           VITE_API_URL: /api
+
+      - name: Bundle size budget
+        run: npx size-limit
+
+      - name: Storybook build (smoke test)
+        run: npx storybook build -o storybook-static --quiet

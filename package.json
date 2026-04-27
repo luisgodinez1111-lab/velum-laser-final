@@ -11,7 +11,11 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "codegen": "./scripts/generate-api-types.sh",
-    "codegen:check": "./scripts/generate-api-types.sh --check"
+    "codegen:check": "./scripts/generate-api-types.sh --check",
+    "tokens:build": "tsx design/tokens.css.ts > design/tokens.css",
+    "storybook": "storybook dev -p 6006",
+    "storybook:build": "storybook build -o storybook-static",
+    "size-check": "size-limit"
   },
   "dependencies": {
     "@sentry/react": "^10.50.0",
@@ -20,7 +24,31 @@
     "react-dom": "^19.2.3",
     "react-router-dom": "^7.12.0"
   },
+  "size-limit": [
+    {
+      "name": "JS inicial (entry chunk)",
+      "path": "dist/assets/index-*.js",
+      "limit": "70 KB",
+      "gzip": true
+    },
+    {
+      "name": "Vendor React",
+      "path": "dist/assets/vendor-react-*.js",
+      "limit": "70 KB",
+      "gzip": true
+    },
+    {
+      "name": "CSS total",
+      "path": "dist/assets/*.css",
+      "limit": "60 KB",
+      "gzip": true
+    }
+  ],
   "devDependencies": {
+    "@size-limit/file": "^12.1.0",
+    "@storybook/addon-vitest": "^10.3.5",
+    "@storybook/react": "^10.3.5",
+    "@storybook/react-vite": "^10.3.5",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.1",
@@ -32,7 +60,10 @@
     "jsdom": "^29.0.1",
     "openapi-typescript": "^7.13.0",
     "postcss": "^8.5.8",
+    "size-limit": "^12.1.0",
+    "storybook": "^10.3.5",
     "tailwindcss": "^3.4.19",
+    "tsx": "^4.21.0",
     "typescript": "~5.8.2",
     "vite": "^6.2.0",
     "vitest": "^4.1.0"
