@@ -32,6 +32,8 @@ function requireEnv(name: string): string {
   return value;
 }
 
+const cookieSameSite = (process.env.COOKIE_SAME_SITE ?? "lax").toLowerCase();
+
 export const env = {
   port: Number(process.env.PORT ?? 4000),
   nodeEnv: process.env.NODE_ENV ?? "development",
@@ -47,6 +49,10 @@ export const env = {
   jwtSecret: requireSecret("JWT_SECRET", 32),
   jwtExpiresIn: process.env.JWT_EXPIRES_IN ?? "1d",
   cookieName: process.env.COOKIE_NAME ?? "velum_token",
+  cookieDomain: process.env.COOKIE_DOMAIN ?? "",
+  cookieSameSite: ["lax", "strict", "none"].includes(cookieSameSite)
+    ? cookieSameSite
+    : "lax",
   stripeSecretKey: (() => {
     const key = process.env.STRIPE_SECRET_KEY ?? "";
     if (!key && process.env.NODE_ENV === "production") {

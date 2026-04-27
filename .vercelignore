@@ -1,0 +1,9 @@
+server
+deploy
+docker-compose.yml
+docs
+*.log
+.env
+.DS_Store
+node_modules
+dist

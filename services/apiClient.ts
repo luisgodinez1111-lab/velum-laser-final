@@ -1,6 +1,6 @@
 /// <reference types="vite/client" />
 
-const API_BASE_URL = import.meta.env.VITE_API_URL ?? '/api';
+const API_BASE_URL = (import.meta.env.VITE_API_URL ?? '/api').replace(/\/$/, '');
 const DEFAULT_TIMEOUT_MS = 15_000;
 
 // ── Silent refresh token rotation ─────────────────────────────────────────────
@@ -78,6 +78,7 @@ export const apiFetch = async <T>(
 ): Promise<T> => {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
 
   try {
     const isFormData = options.body instanceof FormData;
@@ -92,7 +93,7 @@ export const apiFetch = async <T>(
       },
     };
 
-    const response = await fetchWithRetry(`${API_BASE_URL}${path}`, init, 2, 500);
+    const response = await fetchWithRetry(`${API_BASE_URL}${normalizedPath}`, init, 2, 500);
 
     if (!response.ok) {
       const errorBody = await response.json().catch(() => ({}));
@@ -106,10 +107,10 @@ export const apiFetch = async <T>(
 
       // On 401: try silent refresh then retry the original request once.
       // Skip for auth paths to prevent infinite loops.
-      if (response.status === 401 && !path.startsWith('/auth/')) {
+      if (response.status === 401 && !normalizedPath.startsWith('/auth/')) {
         const refreshed = await attemptTokenRefresh();
         if (refreshed) {
-          const retryResp = await fetch(`${API_BASE_URL}${path}`, init).catch(() => null);
+          const retryResp = await fetch(`${API_BASE_URL}${normalizedPath}`, init).catch(() => null);
           if (retryResp?.ok) {
             if (retryResp.status === 204) return undefined as unknown as T;
             return retryResp.json() as Promise<T>;

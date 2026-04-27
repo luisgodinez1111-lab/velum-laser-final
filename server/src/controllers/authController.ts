@@ -1,4 +1,4 @@
-import { Request, Response } from "express";
+import { CookieOptions, Request, Response } from "express";
 import { AuthRequest } from "../middlewares/auth";
 import { registerSchema, loginSchema, forgotSchema, resetSchema, verifyEmailSchema, consentOtpVerifySchema } from "../validators/auth";
 import { createUser, getUserByEmail } from "../services/userService";
@@ -24,20 +24,35 @@ import { parseDurationMs } from "../utils/time";
 // Re-exportar para compatibilidad con tests que importan desde este módulo
 export { LOGIN_LOCKOUT_MS, _forceLoginLockout };
 
+const baseCookieOptions = (): CookieOptions => {
+  const options: CookieOptions = {
+    httpOnly: true,
+    secure: isProduction || env.cookieSameSite === "none",
+    sameSite: env.cookieSameSite as CookieOptions["sameSite"],
+  };
+
+  if (env.cookieDomain) {
+    options.domain = env.cookieDomain;
+  }
+
+  return options;
+};
+
+const cookieClearOptions = (path?: string): CookieOptions => ({
+  ...baseCookieOptions(),
+  ...(path ? { path } : {}),
+});
+
 const setAccessCookie = (res: Response, token: string) => {
   res.cookie(env.cookieName, token, {
-    httpOnly: true,
-    secure: isProduction,
-    sameSite: "strict",
+    ...baseCookieOptions(),
     maxAge: parseDurationMs(env.jwtExpiresIn),
   });
 };
 
 const setRefreshCookie = (res: Response, raw: string) => {
   res.cookie(env.refreshCookieName, raw, {
-    httpOnly: true,
-    secure: isProduction,
-    sameSite: "strict",
+    ...baseCookieOptions(),
     maxAge: env.refreshTokenExpiresDays * 86_400_000,
     path: "/auth/refresh", // restrict cookie to the refresh endpoint only
   });
@@ -161,8 +176,8 @@ export const logout = async (req: Request, res: Response) => {
   if (rawRefresh) {
     await revokeRefreshToken(rawRefresh).catch((err) => logger.warn({ err }, "[auth] logout: failed to revoke refresh token"));
   }
-  res.clearCookie(env.cookieName);
-  res.clearCookie(env.refreshCookieName, { path: "/auth/refresh" });
+  res.clearCookie(env.cookieName, cookieClearOptions());
+  res.clearCookie(env.refreshCookieName, cookieClearOptions("/auth/refresh"));
   return res.status(204).send();
 };
 
@@ -174,8 +189,8 @@ export const refreshToken = async (req: Request, res: Response) => {
 
   const result = await rotateRefreshToken(rawRefresh);
   if (!result) {
-    res.clearCookie(env.cookieName);
-    res.clearCookie(env.refreshCookieName, { path: "/auth/refresh" });
+    res.clearCookie(env.cookieName, cookieClearOptions());
+    res.clearCookie(env.refreshCookieName, cookieClearOptions("/auth/refresh"));
     return res.status(401).json({ message: "Sesión expirada. Inicia sesión de nuevo." });
   }
 
