@@ -1,13 +1,23 @@
-# Runbook — Activación real de RLS (Fase 1)
+# Runbook — Activación real de RLS
 
-> **Estado actual (Fase 0.4):** policies RLS creadas, helper `withTenantContext()`
-> en código, feature flag `RLS_ENFORCE=false`. La aplicación conecta como
-> `postgres` (superuser), que **bypassea RLS por diseño de Postgres**. Los
-> filtros tenant son letra muerta hasta completar este runbook.
+> **Estado actualizado (Fase 1.4.a — completado):**
+> - Policies RLS creadas con fallback permisivo (Fase 0.4)
+> - Helper `withTenantContext()` y feature flag `RLS_ENFORCE` (Fase 0.4)
+> - La app **ya** conecta como `velumapp` (no-superuser, no-bypassrls)
+> - `FORCE ROW LEVEL SECURITY` aplicado en las 4 tablas root (Fase 1.4.a) —
+>   antes el OWNER (`velumapp`) bypaseaba las policies por defecto de Postgres
+> - Rol `app_user` adicional creado como redundancia/preparación
+> - Sanity check intra-migración verificó: sin contexto ve todo, con tenant
+>   inexistente ve 0
 >
-> **Objetivo Fase 1:** la app conecta como `app_user` (no-superuser), todas las
-> queries que tocan tablas con RLS pasan por `withTenantContext()`, y un test
-> automático prueba que un tenant no puede leer datos de otro.
+> **Comportamiento runtime hoy:** idéntico al pre-fase. La app NO setea
+> `app.tenant_id`, así que el fallback permisivo aplica y todas las queries
+> devuelven todo. Cero degradación.
+>
+> **Pendiente (Fase 1.4.b):** refactorear callers que tocan `User`,
+> `Appointment`, `IntegrationJob`, `GoogleCalendarIntegration` a
+> `withTenantContext()`, activar `RLS_ENFORCE=true`, y un test automático
+> que pruebe que un tenant no puede leer datos de otro.
 
 ---
 
