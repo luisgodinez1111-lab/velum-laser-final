@@ -1,4 +1,14 @@
+// OpenTelemetry y Sentry deben inicializarse ANTES de importar Express, Prisma
+// o cualquier librería que se quiera auto-instrumentar — el SDK parcha
+// prototipos en el momento del import. Orden: OTel primero (más bajo nivel),
+// luego Sentry (que se beneficia del trace context de OTel cuando ambos están).
+import { initTelemetry } from "./utils/telemetry";
+initTelemetry();
+import { initSentry } from "./utils/sentry";
+initSentry();
+
 import "express-async-errors";
+import * as Sentry from "@sentry/node";
 import express, { raw } from "express";
 import cors from "cors";
 import helmet from "helmet";
@@ -266,6 +276,12 @@ app.post("/api/v1/errors/client", express.json({ limit: "16kb" }), (req, res) =>
   reportError(fakeErr, { source: "frontend", componentStack, url, ip: req.ip });
   return res.status(204).send();
 });
+
+// ── Sentry error handler — DEBE ir ANTES del errorHandler custom ─────
+// Captura excepciones que lleguen aquí y agrega tags de tenant/usuario vía
+// `beforeSend` configurado en utils/sentry.ts. Si Sentry no está inicializado
+// (sin DSN), este hook es no-op interno.
+Sentry.setupExpressErrorHandler(app);
 
 // ── Error handler (siempre último) ───────────────────────────────────
 app.use(errorHandler);

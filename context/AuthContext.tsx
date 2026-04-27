@@ -1,6 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { UserRole } from '../types';
 import { AuthUser, authService } from '../services/authService';
+import { setSentryUser, clearSentryUser } from '../services/sentry';
 
 interface RegisterPayload {
   email: string;
@@ -39,6 +40,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isActionLoading, setIsActionLoading] = useState(false);
   const [mustChangePassword, setMustChangePassword] = useState(false);
   const [needsOnboarding, setNeedsOnboarding] = useState(false);
+
+  // Mantén Sentry sincronizado con el usuario actual: tag `tenant_id` y `user_role`.
+  useEffect(() => {
+    if (user) {
+      setSentryUser({
+        id: user.id,
+        role: user.role,
+        tenantId: (user as AuthUser & { tenantId?: string; clinicId?: string }).tenantId
+          ?? (user as AuthUser & { clinicId?: string }).clinicId,
+      });
+    } else {
+      clearSentryUser();
+    }
+  }, [user]);
 
   useEffect(() => {
     let isMounted = true;

@@ -14,6 +14,7 @@
  */
 import { env } from "./env";
 import { logger } from "./logger";
+import { captureException } from "./sentry";
 
 const RATE_LIMIT_PER_MIN = 10;
 let recentCount = 0;
@@ -22,6 +23,8 @@ setInterval(() => { recentCount = 0; }, 60_000).unref();
 
 export const reportError = (err: Error, context?: Record<string, unknown>): void => {
   logger.error({ err, ...context }, "[error-reporter] Unhandled error");
+  // Sentry: no-op silencioso si no hay DSN configurado.
+  captureException(err, context);
 
   const webhookUrl = env.errorWebhookUrl;
   if (!webhookUrl || recentCount >= RATE_LIMIT_PER_MIN) return;

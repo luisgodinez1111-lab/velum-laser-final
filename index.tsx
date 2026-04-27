@@ -1,3 +1,7 @@
+import { initSentry } from './services/sentry';
+// Sentry debe inicializarse antes de montar React para capturar errores tempranos.
+initSentry();
+
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';

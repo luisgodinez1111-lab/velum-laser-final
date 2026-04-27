@@ -104,6 +104,33 @@ export const env = {
   clinicContactWhatsapp: process.env.CLINIC_CONTACT_WHATSAPP ?? "5215512345678",
   clinicContactEmail:    process.env.CLINIC_CONTACT_EMAIL    ?? "concierge@velumlaser.com",
   recurringChargeRenewMs: Number(process.env.RECURRING_CHARGE_RENEW_MS ?? 60 * 60 * 1000), // hourly
+
+  // ── Observabilidad (Fase 0.5/0.6) ──────────────────────────────────
+  // Sentry: si SENTRY_DSN está vacío, el SDK no se inicializa (degradación silenciosa).
+  sentryDsn: process.env.SENTRY_DSN ?? "",
+  sentryEnvironment: process.env.SENTRY_ENVIRONMENT ?? process.env.NODE_ENV ?? "development",
+  sentryRelease: process.env.SENTRY_RELEASE ?? "",
+  sentryTracesSampleRate: Number(process.env.SENTRY_TRACES_SAMPLE_RATE ?? 0.1),
+  sentryProfilesSampleRate: Number(process.env.SENTRY_PROFILES_SAMPLE_RATE ?? 0),
+
+  // ── OpenTelemetry (Fase 0.6) ───────────────────────────────────────
+  // Si OTEL_EXPORTER_OTLP_ENDPOINT está vacío, el SDK no se inicializa.
+  // Para Grafana Cloud: https://otlp-gateway-<region>.grafana.net/otlp
+  otelEnabled: !!process.env.OTEL_EXPORTER_OTLP_ENDPOINT,
+  otelEndpoint: process.env.OTEL_EXPORTER_OTLP_ENDPOINT ?? "",
+  // Headers en formato OTLP estándar: "Authorization=Basic base64(id:token),..."
+  otelHeaders: process.env.OTEL_EXPORTER_OTLP_HEADERS ?? "",
+  otelServiceName: process.env.OTEL_SERVICE_NAME ?? "velum-api",
+  otelDeploymentEnv: process.env.OTEL_DEPLOYMENT_ENVIRONMENT ?? process.env.NODE_ENV ?? "development",
+  otelTracesSampler: process.env.OTEL_TRACES_SAMPLER ?? "parentbased_traceidratio",
+  otelTracesSamplerArg: Number(process.env.OTEL_TRACES_SAMPLER_ARG ?? 0.1),
+
+  // ── Multi-tenancy / RLS (Fase 0.4) ─────────────────────────────────
+  // Cuando `true`, el helper `withTenantContext()` ejecuta SET LOCAL
+  // app.tenant_id en cada query envuelta. Sin esto, las RLS policies
+  // permiten todo (fallback). Activar SOLO cuando la conexión use rol
+  // no-superuser (Fase 1), porque postgres bypassea RLS.
+  rlsEnforce: process.env.RLS_ENFORCE === "true",
 };
 
 export const isProduction = env.nodeEnv === "production";

@@ -1,5 +1,6 @@
 import React from 'react';
 import { RefreshCw, AlertTriangle } from 'lucide-react';
+import { captureException } from '../services/sentry';
 
 interface State {
   error: Error | null;
@@ -18,6 +19,9 @@ export class AppErrorBoundary extends React.Component<Props, State> {
   }
 
   componentDidCatch(error: Error, info: React.ErrorInfo) {
+    // Sentry primero (no-op si no hay DSN configurado).
+    captureException(error, { componentStack: info.componentStack, url: window.location.href });
+
     // Report to backend — fire-and-forget; never throw from here
     const API_BASE = (import.meta as { env?: { VITE_API_URL?: string } }).env?.VITE_API_URL ?? '/api';
     fetch(`${API_BASE}/v1/errors/client`, {
