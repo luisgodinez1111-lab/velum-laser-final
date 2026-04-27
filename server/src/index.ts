@@ -37,11 +37,9 @@ import { billingCheckoutRoutes } from "./routes/billingCheckoutRoutes";
 import { customChargeRoutes } from "./routes/customChargeRoutes";
 import { notificationRoutes } from "./routes/notificationRoutes";
 import { stripeWebhookRouter } from "./routes/stripeWebhookRoutes";
-import { startIntegrationWorker, stopIntegrationWorker } from "./services/integrationWorker";
-import { startPaymentReminderCron } from "./services/paymentReminderService";
-import { startAppointmentReminderCron } from "./services/appointmentReminderService";
-import { startIntegrationJobCleanupCron } from "./services/integrationJobCleanupService";
-import { renewRecurringCharges } from "./services/customChargeService";
+// Crons + integration worker fueron movidos al proceso `worker` (Fase 1.2.c).
+// Ver server/src/worker.ts. El API es ahora puramente stateless — escalable
+// horizontalmente sin riesgo de duplicar tareas programadas.
 import { env } from "./utils/env";
 import { httpLogger, logger } from "./utils/logger";
 import { errorHandler } from "./middlewares/error";
@@ -306,24 +304,13 @@ const warnIfMigrationsPending = async () => {
 const server = app.listen(env.port, () => {
   logger.info(`API running on :${env.port}`);
   void warnIfMigrationsPending();
-  void startIntegrationWorker().catch((error) => {
-    logger.error({ err: error }, "Unable to start integration worker");
-  });
-  startPaymentReminderCron();
-  startAppointmentReminderCron();
-  startIntegrationJobCleanupCron();
-  // Recurring charge renewal — runs every env.recurringChargeRenewMs (default 1 h)
-  setInterval(() => {
-    renewRecurringCharges()
-      .then((n) => { if (n > 0) logger.info({ renewed: n }, "[recurring-charges] renewed charges"); })
-      .catch((err) => logger.error({ err }, "[recurring-charges] cron error"));
-  }, env.recurringChargeRenewMs).unref();
+  // Crons + integrationWorker viven ahora en el proceso `worker`.
+  // No iniciar nada de eso aquí: el API es stateless.
 });
 
 // ── Graceful shutdown ─────────────────────────────────────────────────
 const shutdown = (signal: string) => {
   logger.info(`[shutdown] ${signal} received — stopping gracefully`);
-  stopIntegrationWorker();
   server.close(() => {
     prisma.$disconnect().then(() => {
       logger.info("[shutdown] Clean shutdown complete");
