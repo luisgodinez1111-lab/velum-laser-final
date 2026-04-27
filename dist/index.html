@@ -4,15 +4,35 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#544538" />
+    <meta name="description" content="Portal de pacientes — VELUM Laser Medicina Estética" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="VELUM Laser" />
     <title>VELUM LASER</title>
+    <link rel="manifest" href="/manifest.json" />
+    <link rel="apple-touch-icon" href="/icon-192.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=Lato:wght@300;400;700&display=swap">
     <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
-    <script type="module" crossorigin src="/assets/index-CdEXMPdy.js"></script>
-    <link rel="stylesheet" crossorigin href="/assets/index--WDKpmps.css">
+    <script type="module" crossorigin src="/assets/index-CppnO-Bw.js"></script>
+    <link rel="modulepreload" crossorigin href="/assets/vendor-react-D39sujLR.js">
+    <link rel="modulepreload" crossorigin href="/assets/vendor-icons-DrOEIryN.js">
+    <link rel="modulepreload" crossorigin href="/assets/vendor-router-DZ6A9w-j.js">
+    <link rel="modulepreload" crossorigin href="/assets/admin-settings-DgE1QLiV.js">
+    <link rel="modulepreload" crossorigin href="/assets/admin-sections-BR6B0bEo.js">
+    <link rel="stylesheet" crossorigin href="/assets/index-D4hSNDeK.css">
   </head>
   <body class="bg-velum-50 text-velum-900 font-sans antialiased">
     <div id="root"></div>
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js')
+            .catch(err => console.warn('[SW] Registration failed:', err));
+        });
+      }
+    </script>
   </body>
 </html>

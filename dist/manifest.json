@@ -1,0 +1,27 @@
+{
+  "name": "VELUM Laser",
+  "short_name": "VELUM",
+  "description": "Portal de pacientes — VELUM Laser Medicina Estética",
+  "start_url": "/#/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#fdfcfb",
+  "theme_color": "#544538",
+  "lang": "es",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["health", "medical"],
+  "screenshots": []
+}
