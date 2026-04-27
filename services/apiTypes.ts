@@ -77,6 +77,8 @@ export interface MeApiResponse {
   id: string;
   email: string;
   role: string;
+  clinicId?: string | null;
+  tenantId?: string | null;
   mustChangePassword?: boolean;
   profile?: {
     firstName?: string | null;

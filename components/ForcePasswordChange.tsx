@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { Shield, Eye, EyeOff, CheckCircle2 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { authService } from "../services/authService";
 import { useAuth } from "../context/AuthContext";
 
@@ -12,7 +13,8 @@ const getChecks = (v: string) => ({
 });
 
 export const ForcePasswordChange: React.FC = () => {
-  const { clearMustChangePassword } = useAuth();
+  const navigate = useNavigate();
+  const { user, clearMustChangePassword } = useAuth();
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showNew, setShowNew] = useState(false);
@@ -34,7 +36,10 @@ export const ForcePasswordChange: React.FC = () => {
     try {
       await authService.changeInitialPassword(newPassword);
       setSuccess(true);
-      setTimeout(() => clearMustChangePassword(), 1200);
+      setTimeout(() => {
+        clearMustChangePassword();
+        navigate(user?.role === "member" ? "/dashboard" : "/admin", { replace: true });
+      }, 1200);
     } catch (err: any) {
       setError(err?.message ?? "No se pudo actualizar la contraseña. Intenta de nuevo.");
     } finally {

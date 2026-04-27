@@ -3,6 +3,24 @@
 const API_BASE_URL = (import.meta.env.VITE_API_URL ?? '/api').replace(/\/$/, '');
 const DEFAULT_TIMEOUT_MS = 15_000;
 
+const baseIncludesApiPrefix = (baseUrl: string): boolean => /(^|\/)api$/.test(baseUrl.replace(/\/$/, ''));
+
+export const normalizeApiPath = (path: string, apiBaseUrl = API_BASE_URL): string => {
+  const withLeadingSlash = path.startsWith('/') ? path : `/${path}`;
+  if (baseIncludesApiPrefix(apiBaseUrl)) {
+    return withLeadingSlash.replace(/^\/api(?=\/|$)/, '') || '/';
+  }
+  if (/^\/v1(?=\/|$)/.test(withLeadingSlash)) {
+    return `/api${withLeadingSlash}`;
+  }
+  return withLeadingSlash;
+};
+
+export const buildApiUrl = (path: string): string => {
+  if (/^https?:\/\//i.test(path)) return path;
+  return `${API_BASE_URL}${normalizeApiPath(path)}`;
+};
+
 // ── Silent refresh token rotation ─────────────────────────────────────────────
 // On 401, try POST /auth/refresh before redirecting to login.
 // Shared promise prevents multiple concurrent refresh calls (e.g. parallel requests).
@@ -10,7 +28,7 @@ let _refreshInFlight: Promise<boolean> | null = null;
 
 const attemptTokenRefresh = (): Promise<boolean> => {
   if (_refreshInFlight) return _refreshInFlight;
-  _refreshInFlight = fetch(`${API_BASE_URL}/auth/refresh`, {
+  _refreshInFlight = fetch(buildApiUrl('/auth/refresh'), {
     method: 'POST',
     credentials: 'include',
   })
@@ -78,7 +96,8 @@ export const apiFetch = async <T>(
 ): Promise<T> => {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
-  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+  const normalizedPath = normalizeApiPath(path);
+  const requestUrl = buildApiUrl(normalizedPath);
 
   try {
     const isFormData = options.body instanceof FormData;
@@ -93,7 +112,7 @@ export const apiFetch = async <T>(
       },
     };
 
-    const response = await fetchWithRetry(`${API_BASE_URL}${normalizedPath}`, init, 2, 500);
+    const response = await fetchWithRetry(requestUrl, init, 2, 500);
 
     if (!response.ok) {
       const errorBody = await response.json().catch(() => ({}));
@@ -110,14 +129,14 @@ export const apiFetch = async <T>(
       if (response.status === 401 && !normalizedPath.startsWith('/auth/')) {
         const refreshed = await attemptTokenRefresh();
         if (refreshed) {
-          const retryResp = await fetch(`${API_BASE_URL}${normalizedPath}`, init).catch(() => null);
+          const retryResp = await fetch(requestUrl, init).catch(() => null);
           if (retryResp?.ok) {
             if (retryResp.status === 204) return undefined as unknown as T;
             return retryResp.json() as Promise<T>;
           }
         }
-        if (!window.location.hash.includes('/login')) {
-          window.location.replace('/#/login');
+        if (!window.location.hash.includes('/agenda?mode=login')) {
+          window.location.replace('/#/agenda?mode=login');
         }
       }
 

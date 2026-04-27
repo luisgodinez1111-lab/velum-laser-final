@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Shield, ShieldCheck, ShieldOff, Loader2 } from 'lucide-react';
+import { apiFetch } from '../services/apiClient';
 
 interface TotpSetupProps {
   isEnabled: boolean;
@@ -18,9 +19,7 @@ export const TotpSetup: React.FC<TotpSetupProps> = ({ isEnabled, onStatusChange 
   const startSetup = async () => {
     setLoading(true); setError('');
     try {
-      const r = await fetch('/api/v1/me/totp/setup', { credentials: 'include' });
-      const d = await r.json() as { secret?: string; uri?: string; message?: string };
-      if (!r.ok) throw new Error(d.message);
+      const d = await apiFetch<{ secret?: string; uri?: string }>('/v1/me/totp/setup');
       setSecret(d.secret ?? ''); setUri(d.uri ?? ''); setStep('setup');
     } catch (e: unknown) { setError(e instanceof Error ? e.message : 'Error'); }
     finally { setLoading(false); }
@@ -30,13 +29,10 @@ export const TotpSetup: React.FC<TotpSetupProps> = ({ isEnabled, onStatusChange 
     if (code.length !== 6) { setError('Ingresa los 6 dígitos'); return; }
     setLoading(true); setError('');
     try {
-      const r = await fetch('/api/v1/me/totp/enable', {
-        method: 'POST', credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
+      await apiFetch('/v1/me/totp/enable', {
+        method: 'POST',
         body: JSON.stringify({ code }),
       });
-      const d = await r.json() as { message?: string };
-      if (!r.ok) throw new Error(d.message);
       setSuccess('2FA activado correctamente'); setStep('idle'); setCode('');
       onStatusChange();
     } catch (e: unknown) { setError(e instanceof Error ? e.message : 'Error'); }
@@ -47,13 +43,10 @@ export const TotpSetup: React.FC<TotpSetupProps> = ({ isEnabled, onStatusChange 
     if (code.length !== 6) { setError('Ingresa los 6 dígitos'); return; }
     setLoading(true); setError('');
     try {
-      const r = await fetch('/api/v1/me/totp', {
-        method: 'DELETE', credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
+      await apiFetch('/v1/me/totp', {
+        method: 'DELETE',
         body: JSON.stringify({ code }),
       });
-      const d = await r.json() as { message?: string };
-      if (!r.ok) throw new Error(d.message);
       setSuccess('2FA desactivado'); setStep('idle'); setCode('');
       onStatusChange();
     } catch (e: unknown) { setError(e instanceof Error ? e.message : 'Error'); }

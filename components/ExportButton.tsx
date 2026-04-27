@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Download, Loader2 } from 'lucide-react';
+import { buildApiUrl } from '../services/apiClient';
 
 interface ExportButtonProps {
   endpoint: string;
@@ -15,7 +16,7 @@ export const ExportButton: React.FC<ExportButtonProps> = ({ endpoint, label, par
   const handleExport = async () => {
     setLoading(true);
     try {
-      const url = new URL(endpoint, window.location.origin);
+      const url = new URL(buildApiUrl(endpoint), window.location.origin);
       Object.entries(params).forEach(([k, v]) => v && url.searchParams.set(k, v));
       const res = await fetch(url.toString(), { credentials: "include" });
       if (!res.ok) throw new Error("Error en exportación");

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Bell, Check, CheckCheck, Loader2, AlertCircle } from "lucide-react";
-import { apiFetch } from "../services/apiClient";
+import { apiFetch, buildApiUrl } from "../services/apiClient";
 
 const SSE_BACKOFF_INITIAL_MS = 1_000;
 const SSE_BACKOFF_MAX_MS = 30_000;
@@ -13,8 +13,6 @@ type Notification = {
   read: boolean;
   createdAt: string;
 };
-
-const API_BASE = (import.meta as { env?: { VITE_API_URL?: string } }).env?.VITE_API_URL ?? "/api";
 
 const typeIcon: Record<string, string> = {
   custom_charge_created:    "💳",
@@ -72,8 +70,8 @@ export const NotificationBell: React.FC = () => {
     // Build URL with ?since= for catch-up on reconnect
     const since = lastNotifAtRef.current;
     const url = since
-      ? `${API_BASE}/v1/notifications/stream?since=${encodeURIComponent(since)}`
-      : `${API_BASE}/v1/notifications/stream`;
+      ? buildApiUrl(`/v1/notifications/stream?since=${encodeURIComponent(since)}`)
+      : buildApiUrl("/v1/notifications/stream");
 
     const es = new EventSource(url, { withCredentials: true });
     esRef.current = es;

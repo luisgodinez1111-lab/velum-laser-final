@@ -145,7 +145,7 @@ export const login = async (req: Request, res: Response) => {
 
   // Verificar 2FA si está habilitado
   if (user.totpEnabled) {
-    const totpCode = String((req.body as Record<string, unknown>)?.totpCode ?? "").trim();
+    const totpCode = payload.totpCode ?? "";
     if (!totpCode) {
       return res.status(200).json({ requiresTotp: true });
     }

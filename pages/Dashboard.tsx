@@ -33,7 +33,7 @@ import { SignaturePad } from "../components/SignaturePad";
 import { useAuth } from "../context/AuthContext";
 import { redirectToCustomerPortal, createSubscriptionCheckout } from "../services/stripeService";
 import { MEMBERSHIPS } from "../constants";
-import { documentService, memberService } from "../services/dataService";
+import { documentService } from "../services/dataService";
 import { LegalDocument, Member } from "../types";
 import { clinicalService, Payment, SessionTreatment } from "../services/clinicalService";
 import { useToast } from "../context/ToastContext";
@@ -263,11 +263,22 @@ export const Dashboard: React.FC = () => {
       setIsLoadingData(true);
       try {
         if (user?.role === "member") {
-          const [d, ms] = await Promise.all([
-            memberService.getById(user.id),
+          const [intake, docs, ms] = await Promise.all([
+            clinicalService.getMyMedicalIntake().catch(() => null),
+            documentService.listMy().catch(() => []),
             apiFetch<any>("/membership/status").catch(() => null),
           ]);
-          setMemberData(d || null);
+          setMemberData({
+            id: user.id,
+            name: user.name,
+            email: user.email,
+            role: user.role,
+            intakeStatus: (intake?.status ?? "draft") as Member["intakeStatus"],
+            clinical: {
+              consentFormSigned: docs.some((doc) => doc.signed && doc.type === "informed_consent"),
+              documents: docs,
+            },
+          });
           setMembershipData(ms || null);
         }
         const me = await apiFetch<any>("/v1/users/me/profile");
@@ -372,8 +383,15 @@ export const Dashboard: React.FC = () => {
     try {
       await documentService.signDocument(currentDocToSign.id, signatureData);
       toast.success("Documento firmado correctamente.");
-      const u = await memberService.getById(user.id);
-      setMemberData(u || null);
+      const docs = await documentService.listMy().catch(() => []);
+      setMemberData((prev) => prev ? {
+        ...prev,
+        clinical: {
+          ...(prev.clinical ?? {}),
+          consentFormSigned: docs.some((doc) => doc.signed && doc.type === "informed_consent"),
+          documents: docs,
+        },
+      } : prev);
     } catch (err: any) {
       toast.error(asString(err?.message, "No se pudo firmar el documento."));
     } finally {

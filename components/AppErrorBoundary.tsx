@@ -1,6 +1,7 @@
 import React from 'react';
 import { RefreshCw, AlertTriangle } from 'lucide-react';
 import { captureException } from '../services/sentry';
+import { buildApiUrl } from '../services/apiClient';
 
 interface State {
   error: Error | null;
@@ -23,8 +24,7 @@ export class AppErrorBoundary extends React.Component<Props, State> {
     captureException(error, { componentStack: info.componentStack, url: window.location.href });
 
     // Report to backend — fire-and-forget; never throw from here
-    const API_BASE = (import.meta as { env?: { VITE_API_URL?: string } }).env?.VITE_API_URL ?? '/api';
-    fetch(`${API_BASE}/v1/errors/client`, {
+    fetch(buildApiUrl('/v1/errors/client'), {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },

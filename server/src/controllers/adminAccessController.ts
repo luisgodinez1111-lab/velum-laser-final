@@ -174,6 +174,17 @@ export const createAdminAccessUser = async (req: AuthRequest, res: Response) => 
         clinicId,
         emailVerifiedAt: new Date(),
         mustChangePassword,
+        ...(role === "member" ? {
+          memberships: { create: {} },
+          medicalIntake: { create: { status: "draft" } },
+          documents: {
+            create: [
+              { type: "informed_consent", version: "1.0" },
+              { type: "privacy_notice", version: "1.0" },
+              { type: "medical_history", version: "1.0" },
+            ],
+          },
+        } : {}),
       },
       select: { id: true, email: true, role: true, createdAt: true },
     });

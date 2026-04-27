@@ -152,7 +152,7 @@ export const MemberOnboardingFlow: React.FC = () => {
   const saveHistory = useCallback(async () => {
     setSaving(true); setError(null);
     try {
-      await apiFetch('/api/v1/medical-intakes/me', {
+      await apiFetch('/v1/medical-intakes/me', {
         method: 'PUT',
         body: JSON.stringify({
           historyJson: { allergies: history.allergies.trim(), medications: history.medications.trim(), skinConditions: history.skinConditions.trim() }
@@ -168,7 +168,7 @@ export const MemberOnboardingFlow: React.FC = () => {
     if (!phototype) return;
     setSaving(true); setError(null);
     try {
-      await apiFetch('/api/v1/medical-intakes/me', { method: 'PUT', body: JSON.stringify({ phototype }) });
+      await apiFetch('/v1/medical-intakes/me', { method: 'PUT', body: JSON.stringify({ phototype }) });
       setStep(2);
     } catch { setError('No se pudo guardar. Intenta de nuevo.'); }
     finally { setSaving(false); }
@@ -179,7 +179,7 @@ export const MemberOnboardingFlow: React.FC = () => {
     if (!consentAccepted || !signatureData) return;
     setSaving(true); setError(null);
     try {
-      await apiFetch('/api/v1/medical-intakes/me', {
+      await apiFetch('/v1/medical-intakes/me', {
         method: 'PUT',
         body: JSON.stringify({
           consentAccepted: true,

@@ -94,11 +94,12 @@ export const AdminUsersPermissions: React.FC<Props> = ({ embedded = false }) => 
     setError("");
     try {
       const out = await api(`/api/v1/admin/access/users?page=${targetPage}&limit=${PAGE_LIMIT}`);
-      const list: UserRow[] = out.users || [];
+      const list: UserRow[] = Array.isArray(out?.users) ? out.users : Array.isArray(out?.data) ? out.data : [];
+      const pagination = out?.pagination ?? out ?? {};
       setUsers(list);
       setCatalog(out.permissionsCatalog || []);
-      setTotalUsers(out.total ?? list.length);
-      setTotalPages(out.pages ?? 1);
+      setTotalUsers(pagination.total ?? list.length);
+      setTotalPages(pagination.pages ?? 1);
       const nextRoles: Record<string, string> = {};
       const nextPerms: Record<string, string[]> = {};
       list.forEach((u) => { nextRoles[u.id] = u.role; nextPerms[u.id] = u.permissions || []; });
@@ -125,7 +126,7 @@ export const AdminUsersPermissions: React.FC<Props> = ({ embedded = false }) => 
   const createUser = async () => {
     setError(""); setMessage("");
     if (!createEmail.trim()) { setError("El correo es obligatorio"); return; }
-    if (createRole === "member" && createPassword.length < 8) { setError("La contraseña debe tener al menos 8 caracteres"); return; }
+    if (createRole === "member" && createPassword.length < 12) { setError("La contraseña debe tener al menos 12 caracteres"); return; }
     setIsCreating(true);
     try {
       const body: any = { email: createEmail.trim(), role: createRole };
@@ -168,7 +169,7 @@ export const AdminUsersPermissions: React.FC<Props> = ({ embedded = false }) => 
 
   const resetPassword = async (u: UserRow) => {
     const pass = (resetDrafts[u.id] || "").trim();
-    if (pass.length < 8) { setError("La nueva contraseña debe tener al menos 8 caracteres"); return; }
+    if (pass.length < 12) { setError("La nueva contraseña debe tener al menos 12 caracteres"); return; }
     setError(""); setMessage("");
     setResettingPwd(u.id);
     try {
@@ -342,7 +343,7 @@ export const AdminUsersPermissions: React.FC<Props> = ({ embedded = false }) => 
                   <div className="relative">
                     <input type={showCreatePwd ? "text" : "password"}
                       className="w-full rounded-xl border border-velum-200 px-3.5 py-2.5 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-velum-900/20 focus:border-velum-700 transition"
-                      placeholder="Mín. 8 caracteres" value={createPassword} onChange={(e) => setCreatePassword(e.target.value)} />
+                      placeholder="Mín. 12 caracteres" value={createPassword} onChange={(e) => setCreatePassword(e.target.value)} />
                     <button type="button" onClick={() => setShowCreatePwd((v) => !v)}
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-velum-400 hover:text-velum-700 transition">
                       {showCreatePwd ? <EyeOff size={15} /> : <Eye size={15} />}

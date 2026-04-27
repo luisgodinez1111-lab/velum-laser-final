@@ -46,6 +46,7 @@ import { AdminExpedientesSection } from "./AdminExpedientesSection";
 import { AdminPagosSection } from "./AdminPagosSection";
 import { useToast } from "../context/ToastContext";
 import { apiFetch } from "../services/apiClient";
+import { TotpRequiredError } from "../services/authService";
 import { AdminMemberDrawer } from "../components/AdminMemberDrawer";
 import { AdminIntakeModal } from "../components/AdminIntakeModal";
 import { TotpSetup } from "../components/TotpSetup";
@@ -97,6 +98,8 @@ export const Admin: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loginError, setLoginError] = useState('');
+  const [loginRequiresTotp, setLoginRequiresTotp] = useState(false);
+  const [loginTotpCode, setLoginTotpCode] = useState('');
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
@@ -339,8 +342,15 @@ export const Admin: React.FC = () => {
     e.preventDefault();
     setLoginError('');
     try {
-      await login(email, password);
+      await login(email, password, loginRequiresTotp ? loginTotpCode : undefined);
+      setLoginRequiresTotp(false);
+      setLoginTotpCode('');
     } catch (err: any) {
+      if (err instanceof TotpRequiredError) {
+        setLoginRequiresTotp(true);
+        setLoginError(err.message);
+        return;
+      }
       setLoginError(err.message ?? 'Error de autenticación');
     }
   };
@@ -1117,12 +1127,7 @@ export const Admin: React.FC = () => {
 
   const loadTotpStatus = async () => {
     try {
-      // GET /api/v1/me/totp/setup retorna 409 si ya está habilitado, 200 si no
-      // Para saber el estado actual consultamos el endpoint de setup sin efecto secundario
-      // usando una ruta dedicada; como no existe GET de estado, infereimos desde setup:
-      // Si responde 409 → habilitado. Si responde 200 → deshabilitado (guarda secreto temporal)
-      // Para evitar generar secretos temporales en cada carga, chequeamos via el perfil del usuario
-      const r = await apiFetch<{ totpEnabled?: boolean }>('/v1/me/profile');
+      const r = await apiFetch<{ totpEnabled?: boolean }>('/v1/users/me/profile');
       if ('totpEnabled' in r) {
         setTotpEnabled(r.totpEnabled ?? false);
       }
@@ -1739,16 +1744,41 @@ export const Admin: React.FC = () => {
             )}
             <div>
               <label className="block text-xs font-bold uppercase tracking-widest text-velum-500 mb-2">Correo electrónico</label>
-              <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoFocus
+              <input type="email" value={email} onChange={(e) => {
+                  setEmail(e.target.value);
+                  setLoginRequiresTotp(false);
+                  setLoginTotpCode('');
+                }} required autoFocus
                 placeholder="admin@velum.mx"
                 className="w-full rounded-xl border border-velum-200 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-velum-900/20 focus:border-velum-900 transition" />
             </div>
             <div>
               <label className="block text-xs font-bold uppercase tracking-widest text-velum-500 mb-2">Contraseña</label>
-              <PasswordInput value={password} onChange={(e) => setPassword(e.target.value)} required
+              <PasswordInput value={password} onChange={(e) => {
+                  setPassword(e.target.value);
+                  setLoginRequiresTotp(false);
+                  setLoginTotpCode('');
+                }} required
                 className="w-full rounded-xl border border-velum-200 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-velum-900/20 focus:border-velum-900 transition" />
             </div>
-            <button type="submit" disabled={isActionLoading}
+            {loginRequiresTotp && (
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-widest text-velum-500 mb-2">Código 2FA</label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  pattern="\d{6}"
+                  maxLength={6}
+                  value={loginTotpCode}
+                  onChange={(e) => setLoginTotpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  required
+                  autoFocus
+                  placeholder="000000"
+                  className="w-full rounded-xl border border-velum-200 px-4 py-3 text-sm tracking-[0.35em] focus:outline-none focus:ring-2 focus:ring-velum-900/20 focus:border-velum-900 transition"
+                />
+              </div>
+            )}
+            <button type="submit" disabled={isActionLoading || (loginRequiresTotp && loginTotpCode.length !== 6)}
               className="w-full bg-velum-900 text-white rounded-xl py-3 text-sm font-medium hover:bg-velum-800 transition disabled:opacity-50">
               {isActionLoading ? 'Accediendo...' : 'Acceder al panel'}
             </button>

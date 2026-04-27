@@ -21,7 +21,7 @@ interface AuthContextType {
   isActionLoading: boolean;
   /** @deprecated Use isSessionLoading. Kept for backward compatibility. */
   isLoading: boolean;
-  login: (email: string, pass: string) => Promise<AuthUser>;
+  login: (email: string, pass: string, totpCode?: string) => Promise<AuthUser>;
   register: (payload: RegisterPayload) => Promise<AuthUser>;
   logout: () => Promise<void>;
   hasRole: (roles: UserRole[]) => boolean;
@@ -104,6 +104,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       timer = setTimeout(() => {
         authService.logout().catch(() => {});
         setUser(null);
+        setMustChangePassword(false);
+        setNeedsOnboarding(false);
       }, INACTIVITY_MS);
     };
 
@@ -117,10 +119,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, [user?.id]);
 
-  const login = useCallback(async (email: string, pass: string): Promise<AuthUser> => {
+  const login = useCallback(async (email: string, pass: string, totpCode?: string): Promise<AuthUser> => {
     setIsActionLoading(true);
     try {
-      const userData = await authService.login(email, pass);
+      const userData = await authService.login(email, pass, totpCode);
       setUser(userData);
       setMustChangePassword(userData.mustChangePassword ?? false);
       return userData;
@@ -146,6 +148,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       await authService.logout();
     } finally {
       setUser(null);
+      setMustChangePassword(false);
+      setNeedsOnboarding(false);
       setIsActionLoading(false);
     }
   }, []);

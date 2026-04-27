@@ -10,6 +10,15 @@ export interface AuthUser {
   phone?: string;
   birthDate?: string; // YYYY-MM-DD
   mustChangePassword?: boolean;
+  tenantId?: string;
+  clinicId?: string;
+}
+
+export class TotpRequiredError extends Error {
+  constructor() {
+    super("Ingresa el código 2FA para continuar.");
+    this.name = "TotpRequiredError";
+  }
 }
 
 const mapUser = (user: MeApiResponse): AuthUser => {
@@ -31,15 +40,20 @@ const mapUser = (user: MeApiResponse): AuthUser => {
     phone: user?.profile?.phone ?? undefined,
     birthDate,
     mustChangePassword: user?.mustChangePassword ?? false,
+    tenantId: user?.tenantId ?? user?.clinicId ?? undefined,
+    clinicId: user?.clinicId ?? user?.tenantId ?? undefined,
   };
 };
 
 export const authService = {
-  login: async (email: string, password: string): Promise<AuthUser> => {
-    await apiFetch("/auth/login", {
+  login: async (email: string, password: string, totpCode?: string): Promise<AuthUser> => {
+    const loginResponse = await apiFetch<{ requiresTotp?: boolean }>("/auth/login", {
       method: "POST",
-      body: JSON.stringify({ email, password })
+      body: JSON.stringify({ email, password, ...(totpCode ? { totpCode } : {}) })
     });
+    if (loginResponse?.requiresTotp) {
+      throw new TotpRequiredError();
+    }
     const me = await apiFetch<MeApiResponse>("/users/me");
     return mapUser(me);
   },

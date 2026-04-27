@@ -39,4 +39,5 @@ customChargeRoutes.post(
 
 // Public routes (no auth — client accesses by charge ID)
 customChargeRoutes.get("/api/v1/custom-charges/:id", getChargePublic);
+customChargeRoutes.post("/api/v1/custom-charges/:id/resend", resendOtp);
 customChargeRoutes.post("/api/v1/custom-charges/:id/verify", verifyOtpAndCheckout);

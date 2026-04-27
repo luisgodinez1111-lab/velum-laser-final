@@ -19,7 +19,8 @@ export const registerSchema = z.object({
 
 export const loginSchema = z.object({
   email: z.string().email(),
-  password: z.string().min(1)
+  password: z.string().min(1),
+  totpCode: z.string().length(6).regex(/^\d{6}$/, "El código 2FA debe ser de 6 dígitos").optional()
 });
 
 export const forgotSchema = z.object({

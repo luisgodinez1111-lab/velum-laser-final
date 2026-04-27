@@ -27,12 +27,8 @@ Configura el proyecto Vercel con:
 
 ```bash
 VITE_API_URL=https://api.tu-dominio.com
-```
-
-Si el backend sigue temporalmente en Railway, usa la URL publica del backend:
-
-```bash
-VITE_API_URL=https://velum-api-production.up.railway.app
+# o, si el dominio web hace proxy /api al backend:
+VITE_API_URL=https://tu-dominio.com/api
 ```
 
 ## Backend durante la transicion
@@ -45,7 +41,7 @@ API_URL=https://api.tu-dominio.com
 CORS_ORIGIN=https://tu-proyecto.vercel.app,https://tu-dominio.com
 ```
 
-Para cookies cross-site temporales entre `vercel.app` y Railway:
+Para cookies cross-site temporales entre `vercel.app` y un backend externo:
 
 ```bash
 COOKIE_SAME_SITE=none

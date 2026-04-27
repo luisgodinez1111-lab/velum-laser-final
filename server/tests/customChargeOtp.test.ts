@@ -25,6 +25,7 @@ vi.mock("../src/services/emailService", () => ({
 }));
 vi.mock("../src/services/customChargeService", () => ({
   verifyCustomChargeOtp: vi.fn(),
+  resendCustomChargeOtp: vi.fn(),
 }));
 vi.mock("../src/services/notificationService", () => ({
   onCustomChargeCreated: vi.fn().mockResolvedValue(undefined),
@@ -37,16 +38,17 @@ vi.mock("../src/services/stripeConfigService", () => ({
   }),
 }));
 
-import { verifyCustomChargeOtp } from "../src/services/customChargeService";
+import { resendCustomChargeOtp, verifyCustomChargeOtp } from "../src/services/customChargeService";
 
 // Mock global fetch for Stripe API calls
 const mockFetch = vi.fn();
 vi.stubGlobal("fetch", mockFetch);
 
 const buildApp = async () => {
-  const { verifyOtpAndCheckout } = await import("../src/controllers/customChargeController");
+  const { resendOtp, verifyOtpAndCheckout } = await import("../src/controllers/customChargeController");
   const app = express();
   app.use(express.json());
+  app.post("/custom-charge/:id/resend", resendOtp);
   app.post("/custom-charge/:id/verify", verifyOtpAndCheckout);
   return app;
 };
@@ -122,7 +124,7 @@ describe("verifyOtpAndCheckout — respuestas del endpoint", () => {
     // Controller expects { charge: { type, currency, title, amount, user: { id, email } } }
     vi.mocked(verifyCustomChargeOtp).mockResolvedValue({
       charge: {
-        id: "chg_001",
+        id: "c12345678901234567890",
         type: "ONCE",
         currency: "mxn",
         title: "Sesión láser",
@@ -139,5 +141,34 @@ describe("verifyOtpAndCheckout — respuestas del endpoint", () => {
     expect(res.status).toBe(200);
     expect(res.body).toHaveProperty("checkoutUrl");
     expect(res.body.checkoutUrl).toMatch(/stripe\.com/);
+  });
+});
+
+describe("resendOtp — reenvio publico del codigo", () => {
+  it("reenvia el OTP sin requerir sesion admin", async () => {
+    vi.mocked(resendCustomChargeOtp).mockResolvedValue({
+      otp: "123456",
+      charge: {
+        id: "chg_001",
+        type: "ONE_TIME",
+        currency: "mxn",
+        title: "Sesion laser",
+        description: null,
+        amount: 50000,
+        interval: null,
+        user: {
+          id: "u1",
+          email: "cliente@velum.mx",
+          profile: { firstName: "Ana", lastName: "Garcia" },
+        },
+      },
+    } as any);
+
+    const app = await buildApp();
+    const res = await request(app).post("/custom-charge/c12345678901234567890/resend").send({});
+
+    expect(res.status).toBe(200);
+    expect(res.body.message).toMatch(/reenviado/i);
+    expect(resendCustomChargeOtp).toHaveBeenCalledWith("c12345678901234567890");
   });
 });

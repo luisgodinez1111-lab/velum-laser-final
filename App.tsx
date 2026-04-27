@@ -28,10 +28,14 @@ const CustomCharge      = lazy(() => import('./pages/CustomChargePage').then(m =
 const NotFound          = lazy(() => import('./pages/NotFound').then(m => ({ default: m.NotFound })));
 
 // Redirige a "/" si el usuario no tiene alguno de los roles requeridos
-const RequireRole: React.FC<{ roles: UserRole[]; children: React.ReactNode }> = ({ roles, children }) => {
+const RequireRole: React.FC<{ roles: UserRole[]; children: React.ReactNode; redirectTo?: string }> = ({
+  roles,
+  children,
+  redirectTo = '/',
+}) => {
   const { isSessionLoading, hasRole } = useAuth();
   if (isSessionLoading) return <PageSkeleton />;
-  if (!hasRole(roles)) return <Navigate to="/" replace />;
+  if (!hasRole(roles)) return <Navigate to={redirectTo} replace />;
   return <>{children}</>;
 };
 
@@ -48,12 +52,12 @@ const InnerApp: React.FC = () => {
                 <Route path="/memberships"                   element={<Memberships />} />
                 <Route path="/agenda"                        element={<Agenda />} />
                 <Route path="/dashboard"                     element={<Dashboard />} />
-                <Route path="/admin"                         element={<RequireRole roles={['admin', 'staff']}><Admin /></RequireRole>} />
-                <Route path="/admin/whatsapp"                element={<RequireRole roles={['admin']}><AdminWhatsApp /></RequireRole>} />
-                <Route path="/admin/stripe"                  element={<RequireRole roles={['admin']}><AdminStripe /></RequireRole>} />
-                <Route path="/admin/users-permissions"       element={<RequireRole roles={['admin']}><AdminUsers /></RequireRole>} />
+                <Route path="/admin"                         element={<Admin />} />
+                <Route path="/admin/whatsapp"                element={<RequireRole roles={['admin']} redirectTo="/admin"><AdminWhatsApp /></RequireRole>} />
+                <Route path="/admin/stripe"                  element={<RequireRole roles={['admin']} redirectTo="/admin"><AdminStripe /></RequireRole>} />
+                <Route path="/admin/users-permissions"       element={<RequireRole roles={['admin']} redirectTo="/admin"><AdminUsers /></RequireRole>} />
                 <Route path="/settings/agenda-integrations"  element={<Navigate to="/admin" replace />} />
-                <Route path="/admin/onboarding"              element={<RequireRole roles={['admin', 'staff']}><OnboardingAdmin /></RequireRole>} />
+                <Route path="/admin/onboarding"              element={<RequireRole roles={['admin', 'staff']} redirectTo="/admin"><OnboardingAdmin /></RequireRole>} />
                 <Route path="/reset-password"               element={<ResetPassword />} />
                 <Route path="/custom-charge/:id"            element={<CustomCharge />} />
                 <Route path="*"                              element={<NotFound />} />

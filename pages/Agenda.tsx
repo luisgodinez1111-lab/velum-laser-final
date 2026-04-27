@@ -5,7 +5,7 @@ import { ChevronLeft, ChevronRight, Lock, User, Sparkles, Shield, FileText, Stet
 import { useAuth } from "../context/AuthContext";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { clinicalService, MedicalIntake } from "../services/clinicalService";
-import { AuthUser, authService } from "../services/authService";
+import { AuthUser, TotpRequiredError, authService } from "../services/authService";
 import { stripeService } from "../services/stripeService";
 import { DEFAULT_PHOTOTYPE_QUESTIONS, getFototipo } from "../components/PhototypeQuestionnaire";
 import { useToast } from "../context/ToastContext";
@@ -81,9 +81,11 @@ export const Agenda: React.FC = () => {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [phone, setPhone] = useState("");
+  const [loginRequiresTotp, setLoginRequiresTotp] = useState(false);
+  const [loginTotpCode, setLoginTotpCode] = useState("");
 
   const getPasswordChecks = (value: string) => ({
-    length: value.length >= 8,
+    length: value.length >= 12,
     upper: /[A-Z]/.test(value),
     lower: /[a-z]/.test(value),
     number: /[0-9]/.test(value),
@@ -282,14 +284,21 @@ export const Agenda: React.FC = () => {
     e.preventDefault();
     setAppointmentMessage(null);
     try {
-      const userData = await login(email, password);
+      const userData = await login(email, password, loginRequiresTotp ? loginTotpCode : undefined);
+      setLoginRequiresTotp(false);
+      setLoginTotpCode("");
       // Admin/staff/system users don't have a medical intake — redirect to admin panel
       if (['admin', 'staff', 'system'].includes(userData.role)) {
         navigate('/admin');
         return;
       }
       await refreshIntake({ fullName: userData.name, phone: userData.phone, birthDate: userData.birthDate });
-    } catch {
+    } catch (err) {
+      if (err instanceof TotpRequiredError) {
+        setLoginRequiresTotp(true);
+        toast.info(err.message);
+        return;
+      }
       toast.error("Credenciales incorrectas. Verifica tu correo y contraseña.");
     }
   };
@@ -366,7 +375,7 @@ export const Agenda: React.FC = () => {
     }
     const passwordChecks = getPasswordChecks(newPassword);
     if (!Object.values(passwordChecks).every(Boolean)) {
-      setOtpMessage("La contraseña debe incluir mínimo 8 caracteres, una mayúscula, una minúscula, un número y un símbolo.");
+      setOtpMessage("La contraseña debe incluir mínimo 12 caracteres, una mayúscula, una minúscula, un número y un símbolo.");
       return;
     }
     setIsOtpLoading(true);
@@ -750,7 +759,11 @@ export const Agenda: React.FC = () => {
                 <input
                   type="email"
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={(e) => {
+                    setEmail(e.target.value);
+                    setLoginRequiresTotp(false);
+                    setLoginTotpCode("");
+                  }}
                   required
                   className="w-full rounded-2xl bg-velum-50 border border-velum-200/60 px-5 py-4 text-[15px] text-velum-900 placeholder:text-velum-400 outline-none transition-all duration-200 focus:bg-white focus:border-velum-900 focus:ring-4 focus:ring-velum-900/[0.07]"
                   placeholder="correo@ejemplo.com"
@@ -772,16 +785,41 @@ export const Agenda: React.FC = () => {
                 </div>
                 <PasswordInput
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  onChange={(e) => {
+                    setPassword(e.target.value);
+                    setLoginRequiresTotp(false);
+                    setLoginTotpCode("");
+                  }}
                   required
                   className="w-full rounded-2xl bg-velum-50 border border-velum-200/60 px-5 py-4 text-[15px] text-velum-900 placeholder:text-velum-400 outline-none transition-all duration-200 focus:bg-white focus:border-velum-900 focus:ring-4 focus:ring-velum-900/[0.07]"
                   placeholder="••••••••"
                   autoComplete="current-password"
                 />
               </div>
+              {loginRequiresTotp && (
+                <div>
+                  <label className="mb-2 block text-[11px] font-bold uppercase tracking-[0.18em] text-velum-500">
+                    Código 2FA
+                  </label>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    pattern="\d{6}"
+                    maxLength={6}
+                    value={loginTotpCode}
+                    onChange={(e) => setLoginTotpCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                    required
+                    className="w-full rounded-2xl bg-velum-50 border border-velum-200/60 px-5 py-4 text-[15px] text-velum-900 placeholder:text-velum-400 outline-none transition-all duration-200 focus:bg-white focus:border-velum-900 focus:ring-4 focus:ring-velum-900/[0.07]"
+                    placeholder="000000"
+                    autoComplete="one-time-code"
+                    autoFocus
+                  />
+                </div>
+              )}
               <button
                 type="submit"
-                className="mt-2 w-full rounded-2xl bg-velum-900 py-4 text-[15px] font-semibold text-white hover:bg-velum-800 active:scale-[0.99] transition-all duration-200"
+                disabled={loginRequiresTotp && loginTotpCode.length !== 6}
+                className="mt-2 w-full rounded-2xl bg-velum-900 py-4 text-[15px] font-semibold text-white hover:bg-velum-800 active:scale-[0.99] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Entrar
               </button>
@@ -959,7 +997,7 @@ export const Agenda: React.FC = () => {
                     ))}
                   </div>
                   <div className="grid grid-cols-2 gap-1 text-[11px]">
-                    <span className={registerPasswordChecks.length ? "text-green-700" : "text-velum-400"}>{registerPasswordChecks.length ? "✓" : "·"} 8+ caracteres</span>
+                    <span className={registerPasswordChecks.length ? "text-green-700" : "text-velum-400"}>{registerPasswordChecks.length ? "✓" : "·"} 12+ caracteres</span>
                     <span className={registerPasswordChecks.upper ? "text-green-700" : "text-velum-400"}>{registerPasswordChecks.upper ? "✓" : "·"} Mayúscula</span>
                     <span className={registerPasswordChecks.lower ? "text-green-700" : "text-velum-400"}>{registerPasswordChecks.lower ? "✓" : "·"} Minúscula</span>
                     <span className={registerPasswordChecks.number ? "text-green-700" : "text-velum-400"}>{registerPasswordChecks.number ? "✓" : "·"} Número</span>

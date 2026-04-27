@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { CheckCircle2, XCircle, Loader2, CreditCard, ArrowRight, Clock } from "lucide-react";
+import { apiFetch } from "../services/apiClient";
 
 type ChargeInfo = {
   id: string;
@@ -16,19 +17,6 @@ type ChargeInfo = {
   expiresAt?: string;
   user: { email: string; profile?: { firstName?: string } };
 };
-
-const apiBase = (import.meta.env as Record<string, string | undefined>)?.VITE_API_URL ?? "";
-
-async function apiFetch(path: string, init?: RequestInit) {
-  const res = await fetch(`${apiBase}${path}`, {
-    ...init,
-    credentials: "include",
-    headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) },
-  });
-  const json = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(json?.message || "Error en la solicitud");
-  return json;
-}
 
 export const CustomChargePage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -54,7 +42,7 @@ export const CustomChargePage: React.FC = () => {
 
   useEffect(() => {
     if (!id) return;
-    apiFetch(`/api/v1/custom-charges/${id}`)
+    apiFetch<{ charge: ChargeInfo }>(`/v1/custom-charges/${id}`)
       .then((data) => {
         setCharge(data.charge);
         // Start expiry countdown if charge is pending and has an expiresAt
@@ -104,7 +92,7 @@ export const CustomChargePage: React.FC = () => {
     if (code.length !== 6) { setVerifyError("Ingresa los 6 dígitos del código"); return; }
     setVerifyError(""); setVerifying(true);
     try {
-      const data = await apiFetch(`/api/v1/custom-charges/${id}/verify`, {
+      const data = await apiFetch<{ checkoutUrl?: string }>(`/v1/custom-charges/${id}/verify`, {
         method: "POST",
         body: JSON.stringify({ otp: code }),
       });
@@ -124,7 +112,7 @@ export const CustomChargePage: React.FC = () => {
   const handleResend = useCallback(async () => {
     setResending(true);
     try {
-      await apiFetch(`/api/v1/custom-charges/${id}/resend`, { method: "POST" });
+      await apiFetch(`/v1/custom-charges/${id}/resend`, { method: "POST" });
       setOtp(["", "", "", "", "", ""]);
       setVerifyError("");
       setOtpBlocked(false);
@@ -157,7 +145,7 @@ export const CustomChargePage: React.FC = () => {
           </div>
           <h1 className="text-2xl font-serif text-velum-900">¡Pago realizado!</h1>
           <p className="text-sm text-velum-500">Tu pago fue procesado exitosamente. El equipo de Velum Laser recibirá la confirmación.</p>
-          <a href="/#/" className="inline-block mt-2 px-6 py-3 bg-velum-900 text-white rounded-xl text-sm font-medium hover:bg-velum-800 transition">
+          <a href="/#/dashboard" className="inline-block mt-2 px-6 py-3 bg-velum-900 text-white rounded-xl text-sm font-medium hover:bg-velum-800 transition">
             Ir a mi cuenta
           </a>
         </div>

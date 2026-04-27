@@ -1,5 +1,5 @@
 import { AuditLogEntry, LegalDocument, Member, UserRole } from "../types";
-import { apiFetch } from "./apiClient";
+import { apiFetch, buildApiUrl } from "./apiClient";
 import { MEMBERSHIPS } from "../constants";
 import type { RawApiDocument, RawApiUser, AdminUsersApiResponse, AdminAuditLogsApiResponse } from "./apiTypes";
 
@@ -139,6 +139,10 @@ export const memberService = {
 };
 
 export const documentService = {
+  listMy: async (): Promise<LegalDocument[]> => {
+    const docs = await apiFetch<RawApiDocument[]>('/documents');
+    return mapDocuments(docs);
+  },
   signDocument: async (docId: string, signature: string): Promise<void> => {
     await apiFetch(`/documents/${docId}/sign`, {
       method: "POST",
@@ -146,7 +150,7 @@ export const documentService = {
     });
   },
   downloadDocument: async (docId: string, filename: string): Promise<void> => {
-    const resp = await fetch(`/api/documents/${docId}`, { credentials: "include" });
+    const resp = await fetch(buildApiUrl(`/documents/${docId}`), { credentials: "include" });
     if (!resp.ok) throw new Error("No se pudo descargar el documento");
     const blob = await resp.blob();
     const url = URL.createObjectURL(blob);

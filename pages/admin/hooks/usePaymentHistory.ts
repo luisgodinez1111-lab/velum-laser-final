@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { apiFetch } from '../../../services/apiClient';
+import { apiFetch, buildApiUrl } from '../../../services/apiClient';
 import { useToast } from '../../../context/ToastContext';
 
 export const HIST_LIMIT = 50;
@@ -65,7 +65,7 @@ export const usePaymentHistory = (): PaymentHistoryHook => {
       if (histDateFrom) params.set('dateFrom', histDateFrom);
       if (histDateTo) params.set('dateTo', histDateTo);
       if (histStatus) params.set('status', histStatus);
-      const resp = await fetch(`/api/v1/payments/export?${params.toString()}`, { credentials: 'include' });
+      const resp = await fetch(buildApiUrl(`/v1/payments/export?${params.toString()}`), { credentials: 'include' });
       if (!resp.ok) throw new Error('Error al exportar');
       const blob = await resp.blob();
       const url = URL.createObjectURL(blob);
