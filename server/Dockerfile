@@ -16,8 +16,13 @@ COPY --from=base /app/package.json ./package.json
 COPY --from=base /app/package-lock.json* ./
 COPY --from=base /app/prisma ./prisma
 COPY --from=base /app/scripts ./scripts
-# Instalar solo dependencias de producción (sin devDeps: TypeScript, ESLint, Vitest, etc.)
-RUN npm ci --omit=dev
+COPY --from=base /app/src ./src
+# Copiamos node_modules completo desde base (incluye prisma CLI + tsx + cliente
+# generado). Los devDeps son ~80 MB extra; el ahorro de mantener un Dockerfile
+# que funcione consistentemente vale la diferencia. Migrar a `node dist/...` y
+# devDeps strip cuando se separe el image build (Fase 1).
+# Copiamos node_modules ya hidratado desde el base stage.
+COPY --from=base /app/node_modules ./node_modules
 # El usuario 'node' (uid 1000) viene incluido en node:alpine.
 # IMPORTANTE: el directorio de uploads del host debe ser propiedad de uid 1000:
 #   sudo chown -R 1000:1000 /var/velum/uploads
