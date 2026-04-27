@@ -145,6 +145,28 @@ model Tenant {
   @@index([region])
 }
 
+/// Embeddings vectoriales de MedicalIntake para RAG (Movimiento #8).
+/// Tenant-scoped via RLS. El campo `embedding` es vector(1536) — Prisma
+/// no lo soporta nativamente, lo manejamos via $queryRaw.
+model MedicalIntakeEmbedding {
+  id         String   @id @default(cuid())
+  tenantId   String
+  intakeId   String
+  chunkIndex Int
+  chunkType  String
+  content    String
+  model      String
+  tokens     Int?
+  createdAt  DateTime @default(now()) @db.Timestamptz
+  updatedAt  DateTime @updatedAt @db.Timestamptz
+
+  intake     MedicalIntake @relation(fields: [intakeId], references: [id], onDelete: Cascade)
+
+  @@unique([intakeId, chunkIndex, chunkType])
+  @@index([tenantId])
+  @@index([intakeId])
+}
+
 /// Outbox pattern (Fase 1.2). Eventos de dominio escritos atomicamente con
 /// la transaccion que los origina; despachados asincronicamente por el worker.
 model OutboxEvent {
@@ -379,6 +401,7 @@ model MedicalIntake {
   updatedAt        DateTime     @updatedAt
   user             User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   approvedBy       User?        @relation("MedicalIntakeApprover", fields: [approvedByUserId], references: [id], onDelete: SetNull)
+  embeddings       MedicalIntakeEmbedding[]
 
   @@index([status])
   @@index([approvedByUserId])

@@ -46,6 +46,7 @@ import { errorHandler } from "./middlewares/error";
 import { metricsMiddleware } from "./middlewares/metrics";
 import { getSnapshot } from "./services/metricsService";
 import { exportRoutes } from "./routes/exportRoutes";
+import { aiRoutes } from "./routes/aiRoutes";
 import { reportError } from "./utils/errorReporter";
 import { openApiSpec } from "./openapi";
 import { prisma } from "./db/prisma";
@@ -257,6 +258,7 @@ app.use(billingCheckoutRoutes);
 app.use(customChargeRoutes);
 app.use(notificationRoutes);
 app.use(exportRoutes);
+app.use(aiRoutes);
 
 // ── Public clinic config ──────────────────────────────────────────────
 app.get("/api/v1/clinic/config", (_req, res) => {

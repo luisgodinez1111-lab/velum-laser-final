@@ -56,7 +56,10 @@ services:
     stop_grace_period: 15s
 
   postgres:
-    image: postgres:16-alpine
+    # pgvector/pgvector:pg16 — drop-in replacement de postgres:16-alpine que
+    # incluye la extensión `vector`. Requerido para RAG sobre MedicalIntake
+    # (Movimiento #8). El data volume es compatible: Postgres 16 mismo schema.
+    image: pgvector/pgvector:pg16
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}   # Sin fallback — falla el arranque si no está definida

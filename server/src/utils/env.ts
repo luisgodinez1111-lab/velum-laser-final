@@ -144,6 +144,13 @@ export const env = {
   // datos de pacientes. En arranque sin la key, el helper phiCrypto lanza
   // SOLO al primer encrypt/decrypt — para no romper boot en dev.
   phiMasterKey: process.env.PHI_MASTER_KEY ?? "",
+
+  // ── IA / Anthropic (Movimiento #8) ────────────────────────────────
+  // Si ANTHROPIC_API_KEY está vacía, los endpoints /api/v1/ai/* responden
+  // 503 — degradación silenciosa. Cero overhead si no se usa la feature.
+  anthropicApiKey: process.env.ANTHROPIC_API_KEY ?? "",
+  anthropicModel: process.env.ANTHROPIC_MODEL ?? "claude-sonnet-4-6",
+  anthropicMaxTokens: Number(process.env.ANTHROPIC_MAX_TOKENS ?? 1500),
 };
 
 export const isProduction = env.nodeEnv === "production";
