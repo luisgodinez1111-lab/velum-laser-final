@@ -4,20 +4,10 @@ import { AuthRequest } from "../middlewares/auth";
 import { createAuditLog } from "../services/auditService";
 import { logger } from "../utils/logger";
 import { safeIp } from "../utils/request";
-import { decrypt } from "../utils/crypto";
+import { decryptSignature as decryptSignatureData } from "../utils/phiCrypto";
 
 // Max base64 signature size: 2 MB decoded ≈ 2.73 MB base64
 const MAX_SIGNATURE_B64_LEN = 3_000_000;
-
-const SIG_ENC_PREFIX = "enc1:";
-const decryptSignatureData = (val: string | null | undefined): string | null => {
-  if (!val) return null;
-  if (val.startsWith(SIG_ENC_PREFIX)) {
-    try { return decrypt(val.slice(SIG_ENC_PREFIX.length)); }
-    catch { return null; }
-  }
-  return val; // texto plano legacy
-};
 
 export const adminUpdatePatientIntake = async (req: AuthRequest, res: Response) => {
   try {

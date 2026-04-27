@@ -7,23 +7,8 @@ import { medicalIntakeApproveSchema, medicalIntakeUpdateSchema } from "../valida
 import { onIntakeApproved, onIntakeRejected, notifyAdmins } from "../services/notificationService";
 import { logger } from "../utils/logger";
 import { safeIp } from "../utils/request";
-import { encrypt, decrypt } from "../utils/crypto";
+import { encryptSignature as encryptSignatureData, decryptSignature as decryptSignatureData } from "../utils/phiCrypto";
 import { badRequest, notFound } from "../utils/AppError";
-
-// Prefijo que distingue valores encriptados de imágenes en texto plano (compatibilidad hacia atrás)
-const SIG_ENC_PREFIX = "enc1:";
-
-const encryptSignatureData = (plain: string): string =>
-  SIG_ENC_PREFIX + encrypt(plain);
-
-const decryptSignatureData = (val: string | null | undefined): string | null => {
-  if (!val) return null;
-  if (val.startsWith(SIG_ENC_PREFIX)) {
-    try { return decrypt(val.slice(SIG_ENC_PREFIX.length)); }
-    catch { return null; } // dato corrupto — no exponer basura al cliente
-  }
-  return val; // texto plano legacy (anterior a la encriptación)
-};
 
 const ensureIntake = async (userId: string) => {
   return prisma.medicalIntake.upsert({

@@ -137,6 +137,13 @@ export const env = {
   // permiten todo (fallback). Activar SOLO cuando la conexión use rol
   // no-superuser (Fase 1), porque postgres bypassea RLS.
   rlsEnforce: process.env.RLS_ENFORCE === "true",
+
+  // ── PHI cifrado de campo (Fase 1.3) ────────────────────────────────
+  // Master key para cifrar campos médicos sensibles a nivel aplicación.
+  // Distinta de INTEGRATIONS_ENC_KEY: si se filtra una, la otra no expone
+  // datos de pacientes. En arranque sin la key, el helper phiCrypto lanza
+  // SOLO al primer encrypt/decrypt — para no romper boot en dev.
+  phiMasterKey: process.env.PHI_MASTER_KEY ?? "",
 };
 
 export const isProduction = env.nodeEnv === "production";

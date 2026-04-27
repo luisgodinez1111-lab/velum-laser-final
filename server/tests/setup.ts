@@ -15,6 +15,8 @@ process.env.COOKIE_NAME = "access_token";
 process.env.REFRESH_COOKIE_NAME = "refresh_token";
 process.env.FRONTEND_URL = "http://localhost:5173";
 process.env.BASE_URL = "http://localhost:4000";
+process.env.PHI_MASTER_KEY = process.env.PHI_MASTER_KEY ?? "phi-test-master-key-32-bytes-min!!";
+process.env.INTEGRATIONS_ENC_KEY = process.env.INTEGRATIONS_ENC_KEY ?? "integrations-test-key-32-bytes-mn!";
 
 // Mock del logger para evitar output en tests
 vi.mock("../src/utils/logger", () => ({
