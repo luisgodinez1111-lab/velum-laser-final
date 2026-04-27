@@ -78,6 +78,64 @@ enum IntegrationJobStatus {
   failed
 }
 
+enum TenantStatus {
+  trial
+  active
+  suspended
+  churned
+}
+
+enum TenantPlanTier {
+  starter
+  professional
+  enterprise
+  internal
+}
+
+enum TenantRegion {
+  mx
+  us
+  eu
+}
+
+/// Raíz del modelo multi-tenant. Cada fila operacional pertenece a un Tenant
+/// vía `clinicId` (renombrado a `tenantId` en una migración futura).
+/// El primer tenant tiene id literal 'default' por compatibilidad con
+/// las columnas `clinicId` existentes que tienen DEFAULT 'default'.
+model Tenant {
+  id              String          @id @default(cuid())
+  slug            String          @unique
+  legalName       String
+  displayName     String
+  status          TenantStatus    @default(trial)
+  planTier        TenantPlanTier  @default(starter)
+  region          TenantRegion    @default(mx)
+  timezone        String          @default("America/Chihuahua")
+  locale          String          @default("es-MX")
+  primaryDomain   String?         @unique
+  billingEmail    String?
+  contactPhone    String?
+  taxId           String?
+  features        Json            @default("{}")
+  limits          Json            @default("{}")
+  trialEndsAt     DateTime?       @db.Timestamptz
+  suspendedAt     DateTime?       @db.Timestamptz
+  suspendedReason String?
+  createdAt       DateTime        @default(now()) @db.Timestamptz
+  updatedAt       DateTime        @updatedAt @db.Timestamptz
+  deletedAt       DateTime?       @db.Timestamptz
+
+  // Relaciones inversas — toda fila tenant-scoped cuelga de aquí.
+  // El nombre del scalar sigue siendo `clinicId` por compatibilidad;
+  // el rename a `tenantId` viene en una migración posterior.
+  users                      User[]
+  appointments               Appointment[]
+  integrationJobs            IntegrationJob[]
+  googleCalendarIntegrations GoogleCalendarIntegration[]
+
+  @@index([region])
+}
+
 model User {
   id                  String                  @id @default(cuid())
   email               String                  @unique
@@ -123,6 +181,7 @@ model User {
   loginLockedUntil            DateTime?
   totpSecret                  String?
   totpEnabled                 Boolean   @default(false)
+  tenant                      Tenant    @relation(fields: [clinicId], references: [id], onDelete: Restrict, onUpdate: Cascade)
 
   @@index([clinicId])
   @@index([deletedAt])
@@ -322,6 +381,7 @@ model Appointment {
   rescheduledFrom   Appointment?      @relation("AppointmentReschedule", fields: [rescheduledFromId], references: [id], onDelete: SetNull)
   reschedules       Appointment[]     @relation("AppointmentReschedule")
   sessions          SessionTreatment[]
+  tenant            Tenant            @relation(fields: [clinicId], references: [id], onDelete: Restrict, onUpdate: Cascade)
 
   @@index([userId])
   @@index([clinicId])
@@ -619,6 +679,7 @@ model GoogleCalendarIntegration {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
   jobs            IntegrationJob[]
+  tenant          Tenant   @relation(fields: [clinicId], references: [id], onDelete: Restrict, onUpdate: Cascade)
 
   @@unique([clinicId])
   @@index([isActive])
@@ -683,6 +744,7 @@ model IntegrationJob {
   createdAt            DateTime             @default(now())
   updatedAt            DateTime             @updatedAt
   googleIntegration    GoogleCalendarIntegration? @relation(fields: [googleIntegrationId], references: [id], onDelete: SetNull)
+  tenant               Tenant                     @relation(fields: [clinicId], references: [id], onDelete: Restrict, onUpdate: Cascade)
 
   @@index([status, runAt])
   @@index([clinicId, status, runAt])
