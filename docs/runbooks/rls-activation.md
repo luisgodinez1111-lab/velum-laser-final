@@ -14,10 +14,14 @@
 > `app.tenant_id`, así que el fallback permisivo aplica y todas las queries
 > devuelven todo. Cero degradación.
 >
-> **Pendiente (Fase 1.4.b):** refactorear callers que tocan `User`,
-> `Appointment`, `IntegrationJob`, `GoogleCalendarIntegration` a
-> `withTenantContext()`, activar `RLS_ENFORCE=true`, y un test automático
-> que pruebe que un tenant no puede leer datos de otro.
+> **Estado (Fase 1.4.b parcial):**
+> - ✅ Test de aislamiento automatizado en `tests/rlsIsolation.test.ts` —
+>   garantiza que policies + FORCE filtran correctamente cuando
+>   `app.tenant_id` está seteado. Corre contra postgres real (no mock).
+> - ⏳ Refactor masivo de los 37 callers que tocan `User`/`Appointment`/
+>   `IntegrationJob`/`GoogleCalendarIntegration` a `withTenantContext()`
+>   queda como **deuda explícita Fase 2** — alta visibilidad, alto riesgo,
+>   se hace cuando entre el segundo cliente real.
 
 ---
 
