@@ -26,6 +26,15 @@ docker exec "$CONTAINER" \
 SIZE=$(du -sh "$FILE" | cut -f1)
 echo "[$(date -Is)] Backup complete — $SIZE"
 
+# Verificación de integridad — un .sql.gz corrupto no se descubre hasta el restore.
+# `gzip -t` valida el stream entero. Sin esto, podríamos guardar 14 días de basura.
+if ! gzip -t "$FILE"; then
+  echo "[$(date -Is)] ERROR: backup corrupto detectado — $FILE" >&2
+  rm -f "$FILE"
+  exit 1
+fi
+echo "[$(date -Is)] gzip integrity OK"
+
 # Remove backups older than KEEP_DAYS
 find "$BACKUP_DIR" -name "velum_*.sql.gz" -mtime +"$KEEP_DAYS" -delete
 echo "[$(date -Is)] Old backups pruned (kept last ${KEEP_DAYS} days)"
