@@ -24,6 +24,37 @@ services:
       retries: 5
       start_period: 30s
 
+  worker:
+    # Mismo image que el API (comparten src/utils, prisma client, etc).
+    # Solo cambia el comando: arranca el outbox dispatcher en lugar del HTTP server.
+    build:
+      context: ./server
+    image: velum-laser-final-api  # reusar la imagen ya construida por `api`
+    command: ["./node_modules/.bin/tsx", "src/worker.ts"]
+    env_file:
+      - ./server/.env
+    environment:
+      OUTBOX_HEALTH_PORT: "4100"  # health endpoint local para healthcheck
+    depends_on:
+      api:
+        condition: service_healthy   # asume que las migrations ya corrieron en el API
+    volumes:
+      - /var/velum/uploads:/var/velum/uploads:ro   # solo lectura — workers no escriben uploads
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 384m              # menor que API (no sirve HTTP, sin Express)
+          cpus: "0.5"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:4100/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    # 10s para drain del batch en curso antes de SIGKILL.
+    stop_grace_period: 15s
+
   postgres:
     image: postgres:16-alpine
     environment:
