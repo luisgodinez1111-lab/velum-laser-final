@@ -85,6 +85,14 @@ enum TenantStatus {
   churned
 }
 
+enum OutboxStatus {
+  pending
+  processing
+  done
+  failed
+  dead
+}
+
 enum TenantPlanTier {
   starter
   professional
@@ -132,8 +140,36 @@ model Tenant {
   appointments               Appointment[]
   integrationJobs            IntegrationJob[]
   googleCalendarIntegrations GoogleCalendarIntegration[]
+  outboxEvents               OutboxEvent[]
 
   @@index([region])
+}
+
+/// Outbox pattern (Fase 1.2). Eventos de dominio escritos atomicamente con
+/// la transaccion que los origina; despachados asincronicamente por el worker.
+model OutboxEvent {
+  id            String       @id @default(cuid())
+  tenantId      String
+  eventType     String
+  aggregateType String
+  aggregateId   String
+  payload       Json
+  status        OutboxStatus @default(pending)
+  attempts      Int          @default(0)
+  maxAttempts   Int          @default(8)
+  availableAt   DateTime     @default(now()) @db.Timestamptz
+  lockedUntil   DateTime?    @db.Timestamptz
+  processedAt   DateTime?    @db.Timestamptz
+  lastError     String?
+  createdAt     DateTime     @default(now()) @db.Timestamptz
+  updatedAt     DateTime     @updatedAt @db.Timestamptz
+  tenant        Tenant       @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  // La partial index del dispatch path se define en SQL porque Prisma no
+  // modela indices parciales.
+  @@index([tenantId, status], map: "OutboxEvent_tenantId_status_idx")
+  @@index([aggregateType, aggregateId], map: "OutboxEvent_aggregate_idx")
+  @@index([eventType, createdAt], map: "OutboxEvent_eventType_createdAt_idx")
 }
 
 model User {
