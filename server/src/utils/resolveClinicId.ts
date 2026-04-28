@@ -1,4 +1,5 @@
 import { prisma } from "../db/prisma";
+import { withTenantContext } from "../db/withTenantContext";
 import { env } from "./env";
 
 /**
@@ -8,7 +9,7 @@ import { env } from "./env";
  */
 export const resolveClinicId = async (actorClinicId: string | null | undefined): Promise<string | null> => {
   if (actorClinicId) return actorClinicId;
-  const seed = await prisma.user.findFirst({ select: { clinicId: true } });
+  const seed = await withTenantContext(async (tx) => tx.user.findFirst({ select: { clinicId: true } }));
   return seed?.clinicId ?? null;
 };
 
@@ -17,9 +18,9 @@ export const resolveClinicId = async (actorClinicId: string | null | undefined):
  * Fallback al DEFAULT_CLINIC_ID si el usuario no tiene uno asignado.
  */
 export const getClinicIdByUserId = async (userId: string): Promise<string> => {
-  const user = await prisma.user.findUnique({
+  const user = await withTenantContext(async (tx) => tx.user.findUnique({
     where: { id: userId },
     select: { clinicId: true },
-  });
+  }));
   return user?.clinicId || env.defaultClinicId;
 };

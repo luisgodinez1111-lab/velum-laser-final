@@ -50,6 +50,7 @@ import { aiRoutes } from "./routes/aiRoutes";
 import { reportError } from "./utils/errorReporter";
 import { openApiSpec } from "./openapi";
 import { prisma } from "./db/prisma";
+import { withTenantContext } from "./db/withTenantContext";
 import { getSseConnectionCount } from "./services/notificationService";
 import { requestContext } from "./utils/requestContext";
 import { getWorkerStatus } from "./utils/workerRegistry";
@@ -136,9 +137,9 @@ app.get("/api/v1/health/detailed", healthKeyOrAdmin, async (req: express.Request
 
     const [activeMembers, appointmentsToday, pendingIntakes] = await Promise.all([
       prisma.membership.count({ where: { status: "active" } }),
-      prisma.appointment.count({
+      withTenantContext(async (tx) => tx.appointment.count({
         where: { startAt: { gte: todayStart, lte: todayEnd }, status: { not: "canceled" } },
-      }),
+      })),
       prisma.medicalIntake.count({ where: { status: "submitted" } }),
     ]);
     checks.businessMetrics = { ok: true, activeMembers, appointmentsToday, pendingIntakes };

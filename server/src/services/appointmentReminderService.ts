@@ -1,5 +1,6 @@
 import cron from "node-cron";
 import { prisma } from "../db/prisma";
+import { withTenantContext } from "../db/withTenantContext";
 import { sendAppointmentReminderEmail } from "./emailService";
 import { sendWhatsappAppointmentReminder } from "./whatsappMetaService";
 import { logger } from "../utils/logger";
@@ -67,7 +68,7 @@ export const runAppointmentReminders = async (): Promise<void> => {
     const windowStart = new Date(now.getTime() + 20 * 60 * 60 * 1000);
     const windowEnd   = new Date(now.getTime() + 28 * 60 * 60 * 1000);
 
-    const appointments = await prisma.appointment.findMany({
+    const appointments = await withTenantContext(async (tx) => tx.appointment.findMany({
       where: {
         startAt: { gte: windowStart, lte: windowEnd },
         status: { in: ["scheduled", "confirmed"] },
@@ -83,7 +84,7 @@ export const runAppointmentReminders = async (): Promise<void> => {
         treatment: { select: { name: true } },
         cabin:     { select: { name: true } },
       },
-    });
+    }));
 
     logger.info({ count: appointments.length }, "[appointment-reminder] Appointments to remind");
 
@@ -117,10 +118,10 @@ export const runAppointmentReminders = async (): Promise<void> => {
           );
         }
 
-        await prisma.appointment.update({
+        await withTenantContext(async (tx) => tx.appointment.update({
           where: { id: appt.id },
           data:  { reminderSentAt: now },
-        });
+        }));
 
         logger.info({ email: appt.user.email, appointmentId: appt.id }, "[appointment-reminder] Reminder sent");
       } catch (err) {

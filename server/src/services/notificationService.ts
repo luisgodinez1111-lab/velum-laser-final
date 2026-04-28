@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../db/prisma";
+import { withTenantContext } from "../db/withTenantContext";
 import { logger } from "../utils/logger";
 import { broadcastToUser } from "./sseService";
 
@@ -62,10 +63,10 @@ const getAdminIds = async (): Promise<string[]> => {
   if (adminIdCache && Date.now() - adminIdCacheAt < ADMIN_CACHE_TTL_MS) {
     return adminIdCache;
   }
-  const admins = await prisma.user.findMany({
+  const admins = await withTenantContext(async (tx) => tx.user.findMany({
     where: { role: { in: ["admin", "staff", "system"] }, isActive: true },
     select: { id: true },
-  });
+  }));
   adminIdCache = admins.map((a) => a.id);
   adminIdCacheAt = Date.now();
   return adminIdCache;

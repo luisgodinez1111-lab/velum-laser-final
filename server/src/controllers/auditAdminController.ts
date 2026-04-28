@@ -1,5 +1,6 @@
 import { Response } from "express";
 import { prisma } from "../db/prisma";
+import { withTenantContext } from "../db/withTenantContext";
 import { AuthRequest } from "../middlewares/auth";
 import { auditFilterSchema } from "../validators/audit";
 import { parsePagination } from "../utils/pagination";
@@ -103,7 +104,7 @@ export const exportAuditLogsCSV = async (req: AuthRequest, res: Response) => {
 
 export const reports = async (req: AuthRequest, res: Response) => {
   const [users, active, pastDue, documents] = await Promise.all([
-    prisma.user.count(),
+    withTenantContext(async (tx) => tx.user.count()),
     prisma.membership.count({ where: { status: "active" } }),
     prisma.membership.count({ where: { status: "past_due" } }),
     prisma.document.count({ where: { status: "pending" } })
