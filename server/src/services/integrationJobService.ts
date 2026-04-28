@@ -1,5 +1,6 @@
 import { IntegrationJob, IntegrationJobStatus, Prisma } from "@prisma/client";
 import { prisma } from "../db/prisma";
+import { withTenantContext } from "../db/withTenantContext";
 import { logger } from "../utils/logger";
 
 export type IntegrationJobType =
@@ -27,7 +28,7 @@ export const enqueueIntegrationJob = async (args: {
   runAt?: Date;
   maxAttempts?: number;
 }) => {
-  return prisma.integrationJob.create({
+  return withTenantContext(async (tx) => tx.integrationJob.create({
     data: {
       clinicId: args.clinicId,
       type: args.type,
@@ -36,7 +37,7 @@ export const enqueueIntegrationJob = async (args: {
       runAt: args.runAt ?? new Date(),
       maxAttempts: args.maxAttempts ?? 8
     }
-  });
+  }));
 };
 
 const claimNextPendingJob = async (): Promise<IntegrationJob | null> => {
@@ -90,7 +91,8 @@ export const claimIntegrationJobsBatch = async () => {
 };
 
 export const markIntegrationJobDone = async (jobId: string) => {
-  await prisma.integrationJob.update({
+  // Worker-callable: sin tenantContext el helper hace fallback a prisma normal
+  await withTenantContext(async (tx) => tx.integrationJob.update({
     where: { id: jobId },
     data: {
       status: "done",
@@ -98,7 +100,7 @@ export const markIntegrationJobDone = async (jobId: string) => {
       lockedAt: null,
       lastError: null
     }
-  });
+  }));
 };
 
 export const markIntegrationJobError = async (job: IntegrationJob, error: unknown) => {
@@ -106,7 +108,8 @@ export const markIntegrationJobError = async (job: IntegrationJob, error: unknow
   const attemptsExhausted = job.attempts >= job.maxAttempts;
 
   if (attemptsExhausted) {
-    await prisma.integrationJob.update({
+    // Worker-callable: sin tenantContext el helper hace fallback a prisma normal
+    await withTenantContext(async (tx) => tx.integrationJob.update({
       where: { id: job.id },
       data: {
         status: "failed",
@@ -114,7 +117,7 @@ export const markIntegrationJobError = async (job: IntegrationJob, error: unknow
         lockedAt: null,
         lastError: message
       }
-    });
+    }));
 
     logger.error({ jobId: job.id, type: job.type, message }, "Integration job permanently failed");
     return;
@@ -122,7 +125,8 @@ export const markIntegrationJobError = async (job: IntegrationJob, error: unknow
 
   const retryAt = new Date(Date.now() + calculateBackoffMs(job.attempts));
 
-  await prisma.integrationJob.update({
+  // Worker-callable: sin tenantContext el helper hace fallback a prisma normal
+  await withTenantContext(async (tx) => tx.integrationJob.update({
     where: { id: job.id },
     data: {
       status: "pending",
@@ -130,18 +134,19 @@ export const markIntegrationJobError = async (job: IntegrationJob, error: unknow
       lockedAt: null,
       lastError: message
     }
-  });
+  }));
 
   logger.warn({ jobId: job.id, type: job.type, message, retryAt }, "Integration job scheduled for retry");
 };
 
 export const resetProcessingIntegrationJobs = async () => {
-  await prisma.integrationJob.updateMany({
+  // Worker-callable: sin tenantContext el helper hace fallback a prisma normal
+  await withTenantContext(async (tx) => tx.integrationJob.updateMany({
     where: { status: IntegrationJobStatus.processing },
     data: {
       status: IntegrationJobStatus.pending,
       lockedAt: null,
       runAt: new Date()
     }
-  });
+  }));
 };

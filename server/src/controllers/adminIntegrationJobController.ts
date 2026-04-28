@@ -1,6 +1,6 @@
 import { Response } from "express";
 import { IntegrationJobStatus } from "@prisma/client";
-import { prisma } from "../db/prisma";
+import { withTenantContext } from "../db/withTenantContext";
 import { AuthRequest } from "../middlewares/auth";
 import { getClinicIdByUserId } from "../utils/resolveClinicId";
 
@@ -9,7 +9,7 @@ export const listIntegrationJobs = async (req: AuthRequest, res: Response) => {
   const status = typeof req.query.status === "string" ? req.query.status : undefined;
   const limit = Math.min(Number(req.query.limit ?? 100), 500);
 
-  const jobs = await prisma.integrationJob.findMany({
+  const jobs = await withTenantContext(async (tx) => tx.integrationJob.findMany({
     where: {
       clinicId,
       ...(status ? { status: status as IntegrationJobStatus } : {})
@@ -28,7 +28,7 @@ export const listIntegrationJobs = async (req: AuthRequest, res: Response) => {
       createdAt: true,
       googleIntegrationId: true
     }
-  });
+  }));
 
   return res.json({ jobs });
 };

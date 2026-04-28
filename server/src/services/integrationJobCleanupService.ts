@@ -1,5 +1,6 @@
 import cron from "node-cron";
 import { prisma } from "../db/prisma";
+import { withTenantContext } from "../db/withTenantContext";
 import { logger } from "../utils/logger";
 import { sendAdminNotificationEmail } from "./notificationEmailService";
 import { notifyAdmins } from "./notificationService";
@@ -16,12 +17,12 @@ export const pruneOldIntegrationJobs = async (): Promise<void> => {
 
   try {
     const [done, failed] = await Promise.all([
-      prisma.integrationJob.deleteMany({
+      withTenantContext(async (tx) => tx.integrationJob.deleteMany({
         where: { status: "done", finishedAt: { lte: sevenDaysAgo } }
-      }),
-      prisma.integrationJob.deleteMany({
+      })),
+      withTenantContext(async (tx) => tx.integrationJob.deleteMany({
         where: { status: "failed", createdAt: { lte: thirtyDaysAgo } }
-      })
+      })),
     ]);
 
     if (done.count + failed.count > 0) {
