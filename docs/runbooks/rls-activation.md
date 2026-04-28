@@ -14,14 +14,27 @@
 > `app.tenant_id`, así que el fallback permisivo aplica y todas las queries
 > devuelven todo. Cero degradación.
 >
-> **Estado (Fase 1.4.b parcial):**
+> **Estado (Fase 1.4.b — completado):**
 > - ✅ Test de aislamiento automatizado en `tests/rlsIsolation.test.ts` —
 >   garantiza que policies + FORCE filtran correctamente cuando
 >   `app.tenant_id` está seteado. Corre contra postgres real (no mock).
-> - ⏳ Refactor masivo de los 37 callers que tocan `User`/`Appointment`/
->   `IntegrationJob`/`GoogleCalendarIntegration` a `withTenantContext()`
->   queda como **deuda explícita Fase 2** — alta visibilidad, alto riesgo,
->   se hace cuando entre el segundo cliente real.
+> - ✅ Refactor masivo completado: 147 callsites en 37 archivos sobre
+>   `User`/`Appointment`/`IntegrationJob`/`GoogleCalendarIntegration`
+>   envueltos en `withTenantContext()`. Ejecutado en 10 módulos
+>   (M1 Auth → M10 Misc) con patrón Reader→Fixer→Verifier por módulo
+>   más Verifier global cross-codebase. 745 tests verde en cada paso.
+> - ✅ 3 transacciones reemplazadas por `withTenantContext` preservando
+>   atomicidad (createUser, createPatient, deleteMyAccount).
+> - ⚠️ **Excepción documentada**: `services/integrationJobService.ts`
+>   `claimNextPendingJob()` mantiene `prisma.$transaction` por
+>   atomicidad de claim contra race condition entre workers. Cuando
+>   entre 2do tenant, deberá iterar por tenants con
+>   `withExplicitTenant()` — deuda explícita Fase 2.
+> - ⚠️ **Pre-auth flows** (login, register, refresh, reset, verify)
+>   envueltos pero corren sin `tenantContext`. Cuando RLS_ENFORCE=true,
+>   las policies actuales (fallback permisivo) los dejan funcionar.
+>   Cuando se elimine el fallback, esos flujos necesitarán policies
+>   especiales (permitir lookup por email para login). Deuda Fase 2.
 
 ---
 
