@@ -37,6 +37,13 @@ export async function withTenantContext<T>(
 ): Promise<T> {
   const tenantId = options?.tenantIdOverride ?? getTenantId();
 
+  // Kill switch de emergencia: bypass total aún con rlsEnforce=true.
+  // Diseñado para incidentes productivos donde se necesita desactivar RLS
+  // sin rebuild ni tocar otra config — solo editar .env + restart.
+  if (env.rlsBypassEmergency) {
+    return fn(prisma as unknown as Prisma.TransactionClient);
+  }
+
   // Si RLS está apagado o no hay contexto, ejecuta fn con el cliente normal
   // — pasar `prisma` directamente cumple el tipo `TransactionClient`.
   if (!env.rlsEnforce || !tenantId) {

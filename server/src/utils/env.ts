@@ -138,6 +138,12 @@ export const env = {
   // no-superuser (Fase 1), porque postgres bypassea RLS.
   rlsEnforce: process.env.RLS_ENFORCE === "true",
 
+  // Kill switch de emergencia: si `true`, withTenantContext se vuelve no-op
+  // INCLUSO con rlsEnforce=true. Permite desactivar RLS en runtime sin rebuild
+  // ni cambiar otra config — solo editar .env y restart. Útil cuando un
+  // incidente productivo requiere bypass inmediato mientras se diagnostica.
+  rlsBypassEmergency: process.env.RLS_BYPASS_EMERGENCY === "true",
+
   // ── PHI cifrado de campo (Fase 1.3) ────────────────────────────────
   // Master key para cifrar campos médicos sensibles a nivel aplicación.
   // Distinta de INTEGRATIONS_ENC_KEY: si se filtra una, la otra no expone

@@ -43,6 +43,7 @@ import { stripeWebhookRouter } from "./routes/stripeWebhookRoutes";
 import { env } from "./utils/env";
 import { httpLogger, logger } from "./utils/logger";
 import { errorHandler } from "./middlewares/error";
+import { rlsErrorLogger, getRlsErrorStats } from "./middlewares/rlsErrorLogger";
 import { metricsMiddleware } from "./middlewares/metrics";
 import { getSnapshot } from "./services/metricsService";
 import { exportRoutes } from "./routes/exportRoutes";
@@ -158,6 +159,17 @@ app.get("/api/v1/health/detailed", healthKeyOrAdmin, async (req: express.Request
   // Node.js memory usage
   const mem = process.memoryUsage();
   checks.memory = { ok: true, heapUsedMB: Math.round(mem.heapUsed / 1024 / 1024), heapTotalMB: Math.round(mem.heapTotal / 1024 / 1024), rssMB: Math.round(mem.rss / 1024 / 1024) };
+
+  // RLS — estado runtime y errores recientes (informacional, no afecta ok/503)
+  const rlsStats = getRlsErrorStats();
+  checks.rls = {
+    ok: true,
+    enforced: env.rlsEnforce,
+    bypassEmergency: env.rlsBypassEmergency,
+    errorsLast5Min: rlsStats.totalLast5Min,
+    errorsByPath: rlsStats.byPath,
+    errorsBySqlstate: rlsStats.bySqlstate,
+  };
 
   const allOk = Object.values(checks).every((c) => c.ok);
 
@@ -283,6 +295,10 @@ app.post("/api/v1/errors/client", express.json({ limit: "16kb" }), (req, res) =>
 // `beforeSend` configurado en utils/sentry.ts. Si Sentry no está inicializado
 // (sin DSN), este hook es no-op interno.
 Sentry.setupExpressErrorHandler(app);
+
+// ── RLS error logger — etiqueta errores Postgres relacionados con RLS ─
+// Va antes del errorHandler para que pueda inspeccionar el error sin consumirlo.
+app.use(rlsErrorLogger);
 
 // ── Error handler (siempre último) ───────────────────────────────────
 app.use(errorHandler);
