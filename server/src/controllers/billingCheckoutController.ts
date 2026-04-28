@@ -2,6 +2,7 @@ import { Response } from "express";
 import crypto from "crypto";
 import { AuthRequest } from "../middlewares/auth";
 import { prisma } from "../db/prisma";
+import { withTenantContext } from "../db/withTenantContext";
 import { resolveStripeConfig } from "../services/stripeConfigService";
 import { findActivePlanByCode } from "../services/stripePlanCatalogService";
 import { resolveBaseUrl } from "../utils/baseUrl";
@@ -23,10 +24,10 @@ export const createBillingCheckout = async (req: AuthRequest, res: Response) => 
     const secret = stripe.config.secretKey;
     if (!secret) return res.status(400).json({ message: "Stripe no configurado (falta STRIPE_SECRET_KEY)" });
 
-    const me = await prisma.user.findUnique({
-      where: { id: req.user.id },
+    const me = await withTenantContext(async (tx) => tx.user.findUnique({
+      where: { id: req.user!.id },
       select: { id: true, email: true, memberships: { select: { status: true } } },
-    });
+    }));
     if (!me) return res.status(404).json({ message: "Usuario no encontrado" });
 
     // Prevent double-subscribe if already active
@@ -36,10 +37,10 @@ export const createBillingCheckout = async (req: AuthRequest, res: Response) => 
     }
 
     // Check for appointment deposit credit (200 MXN off first month)
-    const userFlags = await prisma.user.findUnique({
-      where: { id: req.user.id },
+    const userFlags = await withTenantContext(async (tx) => tx.user.findUnique({
+      where: { id: req.user!.id },
       select: { appointmentDepositAvailable: true },
-    });
+    }));
     const hasDepositCredit = userFlags?.appointmentDepositAvailable === true;
 
     let couponId: string | null = null;
@@ -123,10 +124,10 @@ export const createBillingPortal = async (req: AuthRequest, res: Response) => {
   try {
     if (!req.user?.id) return res.status(401).json({ message: "No autorizado" });
 
-    const me = await prisma.user.findUnique({
-      where: { id: req.user.id },
+    const me = await withTenantContext(async (tx) => tx.user.findUnique({
+      where: { id: req.user!.id },
       select: { stripeCustomerId: true },
-    });
+    }));
     if (!me?.stripeCustomerId) {
       return res.status(400).json({ message: "No tienes una suscripción activa con Stripe" });
     }

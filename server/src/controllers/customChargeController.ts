@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import crypto from "crypto";
 import { AuthRequest } from "../middlewares/auth";
 import { prisma } from "../db/prisma";
+import { withTenantContext } from "../db/withTenantContext";
 import { parsePagination } from "../utils/pagination";
 import { paginated } from "../utils/response";
 import { queryParams } from "../utils/request";
@@ -93,10 +94,10 @@ export const createCharge = async (req: AuthRequest, res: Response) => {
   if (amountPesos > 500_000) throw badRequest("amount no puede exceder $500,000 pesos por cobro");
   if (amountPesos < 1) throw badRequest("El monto mínimo es $1 peso");
 
-  const user = await prisma.user.findUnique({
+  const user = await withTenantContext(async (tx) => tx.user.findUnique({
     where: { id: userId },
     select: { id: true, email: true, profile: { select: { firstName: true, lastName: true } } },
-  });
+  }));
   if (!user) throw notFound("Usuario");
 
   const amountCents = Math.round(amountPesos * 100);

@@ -1,6 +1,7 @@
 import { Response } from "express";
 import { AuthRequest } from "../middlewares/auth";
 import { prisma } from "../db/prisma";
+import { withTenantContext } from "../db/withTenantContext";
 import { changePlanSchema } from "../validators/membership";
 import { createCheckoutSession, createCustomerPortal, ensureCustomer } from "../services/stripeService";
 import { env } from "../utils/env";
@@ -10,7 +11,7 @@ import { readStripePlanCatalog } from "../services/stripePlanCatalogService";
 export const getMembershipStatus = async (req: AuthRequest, res: Response) => {
   const [membership, user] = await Promise.all([
     prisma.membership.findFirst({ where: { userId: req.user!.id } }),
-    prisma.user.findUnique({ where: { id: req.user!.id }, select: { interestedPlanCode: true, appointmentDepositAvailable: true } }),
+    withTenantContext(async (tx) => tx.user.findUnique({ where: { id: req.user!.id }, select: { interestedPlanCode: true, appointmentDepositAvailable: true } })),
   ]);
   if (!membership) return res.json({ interestedPlanCode: user?.interestedPlanCode ?? null, appointmentDepositAvailable: user?.appointmentDepositAvailable ?? false });
 
@@ -32,7 +33,7 @@ export const getMembershipStatus = async (req: AuthRequest, res: Response) => {
 
 export const changePlan = async (req: AuthRequest, res: Response) => {
   const payload = changePlanSchema.parse(req.body);
-  const user = await prisma.user.findUnique({ where: { id: req.user!.id } });
+  const user = await withTenantContext(async (tx) => tx.user.findUnique({ where: { id: req.user!.id } }));
   if (!user) {
     return res.status(404).json({ message: "Usuario no encontrado" });
   }
@@ -56,7 +57,7 @@ export const changePlan = async (req: AuthRequest, res: Response) => {
 };
 
 export const cancelMembership = async (req: AuthRequest, res: Response) => {
-  const user = await prisma.user.findUnique({ where: { id: req.user!.id } });
+  const user = await withTenantContext(async (tx) => tx.user.findUnique({ where: { id: req.user!.id } }));
   if (!user?.stripeCustomerId) {
     return res.status(400).json({ message: "Cliente Stripe no configurado" });
   }

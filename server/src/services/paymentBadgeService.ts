@@ -1,9 +1,10 @@
 import { prisma } from "../db/prisma";
+import { withTenantContext } from "../db/withTenantContext";
 
 const DAYS_MS = 24 * 60 * 60 * 1000;
 
 export const getPaymentBadge = async (appointmentId: string): Promise<"Al corriente" | "Pago pendiente"> => {
-  const appointment = await prisma.appointment.findUnique({
+  const appointment = await withTenantContext(async (tx) => tx.appointment.findUnique({
     where: { id: appointmentId },
     select: {
       startAt: true,
@@ -29,7 +30,7 @@ export const getPaymentBadge = async (appointmentId: string): Promise<"Al corrie
         }
       }
     }
-  });
+  }));
 
   if (!appointment) {
     return "Pago pendiente";
