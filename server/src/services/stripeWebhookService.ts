@@ -1,6 +1,7 @@
 import Stripe from "stripe";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../db/prisma";
+import { withTenantContext } from "../db/withTenantContext";
 import { logger } from "../utils/logger";
 import { env } from "../utils/env";
 import {
@@ -264,17 +265,26 @@ const findUserBySignals = async (
 
   try {
     if (userId && fields.has("id") && delegate.findUnique) {
-      const row = (await delegate.findUnique({ where: { id: userId } })) as JsonObject | null;
+      const row = (await withTenantContext(async (tx) => {
+        const txDelegate = (tx as Record<string, unknown>)[delegateName] as Delegate | null;
+        return txDelegate?.findUnique ? txDelegate.findUnique({ where: { id: userId } }) : null;
+      })) as JsonObject | null;
       if (row) return row;
     }
 
     if (email && fields.has("email") && delegate.findFirst) {
-      const row = (await delegate.findFirst({ where: { email } })) as JsonObject | null;
+      const row = (await withTenantContext(async (tx) => {
+        const txDelegate = (tx as Record<string, unknown>)[delegateName] as Delegate | null;
+        return txDelegate?.findFirst ? txDelegate.findFirst({ where: { email } }) : null;
+      })) as JsonObject | null;
       if (row) return row;
     }
 
     if (stripeCustomerId && fields.has("stripeCustomerId") && delegate.findFirst) {
-      const row = (await delegate.findFirst({ where: { stripeCustomerId } })) as JsonObject | null;
+      const row = (await withTenantContext(async (tx) => {
+        const txDelegate = (tx as Record<string, unknown>)[delegateName] as Delegate | null;
+        return txDelegate?.findFirst ? txDelegate.findFirst({ where: { stripeCustomerId } }) : null;
+      })) as JsonObject | null;
       if (row) return row;
     }
   } catch (error) {
@@ -501,40 +511,48 @@ const processCheckoutCompleted = async (event: Stripe.Event, stripe: Stripe): Pr
 
     if (userId && startAt && endAt) {
       // Resolve the user's clinicId so the appointment is correctly scoped
-      const userRecord = await prisma.user.findUnique({
-        where: { id: userId },
-        select: { clinicId: true },
-      }).catch(() => null);
+      const userRecord = await withTenantContext((tx) =>
+        tx.user.findUnique({
+          where: { id: userId },
+          select: { clinicId: true },
+        })
+      ).catch(() => null);
       const clinicIdResolved = userRecord?.clinicId || cleanString(metadata.clinicId) || "default";
 
-      await prisma.appointment.create({
-        data: {
-          clinicId: clinicIdResolved,
-          userId,
-          startAt: new Date(startAt),
-          endAt: new Date(endAt),
-          reason,
-          ...(cabinId ? { cabinId } : {}),
-          ...(treatmentId ? { treatmentId } : {}),
-          createdByUserId: userId,
-          status: "scheduled",
-        },
-      }).catch((err: Error) => logger.error({ err }, "[stripe-webhook] Failed to create appointment from deposit"));
+      await withTenantContext((tx) =>
+        tx.appointment.create({
+          data: {
+            clinicId: clinicIdResolved,
+            userId,
+            startAt: new Date(startAt),
+            endAt: new Date(endAt),
+            reason,
+            ...(cabinId ? { cabinId } : {}),
+            ...(treatmentId ? { treatmentId } : {}),
+            createdByUserId: userId,
+            status: "scheduled",
+          },
+        })
+      ).catch((err: Error) => logger.error({ err }, "[stripe-webhook] Failed to create appointment from deposit"));
 
       // Mark deposit credit and save interested plan on the User record
-      await prisma.user.update({
-        where: { id: userId },
-        data: {
-          appointmentDepositAvailable: true,
-          ...(interestedPlanCode ? { interestedPlanCode } : {}),
-        },
-      }).catch((err: Error) => logger.error({ err }, "[stripe-webhook] Failed to set deposit available"));
+      await withTenantContext((tx) =>
+        tx.user.update({
+          where: { id: userId },
+          data: {
+            appointmentDepositAvailable: true,
+            ...(interestedPlanCode ? { interestedPlanCode } : {}),
+          },
+        })
+      ).catch((err: Error) => logger.error({ err }, "[stripe-webhook] Failed to set deposit available"));
 
       // Notify admins about the new appointment deposit
-      const depositUser = await prisma.user.findUnique({
-        where: { id: userId },
-        select: { email: true, profile: { select: { firstName: true, lastName: true } } },
-      }).catch(() => null);
+      const depositUser = await withTenantContext((tx) =>
+        tx.user.findUnique({
+          where: { id: userId },
+          select: { email: true, profile: { select: { firstName: true, lastName: true } } },
+        })
+      ).catch(() => null);
       if (depositUser) {
         const depositName = [depositUser.profile?.firstName, depositUser.profile?.lastName].filter(Boolean).join(" ") || depositUser.email;
         onAppointmentDepositPaid({
@@ -574,7 +592,12 @@ const processCheckoutCompleted = async (event: Stripe.Event, stripe: Stripe): Pr
       try {
         const userFields = getDelegateFieldSet("user");
         if (userFields.has("stripeCustomerId")) {
-          await userDelegate.update({ where: { id: userId }, data: { stripeCustomerId: resolvedCustomerId } });
+          await withTenantContext(async (tx) => {
+            const txUserDelegate = (tx as Record<string, unknown>)["user"] as Delegate | null;
+            if (txUserDelegate?.update) {
+              await txUserDelegate.update({ where: { id: userId }, data: { stripeCustomerId: resolvedCustomerId } });
+            }
+          });
         }
       } catch (error) {
         logger.warn({ err: error }, "[stripe-webhook] could not update user.stripeCustomerId");
@@ -600,10 +623,10 @@ const processCheckoutCompleted = async (event: Stripe.Event, stripe: Stripe): Pr
   // Atomically consume deposit credit — updateMany with condition prevents double-spend
   const applyDepositDiscount = cleanString(metadata.applyDepositDiscount);
   if (applyDepositDiscount === "true" && userId) {
-    const result = await prisma.user.updateMany({
+    const result = await withTenantContext(async (tx) => tx.user.updateMany({
       where: { id: userId, appointmentDepositAvailable: true },
       data: { appointmentDepositAvailable: false },
-    }).catch((err: Error) => {
+    })).catch((err: Error) => {
       logger.error({ err }, "[stripe-webhook] Failed to clear deposit");
       return { count: 0 };
     });
@@ -614,10 +637,12 @@ const processCheckoutCompleted = async (event: Stripe.Event, stripe: Stripe): Pr
 
   // Notify user + admins about membership activation + register payment
   if (userId && subCtx.status === "active") {
-    const memberUser = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { email: true, profile: { select: { firstName: true, lastName: true } } },
-    }).catch(() => null);
+    const memberUser = await withTenantContext((tx) =>
+      tx.user.findUnique({
+        where: { id: userId },
+        select: { email: true, profile: { select: { firstName: true, lastName: true } } },
+      })
+    ).catch(() => null);
     if (memberUser) {
       const memberName = [memberUser.profile?.firstName, memberUser.profile?.lastName].filter(Boolean).join(" ") || memberUser.email;
       logger.info(
@@ -770,10 +795,12 @@ const processInvoiceEvent = async (event: Stripe.Event, stripe: Stripe, success:
 
   // Notify user + admins on invoice paid (renewal) or failed
   if (userId) {
-    const invoiceUser = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { email: true, profile: { select: { firstName: true, lastName: true } } },
-    }).catch(() => null);
+    const invoiceUser = await withTenantContext((tx) =>
+      tx.user.findUnique({
+        where: { id: userId },
+        select: { email: true, profile: { select: { firstName: true, lastName: true } } },
+      })
+    ).catch(() => null);
     if (invoiceUser) {
       const invoiceName = [invoiceUser.profile?.firstName, invoiceUser.profile?.lastName].filter(Boolean).join(" ") || invoiceUser.email;
       if (success) {
@@ -874,12 +901,22 @@ const processCustomerDeleted = async (event: Stripe.Event): Promise<void> => {
     if (userDelegate?.update && userFields.has("stripeCustomerId")) {
       // Find user by stripeCustomerId
       const userRow = userDelegate.findFirst
-        ? ((await userDelegate.findFirst({ where: { stripeCustomerId } })) as { id: string } | null)
+        ? ((await withTenantContext(async (tx) => {
+            const txUserDelegate = (tx as Record<string, unknown>)["user"] as Delegate | null;
+            return txUserDelegate?.findFirst
+              ? txUserDelegate.findFirst({ where: { stripeCustomerId } })
+              : null;
+          })) as { id: string } | null)
         : null;
       if (userRow?.id) {
-        await userDelegate.update({
-          where: { id: userRow.id },
-          data: { stripeCustomerId: null },
+        await withTenantContext(async (tx) => {
+          const txUserDelegate = (tx as Record<string, unknown>)["user"] as Delegate | null;
+          if (txUserDelegate?.update) {
+            await txUserDelegate.update({
+              where: { id: userRow.id },
+              data: { stripeCustomerId: null },
+            });
+          }
         });
       }
     }

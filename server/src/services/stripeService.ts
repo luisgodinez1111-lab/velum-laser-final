@@ -1,6 +1,7 @@
 import Stripe from "stripe";
 import { env } from "../utils/env";
 import { prisma } from "../db/prisma";
+import { withTenantContext } from "../db/withTenantContext";
 import { logger } from "../utils/logger";
 
 let _stripe: Stripe | null = null;
@@ -22,7 +23,7 @@ export const stripe = new Proxy({} as Stripe, {
 });
 
 export const ensureCustomer = async (userId: string, email: string) => {
-  const user = await prisma.user.findUnique({ where: { id: userId } });
+  const user = await withTenantContext((tx) => tx.user.findUnique({ where: { id: userId } }));
   if (!user) {
     throw new Error("Usuario no encontrado");
   }
@@ -33,7 +34,9 @@ export const ensureCustomer = async (userId: string, email: string) => {
     email,
     metadata: { userId }
   });
-  await prisma.user.update({ where: { id: userId }, data: { stripeCustomerId: customer.id } });
+  await withTenantContext((tx) =>
+    tx.user.update({ where: { id: userId }, data: { stripeCustomerId: customer.id } })
+  );
   return customer.id;
 };
 
