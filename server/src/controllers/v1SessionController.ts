@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { Response } from "express";
 import { prisma } from "../db/prisma";
+import { withTenantContext } from "../db/withTenantContext";
 import { AuthRequest } from "../middlewares/auth";
 import { createAuditLog } from "../services/auditService";
 import { sessionCreateSchema, sessionFeedbackSchema } from "../validators/sessions";
@@ -14,7 +15,7 @@ export const createSessionTreatment = async (req: AuthRequest, res: Response) =>
   const payload = sessionCreateSchema.parse(req.body);
 
   if (payload.appointmentId) {
-    const appointment = await prisma.appointment.findUnique({ where: { id: payload.appointmentId } });
+    const appointment = await withTenantContext(async (tx) => tx.appointment.findUnique({ where: { id: payload.appointmentId } }));
 
     if (!appointment) {
       return res.status(404).json({ message: "Cita no encontrada" });
@@ -25,7 +26,7 @@ export const createSessionTreatment = async (req: AuthRequest, res: Response) =>
     }
   }
 
-  const treatment = await prisma.$transaction(async (tx) => {
+  const treatment = await withTenantContext(async (tx) => {
     const created = await tx.sessionTreatment.create({
       data: {
         appointmentId: payload.appointmentId,

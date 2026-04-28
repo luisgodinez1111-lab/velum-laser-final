@@ -1,5 +1,6 @@
 import { Response } from "express";
 import { prisma } from "../db/prisma";
+import { withTenantContext } from "../db/withTenantContext";
 import { AuthRequest } from "../middlewares/auth";
 import { createAuditLog } from "../services/auditService";
 import { enqueueGoogleAppointmentSync } from "../services/googleCalendarIntegrationService";
@@ -84,7 +85,7 @@ const enforceActiveAppointmentLimits = async ({
   weekStart.setUTCDate(weekStart.getUTCDate() - dayNum);
   const queryFrom = weekStart < monthStart ? weekStart : monthStart;
 
-  const upcomingAppointments = await prisma.appointment.findMany({
+  const upcomingAppointments = await withTenantContext(async (tx) => tx.appointment.findMany({
     where: {
       clinicId,
       userId,
@@ -93,7 +94,7 @@ const enforceActiveAppointmentLimits = async ({
       ...(excludeAppointmentId ? { id: { not: excludeAppointmentId } } : {})
     },
     select: { startAt: true },
-  });
+  }));
 
   let countWeek = 0;
   let countMonth = 0;
@@ -290,7 +291,7 @@ export const createAppointment = async (req: AuthRequest, res: Response) => {
     throw error;
   }
 
-  const appointment = await prisma.appointment.create({
+  const appointment = await withTenantContext(async (tx) => tx.appointment.create({
     data: {
       clinicId: actorClinicId,
       userId: targetUserId,
@@ -323,7 +324,7 @@ export const createAppointment = async (req: AuthRequest, res: Response) => {
         }
       }
     }
-  });
+  }));
 
   const agendaPolicy = await prisma.agendaPolicy.findFirst({ select: { timezone: true } });
   const TIMEZONE = agendaPolicy?.timezone ?? "America/Chihuahua";
@@ -377,7 +378,7 @@ export const listAppointments = async (req: AuthRequest, res: Response) => {
   const startDate = typeof req.query.startDate === "string" ? new Date(req.query.startDate) : (skipDateFilter ? undefined : new Date(Date.now() - 30 * 86400000));
   const endDate   = typeof req.query.endDate   === "string" ? new Date(req.query.endDate)   : (skipDateFilter ? undefined : new Date(Date.now() + 90 * 86400000));
 
-  const appointments = await prisma.appointment.findMany({
+  const appointments = await withTenantContext(async (tx) => tx.appointment.findMany({
     where: {
       ...(targetUserId ? { clinicId, userId: targetUserId } : { clinicId }),
       ...(startDate || endDate ? { startAt: { ...(startDate ? { gte: startDate } : {}), ...(endDate ? { lte: endDate } : {}) } } : {})
@@ -405,7 +406,7 @@ export const listAppointments = async (req: AuthRequest, res: Response) => {
     },
     orderBy: { startAt: "asc" },
     take: 1000
-  });
+  }));
 
   return res.json(appointments);
 };
@@ -419,9 +420,9 @@ export const triggerAppointmentSync = async (_req: AuthRequest, res: Response) =
 
 export const updateAppointment = async (req: AuthRequest, res: Response) => {
   const clinicId = await getClinicIdByUserId(req.user!.id);
-  const appointment = await prisma.appointment.findUnique({
+  const appointment = await withTenantContext(async (tx) => tx.appointment.findUnique({
     where: { id: req.params.appointmentId }
-  });
+  }));
 
   if (!appointment) {
     return res.status(404).json({ message: "Cita no encontrada" });
@@ -451,7 +452,7 @@ export const updateAppointment = async (req: AuthRequest, res: Response) => {
   }
 
   if (payload.action === "cancel") {
-    const canceled = await prisma.appointment.update({
+    const canceled = await withTenantContext(async (tx) => tx.appointment.update({
       where: { id: appointment.id },
       data: {
         status: "canceled",
@@ -464,7 +465,7 @@ export const updateAppointment = async (req: AuthRequest, res: Response) => {
         cabin: { select: { id: true, name: true } },
         treatment: { select: { id: true, name: true, code: true, durationMinutes: true, prepBufferMinutes: true, cleanupBufferMinutes: true } }
       }
-    });
+    }));
 
     await createAuditLog({
       userId: req.user!.id,
@@ -520,7 +521,7 @@ export const updateAppointment = async (req: AuthRequest, res: Response) => {
   }
 
   if (payload.action === "confirm") {
-    const confirmed = await prisma.appointment.update({
+    const confirmed = await withTenantContext(async (tx) => tx.appointment.update({
       where: { id: appointment.id },
       data: {
         status: "confirmed",
@@ -534,7 +535,7 @@ export const updateAppointment = async (req: AuthRequest, res: Response) => {
         cabin: { select: { id: true, name: true } },
         treatment: { select: { id: true, name: true, code: true, durationMinutes: true, prepBufferMinutes: true, cleanupBufferMinutes: true } }
       }
-    });
+    }));
 
     await createAuditLog({
       userId: req.user!.id,
@@ -557,7 +558,7 @@ export const updateAppointment = async (req: AuthRequest, res: Response) => {
   }
 
   if (payload.action === "complete") {
-    const completed = await prisma.appointment.update({
+    const completed = await withTenantContext(async (tx) => tx.appointment.update({
       where: { id: appointment.id },
       data: {
         status: "completed",
@@ -569,7 +570,7 @@ export const updateAppointment = async (req: AuthRequest, res: Response) => {
         cabin: { select: { id: true, name: true } },
         treatment: { select: { id: true, name: true, code: true, durationMinutes: true, prepBufferMinutes: true, cleanupBufferMinutes: true } }
       }
-    });
+    }));
 
     await createAuditLog({
       userId: req.user!.id,
@@ -584,7 +585,7 @@ export const updateAppointment = async (req: AuthRequest, res: Response) => {
   }
 
   if (payload.action === "mark_no_show") {
-    const noShow = await prisma.appointment.update({
+    const noShow = await withTenantContext(async (tx) => tx.appointment.update({
       where: { id: appointment.id },
       data: {
         status: "no_show",
@@ -596,7 +597,7 @@ export const updateAppointment = async (req: AuthRequest, res: Response) => {
         cabin: { select: { id: true, name: true } },
         treatment: { select: { id: true, name: true, code: true, durationMinutes: true, prepBufferMinutes: true, cleanupBufferMinutes: true } }
       }
-    });
+    }));
 
     await createAuditLog({
       userId: req.user!.id,
@@ -714,7 +715,7 @@ export const updateAppointment = async (req: AuthRequest, res: Response) => {
     throw error;
   }
 
-  const updated = await prisma.appointment.update({
+  const updated = await withTenantContext(async (tx) => tx.appointment.update({
     where: { id: appointment.id },
     data: {
       startAt,
@@ -733,7 +734,7 @@ export const updateAppointment = async (req: AuthRequest, res: Response) => {
       cabin: { select: { id: true, name: true } },
       treatment: { select: { id: true, name: true, code: true, durationMinutes: true, prepBufferMinutes: true, cleanupBufferMinutes: true } }
     }
-  });
+  }));
 
   await createAuditLog({
     userId: req.user!.id,
@@ -765,7 +766,7 @@ export const confirmAppointmentByToken = async (req: Request, res: Response) => 
     return res.status(400).json({ message: "Token inválido o expirado" });
   }
 
-  const appt = await prisma.appointment.findUnique({ where: { id: appointmentId } });
+  const appt = await withTenantContext(async (tx) => tx.appointment.findUnique({ where: { id: appointmentId } }));
   if (!appt) return res.status(404).json({ message: "Cita no encontrada" });
   if (appt.status === "confirmed") {
     return res.json({ ok: true, message: "La cita ya estaba confirmada", appointmentId });
@@ -774,7 +775,7 @@ export const confirmAppointmentByToken = async (req: Request, res: Response) => 
     return res.status(409).json({ message: `No se puede confirmar una cita con estado "${appt.status}"` });
   }
 
-  await prisma.appointment.update({ where: { id: appointmentId }, data: { status: "confirmed" } });
+  await withTenantContext(async (tx) => tx.appointment.update({ where: { id: appointmentId }, data: { status: "confirmed" } }));
 
   logger.info({ appointmentId }, "[confirm-token] Appointment confirmed via email link");
   return res.json({ ok: true, message: "Cita confirmada correctamente", appointmentId });

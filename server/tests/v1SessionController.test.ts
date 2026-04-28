@@ -51,6 +51,17 @@ vi.mock("../src/db/prisma", () => ({
   },
 }));
 
+// Tras el refactor RLS (M3), createSessionTreatment usa withTenantContext en
+// lugar de prisma.$transaction. El helper redirige la callback con un `tx` que
+// expone los mismos delegates Prisma — aquí lo redirigimos al objeto prisma
+// mockeado para que los mocks individuales sigan aplicando.
+vi.mock("../src/db/withTenantContext", async () => {
+  const { prisma } = await import("../src/db/prisma");
+  return {
+    withTenantContext: async <T,>(fn: (tx: unknown) => Promise<T>) => fn(prisma),
+  };
+});
+
 vi.mock("../src/services/auditService", () => ({
   createAuditLog: mockCreateAuditLog,
 }));
@@ -120,14 +131,7 @@ describe("createSessionTreatment", () => {
 
   it("crea sesión y retorna 201 con appointmentId válido", async () => {
     mockAppointmentFindUnique.mockResolvedValue({ id: APPT_ID, userId: MEMBER_ID });
-    mockTransaction.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) => {
-      const tx = {
-        sessionTreatment: { create: mockSessionCreate },
-        appointment: { update: mockAppointmentUpdate },
-      };
-      mockSessionCreate.mockResolvedValue(baseSession);
-      return fn(tx);
-    });
+    mockSessionCreate.mockResolvedValue(baseSession);
 
     const app  = await buildApp("staff");
     const res  = await request(app).post("/sessions").send(validBody);
@@ -159,11 +163,7 @@ describe("createSessionTreatment", () => {
   });
 
   it("crea sesión sin appointmentId (sesión manual)", async () => {
-    mockTransaction.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) => {
-      const tx = { sessionTreatment: { create: mockSessionCreate } };
-      mockSessionCreate.mockResolvedValue({ ...baseSession, appointmentId: null });
-      return fn(tx);
-    });
+    mockSessionCreate.mockResolvedValue({ ...baseSession, appointmentId: null });
 
     const app = await buildApp("staff");
     const res = await request(app)

@@ -2,6 +2,7 @@ import { Response } from "express";
 import crypto from "crypto";
 import { AuthRequest } from "../middlewares/auth";
 import { prisma } from "../db/prisma";
+import { withTenantContext } from "../db/withTenantContext";
 import { resolveStripeConfig } from "../services/stripeConfigService";
 import { resolveBaseUrl } from "../utils/baseUrl";
 
@@ -52,7 +53,7 @@ export const createAppointmentDepositCheckout = async (req: AuthRequest, res: Re
     const successUrl = `${base}/#/agenda?booking=success`;
     const cancelUrl = `${base}/#/agenda`;
 
-    const me = await prisma.user.findUnique({ where: { id: req.user.id }, select: { email: true, clinicId: true } });
+    const me = await withTenantContext(async (tx) => tx.user.findUnique({ where: { id: req.user!.id }, select: { email: true, clinicId: true } }));
     if (!me) return res.status(404).json({ message: "Usuario no encontrado" });
 
     // Prevent duplicate deposits: block if user already has a recent pending or paid deposit
