@@ -130,6 +130,25 @@
 > setear `RLS_ENFORCE=true`. Comportamiento runtime hoy: idéntico al
 > pre-fase porque el fallback permisivo del policy aplica cuando
 > `app.tenant_id` no está seteado.
+>
+> **Estado (ACTIVACIÓN — completada, 2026-04-28):**
+> - ✅ `velumapp` ya era el rol de conexión runtime (Fase 1.4.a). Solo
+>   faltaba flippear el flag.
+> - ✅ `RLS_ENFORCE=true` añadido a `server/.env`. La app ahora envuelve
+>   cada `withTenantContext()` en transacción con `set_config('app.tenant_id',
+>   ${tenantId}, true)`. Las policies filtran por tenant en todas las
+>   queries autenticadas.
+> - ✅ API + worker recreados con imagen fresh (incluye agendaConfigService
+>   con sintaxis compuesta `tenantId_dayOfWeek` / `tenantId_dateKey`).
+> - ✅ Smoke tests post-activación: `/api/health` OK · login flow
+>   (rechazo correcto de credenciales inválidas con `recordLoginFailure`
+>   actualizando contador) · containers healthy. Logs limpios excepto
+>   P2025 esperado de smoke test con email inexistente.
+> - ✅ Pre-auth flows siguen funcionando vía fallback permisivo del
+>   policy (sin tenantContext → app.tenant_id NULL → policy permite).
+> - ⚠️ **Rollback documentado < 60s**: comentar `RLS_ENFORCE=true` en
+>   `server/.env` y `docker compose restart api worker`. RLS sigue
+>   habilitado pero `withTenantContext` se vuelve no-op.
 
 ---
 
