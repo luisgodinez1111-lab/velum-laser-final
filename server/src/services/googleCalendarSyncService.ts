@@ -6,6 +6,7 @@
 import { GoogleCalendarIntegration } from "@prisma/client";
 import { calendar_v3 } from "googleapis";
 import { prisma } from "../db/prisma";
+import { withTenantContext } from "../db/withTenantContext";
 import { logger } from "../utils/logger";
 import { withGoogleCalendarClient } from "./googleCalendarClient";
 import {
@@ -27,7 +28,7 @@ export const syncChangedGoogleEventIntoVelum = async (
     return;
   }
 
-  const appointment = await prisma.appointment.findUnique({
+  const appointment = await withTenantContext(async (tx) => tx.appointment.findUnique({
     where: { id: props.velumAppointmentId },
     select: {
       id: true,
@@ -39,7 +40,7 @@ export const syncChangedGoogleEventIntoVelum = async (
       canceledAt: true,
       lastPushedAt: true,
     },
-  });
+  }));
 
   if (!appointment || appointment.clinicId !== integration.clinicId) return;
 
@@ -49,7 +50,7 @@ export const syncChangedGoogleEventIntoVelum = async (
   }
 
   if (event.status === "cancelled") {
-    await prisma.appointment.update({
+    await withTenantContext(async (tx) => tx.appointment.update({
       where: { id: appointment.id },
       data: {
         status: "canceled",
@@ -58,7 +59,7 @@ export const syncChangedGoogleEventIntoVelum = async (
         syncStatus: "ok",
         lastSyncedAt: new Date(),
       },
-    });
+    }));
     return;
   }
 
@@ -73,7 +74,7 @@ export const syncChangedGoogleEventIntoVelum = async (
     appointment.startAt.getTime() !== incomingStart.getTime() ||
     appointment.endAt.getTime() !== incomingEnd.getTime();
 
-  await prisma.appointment.update({
+  await withTenantContext(async (tx) => tx.appointment.update({
     where: { id: appointment.id },
     data: {
       startAt: hasTimeChanges ? incomingStart : undefined,
@@ -84,7 +85,7 @@ export const syncChangedGoogleEventIntoVelum = async (
       syncStatus: "ok",
       lastSyncedAt: new Date(),
     },
-  });
+  }));
 };
 
 export const runGoogleSyncInternal = async (
@@ -121,19 +122,19 @@ export const runGoogleSyncInternal = async (
 };
 
 export const runGoogleCalendarFullSync = async (integrationId: string): Promise<void> => {
-  const integration = await prisma.googleCalendarIntegration.findUnique({ where: { id: integrationId } });
+  const integration = await withTenantContext(async (tx) => tx.googleCalendarIntegration.findUnique({ where: { id: integrationId } }));
   if (!integration || !integration.isActive) return;
 
   const { nextSyncToken } = await runGoogleSyncInternal(integration, "full");
 
-  await prisma.googleCalendarIntegration.update({
+  await withTenantContext(async (tx) => tx.googleCalendarIntegration.update({
     where: { id: integration.id },
     data: { syncToken: nextSyncToken, lastSyncAt: new Date() },
-  });
+  }));
 };
 
 export const runGoogleCalendarIncrementalSync = async (integrationId: string): Promise<void> => {
-  const integration = await prisma.googleCalendarIntegration.findUnique({ where: { id: integrationId } });
+  const integration = await withTenantContext(async (tx) => tx.googleCalendarIntegration.findUnique({ where: { id: integrationId } }));
   if (!integration || !integration.isActive) return;
 
   if (!integration.syncToken) {
@@ -144,20 +145,20 @@ export const runGoogleCalendarIncrementalSync = async (integrationId: string): P
   try {
     const { nextSyncToken } = await runGoogleSyncInternal(integration, "incremental");
 
-    await prisma.googleCalendarIntegration.update({
+    await withTenantContext(async (tx) => tx.googleCalendarIntegration.update({
       where: { id: integration.id },
       data: {
         syncToken: nextSyncToken ?? integration.syncToken,
         lastSyncAt: new Date(),
       },
-    });
+    }));
   } catch (error: unknown) {
     if (getGoogleErrorStatus(error) === 410) {
       logger.warn({ integrationId: integration.id }, "Google sync token expired, running full sync");
-      await prisma.googleCalendarIntegration.update({
+      await withTenantContext(async (tx) => tx.googleCalendarIntegration.update({
         where: { id: integration.id },
         data: { syncToken: null },
-      });
+      }));
       await runGoogleCalendarFullSync(integration.id);
       return;
     }

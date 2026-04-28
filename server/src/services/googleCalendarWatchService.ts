@@ -6,6 +6,7 @@
 import crypto from "crypto";
 import { GoogleCalendarIntegration, IntegrationJobStatus } from "@prisma/client";
 import { prisma } from "../db/prisma";
+import { withTenantContext } from "../db/withTenantContext";
 import { logger } from "../utils/logger";
 import { env } from "../utils/env";
 import { withGoogleCalendarClient } from "./googleCalendarClient";
@@ -36,7 +37,7 @@ export const stopWatchChannelIfPresent = async (
 };
 
 export const registerGoogleCalendarWatch = async (integrationId: string) => {
-  const integration = await prisma.googleCalendarIntegration.findUnique({ where: { id: integrationId } });
+  const integration = await withTenantContext(async (tx) => tx.googleCalendarIntegration.findUnique({ where: { id: integrationId } }));
   if (!integration || !integration.isActive) {
     throw new Error("Google integration not found or inactive");
   }
@@ -61,26 +62,26 @@ export const registerGoogleCalendarWatch = async (integrationId: string) => {
   const expirationMs = watchResponse.expiration ? Number(watchResponse.expiration) : Number.NaN;
   const watchExpiration = Number.isNaN(expirationMs) ? null : new Date(expirationMs);
 
-  return prisma.googleCalendarIntegration.update({
+  return withTenantContext(async (tx) => tx.googleCalendarIntegration.update({
     where: { id: integration.id },
     data: {
       watchChannelId: watchResponse.id ?? null,
       watchResourceId: watchResponse.resourceId ?? null,
       watchExpiration,
     },
-  });
+  }));
 };
 
 export const ensureGoogleCalendarWatches = async (): Promise<void> => {
   const soon = new Date(Date.now() + GOOGLE_WATCH_REFRESH_THRESHOLD_MS);
 
-  const integrations = await prisma.googleCalendarIntegration.findMany({
+  const integrations = await withTenantContext(async (tx) => tx.googleCalendarIntegration.findMany({
     where: {
       isActive: true,
       OR: [{ watchExpiration: null }, { watchExpiration: { lte: soon } }],
     },
     select: { id: true },
-  });
+  }));
 
   for (const integration of integrations) {
     try {
@@ -102,27 +103,27 @@ export const enqueueGoogleCalendarSyncFromWebhook = async (args: {
   resourceId: string;
   resourceState: string;
 }): Promise<void> => {
-  const integration = await prisma.googleCalendarIntegration.findFirst({
+  const integration = await withTenantContext(async (tx) => tx.googleCalendarIntegration.findFirst({
     where: {
       isActive: true,
       watchChannelId: args.channelId,
       watchResourceId: args.resourceId,
     },
-  });
+  }));
 
   if (!integration) {
     logger.warn({ channelId: args.channelId, resourceId: args.resourceId }, "Webhook did not match any active integration");
     return;
   }
 
-  const existingPending = await prisma.integrationJob.findFirst({
+  const existingPending = await withTenantContext(async (tx) => tx.integrationJob.findFirst({
     where: {
       googleIntegrationId: integration.id,
       type: "google.sync.incremental",
       status: { in: [IntegrationJobStatus.pending, IntegrationJobStatus.processing] },
     },
     orderBy: { createdAt: "desc" },
-  });
+  }));
 
   if (existingPending) return;
 

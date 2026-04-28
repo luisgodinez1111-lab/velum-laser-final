@@ -2,6 +2,7 @@ import { GoogleCalendarIntegration } from "@prisma/client";
 import { OAuth2Client } from "google-auth-library";
 import { calendar_v3, google } from "googleapis";
 import { prisma } from "../db/prisma";
+import { withTenantContext } from "../db/withTenantContext";
 import { decrypt, encrypt } from "../utils/crypto";
 import { env } from "../utils/env";
 
@@ -74,14 +75,14 @@ export const persistUpdatedGoogleTokens = async (
 
   if (!changed) return integration;
 
-  return prisma.googleCalendarIntegration.update({
+  return withTenantContext(async (tx) => tx.googleCalendarIntegration.update({
     where: { id: integration.id },
     data: {
       accessTokenEnc: encrypt(nextAccessToken),
       refreshTokenEnc: encrypt(nextRefreshToken),
       tokenExpiry: nextTokenExpiry
     }
-  });
+  }));
 };
 
 export const withGoogleCalendarClient = async <T>(

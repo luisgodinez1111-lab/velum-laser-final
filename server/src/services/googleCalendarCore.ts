@@ -5,6 +5,7 @@
 import { AppointmentStatus, GoogleCalendarIntegration, Prisma } from "@prisma/client";
 import { calendar_v3 } from "googleapis";
 import { prisma } from "../db/prisma";
+import { withTenantContext } from "../db/withTenantContext";
 import { env } from "../utils/env";
 
 export type EventFormatMode = "complete" | "private";
@@ -78,7 +79,7 @@ export const parseEventFormatMode = (value?: string | null): EventFormatMode =>
 export const getIntegrationByClinicId = async (
   clinicId: string
 ): Promise<GoogleCalendarIntegration | null> => {
-  const integration = await prisma.googleCalendarIntegration.findUnique({ where: { clinicId } });
+  const integration = await withTenantContext(async (tx) => tx.googleCalendarIntegration.findUnique({ where: { clinicId } }));
   return integration && integration.isActive ? integration : null;
 };
 

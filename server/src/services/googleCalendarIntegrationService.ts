@@ -13,6 +13,7 @@
 import jwt from "jsonwebtoken";
 import { google } from "googleapis";
 import { prisma } from "../db/prisma";
+import { withTenantContext } from "../db/withTenantContext";
 import { decrypt, encrypt } from "../utils/crypto";
 import { env } from "../utils/env";
 import { logger } from "../utils/logger";
@@ -43,7 +44,7 @@ import {
 // ── OAuth / Status ────────────────────────────────────────────────────────────
 
 export const getGoogleCalendarIntegrationStatus = async (clinicId: string) => {
-  const integration = await prisma.googleCalendarIntegration.findUnique({ where: { clinicId } });
+  const integration = await withTenantContext(async (tx) => tx.googleCalendarIntegration.findUnique({ where: { clinicId } }));
 
   if (!integration || !integration.isActive) {
     return {
@@ -134,7 +135,7 @@ export const handleGoogleCalendarOAuthCallback = async (args: { code: string; st
     const profile = await oauth2.userinfo.get();
 
     const clinicId = decoded.clinicId;
-    const existing = await prisma.googleCalendarIntegration.findUnique({ where: { clinicId } });
+    const existing = await withTenantContext(async (tx) => tx.googleCalendarIntegration.findUnique({ where: { clinicId } }));
 
     const accessToken = tokens.access_token ?? (existing ? decrypt(existing.accessTokenEnc) : null);
     const refreshToken = tokens.refresh_token ?? (existing ? decrypt(existing.refreshTokenEnc) : null);
@@ -143,7 +144,7 @@ export const handleGoogleCalendarOAuthCallback = async (args: { code: string; st
       throw new Error("Google OAuth response did not include reusable tokens");
     }
 
-    const integration = await prisma.googleCalendarIntegration.upsert({
+    const integration = await withTenantContext(async (tx) => tx.googleCalendarIntegration.upsert({
       where: { clinicId },
       create: {
         clinicId,
@@ -165,7 +166,7 @@ export const handleGoogleCalendarOAuthCallback = async (args: { code: string; st
         tokenExpiry: tokens.expiry_date ? new Date(tokens.expiry_date) : existing?.tokenExpiry ?? null,
         isActive: true,
       },
-    });
+    }));
 
     await registerGoogleCalendarWatch(integration.id);
 
@@ -187,12 +188,12 @@ export const handleGoogleCalendarOAuthCallback = async (args: { code: string; st
 };
 
 export const disconnectGoogleCalendarIntegration = async (clinicId: string) => {
-  const integration = await prisma.googleCalendarIntegration.findUnique({ where: { clinicId } });
+  const integration = await withTenantContext(async (tx) => tx.googleCalendarIntegration.findUnique({ where: { clinicId } }));
   if (!integration) return { disconnected: true };
 
   await stopWatchChannelIfPresent(integration);
 
-  await prisma.googleCalendarIntegration.update({
+  await withTenantContext(async (tx) => tx.googleCalendarIntegration.update({
     where: { id: integration.id },
     data: {
       isActive: false,
@@ -201,7 +202,7 @@ export const disconnectGoogleCalendarIntegration = async (clinicId: string) => {
       watchExpiration: null,
       syncToken: null,
     },
-  });
+  }));
 
   return { disconnected: true };
 };
@@ -217,10 +218,10 @@ export const updateGoogleCalendarIntegrationSettings = async (
     throw error;
   }
 
-  const updated = await prisma.googleCalendarIntegration.update({
+  const updated = await withTenantContext(async (tx) => tx.googleCalendarIntegration.update({
     where: { id: integration.id },
     data: { eventFormatMode },
-  });
+  }));
 
   return { eventFormatMode: parseEventFormatMode(updated.eventFormatMode) };
 };

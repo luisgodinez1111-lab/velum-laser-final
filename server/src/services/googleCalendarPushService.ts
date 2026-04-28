@@ -5,6 +5,7 @@
  */
 import { GoogleCalendarIntegration, Prisma } from "@prisma/client";
 import { prisma } from "../db/prisma";
+import { withTenantContext } from "../db/withTenantContext";
 import { withGoogleCalendarClient } from "./googleCalendarClient";
 import { enqueueIntegrationJob, IntegrationJobType } from "./integrationJobService";
 import { getPaymentBadge } from "./paymentBadgeService";
@@ -78,7 +79,7 @@ const buildGoogleEventPayload = async (
 };
 
 const loadAppointmentForGooglePush = (appointmentId: string) =>
-  prisma.appointment.findUnique({
+  withTenantContext(async (tx) => tx.appointment.findUnique({
     where: { id: appointmentId },
     include: {
       user: {
@@ -90,7 +91,7 @@ const loadAppointmentForGooglePush = (appointmentId: string) =>
       },
       cabin: { select: { name: true } },
     },
-  });
+  }));
 
 const pushAppointmentCreateOrUpdate = async (
   integration: GoogleCalendarIntegration,
@@ -110,7 +111,7 @@ const pushAppointmentCreateOrUpdate = async (
         sendUpdates: "none",
       });
 
-      await prisma.appointment.update({
+      await withTenantContext(async (tx) => tx.appointment.update({
         where: { id: appointment.id },
         data: {
           googleEventId: created.data.id ?? appointment.googleEventId,
@@ -119,7 +120,7 @@ const pushAppointmentCreateOrUpdate = async (
           lastSyncedAt: new Date(),
           lastPushedAt: new Date(),
         },
-      });
+      }));
       return;
     }
 
@@ -130,7 +131,7 @@ const pushAppointmentCreateOrUpdate = async (
         requestBody: eventPayload,
         sendUpdates: "none",
       });
-      await prisma.appointment.update({
+      await withTenantContext(async (tx) => tx.appointment.update({
         where: { id: appointment.id },
         data: {
           googleEventId: inserted.data.id ?? null,
@@ -139,7 +140,7 @@ const pushAppointmentCreateOrUpdate = async (
           lastSyncedAt: new Date(),
           lastPushedAt: new Date(),
         },
-      });
+      }));
       return;
     }
 
@@ -150,7 +151,7 @@ const pushAppointmentCreateOrUpdate = async (
       sendUpdates: "none",
     });
 
-    await prisma.appointment.update({
+    await withTenantContext(async (tx) => tx.appointment.update({
       where: { id: appointment.id },
       data: {
         googleCalendarId: integration.calendarId,
@@ -158,7 +159,7 @@ const pushAppointmentCreateOrUpdate = async (
         lastSyncedAt: new Date(),
         lastPushedAt: new Date(),
       },
-    });
+    }));
   });
 };
 
@@ -166,18 +167,18 @@ const pushAppointmentCancel = async (
   integration: GoogleCalendarIntegration,
   appointmentId: string
 ): Promise<void> => {
-  const appointment = await prisma.appointment.findUnique({
+  const appointment = await withTenantContext(async (tx) => tx.appointment.findUnique({
     where: { id: appointmentId },
     select: { id: true, googleEventId: true, googleCalendarId: true },
-  });
+  }));
 
   if (!appointment) return;
 
   if (!appointment.googleEventId) {
-    await prisma.appointment.update({
+    await withTenantContext(async (tx) => tx.appointment.update({
       where: { id: appointment.id },
       data: { syncStatus: "ok", lastSyncedAt: new Date(), lastPushedAt: new Date() },
-    });
+    }));
     return;
   }
 
@@ -195,10 +196,10 @@ const pushAppointmentCancel = async (
     });
   });
 
-  await prisma.appointment.update({
+  await withTenantContext(async (tx) => tx.appointment.update({
     where: { id: appointment.id },
     data: { syncStatus: "ok", lastSyncedAt: new Date(), lastPushedAt: new Date() },
-  });
+  }));
 };
 
 export const runGoogleAppointmentSync = async (args: {
@@ -216,10 +217,10 @@ export const runGoogleAppointmentSync = async (args: {
     }
     await pushAppointmentCreateOrUpdate(integration, args.appointmentId, args.action === "create" ? "create" : "update");
   } catch (error: unknown) {
-    await prisma.appointment.update({
+    await withTenantContext(async (tx) => tx.appointment.update({
       where: { id: args.appointmentId },
       data: { syncStatus: "error", lastSyncedAt: new Date() },
-    });
+    }));
     throw error;
   }
 };
