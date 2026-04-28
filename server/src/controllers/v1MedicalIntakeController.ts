@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { Response } from "express";
 import { prisma } from "../db/prisma";
+import { withTenantContext } from "../db/withTenantContext";
 import { AuthRequest } from "../middlewares/auth";
 import { createAuditLog } from "../services/auditService";
 import { medicalIntakeApproveSchema, medicalIntakeUpdateSchema } from "../validators/medicalIntake";
@@ -72,10 +73,10 @@ export const updateMyMedicalIntake = async (req: AuthRequest, res: Response) => 
   });
 
   if (requestedStatus === "submitted") {
-    const patient = await prisma.user.findUnique({
+    const patient = await withTenantContext(async (tx) => tx.user.findUnique({
       where: { id: req.user!.id },
       select: { email: true, profile: { select: { firstName: true, lastName: true } } }
-    });
+    }));
     const name = [patient?.profile?.firstName, patient?.profile?.lastName].filter(Boolean).join(" ") || patient?.email || "Paciente";
     notifyAdmins("intake_submitted", "Expediente médico enviado", `${name} envió su expediente para revisión.`, { userId: req.user!.id })
       .catch((err) => logger.error({ err }, "[intake] admin notification failed"));
@@ -146,10 +147,10 @@ export const approveMedicalIntake = async (req: AuthRequest, res: Response) => {
   });
 
   // Notify patient about the result
-  const patient = await prisma.user.findUnique({
+  const patient = await withTenantContext(async (tx) => tx.user.findUnique({
     where: { id: req.params.userId },
     select: { email: true, profile: { select: { firstName: true, lastName: true } } }
-  });
+  }));
   if (patient) {
     const name = [patient.profile?.firstName, patient.profile?.lastName].filter(Boolean).join(" ") || patient.email;
     const notifyFn = payload.approved

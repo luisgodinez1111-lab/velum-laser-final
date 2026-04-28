@@ -4,6 +4,7 @@ import { AuthRequest } from "../middlewares/auth";
 import { documentSignSchema, documentUploadSchema } from "../validators/documents";
 import { generateStorageKey, getFilePath, saveFile } from "../services/storageService";
 import { prisma } from "../db/prisma";
+import { withTenantContext } from "../db/withTenantContext";
 import { createAuditLog } from "../services/auditService";
 import { sendDocumentSignedEmail } from "../services/emailService";
 import { logger } from "../utils/logger";
@@ -115,10 +116,10 @@ export const signDocument = async (req: AuthRequest, res: Response) => {
   });
 
   // Notificación de firma al usuario
-  const userRecord = await prisma.user.findUnique({
+  const userRecord = await withTenantContext(async (tx) => tx.user.findUnique({
     where: { id: req.user!.id },
     select: { email: true, profile: { select: { firstName: true, lastName: true } } }
-  });
+  }));
   if (userRecord) {
     const name = [userRecord.profile?.firstName, userRecord.profile?.lastName].filter(Boolean).join(" ") || userRecord.email;
     const signedAt = new Date().toLocaleString("es-MX", { dateStyle: "long", timeStyle: "short" });

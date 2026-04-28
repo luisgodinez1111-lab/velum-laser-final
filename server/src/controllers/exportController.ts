@@ -1,6 +1,7 @@
 import { Response } from "express";
 import { AuthRequest } from "../middlewares/auth";
 import { prisma } from "../db/prisma";
+import { withTenantContext } from "../db/withTenantContext";
 import { logger } from "../utils/logger";
 import { createAuditLog } from "../services/auditService";
 
@@ -72,7 +73,7 @@ export const exportAppointments = async (req: AuthRequest, res: Response) => {
       ...(to   ? { startAt: { lte: new Date(to)   } } : {}),
     };
 
-    const appointments = await prisma.appointment.findMany({
+    const appointments = await withTenantContext(async (tx) => tx.appointment.findMany({
       where,
       orderBy: { startAt: "desc" },
       take: 10_000,
@@ -83,7 +84,7 @@ export const exportAppointments = async (req: AuthRequest, res: Response) => {
         cabin:     { select: { name: true } },
         createdBy: { select: { email: true } },
       },
-    });
+    }));
 
     const header = ["ID", "Fecha", "Hora inicio", "Hora fin", "Email paciente", "Nombre paciente", "Teléfono", "Tratamiento", "Cabina", "Estado", "Notas", "Creado por"];
     const tz = "America/Chihuahua";
@@ -113,7 +114,7 @@ export const exportAppointments = async (req: AuthRequest, res: Response) => {
 // ── Exportar miembros ──────────────────────────────────────────────────
 export const exportMembers = async (req: AuthRequest, res: Response) => {
   try {
-    const members = await prisma.user.findMany({
+    const members = await withTenantContext(async (tx) => tx.user.findMany({
       where: { role: "member", deletedAt: null },
       orderBy: { createdAt: "desc" },
       take: 10_000,
@@ -127,7 +128,7 @@ export const exportMembers = async (req: AuthRequest, res: Response) => {
           orderBy: { createdAt: "desc" },
         },
       },
-    });
+    }));
 
     const header = ["ID", "Email", "Nombre", "Teléfono", "Fecha nacimiento", "Plan activo", "Membresía hasta", "Activo", "Registrado"];
     const rows = members.map(m => [
