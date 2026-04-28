@@ -3,6 +3,7 @@ import { prisma } from "../db/prisma";
 import { ensureAgendaDefaults } from "./agendaSetupService";
 import { normalizeDateKey } from "./agendaTimezoneUtils";
 import { AgendaValidationError } from "./agendaConflictService";
+import { getTenantId } from "../utils/tenantContext";
 
 export type AgendaConfigPayload = {
   timezone?: string;
@@ -287,11 +288,18 @@ export const updateAgendaConfig = async (payload: AgendaConfigPayload) => {
       await normalizeTreatmentCabinAssignments();
     }
 
+    // RLS Fase 1.5 Slice C: agenda pasó a tenant-scoped, los uniques son
+    // [tenantId, dayOfWeek] / [tenantId, dateKey]. Resolver tenantId desde
+    // el contexto del request; fallback a 'default' para flujos sin contexto
+    // (background jobs, scripts) — single-tenant compat.
+    const tenantId = getTenantId() ?? "default";
+
     if (payload.weeklyRules) {
       for (const rule of payload.weeklyRules) {
         await tx.agendaWeeklyRule.upsert({
-          where: { dayOfWeek: rule.dayOfWeek },
+          where: { tenantId_dayOfWeek: { tenantId, dayOfWeek: rule.dayOfWeek } },
           create: {
+            tenantId,
             dayOfWeek: rule.dayOfWeek,
             isOpen: rule.isOpen,
             startHour: rule.startHour ?? 9,
@@ -310,10 +318,12 @@ export const updateAgendaConfig = async (payload: AgendaConfigPayload) => {
       const incomingKeys = new Set(payload.specialDateRules.map((rule) => normalizeDateKey(rule.dateKey)));
 
       for (const rule of payload.specialDateRules) {
+        const dateKey = normalizeDateKey(rule.dateKey);
         await tx.agendaSpecialDateRule.upsert({
-          where: { dateKey: normalizeDateKey(rule.dateKey) },
+          where: { tenantId_dateKey: { tenantId, dateKey } },
           create: {
-            dateKey: normalizeDateKey(rule.dateKey),
+            tenantId,
+            dateKey,
             isOpen: rule.isOpen,
             startHour: rule.startHour ?? null,
             endHour: rule.endHour ?? null,

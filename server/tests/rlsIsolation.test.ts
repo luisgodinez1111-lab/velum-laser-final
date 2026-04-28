@@ -28,9 +28,15 @@ import { PrismaClient } from "@prisma/client";
 
 // Cliente directo a Postgres como `postgres` (superuser) para setup/cleanup.
 // El test usa $queryRawUnsafe para evitar parametrización en SQL DDL.
-const prismaSuper = new PrismaClient({
-  datasources: { db: { url: process.env.DATABASE_URL } },
-});
+//
+// Importante: tests/setup.ts forza DATABASE_URL a un valor fake para que los
+// tests unitarios no toquen DB real. Para correr estos tests de RLS contra
+// postgres, el operador debe setear RLS_TEST_DATABASE_URL=postgresql://postgres:...
+// La ausencia de esa variable hace que TODO el describe se skipee.
+const RLS_DB_URL = process.env.RLS_TEST_DATABASE_URL;
+const prismaSuper = RLS_DB_URL
+  ? new PrismaClient({ datasources: { db: { url: RLS_DB_URL } } })
+  : (null as unknown as PrismaClient);
 
 const TENANT_A = "rls_test_a";
 const TENANT_B = "rls_test_b";
@@ -41,7 +47,7 @@ const USER_B = "rls_user_b";
 // presente. Evita falsos positivos en CI básico antes de que el workflow lo prepare.
 let setupReady = false;
 
-describe.skipIf(!process.env.DATABASE_URL)("RLS tenant isolation", () => {
+describe.skipIf(!RLS_DB_URL)("RLS tenant isolation", () => {
   beforeAll(async () => {
     // Detectar si el entorno tiene el setup completo de Fase 1.4.a.
     try {
@@ -193,5 +199,370 @@ describe.skipIf(!process.env.DATABASE_URL)("RLS tenant isolation", () => {
       SELECT id FROM "User" WHERE id = 'rls_evil'
     `;
     expect(exists).toHaveLength(0);
+  });
+
+  // ── Fase 1.5 Slice A — tablas hijas con datos clínicos/financieros ───
+  //
+  // Para cada tabla hija con tenantId, verificamos que:
+  //   1. Tenant A NO ve filas con tenantId=B (SELECT filtra)
+  //   2. INSERT con tenantId mismatch es rechazado (WITH CHECK)
+  //
+  // El setup crea una fila en cada tabla bajo TENANT_A y otra bajo
+  // TENANT_B. Insertamos como `postgres` (superuser bypasa RLS) para no
+  // pelearnos con WITH CHECK durante el setup.
+  describe("Slice A — tablas hijas (Membership, Payment, Document, MedicalIntake, SessionTreatment, CustomCharge, Notification, AuditLog)", () => {
+    const ROW_A = "rls_row_a";
+    const ROW_B = "rls_row_b";
+
+    type ChildTable = {
+      name: string;
+      // SQL para insertar la fila A (tenantId=TENANT_A, userId=USER_A si aplica).
+      insertA: string;
+      // SQL para insertar la fila B (tenantId=TENANT_B, userId=USER_B si aplica).
+      insertB: string;
+      // SQL para limpiar (DELETE).
+      cleanup: string;
+    };
+
+    const tables: ChildTable[] = [
+      {
+        name: "Membership",
+        insertA: `INSERT INTO "Membership" (id, "tenantId", "userId", status, "updatedAt") VALUES ('${ROW_A}', '${TENANT_A}', '${USER_A}', 'inactive', NOW())`,
+        insertB: `INSERT INTO "Membership" (id, "tenantId", "userId", status, "updatedAt") VALUES ('${ROW_B}', '${TENANT_B}', '${USER_B}', 'inactive', NOW())`,
+        cleanup: `DELETE FROM "Membership" WHERE id IN ('${ROW_A}','${ROW_B}')`,
+      },
+      {
+        name: "Payment",
+        insertA: `INSERT INTO "Payment" (id, "tenantId", "userId", status, "updatedAt") VALUES ('${ROW_A}', '${TENANT_A}', '${USER_A}', 'pending', NOW())`,
+        insertB: `INSERT INTO "Payment" (id, "tenantId", "userId", status, "updatedAt") VALUES ('${ROW_B}', '${TENANT_B}', '${USER_B}', 'pending', NOW())`,
+        cleanup: `DELETE FROM "Payment" WHERE id IN ('${ROW_A}','${ROW_B}')`,
+      },
+      {
+        name: "Document",
+        insertA: `INSERT INTO "Document" (id, "tenantId", "userId", type, status, "updatedAt") VALUES ('${ROW_A}', '${TENANT_A}', '${USER_A}', 'consent', 'pending', NOW())`,
+        insertB: `INSERT INTO "Document" (id, "tenantId", "userId", type, status, "updatedAt") VALUES ('${ROW_B}', '${TENANT_B}', '${USER_B}', 'consent', 'pending', NOW())`,
+        cleanup: `DELETE FROM "Document" WHERE id IN ('${ROW_A}','${ROW_B}')`,
+      },
+      {
+        name: "MedicalIntake",
+        insertA: `INSERT INTO "MedicalIntake" (id, "tenantId", "userId", status, "updatedAt") VALUES ('${ROW_A}', '${TENANT_A}', '${USER_A}', 'draft', NOW())`,
+        insertB: `INSERT INTO "MedicalIntake" (id, "tenantId", "userId", status, "updatedAt") VALUES ('${ROW_B}', '${TENANT_B}', '${USER_B}', 'draft', NOW())`,
+        cleanup: `DELETE FROM "MedicalIntake" WHERE id IN ('${ROW_A}','${ROW_B}')`,
+      },
+      {
+        name: "SessionTreatment",
+        insertA: `INSERT INTO "SessionTreatment" (id, "tenantId", "userId", "staffUserId", "updatedAt") VALUES ('${ROW_A}', '${TENANT_A}', '${USER_A}', '${USER_A}', NOW())`,
+        insertB: `INSERT INTO "SessionTreatment" (id, "tenantId", "userId", "staffUserId", "updatedAt") VALUES ('${ROW_B}', '${TENANT_B}', '${USER_B}', '${USER_B}', NOW())`,
+        cleanup: `DELETE FROM "SessionTreatment" WHERE id IN ('${ROW_A}','${ROW_B}')`,
+      },
+      {
+        name: "CustomCharge",
+        insertA: `INSERT INTO "CustomCharge" (id, "tenantId", "userId", title, amount, status, "updatedAt") VALUES ('${ROW_A}', '${TENANT_A}', '${USER_A}', 'test', 100, 'PENDING_ACCEPTANCE', NOW())`,
+        insertB: `INSERT INTO "CustomCharge" (id, "tenantId", "userId", title, amount, status, "updatedAt") VALUES ('${ROW_B}', '${TENANT_B}', '${USER_B}', 'test', 100, 'PENDING_ACCEPTANCE', NOW())`,
+        cleanup: `DELETE FROM "CustomCharge" WHERE id IN ('${ROW_A}','${ROW_B}')`,
+      },
+      {
+        name: "Notification",
+        insertA: `INSERT INTO "Notification" (id, "tenantId", "userId", type, title) VALUES ('${ROW_A}', '${TENANT_A}', '${USER_A}', 'test', 'A')`,
+        insertB: `INSERT INTO "Notification" (id, "tenantId", "userId", type, title) VALUES ('${ROW_B}', '${TENANT_B}', '${USER_B}', 'test', 'B')`,
+        cleanup: `DELETE FROM "Notification" WHERE id IN ('${ROW_A}','${ROW_B}')`,
+      },
+      {
+        name: "AuditLog",
+        insertA: `INSERT INTO "AuditLog" (id, "tenantId", "userId", action) VALUES ('${ROW_A}', '${TENANT_A}', '${USER_A}', 'test')`,
+        insertB: `INSERT INTO "AuditLog" (id, "tenantId", "userId", action) VALUES ('${ROW_B}', '${TENANT_B}', '${USER_B}', 'test')`,
+        cleanup: `DELETE FROM "AuditLog" WHERE id IN ('${ROW_A}','${ROW_B}')`,
+      },
+    ];
+
+    beforeAll(async () => {
+      if (!setupReady) return;
+      for (const t of tables) {
+        await prismaSuper.$executeRawUnsafe(t.cleanup); // safety
+        await prismaSuper.$executeRawUnsafe(t.insertA);
+        await prismaSuper.$executeRawUnsafe(t.insertB);
+      }
+    });
+
+    afterAll(async () => {
+      if (!setupReady) return;
+      for (const t of tables) {
+        await prismaSuper.$executeRawUnsafe(t.cleanup);
+      }
+    });
+
+    for (const t of tables) {
+      it(`${t.name}: tenant A NO ve filas de B`, async () => {
+        if (!requireSetup()) return;
+        const rows = await prismaSuper.$transaction(async (tx) => {
+          await tx.$executeRawUnsafe(`SET LOCAL ROLE velumapp`);
+          await tx.$executeRaw`SELECT set_config('app.tenant_id', ${TENANT_A}, true)`;
+          return tx.$queryRawUnsafe<Array<{ id: string }>>(
+            `SELECT id FROM "${t.name}" WHERE id IN ('${ROW_A}','${ROW_B}')`,
+          );
+        });
+        const ids = rows.map((r) => r.id);
+        expect(ids).toContain(ROW_A);
+        expect(ids).not.toContain(ROW_B);
+      });
+
+      it(`${t.name}: tenant B NO ve filas de A`, async () => {
+        if (!requireSetup()) return;
+        const rows = await prismaSuper.$transaction(async (tx) => {
+          await tx.$executeRawUnsafe(`SET LOCAL ROLE velumapp`);
+          await tx.$executeRaw`SELECT set_config('app.tenant_id', ${TENANT_B}, true)`;
+          return tx.$queryRawUnsafe<Array<{ id: string }>>(
+            `SELECT id FROM "${t.name}" WHERE id IN ('${ROW_A}','${ROW_B}')`,
+          );
+        });
+        const ids = rows.map((r) => r.id);
+        expect(ids).toContain(ROW_B);
+        expect(ids).not.toContain(ROW_A);
+      });
+    }
+  });
+
+  // ── Fase 1.5 Slice B — tablas de auth/identity (PII) ─────────────────
+  //
+  // Cobertura idéntica a Slice A pero para Profile + tokens/OTPs:
+  //   Profile, RefreshToken, EmailVerificationToken, PasswordResetToken,
+  //   ConsentOtpToken, PasswordHistory, WhatsappOtp, DeleteOtp.
+  describe("Slice B — auth/identity (Profile, RefreshToken, EmailVerificationToken, PasswordResetToken, ConsentOtpToken, PasswordHistory, WhatsappOtp, DeleteOtp)", () => {
+    const ROW_A = "rls_authrow_a";
+    const ROW_B = "rls_authrow_b";
+
+    type ChildTable = {
+      name: string;
+      insertA: string;
+      insertB: string;
+      cleanup: string;
+    };
+
+    const tables: ChildTable[] = [
+      {
+        name: "Profile",
+        insertA: `INSERT INTO "Profile" (id, "tenantId", "userId", "updatedAt") VALUES ('${ROW_A}', '${TENANT_A}', '${USER_A}', NOW()) ON CONFLICT DO NOTHING`,
+        insertB: `INSERT INTO "Profile" (id, "tenantId", "userId", "updatedAt") VALUES ('${ROW_B}', '${TENANT_B}', '${USER_B}', NOW()) ON CONFLICT DO NOTHING`,
+        cleanup: `DELETE FROM "Profile" WHERE id IN ('${ROW_A}','${ROW_B}')`,
+      },
+      {
+        name: "RefreshToken",
+        insertA: `INSERT INTO "RefreshToken" (id, "tenantId", "userId", "tokenHash", "expiresAt") VALUES ('${ROW_A}', '${TENANT_A}', '${USER_A}', 'hash_a', NOW() + INTERVAL '1 day')`,
+        insertB: `INSERT INTO "RefreshToken" (id, "tenantId", "userId", "tokenHash", "expiresAt") VALUES ('${ROW_B}', '${TENANT_B}', '${USER_B}', 'hash_b', NOW() + INTERVAL '1 day')`,
+        cleanup: `DELETE FROM "RefreshToken" WHERE id IN ('${ROW_A}','${ROW_B}')`,
+      },
+      {
+        name: "EmailVerificationToken",
+        insertA: `INSERT INTO "EmailVerificationToken" (id, "tenantId", "userId", token, "expiresAt") VALUES ('${ROW_A}', '${TENANT_A}', '${USER_A}', 'tok_evt_a', NOW() + INTERVAL '1 day')`,
+        insertB: `INSERT INTO "EmailVerificationToken" (id, "tenantId", "userId", token, "expiresAt") VALUES ('${ROW_B}', '${TENANT_B}', '${USER_B}', 'tok_evt_b', NOW() + INTERVAL '1 day')`,
+        cleanup: `DELETE FROM "EmailVerificationToken" WHERE id IN ('${ROW_A}','${ROW_B}')`,
+      },
+      {
+        name: "PasswordResetToken",
+        insertA: `INSERT INTO "PasswordResetToken" (id, "tenantId", "userId", token, "expiresAt") VALUES ('${ROW_A}', '${TENANT_A}', '${USER_A}', 'tok_prt_a', NOW() + INTERVAL '1 day')`,
+        insertB: `INSERT INTO "PasswordResetToken" (id, "tenantId", "userId", token, "expiresAt") VALUES ('${ROW_B}', '${TENANT_B}', '${USER_B}', 'tok_prt_b', NOW() + INTERVAL '1 day')`,
+        cleanup: `DELETE FROM "PasswordResetToken" WHERE id IN ('${ROW_A}','${ROW_B}')`,
+      },
+      {
+        name: "ConsentOtpToken",
+        insertA: `INSERT INTO "ConsentOtpToken" (id, "tenantId", "userId", token, "expiresAt") VALUES ('${ROW_A}', '${TENANT_A}', '${USER_A}', 'tok_cot_a', NOW() + INTERVAL '1 day')`,
+        insertB: `INSERT INTO "ConsentOtpToken" (id, "tenantId", "userId", token, "expiresAt") VALUES ('${ROW_B}', '${TENANT_B}', '${USER_B}', 'tok_cot_b', NOW() + INTERVAL '1 day')`,
+        cleanup: `DELETE FROM "ConsentOtpToken" WHERE id IN ('${ROW_A}','${ROW_B}')`,
+      },
+      {
+        name: "PasswordHistory",
+        insertA: `INSERT INTO "PasswordHistory" (id, "tenantId", "userId", "passwordHash") VALUES ('${ROW_A}', '${TENANT_A}', '${USER_A}', 'hash_a')`,
+        insertB: `INSERT INTO "PasswordHistory" (id, "tenantId", "userId", "passwordHash") VALUES ('${ROW_B}', '${TENANT_B}', '${USER_B}', 'hash_b')`,
+        cleanup: `DELETE FROM "PasswordHistory" WHERE id IN ('${ROW_A}','${ROW_B}')`,
+      },
+      {
+        name: "WhatsappOtp",
+        insertA: `INSERT INTO "WhatsappOtp" (id, "tenantId", "userId", "codeHash", phone, "expiresAt") VALUES ('${ROW_A}', '${TENANT_A}', '${USER_A}', 'h', '+520000000001', NOW() + INTERVAL '5 min')`,
+        insertB: `INSERT INTO "WhatsappOtp" (id, "tenantId", "userId", "codeHash", phone, "expiresAt") VALUES ('${ROW_B}', '${TENANT_B}', '${USER_B}', 'h', '+520000000002', NOW() + INTERVAL '5 min')`,
+        cleanup: `DELETE FROM "WhatsappOtp" WHERE id IN ('${ROW_A}','${ROW_B}')`,
+      },
+      {
+        name: "DeleteOtp",
+        // actorUserId @unique — usamos USER_A/B como actor; targetUserId también requerido.
+        insertA: `INSERT INTO "DeleteOtp" (id, "tenantId", "actorUserId", "targetUserId", "otpHash", "expiresAt") VALUES ('${ROW_A}', '${TENANT_A}', '${USER_A}', '${USER_A}', 'h', NOW() + INTERVAL '5 min')`,
+        insertB: `INSERT INTO "DeleteOtp" (id, "tenantId", "actorUserId", "targetUserId", "otpHash", "expiresAt") VALUES ('${ROW_B}', '${TENANT_B}', '${USER_B}', '${USER_B}', 'h', NOW() + INTERVAL '5 min')`,
+        cleanup: `DELETE FROM "DeleteOtp" WHERE id IN ('${ROW_A}','${ROW_B}')`,
+      },
+    ];
+
+    beforeAll(async () => {
+      if (!setupReady) return;
+      for (const t of tables) {
+        await prismaSuper.$executeRawUnsafe(t.cleanup); // safety
+        await prismaSuper.$executeRawUnsafe(t.insertA);
+        await prismaSuper.$executeRawUnsafe(t.insertB);
+      }
+    });
+
+    afterAll(async () => {
+      if (!setupReady) return;
+      for (const t of tables) {
+        await prismaSuper.$executeRawUnsafe(t.cleanup);
+      }
+    });
+
+    for (const t of tables) {
+      it(`${t.name}: tenant A NO ve filas de B`, async () => {
+        if (!requireSetup()) return;
+        const rows = await prismaSuper.$transaction(async (tx) => {
+          await tx.$executeRawUnsafe(`SET LOCAL ROLE velumapp`);
+          await tx.$executeRaw`SELECT set_config('app.tenant_id', ${TENANT_A}, true)`;
+          return tx.$queryRawUnsafe<Array<{ id: string }>>(
+            `SELECT id FROM "${t.name}" WHERE id IN ('${ROW_A}','${ROW_B}')`,
+          );
+        });
+        const ids = rows.map((r) => r.id);
+        expect(ids).toContain(ROW_A);
+        expect(ids).not.toContain(ROW_B);
+      });
+
+      it(`${t.name}: tenant B NO ve filas de A`, async () => {
+        if (!requireSetup()) return;
+        const rows = await prismaSuper.$transaction(async (tx) => {
+          await tx.$executeRawUnsafe(`SET LOCAL ROLE velumapp`);
+          await tx.$executeRaw`SELECT set_config('app.tenant_id', ${TENANT_B}, true)`;
+          return tx.$queryRawUnsafe<Array<{ id: string }>>(
+            `SELECT id FROM "${t.name}" WHERE id IN ('${ROW_A}','${ROW_B}')`,
+          );
+        });
+        const ids = rows.map((r) => r.id);
+        expect(ids).toContain(ROW_B);
+        expect(ids).not.toContain(ROW_A);
+      });
+    }
+  });
+
+  // ── Fase 1.5 Slice C — marketing + agenda multi-tenant ───────────────
+  //
+  // Cobertura: Lead, MarketingAttribution, AgendaPolicy, AgendaCabin,
+  // AgendaTreatment, AgendaTreatmentCabinRule, AgendaWeeklyRule,
+  // AgendaSpecialDateRule, AgendaBlockedSlot.
+  //
+  // Notas: AgendaTreatmentCabinRule depende de AgendaTreatment+AgendaCabin
+  // (FK cascade). Insertamos las dependencias antes; la regla usa los
+  // mismos ids ROW_A/ROW_B.
+  describe("Slice C — marketing + agenda (Lead, MarketingAttribution, AgendaPolicy, AgendaCabin, AgendaTreatment, AgendaTreatmentCabinRule, AgendaWeeklyRule, AgendaSpecialDateRule, AgendaBlockedSlot)", () => {
+    const ROW_A = "rls_crow_a";
+    const ROW_B = "rls_crow_b";
+
+    type ChildTable = {
+      name: string;
+      insertA: string;
+      insertB: string;
+      cleanup: string;
+    };
+
+    // El orden importa: AgendaTreatmentCabinRule depende de
+    // AgendaTreatment + AgendaCabin → setup las primeras.
+    const tables: ChildTable[] = [
+      {
+        name: "Lead",
+        insertA: `INSERT INTO "Lead" (id, "tenantId", name, email, phone, consent, "updatedAt") VALUES ('${ROW_A}', '${TENANT_A}', 'A', 'a@l.local', '+5210000001', true, NOW())`,
+        insertB: `INSERT INTO "Lead" (id, "tenantId", name, email, phone, consent, "updatedAt") VALUES ('${ROW_B}', '${TENANT_B}', 'B', 'b@l.local', '+5210000002', true, NOW())`,
+        cleanup: `DELETE FROM "Lead" WHERE id IN ('${ROW_A}','${ROW_B}')`,
+      },
+      {
+        name: "MarketingAttribution",
+        insertA: `INSERT INTO "MarketingAttribution" (id, "tenantId", "leadId", "updatedAt") VALUES ('${ROW_A}', '${TENANT_A}', '${ROW_A}', NOW())`,
+        insertB: `INSERT INTO "MarketingAttribution" (id, "tenantId", "leadId", "updatedAt") VALUES ('${ROW_B}', '${TENANT_B}', '${ROW_B}', NOW())`,
+        cleanup: `DELETE FROM "MarketingAttribution" WHERE id IN ('${ROW_A}','${ROW_B}')`,
+      },
+      {
+        name: "AgendaPolicy",
+        insertA: `INSERT INTO "AgendaPolicy" (id, "tenantId", "updatedAt") VALUES ('${ROW_A}', '${TENANT_A}', NOW())`,
+        insertB: `INSERT INTO "AgendaPolicy" (id, "tenantId", "updatedAt") VALUES ('${ROW_B}', '${TENANT_B}', NOW())`,
+        cleanup: `DELETE FROM "AgendaPolicy" WHERE id IN ('${ROW_A}','${ROW_B}')`,
+      },
+      {
+        name: "AgendaCabin",
+        insertA: `INSERT INTO "AgendaCabin" (id, "tenantId", name, "updatedAt") VALUES ('${ROW_A}', '${TENANT_A}', 'CabA', NOW())`,
+        insertB: `INSERT INTO "AgendaCabin" (id, "tenantId", name, "updatedAt") VALUES ('${ROW_B}', '${TENANT_B}', 'CabB', NOW())`,
+        cleanup: `DELETE FROM "AgendaCabin" WHERE id IN ('${ROW_A}','${ROW_B}')`,
+      },
+      {
+        name: "AgendaTreatment",
+        insertA: `INSERT INTO "AgendaTreatment" (id, "tenantId", name, code, "updatedAt") VALUES ('${ROW_A}', '${TENANT_A}', 'TrA', 'rls_test_code', NOW())`,
+        insertB: `INSERT INTO "AgendaTreatment" (id, "tenantId", name, code, "updatedAt") VALUES ('${ROW_B}', '${TENANT_B}', 'TrB', 'rls_test_code', NOW())`,
+        cleanup: `DELETE FROM "AgendaTreatment" WHERE id IN ('${ROW_A}','${ROW_B}')`,
+      },
+      {
+        name: "AgendaTreatmentCabinRule",
+        insertA: `INSERT INTO "AgendaTreatmentCabinRule" (id, "tenantId", "treatmentId", "cabinId", "updatedAt") VALUES ('${ROW_A}', '${TENANT_A}', '${ROW_A}', '${ROW_A}', NOW())`,
+        insertB: `INSERT INTO "AgendaTreatmentCabinRule" (id, "tenantId", "treatmentId", "cabinId", "updatedAt") VALUES ('${ROW_B}', '${TENANT_B}', '${ROW_B}', '${ROW_B}', NOW())`,
+        cleanup: `DELETE FROM "AgendaTreatmentCabinRule" WHERE id IN ('${ROW_A}','${ROW_B}')`,
+      },
+      {
+        name: "AgendaWeeklyRule",
+        insertA: `INSERT INTO "AgendaWeeklyRule" (id, "tenantId", "dayOfWeek", "updatedAt") VALUES ('${ROW_A}', '${TENANT_A}', 0, NOW())`,
+        insertB: `INSERT INTO "AgendaWeeklyRule" (id, "tenantId", "dayOfWeek", "updatedAt") VALUES ('${ROW_B}', '${TENANT_B}', 0, NOW())`,
+        cleanup: `DELETE FROM "AgendaWeeklyRule" WHERE id IN ('${ROW_A}','${ROW_B}')`,
+      },
+      {
+        name: "AgendaSpecialDateRule",
+        insertA: `INSERT INTO "AgendaSpecialDateRule" (id, "tenantId", "dateKey", "updatedAt") VALUES ('${ROW_A}', '${TENANT_A}', '2099-01-01', NOW())`,
+        insertB: `INSERT INTO "AgendaSpecialDateRule" (id, "tenantId", "dateKey", "updatedAt") VALUES ('${ROW_B}', '${TENANT_B}', '2099-01-01', NOW())`,
+        cleanup: `DELETE FROM "AgendaSpecialDateRule" WHERE id IN ('${ROW_A}','${ROW_B}')`,
+      },
+      {
+        name: "AgendaBlockedSlot",
+        insertA: `INSERT INTO "AgendaBlockedSlot" (id, "tenantId", "dateKey", "startMinute", "endMinute", "updatedAt") VALUES ('${ROW_A}', '${TENANT_A}', '2099-01-01', 0, 30, NOW())`,
+        insertB: `INSERT INTO "AgendaBlockedSlot" (id, "tenantId", "dateKey", "startMinute", "endMinute", "updatedAt") VALUES ('${ROW_B}', '${TENANT_B}', '2099-01-01', 0, 30, NOW())`,
+        cleanup: `DELETE FROM "AgendaBlockedSlot" WHERE id IN ('${ROW_A}','${ROW_B}')`,
+      },
+    ];
+
+    beforeAll(async () => {
+      if (!setupReady) return;
+      // Cleanup en orden inverso por las FKs cascade
+      for (let i = tables.length - 1; i >= 0; i--) {
+        await prismaSuper.$executeRawUnsafe(tables[i].cleanup);
+      }
+      for (const t of tables) {
+        await prismaSuper.$executeRawUnsafe(t.insertA);
+        await prismaSuper.$executeRawUnsafe(t.insertB);
+      }
+    });
+
+    afterAll(async () => {
+      if (!setupReady) return;
+      for (let i = tables.length - 1; i >= 0; i--) {
+        await prismaSuper.$executeRawUnsafe(tables[i].cleanup);
+      }
+    });
+
+    for (const t of tables) {
+      it(`${t.name}: tenant A NO ve filas de B`, async () => {
+        if (!requireSetup()) return;
+        const rows = await prismaSuper.$transaction(async (tx) => {
+          await tx.$executeRawUnsafe(`SET LOCAL ROLE velumapp`);
+          await tx.$executeRaw`SELECT set_config('app.tenant_id', ${TENANT_A}, true)`;
+          return tx.$queryRawUnsafe<Array<{ id: string }>>(
+            `SELECT id FROM "${t.name}" WHERE id IN ('${ROW_A}','${ROW_B}')`,
+          );
+        });
+        const ids = rows.map((r) => r.id);
+        expect(ids).toContain(ROW_A);
+        expect(ids).not.toContain(ROW_B);
+      });
+
+      it(`${t.name}: tenant B NO ve filas de A`, async () => {
+        if (!requireSetup()) return;
+        const rows = await prismaSuper.$transaction(async (tx) => {
+          await tx.$executeRawUnsafe(`SET LOCAL ROLE velumapp`);
+          await tx.$executeRaw`SELECT set_config('app.tenant_id', ${TENANT_B}, true)`;
+          return tx.$queryRawUnsafe<Array<{ id: string }>>(
+            `SELECT id FROM "${t.name}" WHERE id IN ('${ROW_A}','${ROW_B}')`,
+          );
+        });
+        const ids = rows.map((r) => r.id);
+        expect(ids).toContain(ROW_B);
+        expect(ids).not.toContain(ROW_A);
+      });
+    }
   });
 });

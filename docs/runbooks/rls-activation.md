@@ -35,6 +35,101 @@
 >   las policies actuales (fallback permisivo) los dejan funcionar.
 >   Cuando se elimine el fallback, esos flujos necesitarán policies
 >   especiales (permitir lookup por email para login). Deuda Fase 2.
+>
+> **Estado (Fase 1.5 Slice A — completado, 2026-04-28):**
+> - ✅ Migración `20260428000000_rls_child_tables_slice_a` aplicada en
+>   producción. Agrega `tenantId` con FK + index + RLS + FORCE + policy
+>   `tenant_isolation` con fallback permisivo en 8 tablas hijas:
+>   `Membership`, `Payment`, `Document`, `MedicalIntake`,
+>   `SessionTreatment`, `CustomCharge`, `Notification`, `AuditLog`.
+> - ✅ Backfill verificado: 100% de filas existentes tienen
+>   `tenantId='default'` (heredado vía JOIN al `User.clinicId`).
+>   Para `AuditLog` se usa COALESCE(userId, actorUserId, targetUserId)
+>   con fallback a `'default'` cuando los tres son NULL.
+> - ✅ Schema.prisma actualizado con relación inversa en `Tenant` y
+>   `tenantId String @default("default")` + `tenant Tenant @relation`
+>   en cada modelo. `npx prisma validate` OK.
+> - ✅ Aislamiento end-to-end verificado vía sanity SQL: como rol
+>   `velumapp` con `app.tenant_id='X'`, ningún SELECT/INSERT cruza
+>   tenants. WITH CHECK rechaza inserts con tenantId mismatch.
+> - ✅ Test `rlsIsolation.test.ts` extendido con 16 casos (8 tablas
+>   × 2 direcciones). Corre con `RLS_TEST_DATABASE_URL` apuntando a
+>   postgres real; sin esa variable se skipea limpiamente.
+> - ⚠️ **Deuda**: el `@default("default")` en Prisma permite que
+>   callers no-tenant-aware sigan funcionando en single-tenant. Cuando
+>   entre el 2do tenant, los `.create` de las 8 tablas deben pasar
+>   `tenantId` explícito y el DEFAULT del DB debe eliminarse.
+> - ⏳ **Pendiente Slices B/C**: tablas auth/identity (Profile,
+>   RefreshToken, EmailVerificationToken, PasswordResetToken,
+>   ConsentOtpToken, PasswordHistory, WhatsappOtp, DeleteOtp) y
+>   marketing (Lead, MarketingAttribution). Ver sección final.
+>
+> **Estado (Fase 1.5 Slice B — completado, 2026-04-28):**
+> - ✅ Migración `20260428001000_rls_child_tables_slice_b` aplicada en
+>   producción. Mismo patrón que Slice A en 8 tablas auth/identity:
+>   `Profile`, `RefreshToken`, `EmailVerificationToken`,
+>   `PasswordResetToken`, `ConsentOtpToken`, `PasswordHistory`,
+>   `WhatsappOtp`, `DeleteOtp`.
+> - ✅ Backfill 100%: 3 Profiles + 5 RefreshTokens existentes →
+>   `tenantId='default'`. Tokens corta-vida (vacíos en producción
+>   actualmente) usan el DEFAULT al inserción. `DeleteOtp` backfilled
+>   via `actorUserId`.
+> - ✅ Schema.prisma actualizado, `prisma validate` OK, `tsc --noEmit`
+>   0 errores.
+> - ✅ Aislamiento end-to-end verificado vía sanity SQL en las 8 tablas
+>   con rol `velumapp`.
+> - ✅ Test `rlsIsolation.test.ts` extendido con 16 casos adicionales
+>   Slice B (total: 5 originales + 16 Slice A + 16 Slice B = 37).
+> - ⚠️ **Pre-auth flows revisitados**: login/register/refresh/reset
+>   tocan `RefreshToken`/`EmailVerificationToken`/`PasswordResetToken`/
+>   `User` SIN `tenantContext`. Hoy funcionan por el fallback permisivo
+>   del policy. Cuando se elimine el fallback (Fase 2), estas rutas
+>   necesitarán policies especiales (lookup por email/token sin tenant
+>   en USING) o resolver el tenant antes via host/subdomain → JWT issue.
+> - ⏳ **Pendiente Slice C**: marketing (Lead, MarketingAttribution) +
+>   decisión sobre Agenda globals.
+>
+> **Estado (Fase 1.5 Slice C — completado, 2026-04-28):**
+> - ✅ Migración `20260428002000_rls_child_tables_slice_c` aplicada en
+>   producción. 9 tablas: `Lead`, `MarketingAttribution`, `AgendaPolicy`,
+>   `AgendaCabin`, `AgendaTreatment`, `AgendaTreatmentCabinRule`,
+>   `AgendaWeeklyRule`, `AgendaSpecialDateRule`, `AgendaBlockedSlot`.
+> - ✅ **Decisión arquitectónica**: agenda pasa a multi-tenant. Cada
+>   clínica tendrá su propio catálogo de cabinas, tratamientos, horarios
+>   y bloqueos cuando entre el 2do tenant.
+> - ✅ Cambios estructurales en uniques (no solo aditivos):
+>   - `AgendaTreatment.code`        → `UNIQUE (tenantId, code)`
+>   - `AgendaWeeklyRule.dayOfWeek`  → `UNIQUE (tenantId, dayOfWeek)`
+>   - `AgendaSpecialDateRule.dateKey` → `UNIQUE (tenantId, dateKey)`
+>   `agendaConfigService.ts` ajustado para usar la sintaxis compuesta
+>   en upserts (`tenantId_dayOfWeek` / `tenantId_dateKey`), resolviendo
+>   `tenantId` desde `getTenantId() ?? 'default'`.
+> - ✅ Backfill 100% via JOIN al User para Lead/MarketingAttribution
+>   (con COALESCE a 'default' cuando convertedUserId/userId NULL).
+>   Agenda: backfill via DEFAULT 'default' en ADD COLUMN.
+> - ✅ Schema.prisma actualizado, validado, regenerado, 0 errores TS.
+> - ✅ Aislamiento end-to-end verificado vía sanity SQL en las 9 tablas.
+> - ✅ Test `rlsIsolation.test.ts` extendido con 18 casos adicionales
+>   Slice C (total: 5 originales + 16 A + 16 B + 18 C = 55 casos).
+> - ⚠️ **Recovery durante migración**: el `DROP CONSTRAINT` original
+>   falló porque Prisma viejo creó esos uniques como `CREATE UNIQUE
+>   INDEX` (no como `ADD CONSTRAINT`). Fix aplicado: usar
+>   `DROP CONSTRAINT IF EXISTS` + `DROP INDEX IF EXISTS` en cascada.
+>   Migración rolled back con `prisma migrate resolve` y reaplicada
+>   limpia. Patrón documentado para futuras migraciones Postgres.
+>
+> **🎯 Fase 1.5 completada — RLS denormalizado en 31 tablas:**
+> - Root tables (4): User, Appointment, IntegrationJob, GoogleCalendarIntegration
+> - Outbox + embeddings (2): OutboxEvent, MedicalIntakeEmbedding
+> - Slice A datos clínicos/financieros (8)
+> - Slice B auth/identity (8)
+> - Slice C marketing + agenda (9)
+>
+> El siguiente paso es la **activación real (paso 5 de este runbook)**:
+> cambiar `DATABASE_URL` al rol `velumapp` (no-superuser, FORCE RLS) y
+> setear `RLS_ENFORCE=true`. Comportamiento runtime hoy: idéntico al
+> pre-fase porque el fallback permisivo del policy aplica cuando
+> `app.tenant_id` no está seteado.
 
 ---
 
@@ -174,13 +269,37 @@ RLS sigue habilitado pero `postgres` lo bypassa → comportamiento pre-Fase 1.
 
 ---
 
-## Deuda explícita pendiente (Fase 1.5)
+## Deuda explícita pendiente — Slices B y C
 
-RLS solo cubre `User`, `Appointment`, `IntegrationJob`, `GoogleCalendarIntegration`.
-Las tablas hijas (`Payment`, `MedicalIntake`, `SessionTreatment`, `Document`,
-`CustomCharge`, `Membership`, `Profile`, `Notification`, `AuditLog`...) NO
-tienen RLS — su aislamiento depende de scoping vía JOIN al User.
+**Slice A completo (2026-04-28).** Las 8 tablas con datos clínicos/financieros
+ya tienen RLS denormalizado: `Membership`, `Payment`, `Document`,
+`MedicalIntake`, `SessionTreatment`, `CustomCharge`, `Notification`,
+`AuditLog`.
 
-Plan: migración 0.5/1.0 que añade `tenantId` denormalizado a esas tablas con
-backfill desde `User.clinicId`, FK al Tenant, índice, y la misma policy
-`tenant_isolation`. Es trabajo mecánico pero invasivo (toca ~20 modelos).
+**Slice B — auth/identity (completado 2026-04-28):**
+`Profile`, `RefreshToken`, `EmailVerificationToken`, `PasswordResetToken`,
+`ConsentOtpToken`, `PasswordHistory`, `WhatsappOtp`, `DeleteOtp`. Aislamiento
+verificado. Pre-auth flows siguen funcionando por el fallback permisivo del
+policy — su policy especializada queda como deuda Fase 2.
+
+**Slice C — marketing + agenda multi-tenant (completado 2026-04-28):**
+- `Lead`, `MarketingAttribution` — backfill via convertedUserId/userId con
+  fallback `'default'`.
+- `AgendaPolicy`, `AgendaCabin`, `AgendaTreatment`, `AgendaTreatmentCabinRule`,
+  `AgendaWeeklyRule`, `AgendaSpecialDateRule`, `AgendaBlockedSlot` →
+  multi-tenant. Cada clínica con su propio catálogo cuando entre el
+  2do tenant. Uniques globales reemplazados por compuestos `[tenantId, X]`.
+
+**Deuda transversal (Slices A/B/C):**
+- Eliminar `DEFAULT 'default'` en DB y hacer `tenantId` requerido en Prisma
+  cuando entre el 2do tenant. Refactorear los `.create` para pasar
+  `tenantId: requireTenantId()` explícito.
+- Resolver tenantId en agendaConfigService desde el contexto en lugar de
+  `getTenantId() ?? 'default'` cuando entre el 2do tenant.
+- Pre-auth flows necesitarán policy especializada cuando se elimine el
+  fallback permisivo (lookup por email/token sin tenant).
+- `claimNextPendingJob()` en integrationJobService.ts deberá iterar por
+  tenants con `withExplicitTenant()`.
+
+Fase 1.5 completa — 31 tablas con `tenant_isolation` en producción.
+Siguiente paso: paso 5 de este runbook (activación real con `velumapp`).
