@@ -3,6 +3,8 @@ import { addHours } from "../utils/date";
 import { prisma } from "../db/prisma";
 import { withTenantContext } from "../db/withTenantContext";
 import { generateOtp } from "../utils/crypto";
+import { getTenantIdOr } from "../utils/tenantContext";
+import { env } from "../utils/env";
 
 // El token almacenado en DB combina userId + OTP para garantizar unicidad
 function buildToken(userId: string, otp: string): string {
@@ -23,7 +25,8 @@ export const createEmailVerification = async (userId: string) => {
     data: {
       userId,
       token,
-      expiresAt: addHours(24)
+      expiresAt: addHours(24),
+      tenantId: getTenantIdOr(env.defaultClinicId),
     }
   });
 
@@ -56,7 +59,8 @@ export const createPasswordReset = async (userId: string) => {
     data: {
       userId,
       token,
-      expiresAt: addHours(2)
+      expiresAt: addHours(2),
+      tenantId: getTenantIdOr(env.defaultClinicId),
     }
   });
 
@@ -88,7 +92,8 @@ export const createConsentOtp = async (userId: string) => {
     data: {
       userId,
       token,
-      expiresAt: addHours(1)
+      expiresAt: addHours(1),
+      tenantId: getTenantIdOr(env.defaultClinicId),
     }
   });
 

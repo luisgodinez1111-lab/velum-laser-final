@@ -726,6 +726,10 @@ const upsertPaymentRecord = async (input: {
         failureMessage: input.failureMessage ?? undefined,
         paidAt: input.status === "paid" ? new Date() : null,
         failedAt: input.status === "failed" ? new Date() : null,
+        // Stripe webhooks corren sin tenantContext (sin JWT). Single-tenant:
+        // resolver al DEFAULT_CLINIC_ID. Multi-tenant futuro: lookup vía
+        // input.userId.clinicId o derivar de stripeAccountId.
+        tenantId: env.defaultClinicId,
       },
     });
   } catch (err) {

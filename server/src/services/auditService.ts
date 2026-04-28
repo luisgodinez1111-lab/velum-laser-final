@@ -1,5 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../db/prisma";
+import { getTenantIdOr } from "../utils/tenantContext";
+import { env } from "../utils/env";
 
 type AuditResult = "success" | "failed";
 
@@ -37,7 +39,8 @@ export const createAuditLog = async ({
       resourceId,
       result,
       ip,
-      metadata
+      metadata,
+      tenantId: getTenantIdOr(env.defaultClinicId),
     }
   });
 };

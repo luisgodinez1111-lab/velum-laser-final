@@ -6,6 +6,7 @@ import { withTenantContext } from "../db/withTenantContext";
 import { AuthRequest } from "../middlewares/auth";
 import { createAuditLog } from "../services/auditService";
 import { generateTotpSecret, verifyTotpCode, getTotpUri } from "../utils/totp";
+import { requireTenantId } from "../utils/tenantContext";
 import {
   PERMISSIONS_CATALOG,
   readAccessStore,
@@ -471,7 +472,7 @@ export const requestDeleteUserOtp = async (req: AuthRequest, res: Response) => {
     // Upsert: one pending OTP per actor at a time, resets attempt counter
     await prisma.deleteOtp.upsert({
       where: { actorUserId: actorId },
-      create: { actorUserId: actorId, targetUserId, otpHash, expiresAt },
+      create: { actorUserId: actorId, targetUserId, otpHash, expiresAt, tenantId: requireTenantId() },
       update: { targetUserId, otpHash, expiresAt, attempts: 0 },
     });
 

@@ -3,6 +3,8 @@ import { prisma } from "../db/prisma";
 import { withTenantContext } from "../db/withTenantContext";
 import { logger } from "../utils/logger";
 import { broadcastToUser } from "./sseService";
+import { getTenantIdOr } from "../utils/tenantContext";
+import { env } from "../utils/env";
 
 // Re-exports del broadcaster SSE para compatibilidad con imports existentes
 export { registerSseClient, unregisterSseClient, getSseConnectionCount } from "./sseService";
@@ -43,6 +45,7 @@ export const createNotification = async (params: CreateNotificationParams) => {
         title: params.title,
         body: params.body,
         data: (params.data ?? {}) as Prisma.InputJsonValue,
+        tenantId: getTenantIdOr(env.defaultClinicId),
       },
     });
     // Push to connected SSE clients in real time
@@ -86,12 +89,14 @@ export const notifyAdmins = async (
     const adminIds = await getAdminIds();
     const admins = adminIds.map((id) => ({ id }));
     if (admins.length === 0) return;
+    const tenantId = getTenantIdOr(env.defaultClinicId);
     const rows = admins.map((a) => ({
       userId: a.id,
       type,
       title,
       body,
       data: (data ?? {}) as Prisma.InputJsonValue,
+      tenantId,
     }));
     await prisma.notification.createMany({ data: rows });
     // Push via SSE to each admin that has an active stream

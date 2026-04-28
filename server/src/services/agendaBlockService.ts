@@ -2,6 +2,8 @@ import { prisma } from "../db/prisma";
 import { normalizeDateKey } from "./agendaTimezoneUtils";
 import { AgendaValidationError } from "./agendaConflictService";
 import { ensureAgendaDefaults } from "./agendaSetupService";
+import { getTenantIdOr } from "../utils/tenantContext";
+import { env } from "../utils/env";
 
 export const createAgendaBlock = async ({
   dateKey,
@@ -34,7 +36,8 @@ export const createAgendaBlock = async ({
       endMinute,
       cabinId: cabinId ?? null,
       reason,
-      createdByUserId: actorUserId
+      createdByUserId: actorUserId,
+      tenantId: getTenantIdOr(env.defaultClinicId),
     }
   });
 };

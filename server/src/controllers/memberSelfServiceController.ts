@@ -9,6 +9,7 @@ import { generateOtp } from "../utils/crypto";
 import { safeIp } from "../utils/request";
 import { logger } from "../utils/logger";
 import { stripe } from "../services/stripeService";
+import { requireTenantId } from "../utils/tenantContext";
 
 const OTP_TTL_MS = 10 * 60 * 1000;
 const OTP_MAX_ATTEMPTS = 5;
@@ -42,7 +43,7 @@ const upsertProfileRecord = async (
   return prisma.profile.upsert({
     where: { userId },
     update: { firstName: firstName ?? null, lastName: lastName ?? null, phone },
-    create: { userId, firstName: firstName ?? null, lastName: lastName ?? null, phone },
+    create: { userId, firstName: firstName ?? null, lastName: lastName ?? null, phone, tenantId: requireTenantId() },
   });
 };
 
@@ -142,7 +143,7 @@ export const requestMyPasswordWhatsappCode = async (req: AuthRequest, res: Respo
 
   await prisma.whatsappOtp.upsert({
     where: { userId },
-    create: { userId, codeHash, phone, expiresAt, attempts: 0 },
+    create: { userId, codeHash, phone, expiresAt, attempts: 0, tenantId: requireTenantId() },
     update: { codeHash, phone, expiresAt, attempts: 0 },
   });
 

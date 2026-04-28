@@ -6,6 +6,7 @@ import { env } from "../utils/env";
 import { onCustomChargeCreated } from "./notificationService";
 import { sendCustomChargeOtpEmail } from "./emailService";
 import { resolveBaseUrl } from "../utils/baseUrl";
+import { getTenantIdOr } from "../utils/tenantContext";
 
 const INTERVAL_LABELS: Record<string, string> = {
   day: "diario", week: "semanal", month: "mensual", year: "anual",
@@ -61,6 +62,7 @@ export const createCustomCharge = async (params: {
       otpExpiresAt,
       status: "PENDING_ACCEPTANCE",
       expiresAt,
+      tenantId: getTenantIdOr(env.defaultClinicId),
     },
     include: {
       user: { select: { id: true, email: true, profile: { select: { firstName: true, lastName: true } } } },

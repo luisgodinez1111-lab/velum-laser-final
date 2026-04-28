@@ -8,6 +8,8 @@ import { sessionCreateSchema, sessionFeedbackSchema } from "../validators/sessio
 import { parsePagination } from "../utils/pagination";
 import { paginated } from "../utils/response";
 import { queryParams } from "../utils/request";
+import { getTenantIdOr } from "../utils/tenantContext";
+import { env } from "../utils/env";
 
 const privilegedRoles = new Set(["staff", "admin", "system"]);
 
@@ -34,7 +36,8 @@ export const createSessionTreatment = async (req: AuthRequest, res: Response) =>
         staffUserId: req.user!.id,
         laserParametersJson: payload.laserParametersJson as Prisma.InputJsonValue | undefined,
         notes: payload.notes,
-        adverseEvents: payload.adverseEvents
+        adverseEvents: payload.adverseEvents,
+        tenantId: getTenantIdOr(env.defaultClinicId),
       }
     });
 

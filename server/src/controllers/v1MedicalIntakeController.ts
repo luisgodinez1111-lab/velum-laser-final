@@ -10,12 +10,14 @@ import { logger } from "../utils/logger";
 import { safeIp } from "../utils/request";
 import { encryptSignature as encryptSignatureData, decryptSignature as decryptSignatureData } from "../utils/phiCrypto";
 import { badRequest, notFound } from "../utils/AppError";
+import { getTenantIdOr } from "../utils/tenantContext";
+import { env } from "../utils/env";
 
 const ensureIntake = async (userId: string) => {
   return prisma.medicalIntake.upsert({
     where: { userId },
     update: {},
-    create: { userId, status: "draft" }
+    create: { userId, status: "draft", tenantId: getTenantIdOr(env.defaultClinicId) }
   });
 };
 

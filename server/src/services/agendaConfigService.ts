@@ -3,7 +3,8 @@ import { prisma } from "../db/prisma";
 import { ensureAgendaDefaults } from "./agendaSetupService";
 import { normalizeDateKey } from "./agendaTimezoneUtils";
 import { AgendaValidationError } from "./agendaConflictService";
-import { getTenantId } from "../utils/tenantContext";
+import { getTenantIdOr } from "../utils/tenantContext";
+import { env } from "../utils/env";
 
 export type AgendaConfigPayload = {
   timezone?: string;
@@ -69,6 +70,7 @@ export const updateAgendaConfig = async (payload: AgendaConfigPayload) => {
   const policy = await prisma.agendaPolicy.findFirstOrThrow();
   const effectiveSlotMinutes = payload.slotMinutes ?? policy.slotMinutes;
 
+  const txTenantId = getTenantIdOr(env.defaultClinicId);
   await prisma.$transaction(async (tx) => {
     const normalizeTreatmentCabinAssignments = async () => {
       const treatments = await tx.agendaTreatment.findMany({
@@ -138,7 +140,8 @@ export const updateAgendaConfig = async (payload: AgendaConfigPayload) => {
           data: {
             name: cabin.name,
             isActive: cabin.isActive ?? true,
-            sortOrder: cabin.sortOrder ?? index + 1
+            sortOrder: cabin.sortOrder ?? index + 1,
+            tenantId: txTenantId,
           }
         });
 
@@ -222,7 +225,8 @@ export const updateAgendaConfig = async (payload: AgendaConfigPayload) => {
           cabinId: normalizedAllowedCabinIds[0] ?? null,
           requiresSpecificCabin: treatment.requiresSpecificCabin ?? false,
           isActive: treatment.isActive ?? true,
-          sortOrder: treatment.sortOrder ?? index + 1
+          sortOrder: treatment.sortOrder ?? index + 1,
+          tenantId: txTenantId,
         };
 
         let persistedTreatmentId: string;
@@ -250,7 +254,8 @@ export const updateAgendaConfig = async (payload: AgendaConfigPayload) => {
               treatmentId: persistedTreatmentId,
               cabinId,
               priority: cabinIndex + 1,
-              updatedAt: now
+              updatedAt: now,
+              tenantId: txTenantId,
             }))
           });
         }
@@ -290,9 +295,9 @@ export const updateAgendaConfig = async (payload: AgendaConfigPayload) => {
 
     // RLS Fase 1.5 Slice C: agenda pasó a tenant-scoped, los uniques son
     // [tenantId, dayOfWeek] / [tenantId, dateKey]. Resolver tenantId desde
-    // el contexto del request; fallback a 'default' para flujos sin contexto
-    // (background jobs, scripts) — single-tenant compat.
-    const tenantId = getTenantId() ?? "default";
+    // el contexto del request; fallback al DEFAULT_CLINIC_ID para flujos sin
+    // contexto (background jobs, scripts) — single-tenant compat.
+    const tenantId = getTenantIdOr(env.defaultClinicId);
 
     if (payload.weeklyRules) {
       for (const rule of payload.weeklyRules) {

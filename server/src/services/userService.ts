@@ -1,5 +1,7 @@
 import { prisma } from "../db/prisma";
 import { withTenantContext } from "../db/withTenantContext";
+import { getTenantIdOr } from "../utils/tenantContext";
+import { env } from "../utils/env";
 
 export const getUserByEmail = (email: string) =>
   withTenantContext(async (tx) => tx.user.findUnique({ where: { email } }));
@@ -13,6 +15,7 @@ export const createUser = async (data: {
   birthDate?: string;
 }) => {
   return withTenantContext(async (tx) => {
+    const tenantId = getTenantIdOr(env.defaultClinicId);
     return tx.user.create({
       data: {
         email: data.email,
@@ -22,22 +25,24 @@ export const createUser = async (data: {
             firstName: data.firstName,
             lastName: data.lastName,
             ...(data.phone ? { phone: data.phone } : {}),
-            ...(data.birthDate ? { birthDate: new Date(data.birthDate) } : {})
+            ...(data.birthDate ? { birthDate: new Date(data.birthDate) } : {}),
+            tenantId,
           }
         },
         memberships: {
-          create: {}
+          create: { tenantId }
         },
         medicalIntake: {
           create: {
-            status: "draft"
+            status: "draft",
+            tenantId,
           }
         },
         documents: {
           create: [
-            { type: "informed_consent", version: "1.0" },
-            { type: "privacy_notice", version: "1.0" },
-            { type: "medical_history", version: "1.0" }
+            { type: "informed_consent", version: "1.0", tenantId },
+            { type: "privacy_notice",   version: "1.0", tenantId },
+            { type: "medical_history",  version: "1.0", tenantId },
           ]
         }
       },
@@ -54,7 +59,7 @@ export const updateProfile = async (userId: string, data: {
 }) => {
   return prisma.profile.upsert({
     where: { userId },
-    create: { userId, ...data },
+    create: { userId, ...data, tenantId: getTenantIdOr(env.defaultClinicId) },
     update: data
   });
 };

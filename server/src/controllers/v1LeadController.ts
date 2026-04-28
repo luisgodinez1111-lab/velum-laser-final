@@ -6,10 +6,14 @@ import { AuthRequest } from "../middlewares/auth";
 import { createAuditLog } from "../services/auditService";
 import { sendMetaEvent } from "../services/metaService";
 import { leadCreateSchema, marketingEventSchema } from "../validators/leads";
+import { getTenantIdOr } from "../utils/tenantContext";
+import { env } from "../utils/env";
 
 export const createLead = async (req: AuthRequest, res: Response) => {
   const payload = leadCreateSchema.parse(req.body);
   const eventId = crypto.randomUUID();
+
+  const tenantId = getTenantIdOr(env.defaultClinicId);
 
   const { lead, attribution } = await prisma.$transaction(async (tx) => {
     const newLead = await tx.lead.create({
@@ -17,7 +21,8 @@ export const createLead = async (req: AuthRequest, res: Response) => {
         name: payload.name,
         email: payload.email,
         phone: payload.phone,
-        consent: payload.consent
+        consent: payload.consent,
+        tenantId,
       }
     });
 
@@ -36,6 +41,7 @@ export const createLead = async (req: AuthRequest, res: Response) => {
         fbc: payload.fbc,
         fbclid: payload.fbclid,
         consent: payload.consent,
+        tenantId,
         requestSummary: {
           utm_source: payload.utm_source,
           utm_medium: payload.utm_medium,
@@ -112,6 +118,7 @@ export const trackMarketingEvent = async (req: AuthRequest, res: Response) => {
       eventId: payload.eventId,
       fbp: payload.fbp,
       fbc: payload.fbc,
+      tenantId: getTenantIdOr(env.defaultClinicId),
       requestSummary: {
         eventTime: payload.eventTime,
         customData: payload.customData as Prisma.InputJsonValue | undefined

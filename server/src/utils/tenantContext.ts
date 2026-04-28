@@ -43,6 +43,17 @@ export const requireTenantId = (): string => {
 };
 
 /**
+ * Lee tenantId con fallback al DEFAULT_CLINIC_ID. Usar en código que puede
+ * correr fuera de un request autenticado (pre-auth flows: register, login,
+ * password reset, leads públicos, crons system-wide, etc.).
+ *
+ * Importante: el caller debe importar `env.defaultClinicId` y pasarlo como
+ * fallback. Esta función vive aquí para no introducir dependencia con `env`
+ * en este módulo (mantiene tenantContext.ts puro y testeable).
+ */
+export const getTenantIdOr = (fallback: string): string => getTenantId() ?? fallback;
+
+/**
  * Ejecuta `fn` con el contexto de tenant dado. Use desde middlewares HTTP,
  * workers de cola, crons y scripts CLI.
  */

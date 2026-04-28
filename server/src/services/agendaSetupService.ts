@@ -1,5 +1,6 @@
 import { AgendaPolicy, AgendaWeeklyRule, AgendaTreatment } from "@prisma/client";
 import { prisma } from "../db/prisma";
+import { env } from "../utils/env";
 
 export const defaultPolicy: Pick<
   AgendaPolicy,
@@ -77,7 +78,7 @@ const ensurePolicy = async () => {
   }
 
   return prisma.agendaPolicy.create({
-    data: defaultPolicy
+    data: { ...defaultPolicy, tenantId: env.defaultClinicId }
   });
 };
 
@@ -89,8 +90,8 @@ const ensureCabins = async () => {
 
   await prisma.agendaCabin.createMany({
     data: [
-      { name: "Cabina 1", isActive: true, sortOrder: 1 },
-      { name: "Cabina 2", isActive: true, sortOrder: 2 }
+      { name: "Cabina 1", isActive: true, sortOrder: 1, tenantId: env.defaultClinicId },
+      { name: "Cabina 2", isActive: true, sortOrder: 2, tenantId: env.defaultClinicId }
     ]
   });
 };
@@ -108,7 +109,7 @@ const ensureWeeklyRules = async () => {
       .filter((rule) => !existingByDay.has(rule.dayOfWeek))
       .map((rule) =>
         prisma.agendaWeeklyRule.create({
-          data: rule
+          data: { ...rule, tenantId: env.defaultClinicId }
         })
       )
   );
@@ -121,7 +122,7 @@ const ensureTreatments = async () => {
   }
 
   await prisma.agendaTreatment.createMany({
-    data: defaultTreatments
+    data: defaultTreatments.map((t) => ({ ...t, tenantId: env.defaultClinicId }))
   });
 };
 

@@ -5,6 +5,7 @@ import { documentSignSchema, documentUploadSchema } from "../validators/document
 import { generateStorageKey, getFilePath, saveFile } from "../services/storageService";
 import { prisma } from "../db/prisma";
 import { withTenantContext } from "../db/withTenantContext";
+import { requireTenantId } from "../utils/tenantContext";
 import { createAuditLog } from "../services/auditService";
 import { sendDocumentSignedEmail } from "../services/emailService";
 import { logger } from "../utils/logger";
@@ -57,7 +58,8 @@ export const createUpload = async (req: AuthRequest, res: Response) => {
       version: payload.version,
       contentType: file.mimetype,
       size: file.size,
-      storageKey: key
+      storageKey: key,
+      tenantId: requireTenantId(),
     }
   });
   await createAuditLog({

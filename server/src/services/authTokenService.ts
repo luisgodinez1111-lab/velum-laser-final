@@ -11,6 +11,7 @@ import crypto from "crypto";
 import { prisma } from "../db/prisma";
 import { env } from "../utils/env";
 import { logger } from "../utils/logger";
+import { getTenantIdOr } from "../utils/tenantContext";
 
 // ── Refresh token helpers ────────────────────────────────────────────────────
 // Raw token is sent to client; only SHA-256 hash is stored in DB.
@@ -35,7 +36,7 @@ export const createRefreshToken = async (userId: string): Promise<string> => {
     await prisma.refreshToken.deleteMany({ where: { id: { in: toDelete.map((t) => t.id) } } });
   }
 
-  await prisma.refreshToken.create({ data: { userId, tokenHash, expiresAt } });
+  await prisma.refreshToken.create({ data: { userId, tokenHash, expiresAt, tenantId: getTenantIdOr(env.defaultClinicId) } });
   return raw;
 };
 
@@ -65,7 +66,7 @@ export const rotateRefreshToken = async (
   try {
     await prisma.$transaction([
       prisma.refreshToken.delete({ where: { tokenHash } }),
-      prisma.refreshToken.create({ data: { userId: existing.userId, tokenHash: newHash, expiresAt } }),
+      prisma.refreshToken.create({ data: { userId: existing.userId, tokenHash: newHash, expiresAt, tenantId: getTenantIdOr(env.defaultClinicId) } }),
     ]);
   } catch {
     // Concurrent rotation (race condition) — posible reutilización o robo
@@ -90,7 +91,7 @@ const PASSWORD_HISTORY_DEPTH = 5; // prevent reuse of last 5 passwords
 
 export const recordPasswordHistory = async (userId: string, passwordHash: string): Promise<void> => {
   try {
-    await prisma.passwordHistory.create({ data: { userId, passwordHash } });
+    await prisma.passwordHistory.create({ data: { userId, passwordHash, tenantId: getTenantIdOr(env.defaultClinicId) } });
     // Purge oldest entries beyond the history depth
     const entries = await prisma.passwordHistory.findMany({
       where: { userId },
