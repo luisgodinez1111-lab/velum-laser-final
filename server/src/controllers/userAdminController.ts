@@ -1,6 +1,7 @@
 import { Response } from "express";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../db/prisma";
+import { withTenantContext } from "../db/withTenantContext";
 import { AuthRequest } from "../middlewares/auth";
 import { roleUpdateSchema } from "../validators/admin";
 import { createAuditLog } from "../services/auditService";
@@ -47,23 +48,23 @@ export const listUsers = async (req: AuthRequest, res: Response) => {
 
   // Cursor-based si se provee cursor (eficiente en tablas grandes), offset si no (compatibilidad)
   const [total, users, catalog] = await Promise.all([
-    prisma.user.count({ where }),
+    withTenantContext(async (tx) => tx.user.count({ where })),
     cursor
-      ? prisma.user.findMany({
+      ? withTenantContext(async (tx) => tx.user.findMany({
           where,
           include: { profile: true, memberships: true, documents: true, medicalIntake: { select: { status: true, submittedAt: true, approvedAt: true, rejectedAt: true, rejectionReason: true, phototype: true, consentAccepted: true, createdAt: true } } },
           orderBy: { createdAt: "desc" },
           cursor: { id: cursor },
           skip: 1,
           take: limit,
-        })
-      : prisma.user.findMany({
+        }))
+      : withTenantContext(async (tx) => tx.user.findMany({
           where,
           include: { profile: true, memberships: true, documents: true, medicalIntake: { select: { status: true, submittedAt: true, approvedAt: true, rejectedAt: true, rejectionReason: true, phototype: true, consentAccepted: true, createdAt: true } } },
           orderBy: { createdAt: "desc" },
           skip,
           take: limit,
-        }),
+        })),
     readStripePlanCatalog().catch(() => []),
   ]);
 
@@ -97,10 +98,10 @@ export const listUsers = async (req: AuthRequest, res: Response) => {
 export const getUserById = async (req: AuthRequest, res: Response) => {
   const { userId } = req.params;
   const [user, catalog] = await Promise.all([
-    prisma.user.findUnique({
+    withTenantContext(async (tx) => tx.user.findUnique({
       where: { id: userId },
       include: { profile: true, memberships: true, documents: true, medicalIntake: { select: { status: true, submittedAt: true, approvedAt: true, rejectedAt: true, rejectionReason: true, phototype: true, consentAccepted: true, createdAt: true } } },
-    }),
+    })),
     readStripePlanCatalog().catch(() => []),
   ]);
   if (!user) return res.status(404).json({ message: "Usuario no encontrado" });
@@ -127,12 +128,12 @@ export const getMemberHistory = async (req: AuthRequest, res: Response) => {
       orderBy: { createdAt: "desc" },
       take: 50,
     }),
-    prisma.appointment.findMany({
+    withTenantContext(async (tx) => tx.appointment.findMany({
       where: { userId },
       include: { treatment: { select: { name: true } } },
       orderBy: { startAt: "desc" },
       take: 50,
-    }),
+    })),
     prisma.payment.findMany({
       where: { userId },
       orderBy: { createdAt: "desc" },
@@ -146,10 +147,10 @@ export const getMemberHistory = async (req: AuthRequest, res: Response) => {
 export const updateUserRole = async (req: AuthRequest, res: Response) => {
   const payload = roleUpdateSchema.parse(req.body);
 
-  const targetUser = await prisma.user.findUnique({
+  const targetUser = await withTenantContext(async (tx) => tx.user.findUnique({
     where: { id: req.params.userId },
     select: { id: true, email: true, role: true }
-  });
+  }));
 
   if (!targetUser) {
     return res.status(404).json({ message: "Usuario no encontrado" });
@@ -170,11 +171,11 @@ export const updateUserRole = async (req: AuthRequest, res: Response) => {
     return res.json(targetUser);
   }
 
-  const updated = await prisma.user.update({
+  const updated = await withTenantContext(async (tx) => tx.user.update({
     where: { id: targetUser.id },
     data: { role: payload.role, passwordChangedAt: new Date() },
     select: { id: true, email: true, role: true }
-  });
+  }));
 
   // Revoke all sessions so the new role is enforced immediately
   await revokeAllRefreshTokens(targetUser.id).catch((err: unknown) =>
@@ -212,13 +213,13 @@ export const createPatient = async (req: AuthRequest, res: Response) => {
     if (!validEmail(email)) return res.status(400).json({ message: "Correo inválido" });
     if (!firstName)         return res.status(400).json({ message: "Nombre requerido" });
 
-    const exists = await prisma.user.findUnique({ where: { email }, select: { id: true } });
+    const exists = await withTenantContext(async (tx) => tx.user.findUnique({ where: { email }, select: { id: true } }));
     if (exists) return res.status(409).json({ message: "Ya existe un usuario con ese correo" });
 
-    const actor = await prisma.user.findUnique({
+    const actor = await withTenantContext(async (tx) => tx.user.findUnique({
       where: { id: req.user!.id },
       select: { clinicId: true, email: true, profile: { select: { firstName: true, lastName: true } } }
-    });
+    }));
     const clinicId = await resolveClinicId(actor?.clinicId);
     if (!clinicId) return res.status(400).json({ message: "No se pudo resolver clinicId" });
 
@@ -244,7 +245,7 @@ export const createPatient = async (req: AuthRequest, res: Response) => {
     // Crear user + profile + membership + medicalIntake + documents en una sola transacción atómica.
     // Si medicalIntake.update o membership.updateMany fallan, todo se revierte y el paciente no queda
     // en estado inconsistente (usuario sin expediente o sin plan).
-    const created = await prisma.$transaction(async (tx) => {
+    const created = await withTenantContext(async (tx) => {
       const user = await tx.user.create({
         data: {
           email,
@@ -355,13 +356,13 @@ export const exportUsers = async (req: AuthRequest, res: Response) => {
   let hasMore = true;
 
   while (hasMore) {
-    const batch = await prisma.user.findMany({
+    const batch = await withTenantContext(async (tx) => tx.user.findMany({
       where: { role: "member", deletedAt: null },
       select: { id: true, email: true, createdAt: true, profile: { select: { firstName: true, lastName: true, phone: true } }, memberships: { select: { planId: true, status: true }, take: 1 } },
       orderBy: [{ createdAt: "asc" }, { id: "asc" }],
       take: BATCH,
       ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
-    });
+    }));
 
     for (const u of batch) {
       const ms = u.memberships[0];

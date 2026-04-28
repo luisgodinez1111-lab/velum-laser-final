@@ -1,6 +1,8 @@
 import { prisma } from "../db/prisma";
+import { withTenantContext } from "../db/withTenantContext";
 
-export const getUserByEmail = (email: string) => prisma.user.findUnique({ where: { email } });
+export const getUserByEmail = (email: string) =>
+  withTenantContext(async (tx) => tx.user.findUnique({ where: { email } }));
 
 export const createUser = async (data: {
   email: string;
@@ -10,7 +12,7 @@ export const createUser = async (data: {
   phone?: string;
   birthDate?: string;
 }) => {
-  return prisma.$transaction(async (tx) => {
+  return withTenantContext(async (tx) => {
     return tx.user.create({
       data: {
         email: data.email,
@@ -58,7 +60,9 @@ export const updateProfile = async (userId: string, data: {
 };
 
 export const getUserWithRelations = (userId: string) =>
-  prisma.user.findUnique({
-    where: { id: userId },
-    include: { profile: true, memberships: true, documents: true, medicalIntake: true }
-  });
+  withTenantContext(async (tx) =>
+    tx.user.findUnique({
+      where: { id: userId },
+      include: { profile: true, memberships: true, documents: true, medicalIntake: true }
+    })
+  );

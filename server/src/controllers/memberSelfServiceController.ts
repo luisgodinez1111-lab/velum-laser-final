@@ -1,6 +1,7 @@
 import { Response } from "express";
 import bcrypt from "bcryptjs";
 import { prisma } from "../db/prisma";
+import { withTenantContext } from "../db/withTenantContext";
 import { AuthRequest } from "../middlewares/auth";
 import { normalizePhone, sendWhatsappOtpCode } from "../services/whatsappMetaService";
 import { recordPasswordHistory, isPasswordReused, validatePasswordStrength, hashPassword, verifyPassword } from "../utils/auth";
@@ -46,10 +47,10 @@ const upsertProfileRecord = async (
 };
 
 const getCurrentUser = async (userId: string) =>
-  prisma.user.findUnique({
+  withTenantContext(async (tx) => tx.user.findUnique({
     where: { id: userId },
     select: { id: true, email: true, role: true, passwordHash: true, totpEnabled: true }
-  });
+  }));
 
 const resolvePhoneForUser = async (userId: string, incomingPhone: string): Promise<string> => {
   const direct = normalizePhone(incomingPhone);
@@ -221,10 +222,10 @@ export const changeMyPassword = async (req: AuthRequest, res: Response) => {
   }
 
   const passwordHash = await hashPassword(newPassword);
-  await prisma.user.update({
+  await withTenantContext(async (tx) => tx.user.update({
     where: { id: userId },
     data: { passwordHash, passwordChangedAt: new Date() }
-  });
+  }));
   await recordPasswordHistory(userId, passwordHash);
 
   return res.json({ message: "Contrasena actualizada correctamente" });
@@ -242,7 +243,7 @@ export const getMyData = async (req: AuthRequest, res: Response) => {
   if (!userId) return res.status(401).json({ message: "No autorizado" });
 
   const [user, profile, membership, appointments, payments, intake, documents] = await Promise.all([
-    prisma.user.findUnique({
+    withTenantContext(async (tx) => tx.user.findUnique({
       where: { id: userId },
       select: {
         id: true,
@@ -253,7 +254,7 @@ export const getMyData = async (req: AuthRequest, res: Response) => {
         createdAt: true,
         updatedAt: true,
       },
-    }),
+    })),
     prisma.profile.findUnique({
       where: { userId },
       select: { firstName: true, lastName: true, phone: true, birthDate: true, timezone: true, createdAt: true },
@@ -262,11 +263,11 @@ export const getMyData = async (req: AuthRequest, res: Response) => {
       where: { userId },
       select: { status: true, planCode: true, amount: true, currency: true, currentPeriodEnd: true, createdAt: true },
     }),
-    prisma.appointment.findMany({
+    withTenantContext(async (tx) => tx.appointment.findMany({
       where: { userId },
       select: { id: true, startAt: true, endAt: true, status: true, reason: true, createdAt: true },
       orderBy: { startAt: "desc" },
-    }),
+    })),
     prisma.payment.findMany({
       where: { userId },
       select: { id: true, amount: true, currency: true, status: true, paidAt: true, createdAt: true },
@@ -344,8 +345,8 @@ export const deleteMyAccount = async (req: AuthRequest, res: Response) => {
 
   // Anonimizar datos personales en una transacción atómica
   const anonymizedEmail = `deleted-${userId}@velum.invalid`;
-  await prisma.$transaction([
-    prisma.user.update({
+  await withTenantContext(async (tx) => {
+    await tx.user.update({
       where: { id: userId },
       data: {
         email: anonymizedEmail,
@@ -356,12 +357,12 @@ export const deleteMyAccount = async (req: AuthRequest, res: Response) => {
         totpEnabled: false,
         stripeCustomerId: null,
       },
-    }),
-    prisma.profile.updateMany({
+    });
+    await tx.profile.updateMany({
       where: { userId },
       data: { firstName: null, lastName: null, phone: null, birthDate: null },
-    }),
-  ]);
+    });
+  });
 
   // Limpiar cookies de autenticación
   res.clearCookie("token", { httpOnly: true, sameSite: "lax" });
