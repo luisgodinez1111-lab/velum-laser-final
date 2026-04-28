@@ -149,6 +149,29 @@
 > - ⚠️ **Rollback documentado < 60s**: comentar `RLS_ENFORCE=true` en
 >   `server/.env` y `docker compose restart api worker`. RLS sigue
 >   habilitado pero `withTenantContext` se vuelve no-op.
+>
+> **Estado (ROLLBACK + RE-ACTIVACIÓN con red de seguridad — 2026-04-28):**
+> - ⚠️ Rollback inicial ejecutado tras reporte de "admin no entra al
+>   panel después de login". **La causa NO era RLS** — era el bundle
+>   frontend stale (`admin-settings-C6GiDnsN.js`) con redirect a
+>   `/#/login` (ruta inexistente → NotFound). `apiClient.ts` se había
+>   modificado en commit `f5b5a35` a `/#/agenda?mode=login` pero el
+>   `dist/` nunca se reconstruyó.
+> - ✅ Bundle reconstruido (`npm run build` + `docker compose build nginx`
+>   + recreate). Verificado en ambos: Docker propio (velumlaser.com) y
+>   Vercel (y-pi-puce.vercel.app) sirven bundle nuevo con redirect
+>   correcto.
+> - ✅ Red de seguridad agregada antes de re-activar (commit `15a91f3`):
+>   - `RLS_BYPASS_EMERGENCY` env var → kill switch sin rebuild
+>     (`server/src/db/withTenantContext.ts:42-49`)
+>   - `rlsErrorLogger` middleware → tag `[RLS-ERROR]` en logs +
+>     contador in-memory 5 min
+>     (`server/src/middlewares/rlsErrorLogger.ts`)
+>   - `/api/v1/health/detailed` → bloque `rls.{enforced, bypassEmergency,
+>     errorsLast5Min, errorsByPath, errorsBySqlstate}`
+>   - `scripts/rls-smoke-test.sh` → valida endpoints clave con sesión admin
+> - ✅ `RLS_ENFORCE=true` re-activado, API+worker recreados, login admin
+>   verificado funcional con RLS activo.
 
 ---
 
