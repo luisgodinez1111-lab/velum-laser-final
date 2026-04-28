@@ -1,4 +1,5 @@
 import { prisma } from "../db/prisma";
+import { withTenantContext } from "../db/withTenantContext";
 import { toZonedParts, normalizeDateKey } from "./agendaTimezoneUtils";
 import { getEffectiveRule, buildAgendaSlots, cabinProductivityReport } from "./agendaAvailabilityService";
 import { getAgendaConfig } from "./agendaConfigService";
@@ -18,7 +19,7 @@ export const getAgendaDaySnapshot = async (dateKeyRaw: string) => {
       where: { dateKey },
       orderBy: [{ startMinute: "asc" }, { cabinId: "asc" }]
     }),
-    prisma.appointment.findMany({
+    withTenantContext(async (tx) => tx.appointment.findMany({
       where: {
         startAt: {
           gte: new Date(new Date(dateKey + "T00:00:00Z").getTime() - 2 * 86400000),
@@ -47,7 +48,7 @@ export const getAgendaDaySnapshot = async (dateKeyRaw: string) => {
           }
         }
       }
-    })
+    }))
   ]);
 
   const dayAppointments = appointments.filter((appointment) => {

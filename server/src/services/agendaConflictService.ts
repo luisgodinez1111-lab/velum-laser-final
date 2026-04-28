@@ -1,5 +1,5 @@
 import { AgendaBlockedSlot } from "@prisma/client";
-import { prisma } from "../db/prisma";
+import { withTenantContext } from "../db/withTenantContext";
 import { bufferedRange, overlapsRange, comparableStatuses } from "./agendaTimezoneUtils";
 import { AppError } from "../utils/AppError";
 
@@ -46,7 +46,7 @@ export const hasCabinConflict = async ({
   });
   const aroundWindowMs = 240 * 60 * 1000;
 
-  const appointments = await prisma.appointment.findMany({
+  const appointments = await withTenantContext(async (tx) => tx.appointment.findMany({
     where: {
       ...(excludeAppointmentId
         ? {
@@ -77,7 +77,7 @@ export const hasCabinConflict = async ({
         }
       }
     }
-  });
+  }));
 
   return appointments.some((appointment) => {
     const existingBuffered = bufferedRange({
@@ -131,7 +131,7 @@ export const hasCabinConflictBatch = async ({
   const aroundWindowMs = 240 * 60 * 1000;
 
   // Una sola query trae los appointments de TODAS las cabinas candidatas
-  const appointments = await prisma.appointment.findMany({
+  const appointments = await withTenantContext(async (tx) => tx.appointment.findMany({
     where: {
       ...(excludeAppointmentId ? { id: { not: excludeAppointmentId } } : {}),
       status: {
@@ -161,7 +161,7 @@ export const hasCabinConflictBatch = async ({
         }
       }
     }
-  });
+  }));
 
   for (const appointment of appointments) {
     const existingBuffered = bufferedRange({
