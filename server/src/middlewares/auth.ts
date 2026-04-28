@@ -1,7 +1,7 @@
 import { NextFunction, Request, Response } from "express";
 import { verifyToken } from "../utils/auth";
 import { env } from "../utils/env";
-import { prisma } from "../db/prisma";
+import { withTenantContext } from "../db/withTenantContext";
 import { runWithTenant } from "../utils/tenantContext";
 
 export type AuthRequest = Request & {
@@ -66,10 +66,10 @@ const validateAuthToken = async (req: Request): Promise<TokenValidationResult> =
 
     let userAuth = getCachedUserAuth(payload.sub);
     if (!userAuth) {
-      const dbUser = await prisma.user.findUnique({
+      const dbUser = await withTenantContext(async (tx) => tx.user.findUnique({
         where: { id: payload.sub },
         select: { passwordChangedAt: true, isActive: true, clinicId: true },
-      });
+      }));
       if (dbUser) {
         setCachedUserAuth(payload.sub, dbUser);
         userAuth = { ...dbUser, cachedAt: Date.now() };

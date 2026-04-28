@@ -2,6 +2,7 @@ import { Response } from "express";
 import bcrypt from "bcryptjs";
 import type { Role } from "@prisma/client";
 import { prisma } from "../db/prisma";
+import { withTenantContext } from "../db/withTenantContext";
 import { AuthRequest } from "../middlewares/auth";
 import { createAuditLog } from "../services/auditService";
 import { generateTotpSecret, verifyTotpCode, getTotpUri } from "../utils/totp";
@@ -34,13 +35,13 @@ async function pruneExpiredOtps(): Promise<void> {
 export const getTotpSetup = async (req: AuthRequest, res: Response) => {
   const userId = req.user?.id;
   if (!userId) return res.status(401).json({ message: "No autorizado" });
-  const user = await prisma.user.findUnique({ where: { id: userId }, select: { email: true, totpEnabled: true } });
+  const user = await withTenantContext(async (tx) => tx.user.findUnique({ where: { id: userId }, select: { email: true, totpEnabled: true } }));
   if (!user) return res.status(404).json({ message: "Usuario no encontrado" });
   if (user.totpEnabled) return res.status(409).json({ message: "2FA ya está habilitado" });
   const secret = generateTotpSecret();
   const uri = getTotpUri(secret, user.email);
   // Almacena secreto temporal para verificación — se activa solo tras confirmar
-  await prisma.user.update({ where: { id: userId }, data: { totpSecret: secret } });
+  await withTenantContext(async (tx) => tx.user.update({ where: { id: userId }, data: { totpSecret: secret } }));
   return res.json({ secret, uri });
 };
 
@@ -50,11 +51,11 @@ export const enableTotp = async (req: AuthRequest, res: Response) => {
   if (!userId) return res.status(401).json({ message: "No autorizado" });
   const code = String(req.body?.code ?? "").trim();
   if (!code) return res.status(400).json({ message: "Código requerido" });
-  const user = await prisma.user.findUnique({ where: { id: userId }, select: { totpSecret: true, totpEnabled: true } });
+  const user = await withTenantContext(async (tx) => tx.user.findUnique({ where: { id: userId }, select: { totpSecret: true, totpEnabled: true } }));
   if (!user?.totpSecret) return res.status(400).json({ message: "Inicia el setup primero con GET /totp/setup" });
   if (user.totpEnabled) return res.status(409).json({ message: "2FA ya está habilitado" });
   if (!verifyTotpCode(user.totpSecret, code)) return res.status(400).json({ message: "Código incorrecto" });
-  await prisma.user.update({ where: { id: userId }, data: { totpEnabled: true } });
+  await withTenantContext(async (tx) => tx.user.update({ where: { id: userId }, data: { totpEnabled: true } }));
   await createAuditLog({ userId, actorUserId: userId, action: "auth.totp_enabled", resourceType: "user", resourceId: userId, ip: req.ip, metadata: {} });
   return res.json({ message: "2FA activado correctamente" });
 };
@@ -65,10 +66,10 @@ export const disableTotp = async (req: AuthRequest, res: Response) => {
   if (!userId) return res.status(401).json({ message: "No autorizado" });
   const code = String(req.body?.code ?? "").trim();
   if (!code) return res.status(400).json({ message: "Código requerido para desactivar 2FA" });
-  const user = await prisma.user.findUnique({ where: { id: userId }, select: { totpSecret: true, totpEnabled: true } });
+  const user = await withTenantContext(async (tx) => tx.user.findUnique({ where: { id: userId }, select: { totpSecret: true, totpEnabled: true } }));
   if (!user?.totpEnabled || !user.totpSecret) return res.status(400).json({ message: "2FA no está habilitado" });
   if (!verifyTotpCode(user.totpSecret, code)) return res.status(400).json({ message: "Código incorrecto" });
-  await prisma.user.update({ where: { id: userId }, data: { totpEnabled: false, totpSecret: null } });
+  await withTenantContext(async (tx) => tx.user.update({ where: { id: userId }, data: { totpEnabled: false, totpSecret: null } }));
   await createAuditLog({ userId, actorUserId: userId, action: "auth.totp_disabled", resourceType: "user", resourceId: userId, ip: req.ip, metadata: {} });
   return res.json({ message: "2FA desactivado" });
 };
@@ -78,8 +79,8 @@ export const listAdminAccessUsers = async (req: AuthRequest, res: Response) => {
     const { page, limit, skip } = parsePagination(queryParams(req), { maxLimit: 200, defaultLimit: 100 });
 
     const [total, users] = await Promise.all([
-      prisma.user.count({ where: { deletedAt: null } }),
-      prisma.user.findMany({
+      withTenantContext(async (tx) => tx.user.count({ where: { deletedAt: null } })),
+      withTenantContext(async (tx) => tx.user.findMany({
         where: { deletedAt: null },
         orderBy: { createdAt: "desc" },
         skip,
@@ -94,7 +95,7 @@ export const listAdminAccessUsers = async (req: AuthRequest, res: Response) => {
           emailVerifiedAt: true,
           memberships: { select: { stripeSubscriptionId: true, status: true } },
         },
-      }),
+      })),
     ]);
 
     const store = await readAccessStore();
@@ -154,19 +155,19 @@ export const createAdminAccessUser = async (req: AuthRequest, res: Response) => 
       if (strengthError) return res.status(400).json({ message: strengthError });
     }
 
-    const actor = await prisma.user.findUnique({
+    const actor = await withTenantContext(async (tx) => tx.user.findUnique({
       where: { id: req.user!.id },
       select: { clinicId: true, email: true, profile: { select: { firstName: true, lastName: true } } },
-    });
+    }));
     const clinicId = await resolveClinicId(actor?.clinicId);
     if (!clinicId) return res.status(400).json({ message: "No se pudo resolver clinicId" });
 
-    const exists = await prisma.user.findUnique({ where: { email }, select: { id: true } });
+    const exists = await withTenantContext(async (tx) => tx.user.findUnique({ where: { email }, select: { id: true } }));
     if (exists) return res.status(409).json({ message: "Ya existe un usuario con ese correo" });
 
     const passwordHash = await hashPassword(password);
 
-    const created = await prisma.user.create({
+    const created = await withTenantContext(async (tx) => tx.user.create({
       data: {
         email,
         passwordHash,
@@ -187,7 +188,7 @@ export const createAdminAccessUser = async (req: AuthRequest, res: Response) => 
         } : {}),
       },
       select: { id: true, email: true, role: true, createdAt: true },
-    });
+    }));
 
     if (isAdminOrStaff) {
       const perms = Array.isArray(incomingPerms) && incomingPerms.length > 0
@@ -247,10 +248,10 @@ export const updateAdminAccessUser = async (req: AuthRequest, res: Response) => 
     const nextRoleRaw = clean(updateBody?.role);
     const incomingPerms = updateBody?.permissions;
 
-    const current = await prisma.user.findUnique({
+    const current = await withTenantContext(async (tx) => tx.user.findUnique({
       where: { id: userId },
       select: { id: true, role: true, email: true },
-    });
+    }));
     if (!current) return res.status(404).json({ message: "Usuario no encontrado" });
 
     let nextRole = current.role;
@@ -259,11 +260,11 @@ export const updateAdminAccessUser = async (req: AuthRequest, res: Response) => 
       nextRole = nextRoleRaw as Role;
     }
 
-    const updated = await prisma.user.update({
+    const updated = await withTenantContext(async (tx) => tx.user.update({
       where: { id: userId },
       data: { role: nextRole, passwordChangedAt: new Date() },
       select: { id: true, email: true, role: true, createdAt: true },
-    });
+    }));
 
     // Invalidate all existing sessions so the new role takes effect immediately
     if (nextRoleRaw && nextRole !== current.role) {
@@ -308,11 +309,11 @@ export const resetAdminAccessPassword = async (req: AuthRequest, res: Response) 
     const strengthError = validatePasswordStrength(newPassword);
     if (strengthError) return res.status(400).json({ message: strengthError });
 
-    const found = await prisma.user.findUnique({ where: { id: userId }, select: { id: true } });
+    const found = await withTenantContext(async (tx) => tx.user.findUnique({ where: { id: userId }, select: { id: true } }));
     if (!found) return res.status(404).json({ message: "Usuario no encontrado" });
 
     const passwordHash = await hashPassword(newPassword);
-    await prisma.user.update({ where: { id: userId }, data: { passwordHash, passwordChangedAt: new Date(), mustChangePassword: true } });
+    await withTenantContext(async (tx) => tx.user.update({ where: { id: userId }, data: { passwordHash, passwordChangedAt: new Date(), mustChangePassword: true } }));
 
     // Revoke all sessions so the new password takes effect immediately
     await revokeAllRefreshTokens(userId).catch((err: unknown) =>
@@ -347,10 +348,10 @@ export const deactivateUser = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ message: "No puedes desactivar tu propia cuenta" });
     }
 
-    const target = await prisma.user.findUnique({
+    const target = await withTenantContext(async (tx) => tx.user.findUnique({
       where: { id: targetUserId },
       select: { id: true, email: true, role: true, isActive: true, memberships: { select: { stripeSubscriptionId: true, status: true } } },
-    });
+    }));
     if (!target) return res.status(404).json({ message: "Usuario no encontrado" });
     if (!target.isActive) return res.status(409).json({ message: "El usuario ya está desactivado" });
 
@@ -377,10 +378,10 @@ export const deactivateUser = async (req: AuthRequest, res: Response) => {
     }
 
     // Mark user as inactive
-    await prisma.user.update({
+    await withTenantContext(async (tx) => tx.user.update({
       where: { id: targetUserId },
       data: { isActive: false, deactivatedAt: new Date() },
-    });
+    }));
     invalidateAdminIdCache(); // deactivated user may have been admin/staff
 
     await createAuditLog({
@@ -411,17 +412,17 @@ export const activateUser = async (req: AuthRequest, res: Response) => {
     const actorId = req.user!.id;
     const targetUserId = clean(req.params.userId);
 
-    const target = await prisma.user.findUnique({
+    const target = await withTenantContext(async (tx) => tx.user.findUnique({
       where: { id: targetUserId },
       select: { id: true, email: true, isActive: true },
-    });
+    }));
     if (!target) return res.status(404).json({ message: "Usuario no encontrado" });
     if (target.isActive) return res.status(409).json({ message: "El usuario ya está activo" });
 
-    await prisma.user.update({
+    await withTenantContext(async (tx) => tx.user.update({
       where: { id: targetUserId },
       data: { isActive: true, deactivatedAt: null },
-    });
+    }));
     invalidateAdminIdCache(); // reactivated user may be admin/staff
 
     await createAuditLog({
@@ -454,8 +455,8 @@ export const requestDeleteUserOtp = async (req: AuthRequest, res: Response) => {
     }
 
     const [target, actor] = await Promise.all([
-      prisma.user.findUnique({ where: { id: targetUserId }, select: { id: true, email: true, role: true } }),
-      prisma.user.findUnique({ where: { id: actorId }, select: { id: true, email: true } }),
+      withTenantContext(async (tx) => tx.user.findUnique({ where: { id: targetUserId }, select: { id: true, email: true, role: true } })),
+      withTenantContext(async (tx) => tx.user.findUnique({ where: { id: actorId }, select: { id: true, email: true } })),
     ]);
 
     if (!target) return res.status(404).json({ message: "Usuario no encontrado" });
@@ -550,10 +551,10 @@ export const deleteUser = async (req: AuthRequest, res: Response) => {
     // OTP valid — consume it immediately
     await prisma.deleteOtp.delete({ where: { actorUserId: actorId } }).catch(() => {});
 
-    const target = await prisma.user.findUnique({
+    const target = await withTenantContext(async (tx) => tx.user.findUnique({
       where: { id: targetUserId },
       select: { id: true, email: true, role: true },
-    });
+    }));
     if (!target) return res.status(404).json({ message: "Usuario no encontrado" });
 
     // Cancel Stripe subscription before deleting
@@ -590,24 +591,24 @@ export const deleteUser = async (req: AuthRequest, res: Response) => {
     }
 
     // Reassign Restrict FK relations before deleting
-    await prisma.appointment.updateMany({
+    await withTenantContext(async (tx) => tx.appointment.updateMany({
       where: { createdByUserId: targetUserId },
       data: { createdByUserId: actorId },
-    });
+    }));
     await prisma.sessionTreatment.updateMany({
       where: { staffUserId: targetUserId },
       data: { staffUserId: actorId },
     });
 
     // Soft delete: mark user as deleted instead of hard-deleting
-    await prisma.user.update({
+    await withTenantContext(async (tx) => tx.user.update({
       where: { id: targetUserId },
       data: {
         deletedAt: new Date(),
         deletedBy: actorId,
         isActive: false,
       },
-    });
+    }));
 
     await createAuditLog({
       userId: actorId,

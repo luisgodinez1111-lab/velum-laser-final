@@ -7,6 +7,7 @@ import { hashPassword, signToken, verifyPassword, createRefreshToken, rotateRefr
 import { env, isProduction } from "../utils/env";
 import { createEmailVerification, createPasswordReset, consumeEmailVerification, consumePasswordReset, createConsentOtp, consumeConsentOtp } from "../services/authService";
 import { prisma } from "../db/prisma";
+import { withTenantContext } from "../db/withTenantContext";
 import { createAuditLog } from "../services/auditService";
 import { sendPasswordResetEmail, sendEmailVerificationEmail, sendConsentOtpEmail } from "../services/emailService";
 import { onNewMember } from "../services/notificationService";
@@ -194,10 +195,10 @@ export const refreshToken = async (req: Request, res: Response) => {
     return res.status(401).json({ message: "Sesión expirada. Inicia sesión de nuevo." });
   }
 
-  const user = await prisma.user.findUnique({
+  const user = await withTenantContext(async (tx) => tx.user.findUnique({
     where: { id: result.userId },
     select: { id: true, email: true, role: true, isActive: true },
-  });
+  }));
 
   if (!user || !user.isActive) {
     await revokeAllRefreshTokens(result.userId).catch((err) => logger.warn({ err, userId: result.userId }, "[auth] refresh: failed to revoke all tokens for inactive user"));
@@ -252,10 +253,10 @@ export const resetPassword = async (req: Request, res: Response) => {
   }
 
   const newHash = await hashPassword(payload.password);
-  await prisma.user.update({
+  await withTenantContext(async (tx) => tx.user.update({
     where: { id: reset.userId },
     data: { passwordHash: newHash, passwordChangedAt: new Date() }
-  });
+  }));
   await recordPasswordHistory(reset.userId, newHash);
 
   await createAuditLog({
@@ -312,10 +313,10 @@ export const resendVerification = async (req: Request, res: Response) => {
 // ── OTP para firma de consentimiento informado ────────────────────────
 export const sendConsentOtp = async (req: AuthRequest, res: Response) => {
   const userId = req.user!.id;
-  const user = await prisma.user.findUnique({
+  const user = await withTenantContext(async (tx) => tx.user.findUnique({
     where: { id: userId },
     select: { email: true, profile: { select: { firstName: true, lastName: true } } }
-  });
+  }));
   if (!user) {
     return res.status(404).json({ message: "Usuario no encontrado" });
   }
@@ -365,10 +366,10 @@ export const changeInitialPassword = async (req: AuthRequest, res: Response) => 
   const strengthError = validatePasswordStrength(newPassword);
   if (strengthError) return res.status(400).json({ message: strengthError });
 
-  const user = await prisma.user.findUnique({
+  const user = await withTenantContext(async (tx) => tx.user.findUnique({
     where: { id: userId },
     select: { mustChangePassword: true }
-  });
+  }));
 
   if (!user?.mustChangePassword) {
     return res.status(400).json({ message: "No hay contraseña temporal pendiente de cambio" });
@@ -389,14 +390,14 @@ export const changeInitialPassword = async (req: AuthRequest, res: Response) => 
   }
 
   const passwordHash = await hashPassword(newPassword);
-  await prisma.user.update({
+  await withTenantContext(async (tx) => tx.user.update({
     where: { id: userId },
     data: {
       passwordHash,
       mustChangePassword: false,
       passwordChangedAt: new Date()
     }
-  });
+  }));
   await recordPasswordHistory(userId, passwordHash);
 
   await createAuditLog({

@@ -1,6 +1,7 @@
 import { randomBytes } from "crypto";
 import { addHours } from "../utils/date";
 import { prisma } from "../db/prisma";
+import { withTenantContext } from "../db/withTenantContext";
 import { generateOtp } from "../utils/crypto";
 
 // El token almacenado en DB combina userId + OTP para garantizar unicidad
@@ -37,7 +38,7 @@ export const consumeEmailVerification = async (userId: string, otp: string) => {
     return null;
   }
 
-  await prisma.user.update({ where: { id: record.userId }, data: { emailVerifiedAt: new Date() } });
+  await withTenantContext(async (tx) => tx.user.update({ where: { id: record.userId }, data: { emailVerifiedAt: new Date() } }));
   await prisma.emailVerificationToken.delete({ where: { token } });
   return record;
 };

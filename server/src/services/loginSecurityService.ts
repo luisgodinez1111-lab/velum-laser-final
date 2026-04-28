@@ -7,7 +7,7 @@
  *
  * Extraído de authController para que sea testeable de forma aislada y reutilizable.
  */
-import { prisma } from "../db/prisma";
+import { withTenantContext } from "../db/withTenantContext";
 import { logger } from "../utils/logger";
 
 export const LOGIN_MAX_FAILURES = 10;
@@ -36,17 +36,17 @@ export const isAccountLocked = async (email: string): Promise<boolean> => {
   }
 
   try {
-    const user = await prisma.user.findUnique({
+    const user = await withTenantContext(async (tx) => tx.user.findUnique({
       where: { email: key },
       select: { loginLockedUntil: true },
-    });
+    }));
     if (!user?.loginLockedUntil) return false;
     if (user.loginLockedUntil > new Date()) return true;
     // Lockout expirado — limpiar en background
-    await prisma.user.update({
+    await withTenantContext(async (tx) => tx.user.update({
       where: { email: key },
       data: { loginLockedUntil: null, loginFailedCount: 0 },
-    }).catch(() => {});
+    })).catch(() => {});
     return false;
   } catch {
     return false;
@@ -58,17 +58,17 @@ export const isAccountLocked = async (email: string): Promise<boolean> => {
  */
 export const recordLoginFailure = async (email: string): Promise<void> => {
   try {
-    const user = await prisma.user.update({
+    const user = await withTenantContext(async (tx) => tx.user.update({
       where: { email: email.toLowerCase() },
       data: { loginFailedCount: { increment: 1 } },
       select: { loginFailedCount: true },
-    });
+    }));
     if (user.loginFailedCount >= LOGIN_MAX_FAILURES) {
       const expiresAt = new Date(Date.now() + LOGIN_LOCKOUT_MS);
-      await prisma.user.update({
+      await withTenantContext(async (tx) => tx.user.update({
         where: { email: email.toLowerCase() },
         data: { loginLockedUntil: expiresAt },
-      });
+      }));
       // Sincronizar fast-path en memoria
       inMemoryLockout.set(email.toLowerCase(), expiresAt.getTime());
     }
@@ -82,8 +82,8 @@ export const recordLoginFailure = async (email: string): Promise<void> => {
  */
 export const clearLoginFailures = async (email: string): Promise<void> => {
   inMemoryLockout.delete(email.toLowerCase());
-  await prisma.user.updateMany({
+  await withTenantContext(async (tx) => tx.user.updateMany({
     where: { email: email.toLowerCase() },
     data: { loginFailedCount: 0, loginLockedUntil: null },
-  }).catch(() => {});
+  })).catch(() => {});
 };
