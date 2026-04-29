@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Button } from "../components/ui";
+import { Button, PillButton } from "../components/ui";
 import { PasswordInput } from "../components/PasswordInput";
-import { ChevronLeft, ChevronRight, Lock, User, Sparkles, Shield, FileText, Stethoscope, CircleCheck, KeyRound, Mail } from "lucide-react";
+import { ChevronLeft, ChevronRight, Lock, User, Sparkles, Shield, FileText, Stethoscope, CircleCheck, KeyRound, Mail, Check } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { clinicalService, MedicalIntake } from "../services/clinicalService";
@@ -36,10 +36,13 @@ const emptyIntakeDraft: IntakeDraft = {
   consentAccepted: false
 };
 
+// Tokens (Apple híbrido — cliente)
+// labelClass migrado a sans semibold per MASTER §6.3 (cero microlabels uppercase en cliente).
+// glassCardClass migrado de shadow extrema (24px blur 80px) a shadow-lg tokenizado.
 const shellWrapperClass = "w-full max-w-5xl mx-auto px-4 py-8 sm:py-10 animate-fade-in";
-const glassCardClass = "rounded-[28px] border border-velum-200/80 bg-white/95 shadow-[0_24px_80px_rgba(84,69,56,0.12)] backdrop-blur-sm";
-const fieldClass = "w-full rounded-2xl bg-velum-50 border border-velum-200/60 px-5 py-4 text-[15px] text-velum-900 placeholder:text-velum-400 outline-none transition-all duration-200 focus:bg-white focus:border-velum-900 focus:ring-4 focus:ring-velum-900/[0.07]";
-const labelClass = "mb-2 block text-[11px] font-bold uppercase tracking-[0.18em] text-velum-500";
+const glassCardClass = "rounded-3xl border border-velum-200/80 bg-white shadow-lg";
+const fieldClass = "w-full rounded-2xl bg-velum-50 border border-velum-200/60 px-5 py-4 text-[15px] text-velum-900 placeholder:text-velum-400 outline-none transition-all duration-base ease-standard focus:bg-white focus:border-velum-900 focus:ring-4 focus:ring-velum-900/[0.07]";
+const labelClass = "mb-2 block text-[13px] font-semibold text-velum-500";
 
 const intakeStepMeta = [
   {
@@ -97,7 +100,7 @@ export const Agenda: React.FC = () => {
   const registerPasswordStrength =
     registerPasswordScore <= 2 ? "Debil" : registerPasswordScore <= 4 ? "Media" : "Fuerte";
   const registerPasswordStrengthClass =
-    registerPasswordScore <= 2 ? "text-red-600" : registerPasswordScore <= 4 ? "text-amber-600" : "text-green-700";
+    registerPasswordScore <= 2 ? "text-danger-700" : registerPasswordScore <= 4 ? "text-warning-700" : "text-success-700";
 
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -594,37 +597,35 @@ export const Agenda: React.FC = () => {
   if (!isAuthenticated && __effectiveViewState === "intro") {
     return (
       <div className="min-h-[calc(100vh-7rem)] flex animate-fade-in">
-        {/* Brand panel */}
-        <div className="hidden lg:flex flex-col justify-between w-[44%] bg-velum-900 p-12 xl:p-16 relative overflow-hidden">
-          <div className="absolute -top-40 -right-40 w-96 h-96 rounded-full bg-velum-700/25 blur-[80px] pointer-events-none" />
-          <div className="absolute -bottom-32 -left-20 w-72 h-72 rounded-full bg-velum-600/15 blur-[60px] pointer-events-none" />
-          <div className="relative">
+        {/* Brand panel — Apple híbrido sin blobs */}
+        <div className="hidden lg:flex flex-col justify-between w-[44%] bg-velum-900 p-12 xl:p-16">
+          <div>
             <div className="inline-flex items-center gap-2 mb-10">
               <div className="w-1.5 h-1.5 rounded-full bg-velum-400" />
-              <p className="text-[11px] font-bold uppercase tracking-[0.26em] text-velum-400">Velum Laser</p>
+              <p className="text-[13px] font-semibold text-velum-300">Velum Laser</p>
             </div>
-            <h1 className="font-serif text-4xl xl:text-5xl italic text-white leading-[1.15]">
+            <h1 className="font-sans font-bold text-white text-4xl xl:text-5xl tracking-[-0.025em] leading-[1.05]">
               Tu piel.<br/>Tu agenda.<br/>Tu historia.
             </h1>
-            <p className="mt-7 text-velum-300 text-[13px] font-light leading-relaxed max-w-[260px]">
+            <p className="mt-7 text-velum-300 text-[14px] leading-relaxed max-w-[280px]">
               Plataforma clínica privada para depilación láser de alto estándar. Expediente digital, seguimiento y membresía integrados.
             </p>
           </div>
-          <div className="relative">
+          <div>
             <div className="space-y-3 mb-8">
-              <div className="flex items-center gap-3 text-velum-300 text-sm">
+              <div className="flex items-center gap-3 text-velum-200 text-[14px]">
                 <div className="w-7 h-7 rounded-xl bg-velum-800 flex items-center justify-center shrink-0">
                   <Shield size={13} className="text-velum-400" />
                 </div>
                 Historial clínico protegido y privado
               </div>
-              <div className="flex items-center gap-3 text-velum-300 text-sm">
+              <div className="flex items-center gap-3 text-velum-200 text-[14px]">
                 <div className="w-7 h-7 rounded-xl bg-velum-800 flex items-center justify-center shrink-0">
                   <CircleCheck size={13} className="text-velum-400" />
                 </div>
                 Agenda directa sin intermediarios
               </div>
-              <div className="flex items-center gap-3 text-velum-300 text-sm">
+              <div className="flex items-center gap-3 text-velum-200 text-[14px]">
                 <div className="w-7 h-7 rounded-xl bg-velum-800 flex items-center justify-center shrink-0">
                   <Sparkles size={13} className="text-velum-400" />
                 </div>
@@ -632,8 +633,8 @@ export const Agenda: React.FC = () => {
               </div>
             </div>
             <div className="flex items-center gap-2 pt-5 border-t border-velum-800">
-              <Lock size={11} className="text-velum-600" />
-              <p className="text-[11px] uppercase tracking-[0.16em] text-velum-600">Sesión encriptada</p>
+              <Lock size={11} className="text-velum-500" />
+              <p className="text-[12px] font-medium text-velum-500">Sesión encriptada</p>
             </div>
           </div>
         </div>
@@ -644,45 +645,45 @@ export const Agenda: React.FC = () => {
             <div className="mb-10 text-center lg:hidden">
               <div className="inline-flex items-center gap-2 mb-3">
                 <div className="w-1.5 h-1.5 rounded-full bg-velum-500" />
-                <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-velum-500">Velum Laser</p>
+                <p className="text-[13px] font-semibold text-velum-500">Velum Laser</p>
               </div>
-              <h1 className="font-serif text-4xl italic text-velum-900">Portal de pacientes</h1>
+              <h1 className="font-sans font-bold text-velum-900 text-4xl tracking-[-0.025em]">Portal de pacientes</h1>
             </div>
             <div className="mb-10 hidden lg:block">
-              <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-velum-500 mb-2">Portal de pacientes</p>
-              <h2 className="font-serif text-[2.5rem] italic text-velum-900 leading-tight">¿Cómo deseas acceder?</h2>
+              <p className="text-[13px] font-semibold text-velum-500 mb-3">Portal de pacientes</p>
+              <h2 className="font-sans font-bold text-velum-900 text-4xl xl:text-[2.75rem] tracking-[-0.025em] leading-[1.05]">¿Cómo deseas acceder?</h2>
             </div>
             <div className="space-y-4">
               <button
                 type="button"
                 onClick={() => setGuestViewState("login")}
-                className="group w-full flex items-center gap-5 rounded-3xl border-2 border-velum-100 bg-velum-50 p-6 text-left transition-all duration-300 hover:border-velum-300 hover:bg-white hover:shadow-lg active:scale-[0.99]"
+                className="group w-full flex items-center gap-5 rounded-3xl border-2 border-velum-100 bg-velum-50 p-6 text-left transition-all duration-base ease-standard hover:border-velum-300 hover:bg-white hover:shadow-md active:scale-[0.99] focus:outline-none focus-visible:shadow-focus"
               >
-                <div className="w-12 h-12 rounded-2xl bg-white shadow-sm border border-velum-200 flex items-center justify-center text-velum-700 group-hover:bg-velum-900 group-hover:text-white group-hover:border-velum-900 transition-all duration-300 shrink-0">
+                <div className="w-12 h-12 rounded-2xl bg-white shadow-sm border border-velum-200 flex items-center justify-center text-velum-700 group-hover:bg-velum-900 group-hover:text-white group-hover:border-velum-900 transition-all duration-base ease-standard shrink-0">
                   <User size={20} />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-velum-500 mb-0.5">Ya tengo cuenta</p>
+                  <p className="text-[13px] font-semibold text-velum-500 mb-0.5">Ya tengo cuenta</p>
                   <p className="text-[17px] font-semibold text-velum-900">Iniciar sesión</p>
                 </div>
-                <ChevronRight size={18} className="text-velum-300 group-hover:text-velum-700 group-hover:translate-x-0.5 transition-all duration-200 shrink-0" />
+                <ChevronRight size={18} className="text-velum-300 group-hover:text-velum-700 group-hover:translate-x-0.5 transition-all duration-base ease-standard shrink-0" />
               </button>
               <button
                 type="button"
                 onClick={() => setGuestViewState("register")}
-                className="group w-full flex items-center gap-5 rounded-3xl bg-velum-900 p-6 text-left transition-all duration-300 hover:bg-velum-800 hover:shadow-xl active:scale-[0.99]"
+                className="group w-full flex items-center gap-5 rounded-3xl bg-velum-900 p-6 text-left transition-all duration-base ease-standard hover:bg-velum-800 hover:shadow-md active:scale-[0.99] focus:outline-none focus-visible:shadow-focus"
               >
-                <div className="w-12 h-12 rounded-2xl bg-velum-800 flex items-center justify-center text-velum-300 group-hover:bg-velum-700 transition-all duration-300 shrink-0">
+                <div className="w-12 h-12 rounded-2xl bg-velum-800 flex items-center justify-center text-velum-300 group-hover:bg-velum-700 transition-all duration-base ease-standard shrink-0">
                   <Sparkles size={20} />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-velum-500 mb-0.5">Primera visita</p>
+                  <p className="text-[13px] font-semibold text-velum-300 mb-0.5">Primera visita</p>
                   <p className="text-[17px] font-semibold text-white">Crear cuenta</p>
                 </div>
-                <ChevronRight size={18} className="text-velum-600 group-hover:text-velum-300 group-hover:translate-x-0.5 transition-all duration-200 shrink-0" />
+                <ChevronRight size={18} className="text-velum-600 group-hover:text-velum-300 group-hover:translate-x-0.5 transition-all duration-base ease-standard shrink-0" />
               </button>
             </div>
-            <p className="mt-10 text-center text-[11px] text-velum-400">
+            <p className="mt-10 text-center text-[12px] text-velum-400">
               Acceso exclusivo para pacientes registrados en Velum Laser
             </p>
           </div>
@@ -694,31 +695,29 @@ export const Agenda: React.FC = () => {
   if (!isAuthenticated && __effectiveViewState === "login") {
     return (
       <div className="min-h-[calc(100vh-7rem)] flex animate-fade-in">
-        {/* Brand panel */}
-        <div className="hidden lg:flex flex-col justify-between w-[44%] bg-velum-900 p-12 xl:p-16 relative overflow-hidden">
-          <div className="absolute -top-40 -right-40 w-96 h-96 rounded-full bg-velum-700/25 blur-[80px] pointer-events-none" />
-          <div className="absolute bottom-0 left-0 w-80 h-80 rounded-full bg-velum-600/15 blur-[60px] pointer-events-none" />
-          <div className="relative">
+        {/* Brand panel — Apple híbrido sin blobs */}
+        <div className="hidden lg:flex flex-col justify-between w-[44%] bg-velum-900 p-12 xl:p-16">
+          <div>
             <div className="inline-flex items-center gap-2 mb-10">
               <div className="w-1.5 h-1.5 rounded-full bg-velum-400" />
-              <p className="text-[11px] font-bold uppercase tracking-[0.26em] text-velum-400">Velum Laser</p>
+              <p className="text-[13px] font-semibold text-velum-300">Velum Laser</p>
             </div>
-            <h1 className="font-serif text-4xl xl:text-[2.75rem] italic text-white leading-[1.2]">
+            <h1 className="font-sans font-bold text-white text-4xl xl:text-[2.75rem] tracking-[-0.025em] leading-[1.05]">
               Bienvenido<br/>de vuelta.
             </h1>
-            <p className="mt-6 text-velum-300 text-[13px] font-light leading-relaxed max-w-[260px]">
+            <p className="mt-6 text-velum-300 text-[14px] leading-relaxed max-w-[280px]">
               Tu expediente clínico y agenda te esperan. Ingresa para continuar.
             </p>
           </div>
-          <div className="relative">
+          <div>
             <div className="space-y-3 mb-8">
-              <div className="flex items-center gap-3 text-velum-300 text-sm">
+              <div className="flex items-center gap-3 text-velum-200 text-[14px]">
                 <div className="w-7 h-7 rounded-xl bg-velum-800 flex items-center justify-center shrink-0">
                   <Shield size={13} className="text-velum-400" />
                 </div>
                 Datos clínicos protegidos
               </div>
-              <div className="flex items-center gap-3 text-velum-300 text-sm">
+              <div className="flex items-center gap-3 text-velum-200 text-[14px]">
                 <div className="w-7 h-7 rounded-xl bg-velum-800 flex items-center justify-center shrink-0">
                   <CircleCheck size={13} className="text-velum-400" />
                 </div>
@@ -726,11 +725,11 @@ export const Agenda: React.FC = () => {
               </div>
             </div>
             <div className="flex items-center gap-3 pt-5 border-t border-velum-800">
-              <span className="text-[11px] uppercase tracking-[0.16em] text-velum-600">¿Primera vez?</span>
+              <span className="text-[13px] text-velum-500">¿Primera vez?</span>
               <button
                 type="button"
                 onClick={() => setGuestViewState("register")}
-                className="text-[11px] uppercase tracking-[0.16em] text-velum-400 underline underline-offset-2 hover:text-velum-200 transition"
+                className="text-[13px] font-medium text-velum-300 underline underline-offset-2 hover:text-velum-100 transition-colors duration-base ease-standard"
               >
                 Crear cuenta
               </button>
@@ -744,16 +743,16 @@ export const Agenda: React.FC = () => {
             <button
               type="button"
               onClick={() => setGuestViewState("intro")}
-              className="mb-10 inline-flex items-center gap-1.5 text-sm text-velum-400 hover:text-velum-900 transition-colors"
+              className="mb-10 inline-flex items-center gap-1.5 text-[14px] text-velum-500 hover:text-velum-900 transition-colors duration-base ease-standard"
             >
               <ChevronLeft size={16} />
               Atrás
             </button>
-            <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-velum-500 mb-2">Acceso seguro</p>
-            <h2 className="font-serif text-[2.25rem] italic text-velum-900 mb-10 leading-tight">Iniciar sesión</h2>
+            <p className="text-[13px] font-semibold text-velum-500 mb-3">Acceso seguro</p>
+            <h2 className="font-sans font-bold text-velum-900 text-4xl xl:text-[2.5rem] tracking-[-0.025em] leading-[1.05] mb-10">Iniciar sesión</h2>
             <form onSubmit={handleLoginSubmit} className="space-y-5">
               <div>
-                <label className="mb-2 block text-[11px] font-bold uppercase tracking-[0.18em] text-velum-500">
+                <label className={labelClass}>
                   Correo electrónico
                 </label>
                 <input
@@ -765,20 +764,20 @@ export const Agenda: React.FC = () => {
                     setLoginTotpCode("");
                   }}
                   required
-                  className="w-full rounded-2xl bg-velum-50 border border-velum-200/60 px-5 py-4 text-[15px] text-velum-900 placeholder:text-velum-400 outline-none transition-all duration-200 focus:bg-white focus:border-velum-900 focus:ring-4 focus:ring-velum-900/[0.07]"
+                  className={fieldClass}
                   placeholder="correo@ejemplo.com"
                   autoComplete="email"
                 />
               </div>
               <div>
                 <div className="mb-2 flex items-center justify-between">
-                  <label className="text-[11px] font-bold uppercase tracking-[0.18em] text-velum-500">
+                  <label className="text-[13px] font-semibold text-velum-500">
                     Contraseña
                   </label>
                   <button
                     type="button"
                     onClick={() => { setOtpEmail(email); setOtpCode(""); setOtpMessage(null); setOtpSuccess(false); setViewState("forgot"); }}
-                    className="text-[11px] text-velum-500 hover:text-velum-900 transition underline underline-offset-2"
+                    className="text-[13px] text-velum-500 hover:text-velum-900 transition-colors duration-base ease-standard underline underline-offset-2"
                   >
                     ¿Olvidaste tu contraseña?
                   </button>
@@ -791,14 +790,14 @@ export const Agenda: React.FC = () => {
                     setLoginTotpCode("");
                   }}
                   required
-                  className="w-full rounded-2xl bg-velum-50 border border-velum-200/60 px-5 py-4 text-[15px] text-velum-900 placeholder:text-velum-400 outline-none transition-all duration-200 focus:bg-white focus:border-velum-900 focus:ring-4 focus:ring-velum-900/[0.07]"
+                  className={fieldClass}
                   placeholder="••••••••"
                   autoComplete="current-password"
                 />
               </div>
               {loginRequiresTotp && (
                 <div>
-                  <label className="mb-2 block text-[11px] font-bold uppercase tracking-[0.18em] text-velum-500">
+                  <label className={labelClass}>
                     Código 2FA
                   </label>
                   <input
@@ -809,32 +808,35 @@ export const Agenda: React.FC = () => {
                     value={loginTotpCode}
                     onChange={(e) => setLoginTotpCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
                     required
-                    className="w-full rounded-2xl bg-velum-50 border border-velum-200/60 px-5 py-4 text-[15px] text-velum-900 placeholder:text-velum-400 outline-none transition-all duration-200 focus:bg-white focus:border-velum-900 focus:ring-4 focus:ring-velum-900/[0.07]"
+                    className={fieldClass}
                     placeholder="000000"
                     autoComplete="one-time-code"
                     autoFocus
                   />
                 </div>
               )}
-              <button
+              <PillButton
                 type="submit"
+                variant="primary"
+                size="lg"
+                fullWidth
                 disabled={loginRequiresTotp && loginTotpCode.length !== 6}
-                className="mt-2 w-full rounded-2xl bg-velum-900 py-4 text-[15px] font-semibold text-white hover:bg-velum-800 active:scale-[0.99] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="mt-2"
               >
                 Entrar
-              </button>
+              </PillButton>
             </form>
             {appointmentMessage && (
-              <div className="mt-5 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              <div className="mt-5 rounded-2xl border border-danger-100 bg-danger-50 px-4 py-3 text-[13px] text-danger-700">
                 {appointmentMessage}
               </div>
             )}
-            <p className="mt-10 text-center text-sm text-velum-400 lg:hidden">
+            <p className="mt-10 text-center text-[14px] text-velum-500 lg:hidden">
               ¿Primera vez?{" "}
               <button
                 type="button"
                 onClick={() => setGuestViewState("register")}
-                className="text-velum-700 font-semibold underline underline-offset-2 hover:text-velum-900 transition"
+                className="text-velum-700 font-semibold underline underline-offset-2 hover:text-velum-900 transition-colors duration-base ease-standard"
               >
                 Crear cuenta
               </button>
@@ -848,37 +850,35 @@ export const Agenda: React.FC = () => {
   if (!isAuthenticated && __effectiveViewState === "register") {
     return (
       <div className="min-h-[calc(100vh-7rem)] flex animate-fade-in">
-        {/* Brand panel */}
-        <div className="hidden lg:flex flex-col justify-between w-[44%] bg-velum-900 p-12 xl:p-16 relative overflow-hidden">
-          <div className="absolute -top-32 -right-32 w-80 h-80 rounded-full bg-velum-700/25 blur-[80px] pointer-events-none" />
-          <div className="absolute -bottom-32 -left-16 w-72 h-72 rounded-full bg-velum-600/20 blur-[60px] pointer-events-none" />
-          <div className="relative">
+        {/* Brand panel — Apple híbrido sin blobs */}
+        <div className="hidden lg:flex flex-col justify-between w-[44%] bg-velum-900 p-12 xl:p-16">
+          <div>
             <div className="inline-flex items-center gap-2 mb-10">
               <div className="w-1.5 h-1.5 rounded-full bg-velum-400" />
-              <p className="text-[11px] font-bold uppercase tracking-[0.26em] text-velum-400">Velum Laser</p>
+              <p className="text-[13px] font-semibold text-velum-300">Velum Laser</p>
             </div>
-            <h1 className="font-serif text-4xl xl:text-[2.75rem] italic text-white leading-[1.2]">
+            <h1 className="font-sans font-bold text-white text-4xl xl:text-[2.75rem] tracking-[-0.025em] leading-[1.05]">
               Comienza tu<br/>expediente<br/>clínico.
             </h1>
-            <p className="mt-6 text-velum-300 text-[13px] font-light leading-relaxed max-w-[260px]">
+            <p className="mt-6 text-velum-300 text-[14px] leading-relaxed max-w-[280px]">
               Alta en menos de 1 minuto. Después del registro completarás tu expediente médico directamente.
             </p>
           </div>
-          <div className="relative">
+          <div>
             <div className="space-y-3 mb-8">
-              <div className="flex items-center gap-3 text-velum-300 text-sm">
+              <div className="flex items-center gap-3 text-velum-200 text-[14px]">
                 <div className="w-7 h-7 rounded-xl bg-velum-800 flex items-center justify-center shrink-0">
                   <CircleCheck size={13} className="text-velum-400" />
                 </div>
                 Alta en menos de 1 minuto
               </div>
-              <div className="flex items-center gap-3 text-velum-300 text-sm">
+              <div className="flex items-center gap-3 text-velum-200 text-[14px]">
                 <div className="w-7 h-7 rounded-xl bg-velum-800 flex items-center justify-center shrink-0">
                   <FileText size={13} className="text-velum-400" />
                 </div>
                 Perfil conectado con expediente y consentimiento
               </div>
-              <div className="flex items-center gap-3 text-velum-300 text-sm">
+              <div className="flex items-center gap-3 text-velum-200 text-[14px]">
                 <div className="w-7 h-7 rounded-xl bg-velum-800 flex items-center justify-center shrink-0">
                   <Shield size={13} className="text-velum-400" />
                 </div>
@@ -886,11 +886,11 @@ export const Agenda: React.FC = () => {
               </div>
             </div>
             <div className="flex items-center gap-3 pt-5 border-t border-velum-800">
-              <span className="text-[11px] uppercase tracking-[0.16em] text-velum-600">¿Ya tienes cuenta?</span>
+              <span className="text-[13px] text-velum-500">¿Ya tienes cuenta?</span>
               <button
                 type="button"
                 onClick={() => setGuestViewState("login")}
-                className="text-[11px] uppercase tracking-[0.16em] text-velum-400 underline underline-offset-2 hover:text-velum-200 transition"
+                className="text-[13px] font-medium text-velum-300 underline underline-offset-2 hover:text-velum-100 transition-colors duration-base ease-standard"
               >
                 Iniciar sesión
               </button>
@@ -904,55 +904,55 @@ export const Agenda: React.FC = () => {
             <button
               type="button"
               onClick={() => setGuestViewState("intro")}
-              className="mb-10 inline-flex items-center gap-1.5 text-sm text-velum-400 hover:text-velum-900 transition-colors"
+              className="mb-10 inline-flex items-center gap-1.5 text-[14px] text-velum-500 hover:text-velum-900 transition-colors duration-base ease-standard"
             >
               <ChevronLeft size={16} />
               Atrás
             </button>
-            <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-velum-500 mb-2">Cuenta nueva</p>
-            <h2 className="font-serif text-[2.25rem] italic text-velum-900 mb-10 leading-tight">Crear cuenta</h2>
+            <p className="text-[13px] font-semibold text-velum-500 mb-3">Cuenta nueva</p>
+            <h2 className="font-sans font-bold text-velum-900 text-4xl xl:text-[2.5rem] tracking-[-0.025em] leading-[1.05] mb-10">Crear cuenta</h2>
             <form onSubmit={handleRegisterSubmit} className="space-y-5">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="mb-2 block text-[11px] font-bold uppercase tracking-[0.18em] text-velum-500">Nombre</label>
+                  <label className={labelClass}>Nombre</label>
                   <input
                     type="text"
                     value={firstName}
                     onChange={(e) => setFirstName(e.target.value)}
                     required
-                    className="w-full rounded-2xl bg-velum-50 border border-velum-200/60 px-4 py-4 text-[15px] text-velum-900 placeholder:text-velum-400 outline-none transition-all duration-200 focus:bg-white focus:border-velum-900 focus:ring-4 focus:ring-velum-900/[0.07]"
+                    className={fieldClass}
                     placeholder="Ana"
                     autoComplete="given-name"
                   />
                 </div>
                 <div>
-                  <label className="mb-2 block text-[11px] font-bold uppercase tracking-[0.18em] text-velum-500">Apellido</label>
+                  <label className={labelClass}>Apellido</label>
                   <input
                     type="text"
                     value={lastName}
                     onChange={(e) => setLastName(e.target.value)}
                     required
-                    className="w-full rounded-2xl bg-velum-50 border border-velum-200/60 px-4 py-4 text-[15px] text-velum-900 placeholder:text-velum-400 outline-none transition-all duration-200 focus:bg-white focus:border-velum-900 focus:ring-4 focus:ring-velum-900/[0.07]"
+                    className={fieldClass}
                     placeholder="García"
                     autoComplete="family-name"
                   />
                 </div>
               </div>
               <div>
-                <label className="mb-2 block text-[11px] font-bold uppercase tracking-[0.18em] text-velum-500">Correo electrónico</label>
+                <label className={labelClass}>Correo electrónico</label>
                 <input
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
-                  className="w-full rounded-2xl bg-velum-50 border border-velum-200/60 px-5 py-4 text-[15px] text-velum-900 placeholder:text-velum-400 outline-none transition-all duration-200 focus:bg-white focus:border-velum-900 focus:ring-4 focus:ring-velum-900/[0.07]"
+                  className={fieldClass}
                   placeholder="correo@ejemplo.com"
                   autoComplete="email"
                 />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="mb-2 block text-[11px] font-bold uppercase tracking-[0.18em] text-velum-500">Celular</label>
+                  <label className={labelClass}>Celular</label>
                   <input
                     type="tel"
                     inputMode="tel"
@@ -960,80 +960,83 @@ export const Agenda: React.FC = () => {
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
                     required
-                    className="w-full rounded-2xl bg-velum-50 border border-velum-200/60 px-4 py-4 text-[15px] text-velum-900 placeholder:text-velum-400 outline-none transition-all duration-200 focus:bg-white focus:border-velum-900 focus:ring-4 focus:ring-velum-900/[0.07]"
+                    className={fieldClass}
                     placeholder="+52 55…"
                   />
                 </div>
                 <div>
-                  <label className="mb-2 block text-[11px] font-bold uppercase tracking-[0.18em] text-velum-500">Nacimiento</label>
+                  <label className={labelClass}>Nacimiento</label>
                   <input
                     type="date"
                     value={birthDate}
                     onChange={(e) => setBirthDate(e.target.value)}
                     required
                     max={new Date(new Date().setFullYear(new Date().getFullYear() - 18)).toISOString().split("T")[0]}
-                    className="w-full rounded-2xl bg-velum-50 border border-velum-200/60 px-4 py-4 text-[15px] text-velum-900 outline-none transition-all duration-200 focus:bg-white focus:border-velum-900 focus:ring-4 focus:ring-velum-900/[0.07]"
+                    className={fieldClass}
                   />
                 </div>
               </div>
               <div>
-                <label className="mb-2 block text-[11px] font-bold uppercase tracking-[0.18em] text-velum-500">Contraseña</label>
+                <label className={labelClass}>Contraseña</label>
                 <PasswordInput
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
-                  className="w-full rounded-2xl bg-velum-50 border border-velum-200/60 px-5 py-4 text-[15px] text-velum-900 placeholder:text-velum-400 outline-none transition-all duration-200 focus:bg-white focus:border-velum-900 focus:ring-4 focus:ring-velum-900/[0.07]"
+                  className={fieldClass}
                   placeholder="••••••••"
                   autoComplete="new-password"
                 />
                 <div className="mt-3 rounded-2xl bg-velum-50 border border-velum-200/60 px-4 py-3">
                   <div className="flex items-center justify-between mb-2">
-                    <p className="text-[11px] uppercase tracking-[0.16em] text-velum-500">Fortaleza</p>
-                    <p className={`text-[11px] font-bold ${registerPasswordStrengthClass}`}>{registerPasswordStrength}</p>
+                    <p className="text-[12px] font-medium text-velum-500">Fortaleza</p>
+                    <p className={`text-[12px] font-semibold ${registerPasswordStrengthClass}`}>{registerPasswordStrength}</p>
                   </div>
                   <div className="flex gap-1 mb-3">
                     {[1,2,3,4,5].map((i) => (
-                      <div key={i} className={`h-1 flex-1 rounded-full transition-all duration-300 ${i <= registerPasswordScore ? (registerPasswordScore <= 2 ? "bg-red-400" : registerPasswordScore <= 4 ? "bg-amber-400" : "bg-green-500") : "bg-velum-200"}`} />
+                      <div key={i} className={`h-1 flex-1 rounded-full transition-all duration-base ease-standard ${i <= registerPasswordScore ? (registerPasswordScore <= 2 ? "bg-danger-500/70" : registerPasswordScore <= 4 ? "bg-warning-500/80" : "bg-success-500") : "bg-velum-200"}`} />
                     ))}
                   </div>
-                  <div className="grid grid-cols-2 gap-1 text-[11px]">
-                    <span className={registerPasswordChecks.length ? "text-green-700" : "text-velum-400"}>{registerPasswordChecks.length ? "✓" : "·"} 12+ caracteres</span>
-                    <span className={registerPasswordChecks.upper ? "text-green-700" : "text-velum-400"}>{registerPasswordChecks.upper ? "✓" : "·"} Mayúscula</span>
-                    <span className={registerPasswordChecks.lower ? "text-green-700" : "text-velum-400"}>{registerPasswordChecks.lower ? "✓" : "·"} Minúscula</span>
-                    <span className={registerPasswordChecks.number ? "text-green-700" : "text-velum-400"}>{registerPasswordChecks.number ? "✓" : "·"} Número</span>
-                    <span className={registerPasswordChecks.special ? "text-green-700" : "text-velum-400"}>{registerPasswordChecks.special ? "✓" : "·"} Símbolo</span>
+                  <div className="grid grid-cols-2 gap-1 text-[12px]">
+                    <span className={`flex items-center gap-1 ${registerPasswordChecks.length ? "text-success-700" : "text-velum-400"}`}>{registerPasswordChecks.length ? <Check size={11} /> : <span className="w-[11px]">·</span>} 12+ caracteres</span>
+                    <span className={`flex items-center gap-1 ${registerPasswordChecks.upper ? "text-success-700" : "text-velum-400"}`}>{registerPasswordChecks.upper ? <Check size={11} /> : <span className="w-[11px]">·</span>} Mayúscula</span>
+                    <span className={`flex items-center gap-1 ${registerPasswordChecks.lower ? "text-success-700" : "text-velum-400"}`}>{registerPasswordChecks.lower ? <Check size={11} /> : <span className="w-[11px]">·</span>} Minúscula</span>
+                    <span className={`flex items-center gap-1 ${registerPasswordChecks.number ? "text-success-700" : "text-velum-400"}`}>{registerPasswordChecks.number ? <Check size={11} /> : <span className="w-[11px]">·</span>} Número</span>
+                    <span className={`flex items-center gap-1 ${registerPasswordChecks.special ? "text-success-700" : "text-velum-400"}`}>{registerPasswordChecks.special ? <Check size={11} /> : <span className="w-[11px]">·</span>} Símbolo</span>
                   </div>
                 </div>
               </div>
               <div>
-                <label className="mb-2 block text-[11px] font-bold uppercase tracking-[0.18em] text-velum-500">Confirmar contraseña</label>
+                <label className={labelClass}>Confirmar contraseña</label>
                 <PasswordInput
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   required
-                  className="w-full rounded-2xl bg-velum-50 border border-velum-200/60 px-5 py-4 text-[15px] text-velum-900 placeholder:text-velum-400 outline-none transition-all duration-200 focus:bg-white focus:border-velum-900 focus:ring-4 focus:ring-velum-900/[0.07]"
+                  className={fieldClass}
                   placeholder="••••••••"
                   autoComplete="new-password"
                 />
               </div>
-              <button
+              <PillButton
                 type="submit"
-                className="mt-2 w-full rounded-2xl bg-velum-900 py-4 text-[15px] font-semibold text-white hover:bg-velum-800 active:scale-[0.99] transition-all duration-200"
+                variant="primary"
+                size="lg"
+                fullWidth
+                className="mt-2"
               >
                 Crear cuenta
-              </button>
+              </PillButton>
             </form>
             {appointmentMessage && (
-              <div className="mt-5 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              <div className="mt-5 rounded-2xl border border-danger-100 bg-danger-50 px-4 py-3 text-[13px] text-danger-700">
                 {appointmentMessage}
               </div>
             )}
-            <p className="mt-8 text-center text-sm text-velum-400 lg:hidden">
+            <p className="mt-8 text-center text-[14px] text-velum-500 lg:hidden">
               ¿Ya tienes cuenta?{" "}
               <button
                 type="button"
                 onClick={() => setGuestViewState("login")}
-                className="text-velum-700 font-semibold underline underline-offset-2 hover:text-velum-900 transition"
+                className="text-velum-700 font-semibold underline underline-offset-2 hover:text-velum-900 transition-colors duration-base ease-standard"
               >
                 Iniciar sesión
               </button>
@@ -1052,7 +1055,7 @@ export const Agenda: React.FC = () => {
           <button
             type="button"
             onClick={() => { setOtpMessage(null); setViewState("login"); }}
-            className="mb-10 inline-flex items-center gap-1.5 text-sm text-velum-400 hover:text-velum-900 transition-colors"
+            className="mb-10 inline-flex items-center gap-1.5 text-[14px] text-velum-500 hover:text-velum-900 transition-colors duration-base ease-standard"
           >
             <ChevronLeft size={16} />
             Volver al inicio de sesión
@@ -1061,15 +1064,15 @@ export const Agenda: React.FC = () => {
             <div className="w-14 h-14 rounded-2xl bg-velum-50 border border-velum-200 flex items-center justify-center mb-6">
               <KeyRound size={24} className="text-velum-700" />
             </div>
-            <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-velum-500 mb-2">Recuperar acceso</p>
-            <h2 className="font-serif text-[2.25rem] italic text-velum-900 mb-3 leading-tight">Restablecer contraseña</h2>
+            <p className="text-[13px] font-semibold text-velum-500 mb-3">Recuperar acceso</p>
+            <h2 className="font-sans font-bold text-velum-900 text-4xl tracking-[-0.025em] leading-[1.05] mb-4">Restablecer contraseña</h2>
             <p className="text-[14px] text-velum-500 leading-relaxed">
               Ingresa tu correo y te enviaremos un enlace para crear una nueva contraseña.
             </p>
           </div>
           <form onSubmit={handleForgotSubmit} className="space-y-5">
             <div>
-              <label className="mb-2 block text-[11px] font-bold uppercase tracking-[0.18em] text-velum-500">
+              <label className={labelClass}>
                 Correo electrónico
               </label>
               <input
@@ -1077,21 +1080,25 @@ export const Agenda: React.FC = () => {
                 value={otpEmail}
                 onChange={(e) => setOtpEmail(e.target.value)}
                 required
-                className="w-full rounded-2xl bg-velum-50 border border-velum-200/60 px-5 py-4 text-[15px] text-velum-900 placeholder:text-velum-400 outline-none transition-all duration-200 focus:bg-white focus:border-velum-900 focus:ring-4 focus:ring-velum-900/[0.07]"
+                className={fieldClass}
                 placeholder="correo@ejemplo.com"
                 autoFocus
               />
             </div>
-            <button
+            <PillButton
               type="submit"
+              variant="primary"
+              size="lg"
+              fullWidth
               disabled={isOtpLoading}
-              className="w-full rounded-2xl bg-velum-900 py-4 text-[15px] font-semibold text-white hover:bg-velum-800 disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.99] transition-all duration-200"
+              isLoading={isOtpLoading}
+              loadingLabel="Enviando..."
             >
-              {isOtpLoading ? "Enviando..." : "Enviar enlace"}
-            </button>
+              Enviar enlace
+            </PillButton>
           </form>
           {otpMessage && (
-            <div className={`mt-5 rounded-2xl px-4 py-3 text-[13px] ${otpSuccess ? "bg-green-50 text-green-700" : "bg-amber-50 text-amber-700"}`}>
+            <div className={`mt-5 rounded-2xl px-4 py-3 text-[13px] ${otpSuccess ? "bg-success-50 text-success-700" : "bg-warning-50 text-warning-700"}`}>
               {otpMessage}
             </div>
           )}
@@ -1105,29 +1112,30 @@ export const Agenda: React.FC = () => {
     return (
       <div className="min-h-[calc(100vh-7rem)] flex items-center justify-center bg-white px-6 py-12 animate-fade-in">
         <div className="w-full max-w-sm text-center">
-          <div className="w-16 h-16 rounded-2xl bg-green-50 border border-green-200 flex items-center justify-center mx-auto mb-6">
-            <Mail size={28} className="text-green-600" />
+          <div className="w-16 h-16 rounded-2xl bg-success-50 border border-success-100 flex items-center justify-center mx-auto mb-6">
+            <Mail size={28} className="text-success-700" />
           </div>
-          <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-velum-500 mb-2">Revisa tu correo</p>
-          <h2 className="font-serif text-[2.25rem] italic text-velum-900 mb-3 leading-tight">Enlace enviado</h2>
+          <p className="text-[13px] font-semibold text-velum-500 mb-3">Revisa tu correo</p>
+          <h2 className="font-sans font-bold text-velum-900 text-4xl tracking-[-0.025em] leading-[1.05] mb-4">Enlace enviado</h2>
           <p className="text-[14px] text-velum-500 leading-relaxed mb-2">
             Enviamos un enlace a
           </p>
-          <p className="text-[14px] font-semibold text-velum-900 mb-6">{otpEmail}</p>
+          <p className="text-[15px] font-semibold text-velum-900 mb-6">{otpEmail}</p>
           <p className="text-[13px] text-velum-400 leading-relaxed mb-10">
             Haz clic en el enlace del correo para crear tu nueva contraseña. Es válido por <strong>2 horas</strong>.
           </p>
-          <button
-            type="button"
+          <PillButton
+            variant="primary"
+            size="lg"
+            fullWidth
             onClick={() => { setOtpMessage(null); setOtpEmail(""); setViewState("login"); }}
-            className="w-full rounded-2xl bg-velum-900 py-4 text-[15px] font-semibold text-white hover:bg-velum-800 active:scale-[0.99] transition-all duration-200"
           >
             Volver al inicio de sesión
-          </button>
+          </PillButton>
           <button
             type="button"
             onClick={() => { setOtpMessage(null); setViewState("forgot"); }}
-            className="mt-4 w-full text-center text-[13px] text-velum-400 hover:text-velum-900 transition underline underline-offset-2"
+            className="mt-4 w-full text-center text-[13px] text-velum-500 hover:text-velum-900 transition-colors duration-base ease-standard underline underline-offset-2"
           >
             Usar otro correo
           </button>
@@ -1144,8 +1152,8 @@ export const Agenda: React.FC = () => {
           <div className="w-16 h-16 rounded-2xl bg-velum-50 border border-velum-200 flex items-center justify-center mx-auto mb-8">
             <Mail size={28} className="text-velum-700" />
           </div>
-          <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-velum-500 mb-3">Activación de cuenta</p>
-          <h2 className="font-serif text-[2.25rem] italic text-velum-900 mb-5 leading-tight">Confirma tu correo</h2>
+          <p className="text-[13px] font-semibold text-velum-500 mb-3">Activación de cuenta</p>
+          <h2 className="font-sans font-bold text-velum-900 text-4xl tracking-[-0.025em] leading-[1.05] mb-5">Confirma tu correo</h2>
           <p className="text-[14px] text-velum-500 leading-relaxed mb-10">
             Enviamos un código de 6 dígitos a<br/>
             <strong className="text-velum-900 font-semibold">{email}</strong>
@@ -1160,21 +1168,25 @@ export const Agenda: React.FC = () => {
                 value={otpCode}
                 onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
                 required
-                className="w-full rounded-2xl bg-velum-50 border border-velum-200/60 px-5 py-5 text-center text-[32px] font-bold tracking-[0.44em] text-velum-900 outline-none transition-all duration-200 focus:bg-white focus:border-velum-900 focus:ring-4 focus:ring-velum-900/[0.07]"
+                className="w-full rounded-2xl bg-velum-50 border border-velum-200/60 px-5 py-5 text-center text-[32px] font-bold tracking-[0.44em] text-velum-900 tabular-nums outline-none transition-all duration-base ease-standard focus:bg-white focus:border-velum-900 focus:ring-4 focus:ring-velum-900/[0.07]"
                 placeholder="000000"
                 autoFocus
               />
             </div>
-            <button
+            <PillButton
               type="submit"
+              variant="primary"
+              size="lg"
+              fullWidth
               disabled={isOtpLoading || otpSuccess || otpCode.length < 6}
-              className="w-full rounded-2xl bg-velum-900 py-4 text-[15px] font-semibold text-white hover:bg-velum-800 disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.99] transition-all duration-200"
+              isLoading={isOtpLoading}
+              loadingLabel="Verificando..."
             >
-              {isOtpLoading ? "Verificando..." : otpSuccess ? "¡Verificado!" : "Confirmar correo"}
-            </button>
+              {otpSuccess ? "¡Verificado!" : "Confirmar correo"}
+            </PillButton>
           </form>
           {otpMessage && (
-            <div className={`mt-5 rounded-2xl px-4 py-3 text-[13px] ${otpSuccess ? "bg-green-50 text-green-700" : "bg-red-50 text-red-600"}`}>
+            <div className={`mt-5 rounded-2xl px-4 py-3 text-[13px] ${otpSuccess ? "bg-success-50 text-success-700" : "bg-danger-50 text-danger-700"}`}>
               {otpMessage}
             </div>
           )}
@@ -1183,7 +1195,7 @@ export const Agenda: React.FC = () => {
               type="button"
               onClick={handleResendVerificationEmail}
               disabled={isOtpLoading}
-              className="text-[13px] text-velum-500 hover:text-velum-900 transition underline underline-offset-2 disabled:opacity-50"
+              className="text-[13px] text-velum-500 hover:text-velum-900 transition-colors duration-base ease-standard underline underline-offset-2 disabled:opacity-50"
             >
               {isOtpLoading ? "Enviando..." : "Reenviar código"}
             </button>
@@ -1191,7 +1203,7 @@ export const Agenda: React.FC = () => {
             <button
               type="button"
               onClick={() => { const pf = { fullName: `${firstName.trim()} ${lastName.trim()}`.trim(), phone: phone.trim(), birthDate }; setOtpCode(""); setOtpMessage(null); setPendingEmailVerify(false); refreshIntake(pf); }}
-              className="text-[12px] text-velum-400 hover:text-velum-600 transition"
+              className="text-[12px] text-velum-400 hover:text-velum-600 transition-colors duration-base ease-standard"
             >
               Omitir y continuar →
             </button>
@@ -1210,12 +1222,12 @@ export const Agenda: React.FC = () => {
         <section className={`${glassCardClass} p-4 sm:p-6 lg:p-8`}>
           <div className="grid gap-6 lg:grid-cols-[260px_minmax(0,1fr)]">
             <aside className="rounded-3xl border border-velum-200 bg-velum-50/70 p-4 sm:p-5 lg:sticky lg:top-24 lg:self-start">
-              <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-velum-500">Proceso clínico</p>
-              <h2 className="mt-1 font-serif text-2xl text-velum-900">Expediente médico</h2>
-              <p className="mt-2 text-xs text-velum-600">Paso {intakeStep} de 4</p>
+              <p className="text-[13px] font-semibold text-velum-500">Proceso clínico</p>
+              <h2 className="mt-1 font-sans font-bold text-velum-900 text-2xl tracking-tight">Expediente médico</h2>
+              <p className="mt-2 text-[13px] text-velum-600">Paso {intakeStep} de 4</p>
 
               <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-white">
-                <div className="h-full rounded-full bg-velum-900 transition-all duration-500" style={{ width: `${progress}%` }} />
+                <div className="h-full rounded-full bg-velum-900 transition-all duration-slower ease-standard" style={{ width: `${progress}%` }} />
               </div>
 
               <div className="mt-4 space-y-2">
@@ -1226,7 +1238,7 @@ export const Agenda: React.FC = () => {
                   return (
                     <div
                       key={step.title}
-                      className={`rounded-2xl border px-3 py-2 transition ${
+                      className={`rounded-2xl border px-3 py-2 transition-all duration-base ease-standard ${
                         current
                           ? "border-velum-900 bg-velum-900 text-velum-50"
                           : completed
@@ -1234,11 +1246,11 @@ export const Agenda: React.FC = () => {
                             : "border-velum-200 bg-white text-velum-500"
                       }`}
                     >
-                      <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider">
+                      <div className="flex items-center gap-2 text-[13px] font-semibold">
                         <Icon size={14} />
                         <span>{idx + 1}. {step.title}</span>
                       </div>
-                      <p className={`mt-1 text-[11px] ${current ? "text-velum-200" : "text-velum-500"}`}>{step.subtitle}</p>
+                      <p className={`mt-1 text-[12px] ${current ? "text-velum-200" : "text-velum-500"}`}>{step.subtitle}</p>
                     </div>
                   );
                 })}
@@ -1247,15 +1259,15 @@ export const Agenda: React.FC = () => {
 
             <div>
               <header className="mb-6 rounded-3xl border border-velum-200 bg-white p-5 sm:p-6">
-                <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-velum-500">Paso activo</p>
-                <h1 className="mt-1 font-serif text-3xl italic text-velum-900">{activeMeta.title}</h1>
-                <p className="mt-2 text-sm text-velum-600">{activeMeta.subtitle}</p>
+                <p className="text-[13px] font-semibold text-velum-500">Paso activo</p>
+                <h1 className="mt-1 font-sans font-bold text-velum-900 text-3xl tracking-tight">{activeMeta.title}</h1>
+                <p className="mt-2 text-[14px] text-velum-600">{activeMeta.subtitle}</p>
               </header>
 
               <div className="rounded-3xl border border-velum-200 bg-velum-50/70 p-5 sm:p-6">
                 {intakeStep === 1 && (
                   <div className="space-y-4">
-                    <h3 className="font-serif text-2xl text-velum-900">Datos personales</h3>
+                    <h3 className="font-sans font-bold text-velum-900 text-2xl tracking-tight">Datos personales</h3>
                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                       <div className="sm:col-span-2">
                         <label className={labelClass}>Nombre completo</label>
@@ -1296,8 +1308,8 @@ export const Agenda: React.FC = () => {
 
                 {intakeStep === 2 && (
                   <div className="space-y-4">
-                    <h3 className="font-serif text-2xl text-velum-900">Historial médico</h3>
-                    <p className="text-sm text-velum-600">
+                    <h3 className="font-sans font-bold text-velum-900 text-2xl tracking-tight">Historial médico</h3>
+                    <p className="text-[14px] text-velum-600">
                       Esta información es confidencial y se usa para ajustar parámetros seguros de tratamiento.
                     </p>
                     <div className="space-y-3">
@@ -1354,11 +1366,11 @@ export const Agenda: React.FC = () => {
                   return (
                     <div className="space-y-5">
                       <div>
-                        <h3 className="font-serif text-2xl text-velum-900">Clasificación de fototipo</h3>
-                        <p className="mt-1 text-sm text-velum-600">
+                        <h3 className="font-sans font-bold text-velum-900 text-2xl tracking-tight">Clasificación de fototipo</h3>
+                        <p className="mt-1 text-[14px] text-velum-600">
                           Responde las siguientes preguntas para determinar tu fototipo Fitzpatrick.
                         </p>
-                        <p className="mt-1 text-xs text-velum-500">{answered}/{DEFAULT_PHOTOTYPE_QUESTIONS.length} preguntas respondidas</p>
+                        <p className="mt-1 text-[13px] text-velum-500 tabular-nums">{answered}/{DEFAULT_PHOTOTYPE_QUESTIONS.length} preguntas respondidas</p>
                       </div>
 
                       {DEFAULT_PHOTOTYPE_QUESTIONS.map((q) => (
@@ -1394,9 +1406,9 @@ export const Agenda: React.FC = () => {
 
                       {result && (
                         <div className="rounded-2xl border border-velum-300 bg-velum-50 p-4">
-                          <p className="text-xs font-bold uppercase tracking-widest text-velum-500">Resultado</p>
-                          <p className="mt-1 font-serif text-xl text-velum-900">Fototipo {result.phototype}</p>
-                          <p className="mt-1 text-sm text-velum-600">{result.description}</p>
+                          <p className="text-[13px] font-semibold text-velum-500">Resultado</p>
+                          <p className="mt-1 font-sans font-bold text-velum-900 text-xl tracking-tight">Fototipo {result.phototype}</p>
+                          <p className="mt-1 text-[14px] text-velum-600">{result.description}</p>
                         </div>
                       )}
                     </div>
@@ -1406,14 +1418,14 @@ export const Agenda: React.FC = () => {
                 {intakeStep === 4 && (
                   <div className="space-y-5">
                     <div>
-                      <h3 className="font-serif text-2xl text-velum-900">Consentimiento Informado</h3>
-                      <p className="mt-1 text-sm text-velum-500">Lee con atención antes de firmar digitalmente.</p>
+                      <h3 className="font-sans font-bold text-velum-900 text-2xl tracking-tight">Consentimiento informado</h3>
+                      <p className="mt-1 text-[14px] text-velum-500">Lee con atención antes de firmar digitalmente.</p>
                     </div>
 
                     {/* ── Documento de consentimiento ─────────────────── */}
                     <div className="h-80 overflow-y-auto rounded-2xl border border-velum-200 bg-velum-50 p-5 text-[13px] leading-relaxed text-velum-800 space-y-4 scroll-smooth">
 
-                      <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-velum-400">Velum Laser · Chihuahua, México · Versión 1.0 — 2026</p>
+                      <p className="text-[12px] font-semibold text-velum-500">Velum Laser · Chihuahua, México · Versión 1.0 — 2026</p>
 
                       <p className="font-bold text-velum-900 text-[14px]">CONSENTIMIENTO INFORMADO PARA DEPILACIÓN CON LÁSER CUATRIODO</p>
 
@@ -1467,11 +1479,11 @@ export const Agenda: React.FC = () => {
 
                     {/* ── Estado de firma ─────────────────────────────── */}
                     {consentSignedAt ? (
-                      <div className="rounded-2xl border border-green-200 bg-green-50 px-5 py-4 flex items-start gap-3">
-                        <CircleCheck className="mt-0.5 h-5 w-5 shrink-0 text-green-600" />
+                      <div className="rounded-2xl border border-success-100 bg-success-50 px-5 py-4 flex items-start gap-3">
+                        <CircleCheck className="mt-0.5 h-5 w-5 shrink-0 text-success-700" />
                         <div>
-                          <p className="text-sm font-semibold text-green-800">Consentimiento firmado digitalmente</p>
-                          <p className="mt-0.5 text-xs text-green-700">
+                          <p className="text-[14px] font-semibold text-success-700">Consentimiento firmado digitalmente</p>
+                          <p className="mt-0.5 text-[13px] text-success-700/85">
                             Firma registrada el {new Date(consentSignedAt).toLocaleString("es-MX", {
                               dateStyle: "long", timeStyle: "short"
                             })} (hora local). El registro queda en tu expediente clínico.
@@ -1483,8 +1495,8 @@ export const Agenda: React.FC = () => {
                         <div className="flex items-start gap-3">
                           <Shield className="mt-0.5 h-5 w-5 shrink-0 text-velum-600" />
                           <div>
-                            <p className="text-sm font-semibold text-velum-900">Firma digital con código OTP</p>
-                            <p className="mt-0.5 text-xs text-velum-500">
+                            <p className="text-[14px] font-semibold text-velum-900">Firma digital con código OTP</p>
+                            <p className="mt-0.5 text-[13px] text-velum-500">
                               Enviaremos un código de 6 dígitos a tu correo electrónico.
                               Al ingresarlo confirmas que leíste y aceptas el consentimiento.
                             </p>
@@ -1492,38 +1504,42 @@ export const Agenda: React.FC = () => {
                         </div>
 
                         {!consentOtpSent ? (
-                          <Button
-                            className="w-full rounded-2xl"
+                          <PillButton
+                            variant="primary"
+                            size="md"
+                            fullWidth
                             onClick={handleSendConsentOtp}
                             isLoading={consentOtpLoading}
+                            leftIcon={<Mail className="h-4 w-4" aria-hidden="true" />}
                           >
-                            <Mail className="mr-2 h-4 w-4" />
                             Enviar código OTP a mi correo
-                          </Button>
+                          </PillButton>
                         ) : (
                           <div className="space-y-3">
                             <div>
                               <label className={labelClass}>Código de verificación (6 dígitos)</label>
                               <div className="flex gap-2">
                                 <input
-                                  className={`${fieldClass} text-center tracking-[0.4em] text-lg font-bold`}
+                                  className={`${fieldClass} text-center tracking-[0.4em] text-lg font-bold tabular-nums`}
                                   placeholder="000000"
                                   maxLength={6}
                                   value={consentOtpCode}
                                   onChange={(e) => setConsentOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
                                 />
-                                <Button
-                                  className="shrink-0 rounded-2xl px-5"
+                                <PillButton
+                                  variant="primary"
+                                  size="md"
                                   onClick={handleVerifyConsentOtp}
                                   isLoading={consentOtpLoading}
+                                  aria-label="Verificar código"
                                 >
-                                  <KeyRound className="h-4 w-4" />
-                                </Button>
+                                  <KeyRound className="h-4 w-4" aria-hidden="true" />
+                                </PillButton>
                               </div>
                             </div>
                             <button
                               type="button"
-                              className="text-xs text-velum-500 underline underline-offset-2 hover:text-velum-900"
+                              className="text-[12px] text-velum-500 underline underline-offset-2 hover:text-velum-900 transition-colors duration-base ease-standard"
                               onClick={handleSendConsentOtp}
                               disabled={consentOtpLoading}
                             >
@@ -1533,7 +1549,7 @@ export const Agenda: React.FC = () => {
                         )}
 
                         {consentOtpMessage && (
-                          <p className={`text-xs ${consentOtpMessage.includes("enviado") ? "text-velum-600" : "text-red-600"}`}>
+                          <p className={`text-[13px] ${consentOtpMessage.includes("enviado") ? "text-velum-600" : "text-danger-700"}`}>
                             {consentOtpMessage}
                           </p>
                         )}
@@ -1544,7 +1560,7 @@ export const Agenda: React.FC = () => {
               </div>
 
               {intakeError && (
-                <p className="mt-4 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{intakeError}</p>
+                <p className="mt-4 rounded-xl border border-danger-100 bg-danger-50 px-3 py-2 text-[13px] text-danger-700">{intakeError}</p>
               )}
 
               <div className="mt-6 flex flex-col-reverse items-stretch justify-between gap-3 border-t border-velum-200 pt-5 sm:flex-row sm:items-center">
@@ -1558,17 +1574,17 @@ export const Agenda: React.FC = () => {
                 </Button>
 
                 {intakeStep < 4 ? (
-                  <Button className="rounded-2xl" onClick={handleNextIntakeStep} isLoading={isSavingIntake}>
+                  <PillButton variant="primary" size="lg" showChevron onClick={handleNextIntakeStep} isLoading={isSavingIntake}>
                     Guardar y continuar
-                  </Button>
+                  </PillButton>
                 ) : (
-                  <Button className="rounded-2xl" onClick={handleSubmitIntake} isLoading={isSavingIntake}>
+                  <PillButton variant="primary" size="lg" showChevron onClick={handleSubmitIntake} isLoading={isSavingIntake}>
                     Enviar expediente
-                  </Button>
+                  </PillButton>
                 )}
               </div>
 
-              {intake?.status && <p className="mt-4 text-xs text-velum-500">Estado actual: {intake.status}</p>}
+              {intake?.status && <p className="mt-4 text-[12px] text-velum-500">Estado actual: {intake.status}</p>}
             </div>
           </div>
         </section>
@@ -1581,13 +1597,13 @@ export const Agenda: React.FC = () => {
       <section className={`${glassCardClass} p-6 sm:p-8`}>
         <header className="mb-6 flex flex-col justify-between gap-4 border-b border-velum-200 pb-5 sm:flex-row sm:items-end">
           <div>
-            <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-velum-500">Agenda activa</p>
-            <h1 className="mt-1 text-3xl font-serif italic text-velum-900">
-              Agenda {appointmentType === "valuation" ? "de Valoración" : "Personal"}
+            <p className="text-[13px] font-semibold text-velum-500">Agenda activa</p>
+            <h1 className="mt-2 font-sans font-bold text-velum-900 text-3xl sm:text-4xl tracking-[-0.025em]">
+              Agenda {appointmentType === "valuation" ? "de valoración" : "personal"}
             </h1>
-            <p className="mt-2 text-sm font-light text-velum-600">Hola, {user?.name}. Selecciona fecha y horario para tu siguiente sesión.</p>
+            <p className="mt-2 text-[14px] text-velum-600">Hola, {user?.name}. Selecciona fecha y horario para tu siguiente sesión.</p>
           </div>
-          <Link to="/dashboard" className="text-xs font-bold uppercase tracking-widest text-velum-700 underline">
+          <Link to="/dashboard" className="text-[13px] font-medium text-velum-700 hover:text-velum-900 underline underline-offset-2 transition-colors duration-base ease-standard">
             Ir a Mi Cuenta
           </Link>
         </header>
@@ -1596,7 +1612,7 @@ export const Agenda: React.FC = () => {
           {/* ── Calendario real ─────────────────────────────── */}
           <div className="rounded-3xl border border-velum-200 bg-white p-6">
             <div className="mb-4 flex items-center justify-between">
-              <h3 className="font-serif text-lg capitalize">{calendarMonthLabel}</h3>
+              <h3 className="font-sans font-bold text-velum-900 text-lg tracking-tight capitalize">{calendarMonthLabel}</h3>
               <div className="flex gap-2">
                 <button
                   onClick={() => {
@@ -1608,7 +1624,7 @@ export const Agenda: React.FC = () => {
                     setDaySlots([]);
                     setSelectedSlot(null);
                   }}
-                  className="rounded-full border border-velum-200 p-1.5 text-velum-600 hover:border-velum-500 hover:text-velum-900 transition"
+                  className="rounded-full border border-velum-200 p-1.5 text-velum-600 hover:border-velum-500 hover:text-velum-900 transition-colors duration-base ease-standard"
                   aria-label="Mes anterior"
                 >
                   <ChevronLeft size={18} />
@@ -1623,14 +1639,14 @@ export const Agenda: React.FC = () => {
                     setDaySlots([]);
                     setSelectedSlot(null);
                   }}
-                  className="rounded-full border border-velum-200 p-1.5 text-velum-600 hover:border-velum-500 hover:text-velum-900 transition"
+                  className="rounded-full border border-velum-200 p-1.5 text-velum-600 hover:border-velum-500 hover:text-velum-900 transition-colors duration-base ease-standard"
                   aria-label="Mes siguiente"
                 >
                   <ChevronRight size={18} />
                 </button>
               </div>
             </div>
-            <div className="mb-2 grid grid-cols-7 gap-1 text-center text-[10px] font-bold uppercase text-velum-400">
+            <div className="mb-2 grid grid-cols-7 gap-1 text-center text-[12px] font-semibold text-velum-500">
               {["D","L","M","M","J","V","S"].map((d, i) => <div key={i}>{d}</div>)}
             </div>
             <div className="grid grid-cols-7 gap-1">
@@ -1645,11 +1661,11 @@ export const Agenda: React.FC = () => {
                     disabled={!cell.selectable}
                     onClick={() => handleSelectDate(cell.dateKey!)}
                     className={`
-                      aspect-square rounded-xl text-sm font-medium transition-colors duration-200
+                      aspect-square rounded-xl text-[14px] font-medium tabular-nums transition-all duration-base ease-standard
                       ${!cell.selectable
                         ? "cursor-not-allowed text-velum-300"
                         : isSelected
-                          ? "bg-velum-900 text-white shadow-md"
+                          ? "bg-velum-900 text-white shadow-sm"
                           : "text-velum-800 hover:bg-velum-100"}
                     `}
                   >
@@ -1658,21 +1674,21 @@ export const Agenda: React.FC = () => {
                 );
               })}
             </div>
-            <p className="mt-3 text-[11px] text-velum-400">
+            <p className="mt-3 text-[12px] text-velum-400">
               Solo se muestran fechas disponibles para reservar.
             </p>
           </div>
 
           {/* ── Horarios del día seleccionado ───────────────── */}
           <div className="flex h-full flex-col rounded-3xl border border-velum-200 bg-white p-6">
-            <h3 className="mb-4 font-serif text-lg">
+            <h3 className="mb-4 font-sans font-bold text-velum-900 text-lg tracking-tight">
               {selectedDate
                 ? `Horarios — ${new Date(selectedDate + "T00:00:00").toLocaleDateString("es-MX", { weekday: "long", day: "numeric", month: "long" })}`
                 : "Horarios disponibles"}
             </h3>
 
             {!selectedDate && (
-              <div className="flex flex-1 items-center justify-center rounded-2xl border border-dashed border-velum-300 bg-velum-50 p-8 text-center text-sm text-velum-400">
+              <div className="flex flex-1 items-center justify-center rounded-2xl border border-dashed border-velum-300 bg-velum-50 p-8 text-center text-[13px] text-velum-500">
                 <p>Selecciona un día en el calendario para ver los horarios disponibles.</p>
               </div>
             )}
@@ -1684,7 +1700,7 @@ export const Agenda: React.FC = () => {
             )}
 
             {selectedDate && !isLoadingSlots && slotsError && (
-              <div className="flex flex-1 items-center justify-center rounded-2xl border border-dashed border-velum-300 bg-velum-50 p-8 text-center text-sm text-velum-500">
+              <div className="flex flex-1 items-center justify-center rounded-2xl border border-dashed border-velum-300 bg-velum-50 p-8 text-center text-[13px] text-velum-500">
                 <p>{slotsError}</p>
               </div>
             )}
@@ -1697,11 +1713,11 @@ export const Agenda: React.FC = () => {
                     disabled={!slot.available}
                     onClick={() => setSelectedSlot(slot)}
                     className={`
-                      rounded-xl border py-2.5 text-sm font-medium transition-all duration-200
+                      rounded-xl border py-2.5 text-[14px] font-medium tabular-nums transition-all duration-base ease-standard
                       ${!slot.available
                         ? "cursor-not-allowed border-velum-100 bg-velum-50 text-velum-300 line-through"
                         : selectedSlot?.label === slot.label
-                          ? "scale-105 border-velum-900 bg-velum-900 text-white shadow-md"
+                          ? "scale-105 border-velum-900 bg-velum-900 text-white shadow-sm"
                           : "border-velum-200 text-velum-800 hover:border-velum-400 hover:bg-velum-50"}
                     `}
                   >
@@ -1714,8 +1730,8 @@ export const Agenda: React.FC = () => {
             {/* Plan de interés */}
             {selectedSlot && (
               <div className="mt-5 border-t border-velum-100 pt-5">
-                <p className="text-[10px] font-bold uppercase tracking-widest text-velum-500 mb-3">
-                  Plan de interés <span className="text-velum-400 font-normal normal-case tracking-normal">(opcional)</span>
+                <p className="text-[13px] font-semibold text-velum-500 mb-3">
+                  Plan de interés <span className="text-velum-400 font-normal">(opcional)</span>
                 </p>
                 <div className="grid grid-cols-1 gap-1.5">
                   {MEMBERSHIPS.map((tier) => (
@@ -1725,14 +1741,14 @@ export const Agenda: React.FC = () => {
                       onClick={() => setSelectedPlanCode(
                         selectedPlanCode === tier.stripePriceId ? null : tier.stripePriceId
                       )}
-                      className={`flex items-center justify-between rounded-xl border px-3 py-2 text-left text-sm transition-all duration-150 ${
+                      className={`flex items-center justify-between rounded-xl border px-3 py-2 text-left text-[14px] transition-all duration-base ease-standard ${
                         selectedPlanCode === tier.stripePriceId
                           ? "border-velum-900 bg-velum-900 text-white"
                           : "border-velum-200 text-velum-800 hover:border-velum-400 hover:bg-velum-50"
                       }`}
                     >
                       <span className="font-semibold">{tier.name}</span>
-                      <span className={`text-xs ${selectedPlanCode === tier.stripePriceId ? "text-velum-300" : "text-velum-500"}`}>
+                      <span className={`text-[13px] tabular-nums ${selectedPlanCode === tier.stripePriceId ? "text-velum-300" : "text-velum-500"}`}>
                         ${tier.price.toLocaleString("es-MX")}/mes
                       </span>
                     </button>
@@ -1743,21 +1759,23 @@ export const Agenda: React.FC = () => {
 
             <div className="mt-auto border-t border-velum-100 pt-5">
               {selectedSlot && (
-                <p className="mb-3 text-xs text-velum-600 text-center">
+                <p className="mb-3 text-[13px] text-velum-600 text-center">
                   Seleccionado: <strong>{selectedSlot.label}</strong>
                   {selectedDate && ` — ${new Date(selectedDate + "T00:00:00").toLocaleDateString("es-MX", { day: "numeric", month: "short" })}`}
                 </p>
               )}
-              <Button
-                className="w-full rounded-2xl"
+              <PillButton
+                variant="primary"
+                size="lg"
+                fullWidth
                 disabled={!selectedDate || !selectedSlot || isScheduling}
                 isLoading={isScheduling}
                 loadingLabel="Redirigiendo a pago..."
                 onClick={handleSchedule}
               >
                 Confirmar y pagar ${APPOINTMENT_DEPOSIT_MXN}
-              </Button>
-              <p className="mt-2 text-center text-[11px] text-velum-500">
+              </PillButton>
+              <p className="mt-2 text-center text-[12px] text-velum-500">
                 El depósito se descuenta de tu primera mensualidad.
               </p>
             </div>
