@@ -48,7 +48,7 @@ export const sectionMeta: Record<AdminSection, { label: string; icon: React.Comp
   ajustes:      { label: 'Ajustes',      icon: Settings,       description: 'Configuración del sistema, usuarios y permisos' },
 };
 
-const NAV_SECTIONS: AdminSection[] = [
+export const NAV_SECTIONS: AdminSection[] = [
   'panel', 'socias', 'agenda', 'expedientes', 'pagos',
   'kpis', 'finanzas', 'riesgos', 'cumplimiento', 'ajustes',
 ];

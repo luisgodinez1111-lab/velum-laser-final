@@ -23,14 +23,22 @@ import {
   Plus,
   Download,
   BarChart3,
-  Loader2
+  Loader2,
+  LogOut,
+  User as UserIcon,
 } from 'lucide-react';
 import { AuditLogEntry, Member, UserRole } from '../types';
 import { AdminSection, HealthFlag, AgendaPolicyDraft, AgendaTemplatePreset, SettingsCategory, ControlAlert } from './admin/adminTypes';
-import { AdminSidebarContent, riskOfMember, sectionMeta, weekDayLabel, allowedRoles } from './admin/AdminSidebar';
+import { AdminSidebarContent, riskOfMember, sectionMeta, weekDayLabel, allowedRoles, NAV_SECTIONS } from './admin/AdminSidebar';
 import { AdminErrorBoundary } from '../components/AdminErrorBoundary';
 import { DensityProvider } from '../context/DensityContext';
-import { DensityToggle } from '../components/ui';
+import {
+  DensityToggle,
+  CommandPaletteProvider,
+  CommandPalette,
+  useCommandPalette,
+  type CommandItem,
+} from '../components/ui';
 import { useAuth } from '../context/AuthContext';
 import { memberService, auditService } from '../services/dataService';
 import { SessionTreatment, SessionCreatePayload, MedicalIntake } from '../services/clinicalService';
@@ -79,6 +87,46 @@ import { useIntegrationJobs } from './admin/hooks/useIntegrationJobs';
 import { useAdminData } from './admin/hooks/useAdminData';
 import { useAgendaConfig } from './admin/hooks/useAgendaConfig';
 
+// ─── CmdKButton ──────────────────────────────────────────────────────────────
+// Trigger del CommandPalette en la top bar. Definido fuera de Admin para
+// evitar que React lo trate como tipo nuevo en cada render. Usa el hook —
+// requiere estar dentro de <CommandPaletteProvider>.
+const CmdKButton: React.FC = () => {
+  const { open } = useCommandPalette();
+  // Detecta plataforma sólo para mostrar el kbd correcto.
+  const isMac =
+    typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
+  const shortcut = isMac ? '⌘K' : 'Ctrl+K';
+  return (
+    <button
+      type="button"
+      onClick={open}
+      aria-label={`Buscar (${shortcut})`}
+      className="hidden md:inline-flex items-center gap-2 px-2.5 py-1.5 rounded-lg border border-velum-200 bg-velum-50/60 text-velum-500 text-xs hover:bg-velum-100 hover:text-velum-700 transition-colors duration-base ease-standard focus:outline-none focus-visible:shadow-focus"
+    >
+      <Search size={13} aria-hidden="true" />
+      <span>Buscar</span>
+      <kbd className="ml-2 px-1.5 py-0.5 text-[10px] font-mono font-semibold tracking-wide text-velum-500 bg-white border border-velum-200 rounded">
+        {shortcut}
+      </kbd>
+    </button>
+  );
+};
+
+// Versión mobile (icono solo) — el desktop muestra el botón completo.
+const CmdKButtonMobile: React.FC = () => {
+  const { open } = useCommandPalette();
+  return (
+    <button
+      type="button"
+      onClick={open}
+      aria-label="Buscar"
+      className="md:hidden p-2 rounded-xl text-velum-400 hover:text-velum-700 hover:bg-velum-50 transition"
+    >
+      <Search size={18} />
+    </button>
+  );
+};
 
 
 const KpiCard: React.FC<{ icon: React.ReactNode; label: string; value: string | number; sub?: string; accent?: string }> = ({ icon, label, value, sub, accent = 'text-velum-900' }) => (
@@ -1799,8 +1847,70 @@ export const Admin: React.FC = () => {
   // SidebarContent ahora es AdminSidebarContent (definido fuera del componente)
   // para evitar que React lo trate como tipo nuevo en cada render.
 
+  // ─── Comandos del CommandPalette (Cmd+K) ──────────────────────────────────
+  // Tres grupos: Secciones (10), Pacientes (top 100), Acciones globales.
+  // Memoizado por members + activeSection para evitar reconstruir en cada
+  // render (members cambia rara vez).
+  const paletteCommands = useMemo<CommandItem[]>(() => {
+    const sectionCmds: CommandItem[] = NAV_SECTIONS.map((section) => ({
+      id: `section:${section}`,
+      label: `Ir a ${sectionMeta[section].label}`,
+      hint: sectionMeta[section].description,
+      group: 'Secciones',
+      icon: sectionMeta[section].icon,
+      keywords: [section, sectionMeta[section].label.toLowerCase()],
+      perform: () => {
+        setActiveSection(section);
+        setSidebarOpen(false);
+      },
+    }));
+
+    // Pacientes — limitado a 100 para no saturar la lista. El usuario puede
+    // refinar con texto antes de que aparezcan más. Si en el futuro hay
+    // miles, considerar virtualizar la lista o paginar el filtrado.
+    const memberCmds: CommandItem[] = members.slice(0, 100).map((m) => ({
+      id: `member:${m.id}`,
+      label: m.name || m.email || 'Sin nombre',
+      hint: m.name ? m.email : undefined,
+      group: 'Pacientes',
+      icon: UserIcon,
+      keywords: [m.email, m.id, m.name].filter(Boolean) as string[],
+      perform: () => {
+        setActiveSection('socias');
+        setSelectedMember(m);
+      },
+    }));
+
+    const actionCmds: CommandItem[] = [
+      {
+        id: 'action:refresh',
+        label: 'Actualizar datos',
+        hint: 'Recarga miembros, citas y métricas',
+        group: 'Acciones',
+        icon: RefreshCw,
+        keywords: ['refresh', 'recargar', 'sync'],
+        perform: () => triggerLoadData(),
+      },
+      {
+        id: 'action:logout',
+        label: 'Cerrar sesión',
+        group: 'Acciones',
+        icon: LogOut,
+        keywords: ['salir', 'logout', 'sign out'],
+        perform: () => logout(),
+      },
+    ];
+
+    return [...sectionCmds, ...memberCmds, ...actionCmds];
+    // triggerLoadData y logout se referencian via closure — son estables
+    // (definidos en el componente). No se incluyen en deps porque cambian
+    // referencia en cada render y causarían rebuild innecesario.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [members]);
+
   return (
     <DensityProvider>
+    <CommandPaletteProvider>
     <div className="min-h-screen bg-velum-50 flex">
 
       {/* ── Sidebar desktop (always visible ≥ md) ── */}
@@ -1862,6 +1972,8 @@ export const Admin: React.FC = () => {
             <span className="text-sm font-semibold text-velum-900">{sectionMeta[activeSection].label}</span>
           </div>
           <div className="flex items-center gap-2">
+            <CmdKButton />
+            <CmdKButtonMobile />
             <DensityToggle />
             <button
               onClick={() => void triggerLoadData()}
@@ -2003,7 +2115,11 @@ export const Admin: React.FC = () => {
           </>
         );
       })()}
+
+      {/* Cmd+K — paleta global de comandos. Montada una vez al final. */}
+      <CommandPalette commands={paletteCommands} />
     </div>
+    </CommandPaletteProvider>
     </DensityProvider>
   );
 };

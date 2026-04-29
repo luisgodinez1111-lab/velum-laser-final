@@ -47,3 +47,10 @@ export { MobileBottomNav } from './MobileBottomNav';
 export type { BottomNavItem } from './MobileBottomNav';
 
 export { DensityToggle } from './DensityToggle';
+
+export {
+  CommandPalette,
+  CommandPaletteProvider,
+  useCommandPalette,
+} from './CommandPalette';
+export type { CommandItem } from './CommandPalette';
