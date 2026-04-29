@@ -28,7 +28,7 @@ import {
   ClipboardList,
   Download
 } from "lucide-react";
-import { Button } from "../components/ui";
+import { Button, PillButton } from "../components/ui";
 import { SignaturePad } from "../components/SignaturePad";
 import { useAuth } from "../context/AuthContext";
 import { redirectToCustomerPortal, createSubscriptionCheckout } from "../services/stripeService";
@@ -45,11 +45,12 @@ import { apiFetch } from "../services/apiClient";
 
 const asString = (v: unknown, fallback = ""): string => (typeof v === "string" ? v : fallback);
 
-// ── Design tokens ────────────────────────────────────────────────────────────
-const fld = "w-full rounded-2xl bg-velum-50 border border-velum-200/60 px-5 py-4 text-[15px] text-velum-900 placeholder:text-velum-400 outline-none transition-all duration-200 focus:bg-white focus:border-velum-900 focus:ring-4 focus:ring-velum-900/[0.07]";
-const lbl = "mb-2 block text-[11px] font-bold uppercase tracking-[0.18em] text-velum-500";
+// ── Design tokens (Apple híbrido — cliente) ───────────────────────────────────
+// `lbl` migrado a sans semibold sin uppercase per MASTER §6.3 (cliente sin uppercase).
+const fld = "w-full rounded-2xl bg-velum-50 border border-velum-200/60 px-5 py-4 text-[15px] text-velum-900 placeholder:text-velum-400 outline-none transition-all duration-base ease-standard focus:bg-white focus:border-velum-900 focus:ring-4 focus:ring-velum-900/[0.07]";
+const lbl = "mb-2 block text-[13px] font-semibold text-velum-500";
 const card = "bg-white rounded-2xl border border-velum-100 shadow-sm";
-const pressBtn = "transition-transform duration-100 active:scale-[0.96]";
+const pressBtn = "transition-transform duration-fast active:scale-[0.96]";
 // ────────────────────────────────────────────────────────────────────────────
 
 // Saludo según la hora (ES MX). Devuelve la mayúscula correcta.
@@ -125,12 +126,12 @@ const Sk: React.FC<{ className?: string }> = ({ className = "" }) => (
 // ── Appointment Card ─────────────────────────────────────────────────────────
 const apptStatusLabel = (status: string) => {
   switch (status) {
-    case "scheduled":   return { label: "Agendada",   cls: "bg-blue-50 text-blue-700 border-blue-200" };
-    case "confirmed":   return { label: "Confirmada", cls: "bg-emerald-50 text-emerald-700 border-emerald-200" };
-    case "completed":   return { label: "Completada", cls: "bg-zinc-100 text-zinc-600 border-zinc-200" };
-    case "canceled":    return { label: "Cancelada",  cls: "bg-red-50 text-red-600 border-red-200" };
-    case "no_show":     return { label: "No asistió", cls: "bg-orange-50 text-orange-700 border-orange-200" };
-    default:            return { label: status,        cls: "bg-zinc-100 text-zinc-600 border-zinc-200" };
+    case "scheduled":   return { label: "Agendada",   cls: "bg-info-50 text-info-700 border-info-100" };
+    case "confirmed":   return { label: "Confirmada", cls: "bg-success-50 text-success-700 border-success-100" };
+    case "completed":   return { label: "Completada", cls: "bg-velum-100 text-velum-600 border-velum-200" };
+    case "canceled":    return { label: "Cancelada",  cls: "bg-danger-50 text-danger-700 border-danger-100" };
+    case "no_show":     return { label: "No asistió", cls: "bg-warning-50 text-warning-700 border-warning-100" };
+    default:            return { label: status,        cls: "bg-velum-100 text-velum-600 border-velum-200" };
   }
 };
 
@@ -150,11 +151,11 @@ const AppointmentCard: React.FC<{
       <div className="flex-1 px-4 py-4 sm:px-5">
         <div className="flex items-start gap-4">
           <div className="shrink-0 w-[52px] text-center bg-velum-50 border border-velum-100 rounded-2xl py-2">
-            <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-velum-500 leading-none">
-              {start.toLocaleDateString("es-MX", { month: "short" })}
+            <p className="text-[11px] font-semibold text-velum-500 leading-none capitalize">
+              {start.toLocaleDateString("es-MX", { month: "short" }).replace(".", "")}
             </p>
-            <p className="text-[26px] font-serif font-bold text-velum-900 leading-tight">{start.getDate()}</p>
-            <p className="text-[10px] text-velum-400 leading-none">{start.getFullYear()}</p>
+            <p className="text-[26px] font-sans font-bold tabular-nums tracking-tight text-velum-900 leading-tight">{start.getDate()}</p>
+            <p className="text-[11px] text-velum-400 leading-none tabular-nums">{start.getFullYear()}</p>
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-start justify-between gap-2">
@@ -166,9 +167,9 @@ const AppointmentCard: React.FC<{
                 </p>
                 {appt.treatment && <p className="text-[13px] text-velum-600 mt-0.5">{appt.treatment.name}</p>}
                 {appt.cabin     && <p className="text-[12px] text-velum-400 mt-0.5">Cabina {appt.cabin.name}</p>}
-                {appt.canceledReason && <p className="text-[12px] text-red-500 mt-1">Motivo: {appt.canceledReason}</p>}
+                {appt.canceledReason && <p className="text-[12px] text-danger-500 mt-1">Motivo: {appt.canceledReason}</p>}
               </div>
-              <span className={`shrink-0 text-[10px] font-bold uppercase tracking-[0.1em] px-2.5 py-1 border rounded-full ${cls}`}>
+              <span className={`shrink-0 text-[11px] font-semibold px-2.5 py-1 border rounded-full ${cls}`}>
                 {label}
               </span>
             </div>
@@ -182,7 +183,7 @@ const AppointmentCard: React.FC<{
                 )}
                 {onCancel && (
                   <button type="button" onClick={onCancel}
-                    className={`flex items-center gap-1.5 text-[13px] font-medium text-red-500 hover:text-red-700 transition-colors ${pressBtn}`}>
+                    className={`flex items-center gap-1.5 text-[13px] font-medium text-danger-500 hover:text-danger-700 transition-colors duration-base ease-standard ${pressBtn}`}>
                     <X size={12} /> Cancelar
                   </button>
                 )}
@@ -551,11 +552,11 @@ export const Dashboard: React.FC = () => {
   const interestedPlanCode = asString(membershipData?.interestedPlanCode ?? "");
   const hasDepositCredit   = !!(membershipData?.appointmentDepositAvailable);
   const statusStyles: Record<string, { label: string; cls: string }> = {
-    active:   { label: "Activa",          cls: "bg-emerald-50 text-emerald-700 border-emerald-200" },
-    inactive: { label: "Inactiva",        cls: "bg-velum-100 text-velum-600 border-velum-200"     },
-    past_due: { label: "Pago pendiente",  cls: "bg-amber-50 text-amber-700 border-amber-200"      },
-    canceled: { label: "Cancelada",       cls: "bg-red-50 text-red-600 border-red-200"            },
-    paused:   { label: "Pausada",         cls: "bg-zinc-100 text-zinc-600 border-zinc-200"        },
+    active:   { label: "Activa",          cls: "bg-success-50 text-success-700 border-success-100" },
+    inactive: { label: "Inactiva",        cls: "bg-velum-100 text-velum-600 border-velum-200"      },
+    past_due: { label: "Pago pendiente",  cls: "bg-warning-50 text-warning-700 border-warning-100" },
+    canceled: { label: "Cancelada",       cls: "bg-danger-50 text-danger-700 border-danger-100"    },
+    paused:   { label: "Pausada",         cls: "bg-velum-100 text-velum-600 border-velum-200"      },
   };
   const { label: msLabel, cls: msCls } = statusStyles[membershipStatus] ?? statusStyles.inactive;
 
@@ -647,7 +648,7 @@ export const Dashboard: React.FC = () => {
                 <span className="text-[11px] font-bold text-velum-900">{notifCount}</span>
               </button>
             )}
-            <span className={`hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-[0.16em] border ${msCls}`}>
+            <span className={`hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-semibold border ${msCls}`}>
               {msLabel}
             </span>
           </div>
@@ -700,22 +701,22 @@ export const Dashboard: React.FC = () => {
                 </p>
               </section>
 
-              {/* Status alerts */}
+              {/* Status alerts — semantic tokens */}
               {intakeStatus === "submitted" && (
-                <div className="flex items-start gap-3 bg-amber-50 border border-amber-200/80 rounded-2xl px-4 py-3.5 animate-fade-in">
-                  <div className="w-7 h-7 rounded-xl bg-amber-100 flex items-center justify-center shrink-0 mt-0.5"><Bell size={13} className="text-amber-600" /></div>
+                <div className="flex items-start gap-3 bg-warning-50 border border-warning-100 rounded-2xl px-4 py-3.5 animate-fade-in">
+                  <div className="w-7 h-7 rounded-xl bg-warning-100 flex items-center justify-center shrink-0 mt-0.5"><Bell size={13} className="text-warning-700" /></div>
                   <div>
-                    <p className="text-[13px] font-semibold text-amber-900">Expediente en revisión</p>
-                    <p className="text-[12px] text-amber-700 mt-0.5 leading-snug">Nuestro equipo clínico lo revisará en menos de 24 horas hábiles.</p>
+                    <p className="text-[13px] font-semibold text-warning-700">Expediente en revisión</p>
+                    <p className="text-[12px] text-warning-700/85 mt-0.5 leading-snug">Nuestro equipo clínico lo revisará en menos de 24 horas hábiles.</p>
                   </div>
                 </div>
               )}
               {intakeStatus === "rejected" && (
-                <div className="flex items-start gap-3 bg-red-50 border border-red-200/80 rounded-2xl px-4 py-3.5 animate-fade-in">
-                  <div className="w-7 h-7 rounded-xl bg-red-100 flex items-center justify-center shrink-0 mt-0.5"><AlertTriangle size={13} className="text-red-500" /></div>
+                <div className="flex items-start gap-3 bg-danger-50 border border-danger-100 rounded-2xl px-4 py-3.5 animate-fade-in">
+                  <div className="w-7 h-7 rounded-xl bg-danger-100 flex items-center justify-center shrink-0 mt-0.5"><AlertTriangle size={13} className="text-danger-500" /></div>
                   <div>
-                    <p className="text-[13px] font-semibold text-red-900">Expediente requiere correcciones</p>
-                    <p className="text-[12px] text-red-700 mt-0.5">
+                    <p className="text-[13px] font-semibold text-danger-700">Expediente requiere correcciones</p>
+                    <p className="text-[12px] text-danger-700/85 mt-0.5">
                       <button onClick={() => switchTab("records")} className="underline font-medium">Actualiza tu expediente</button> para continuar.
                     </p>
                   </div>
@@ -740,14 +741,14 @@ export const Dashboard: React.FC = () => {
                   <div className="px-4 py-3 border-b border-velum-100 flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <Bell size={14} className="text-velum-600" />
-                      <p className="text-[11px] font-bold uppercase tracking-widest text-velum-500">Notificaciones</p>
+                      <p className="text-[13px] font-semibold text-velum-700">Notificaciones</p>
                       {inAppUnread > 0 && (
-                        <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-velum-900 text-white text-[9px] font-bold">{inAppUnread}</span>
+                        <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-velum-900 text-white text-[10px] font-bold">{inAppUnread}</span>
                       )}
                     </div>
                     {inAppUnread > 0 && (
                       <button onClick={handleMarkAllRead} disabled={markingAllRead}
-                        className="flex items-center gap-1.5 text-[11px] font-medium text-velum-600 hover:text-velum-900 transition-colors disabled:opacity-40">
+                        className="flex items-center gap-1.5 text-[12px] font-medium text-velum-500 hover:text-velum-900 transition-colors duration-base ease-standard disabled:opacity-40">
                         {markingAllRead ? <Loader2 size={11} className="animate-spin" /> : <CheckCircle size={11} />}
                         Marcar todo como leído
                       </button>
@@ -904,16 +905,19 @@ export const Dashboard: React.FC = () => {
                 const tier = MEMBERSHIPS.find((t) => t.stripePriceId === interestedPlanCode);
                 if (!tier) return null;
                 return (
-                  <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-700 mb-1">Plan pre-seleccionado</p>
+                  <div className="rounded-2xl border border-success-100 bg-success-50 px-5 py-4">
+                    <p className="text-[13px] font-semibold text-success-700 mb-2">Plan pre-seleccionado</p>
                     <div className="flex items-center justify-between gap-3">
                       <div>
-                        <p className="font-semibold text-velum-900 text-sm">{tier.name}</p>
-                        <p className="text-xs text-velum-500 mt-0.5">${tier.price.toLocaleString("es-MX")}/mes{hasDepositCredit && " · $200 de depósito se descuenta"}</p>
+                        <p className="font-semibold text-velum-900 text-[15px]">{tier.name}</p>
+                        <p className="text-[13px] text-velum-500 mt-0.5">${tier.price.toLocaleString("es-MX")}/mes{hasDepositCredit && " · $200 de depósito se descuenta"}</p>
                       </div>
-                      <button
-                        type="button"
+                      <PillButton
+                        variant="primary"
+                        size="sm"
                         disabled={isActivatingPlan}
+                        isLoading={isActivatingPlan}
+                        loadingLabel="Redirigiendo…"
                         onClick={async () => {
                           setIsActivatingPlan(true);
                           try {
@@ -924,47 +928,42 @@ export const Dashboard: React.FC = () => {
                             setIsActivatingPlan(false);
                           }
                         }}
-                        className={`shrink-0 bg-velum-900 text-white text-xs font-bold px-4 py-2 rounded-xl hover:bg-velum-800 transition-colors disabled:opacity-60 disabled:cursor-not-allowed ${pressBtn}`}
                         aria-label="Activar plan seleccionado"
                       >
-                        {isActivatingPlan ? "Redirigiendo…" : "Activar ahora"}
-                      </button>
+                        Activar ahora
+                      </PillButton>
                     </div>
-                    <p className="text-[11px] text-emerald-700 mt-2">
+                    <p className="text-[13px] text-success-700/85 mt-3">
                       Si quieres cambiar de plan, <Link to="/memberships" className="underline font-medium">selecciona otro aquí</Link>.
                     </p>
                   </div>
                 );
               })()}
 
-              {/* Membership card */}
+              {/* Membership card — Apple híbrido (sin blobs, sans tipografía) */}
               {membership && (
-                <div className="bg-velum-900 rounded-2xl p-5 sm:p-6 text-white relative overflow-hidden">
-                  <div className="absolute -right-10 -top-10 w-36 h-36 rounded-full bg-velum-800/40 pointer-events-none" />
-                  <div className="absolute right-0 -bottom-8 w-24 h-24 rounded-full bg-velum-800/20 pointer-events-none" />
-                  <div className="relative">
-                    <div className="flex items-start justify-between gap-4 mb-5">
-                      <div>
-                        <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-velum-400">Plan activo</p>
-                        <p className="font-serif text-2xl italic text-white mt-1">{planLabel ?? "Plan Velum"}</p>
-                        {planPrice && (
-                          <p className="text-[12px] text-velum-300 mt-1 font-medium">{planPrice}</p>
-                        )}
+                <div className="bg-velum-900 rounded-3xl px-6 py-7 sm:px-8 sm:py-8 text-white">
+                  <div className="flex items-start justify-between gap-4 mb-6">
+                    <div>
+                      <p className="text-[13px] font-semibold text-velum-300">Plan activo</p>
+                      <p className="font-sans font-bold text-white text-2xl tracking-tight mt-2">{planLabel ?? "Plan Velum"}</p>
+                      {planPrice && (
+                        <p className="text-[13px] text-velum-300 mt-1.5 font-medium tabular-nums">{planPrice}</p>
+                      )}
+                    </div>
+                    <span className={`shrink-0 text-[11px] font-semibold px-2.5 py-1 border rounded-full ${msCls}`}>{msLabel}</span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-3 pt-5 border-t border-velum-800">
+                    {[
+                      ["Sesiones", String(sessions.length)],
+                      ["Próxima", upcomingAppointments.length > 0 ? new Date(upcomingAppointments[0].startAt).toLocaleDateString("es-MX",{day:"numeric",month:"short"}) : "—"],
+                      ["Renueva",  membership?.currentPeriodEnd ? new Date(membership.currentPeriodEnd).toLocaleDateString("es-MX",{day:"numeric",month:"short"}) : "—"],
+                    ].map(([k, v]) => (
+                      <div key={k}>
+                        <p className="text-[12px] font-medium text-velum-400">{k}</p>
+                        <p className="text-[16px] font-sans font-bold text-white mt-1 tabular-nums tracking-tight">{v}</p>
                       </div>
-                      <span className={`shrink-0 text-[10px] font-bold uppercase tracking-[0.1em] px-2.5 py-1.5 border rounded-full ${msCls}`}>{msLabel}</span>
-                    </div>
-                    <div className="grid grid-cols-3 gap-3 pt-4 border-t border-velum-800">
-                      {[
-                        ["Sesiones", String(sessions.length)],
-                        ["Próxima", upcomingAppointments.length > 0 ? new Date(upcomingAppointments[0].startAt).toLocaleDateString("es-MX",{day:"numeric",month:"short"}) : "—"],
-                        ["Renueva",  membership?.currentPeriodEnd ? new Date(membership.currentPeriodEnd).toLocaleDateString("es-MX",{day:"numeric",month:"short"}) : "—"],
-                      ].map(([k, v]) => (
-                        <div key={k}>
-                          <p className="text-[9px] uppercase tracking-widest text-velum-500">{k}</p>
-                          <p className="text-[14px] font-bold text-white mt-0.5">{v}</p>
-                        </div>
-                      ))}
-                    </div>
+                    ))}
                   </div>
                 </div>
               )}
@@ -972,7 +971,7 @@ export const Dashboard: React.FC = () => {
               {/* Onboarding stepper */}
               {!onboardingComplete && (
                 <div className={`${card} p-5`}>
-                  <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-velum-400 mb-4">Tu progreso</p>
+                  <p className="text-[13px] font-semibold text-velum-500 mb-4">Tu progreso</p>
                   <div className="flex items-center">
                     {onboardingSteps.map((step, idx) => (
                       <React.Fragment key={step.id}>
@@ -1000,7 +999,7 @@ export const Dashboard: React.FC = () => {
 
               {/* Quick actions */}
               <div className={`${card} p-5`}>
-                <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-velum-400 mb-4">Accesos rápidos</p>
+                <p className="text-[13px] font-semibold text-velum-500 mb-4">Accesos rápidos</p>
                 <div className="grid grid-cols-2 gap-3">
                   <Link to="/agenda" className={`flex items-center gap-3 rounded-2xl border border-velum-100 bg-velum-50 px-4 py-3.5 hover:border-velum-300 hover:bg-white transition-all group card-hover ${pressBtn}`}>
                     <Calendar size={18} className="text-velum-600 group-hover:text-velum-900 transition-colors" />
@@ -1024,12 +1023,12 @@ export const Dashboard: React.FC = () => {
                   <div className="w-9 h-9 rounded-[10px] bg-velum-50 border border-velum-100 flex items-center justify-center">
                     <Calendar size={16} className="text-velum-700" />
                   </div>
-                  <h2 className="font-serif text-xl text-velum-900">Mis citas</h2>
+                  <h2 className="font-sans font-bold text-velum-900 text-xl tracking-tight">Mis citas</h2>
                 </div>
                 <Link to="/agenda">
-                  <button className={`rounded-2xl bg-velum-900 text-white text-[13px] font-semibold px-4 py-2 hover:bg-velum-800 transition-colors ${pressBtn}`}>
-                    + Nueva
-                  </button>
+                  <PillButton variant="primary" size="sm" leftIcon={<Plus size={14} aria-hidden="true" />}>
+                    Nueva
+                  </PillButton>
                 </Link>
               </div>
 
@@ -1041,7 +1040,7 @@ export const Dashboard: React.FC = () => {
 
               {!isLoadingAppointments && upcomingAppointments.length > 0 && (
                 <div>
-                  <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-velum-400 mb-3">Próximas</p>
+                  <p className="text-[13px] font-semibold text-velum-500 mb-3">Próximas</p>
                   <div className="space-y-3">
                     {upcomingAppointments.map(appt => (
                       <AppointmentCard key={appt.id} appt={appt}
@@ -1060,16 +1059,14 @@ export const Dashboard: React.FC = () => {
                   <p className="font-semibold text-velum-900 text-[15px]">Sin citas programadas</p>
                   <p className="text-[13px] text-velum-500 mt-1 mb-5">Agenda tu próxima sesión y sigue tu tratamiento</p>
                   <Link to="/agenda">
-                    <button className={`rounded-2xl bg-velum-900 text-white text-[13px] font-semibold px-5 py-2.5 hover:bg-velum-800 transition-colors ${pressBtn}`}>
-                      Agendar cita
-                    </button>
+                    <PillButton variant="primary" size="md" showChevron>Agendar cita</PillButton>
                   </Link>
                 </div>
               )}
 
               {!isLoadingAppointments && pastAppointments.length > 0 && (
                 <div>
-                  <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-velum-400 mb-3">Historial</p>
+                  <p className="text-[13px] font-semibold text-velum-500 mb-3">Historial</p>
                   <div className="space-y-2">
                     {pastAppointments.slice(0, 10).map(appt => (
                       <AppointmentCard key={appt.id} appt={appt} past />
@@ -1087,15 +1084,22 @@ export const Dashboard: React.FC = () => {
                 <div className="w-9 h-9 rounded-[10px] bg-velum-50 border border-velum-100 flex items-center justify-center">
                   <User size={16} className="text-velum-700" />
                 </div>
-                <h2 className="font-serif text-xl text-velum-900">Información personal</h2>
+                <h2 className="font-sans font-bold text-velum-900 text-xl tracking-tight">Información personal</h2>
               </div>
               <div><label className={lbl}>Nombre completo</label><input className={fld} value={profile.fullName} onChange={e => setProfile(p => ({...p, fullName: e.target.value}))} placeholder="Nombre y apellido" disabled={isLoadingData} /></div>
               <div><label className={lbl}>Correo electrónico</label><input className={fld} type="email" value={profile.email} onChange={e => setProfile(p => ({...p, email: e.target.value}))} placeholder="correo@dominio.com" disabled={isLoadingData} /></div>
               <div><label className={lbl}>Teléfono</label><input className={fld} value={profile.phone} onChange={e => setProfile(p => ({...p, phone: e.target.value}))} placeholder="+52 55 1234 5678" disabled={isLoadingData} /></div>
-              <button type="button" onClick={handleSaveProfile} disabled={isSavingProfile || isLoadingData}
-                className={`w-full rounded-2xl bg-velum-900 text-white py-4 text-[15px] font-semibold hover:bg-velum-800 disabled:opacity-50 transition-colors ${pressBtn}`}>
-                {isSavingProfile ? "Guardando…" : "Guardar cambios"}
-              </button>
+              <PillButton
+                variant="primary"
+                size="lg"
+                fullWidth
+                onClick={handleSaveProfile}
+                disabled={isSavingProfile || isLoadingData}
+                isLoading={isSavingProfile}
+                loadingLabel="Guardando…"
+              >
+                Guardar cambios
+              </PillButton>
             </div>
           )}
 
@@ -1106,21 +1110,21 @@ export const Dashboard: React.FC = () => {
                 <div className="w-9 h-9 rounded-[10px] bg-velum-50 border border-velum-100 flex items-center justify-center">
                   <Lock size={16} className="text-velum-700" />
                 </div>
-                <h2 className="font-serif text-xl text-velum-900">Seguridad</h2>
+                <h2 className="font-sans font-bold text-velum-900 text-xl tracking-tight">Seguridad</h2>
               </div>
               <div className="bg-velum-50 border border-velum-200/60 rounded-2xl p-4 space-y-3">
                 <p className="text-[13px] text-velum-700 leading-snug">Para cambiar tu contraseña, solicita primero un código de verificación por WhatsApp.</p>
                 <div className="flex flex-wrap gap-2">
                   <button type="button" onClick={handleRequestWhatsappCode} disabled={isSendingCode}
-                    className={`flex items-center gap-2 rounded-2xl border border-velum-200 bg-white px-4 py-2.5 text-[13px] font-semibold text-velum-700 hover:border-velum-700 hover:text-velum-900 transition-all disabled:opacity-50 ${pressBtn}`}>
+                    className={`flex items-center gap-2 rounded-2xl border border-velum-200 bg-white px-4 py-2.5 text-[13px] font-semibold text-velum-700 hover:border-velum-700 hover:text-velum-900 transition-all duration-base ease-standard disabled:opacity-50 ${pressBtn}`}>
                     <KeyRound size={14} />{isSendingCode ? "Enviando…" : "Código por WhatsApp"}
                   </button>
                   <a href="/#/agenda?mode=forgot"
-                    className={`flex items-center gap-2 rounded-2xl border border-velum-200 bg-white px-4 py-2.5 text-[13px] font-semibold text-velum-600 hover:border-velum-500 hover:text-velum-900 transition-all ${pressBtn}`}>
+                    className={`flex items-center gap-2 rounded-2xl border border-velum-200 bg-white px-4 py-2.5 text-[13px] font-semibold text-velum-600 hover:border-velum-500 hover:text-velum-900 transition-all duration-base ease-standard ${pressBtn}`}>
                     <Mail size={14} /> Restablecer por correo
                   </a>
                 </div>
-                <p className="text-[11px] text-velum-400">¿Cambiaste de número? Usa la opción de correo.</p>
+                <p className="text-[12px] text-velum-400">¿Cambiaste de número? Usa la opción de correo.</p>
               </div>
               <div className="space-y-4">
                 <div><label className={lbl}>Código de WhatsApp</label><input className={fld} value={whatsappCode} onChange={e => setWhatsappCode(e.target.value)} placeholder="6 dígitos" maxLength={6} /></div>
@@ -1131,12 +1135,12 @@ export const Dashboard: React.FC = () => {
                   {newPassword && (
                     <>
                       <div className="mt-2 flex gap-1">
-                        {[0,1,2,3,4].map(i => { const s = Object.values(passwordChecks).filter(Boolean).length; return <div key={i} className={`h-1 flex-1 rounded-full transition-colors ${i < s ? s <= 2 ? "bg-red-400" : s <= 4 ? "bg-amber-400" : "bg-emerald-400" : "bg-velum-100"}`} />; })}
+                        {[0,1,2,3,4].map(i => { const s = Object.values(passwordChecks).filter(Boolean).length; return <div key={i} className={`h-1 flex-1 rounded-full transition-colors duration-base ease-standard ${i < s ? s <= 2 ? "bg-danger-500/70" : s <= 4 ? "bg-warning-500/80" : "bg-success-500" : "bg-velum-100"}`} />; })}
                       </div>
                       <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1">
                         {([[passwordChecks.length,"12+ caracteres"],[passwordChecks.upper,"1 mayúscula"],[passwordChecks.lower,"1 minúscula"],[passwordChecks.number,"1 número"],[passwordChecks.special,"1 símbolo"]] as [boolean,string][]).map(([ok,txt],i) => (
-                          <span key={i} className={`flex items-center gap-1.5 text-[11px] ${ok ? "text-emerald-600" : "text-velum-400"}`}>
-                            <span className={`w-1.5 h-1.5 rounded-full ${ok ? "bg-emerald-500" : "bg-velum-200"}`} />{txt}
+                          <span key={i} className={`flex items-center gap-1.5 text-[12px] ${ok ? "text-success-700" : "text-velum-400"}`}>
+                            <span className={`w-1.5 h-1.5 rounded-full ${ok ? "bg-success-500" : "bg-velum-200"}`} />{txt}
                           </span>
                         ))}
                       </div>
@@ -1144,10 +1148,17 @@ export const Dashboard: React.FC = () => {
                   )}
                 </div>
                 <div><label className={lbl}>Confirmar contraseña</label><input className={fld} type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} /></div>
-                <button type="button" onClick={handleChangePassword} disabled={isUpdatingPassword}
-                  className={`w-full rounded-2xl bg-velum-900 text-white py-4 text-[15px] font-semibold hover:bg-velum-800 disabled:opacity-50 transition-colors ${pressBtn}`}>
-                  {isUpdatingPassword ? "Actualizando…" : "Cambiar contraseña"}
-                </button>
+                <PillButton
+                  variant="primary"
+                  size="lg"
+                  fullWidth
+                  onClick={handleChangePassword}
+                  disabled={isUpdatingPassword}
+                  isLoading={isUpdatingPassword}
+                  loadingLabel="Actualizando…"
+                >
+                  Cambiar contraseña
+                </PillButton>
               </div>
             </div>
           )}
@@ -1161,22 +1172,22 @@ export const Dashboard: React.FC = () => {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="font-semibold text-velum-900 text-[15px]">Expediente médico</p>
-                  <p className="text-[12px] text-velum-500 mt-0.5">Información clínica actualizada para tratamientos seguros.</p>
+                  <p className="text-[13px] text-velum-500 mt-0.5">Información clínica actualizada para tratamientos seguros.</p>
                 </div>
                 <button type="button" onClick={handleOpenEditIntake}
-                  className={`shrink-0 flex items-center gap-2 rounded-2xl border border-velum-200 px-4 py-2.5 text-[13px] font-semibold text-velum-700 hover:border-velum-700 transition-all ${pressBtn}`}>
+                  className={`shrink-0 flex items-center gap-2 rounded-2xl border border-velum-200 px-4 py-2.5 text-[13px] font-semibold text-velum-700 hover:border-velum-700 transition-all duration-base ease-standard ${pressBtn}`}>
                   <RefreshCw size={13} /> Actualizar
                 </button>
               </div>
               <div className={`${card} p-6 space-y-4`}>
                 <div className="flex items-center gap-3">
                   <div className="w-9 h-9 rounded-[10px] bg-velum-50 border border-velum-100 flex items-center justify-center"><FileText size={16} className="text-velum-700" /></div>
-                  <h2 className="font-serif text-xl text-velum-900">Documentos y consentimientos</h2>
+                  <h2 className="font-sans font-bold text-velum-900 text-xl tracking-tight">Documentos y consentimientos</h2>
                 </div>
                 {pendingDocs > 0 && (
-                  <div className="rounded-2xl border border-orange-200/80 bg-orange-50 px-4 py-3 flex items-start gap-3">
-                    <AlertTriangle size={16} className="text-orange-500 mt-0.5 shrink-0" />
-                    <p className="text-[13px] text-orange-800">Tienes <strong>{pendingDocs}</strong> documento{pendingDocs>1?"s":""} pendiente{pendingDocs>1?"s":""} de firma.</p>
+                  <div className="rounded-2xl border border-warning-100 bg-warning-50 px-4 py-3 flex items-start gap-3">
+                    <AlertTriangle size={16} className="text-warning-500 mt-0.5 shrink-0" />
+                    <p className="text-[13px] text-warning-700">Tienes <strong>{pendingDocs}</strong> documento{pendingDocs>1?"s":""} pendiente{pendingDocs>1?"s":""} de firma.</p>
                   </div>
                 )}
                 <div className="space-y-2">
@@ -1189,14 +1200,14 @@ export const Dashboard: React.FC = () => {
                       </div>
                       {doc.signed
                         ? <div className="flex items-center gap-2">
-                            <span className="flex items-center gap-1.5 text-[11px] font-bold text-emerald-700"><CheckCircle size={13} /> Firmado</span>
+                            <span className="flex items-center gap-1.5 text-[12px] font-semibold text-success-700"><CheckCircle size={13} /> Firmado</span>
                             <button
                               onClick={() => documentService.downloadDocument(doc.id, doc.title + ".pdf").catch(() => toast.error("No se pudo descargar el documento"))}
-                              className={`flex items-center gap-1 rounded-xl border border-velum-200 text-velum-600 text-[11px] font-semibold px-2.5 py-1 hover:bg-velum-50 transition-colors ${pressBtn}`}
+                              className={`flex items-center gap-1 rounded-xl border border-velum-200 text-velum-600 text-[12px] font-semibold px-2.5 py-1 hover:bg-velum-50 transition-colors duration-base ease-standard ${pressBtn}`}
                               title="Descargar"
                             ><Download size={12} /> Descargar</button>
                           </div>
-                        : <button onClick={() => initiateSigning(doc)} className={`rounded-xl bg-velum-900 text-white text-[12px] font-semibold px-3 py-1.5 hover:bg-velum-800 transition-colors ${pressBtn}`}>Firmar</button>
+                        : <button onClick={() => initiateSigning(doc)} className={`rounded-xl bg-velum-900 text-white text-[12px] font-semibold px-3 py-1.5 hover:bg-velum-800 transition-colors duration-base ease-standard ${pressBtn}`}>Firmar</button>
                       }
                     </div>
                   ))}
@@ -1231,7 +1242,7 @@ export const Dashboard: React.FC = () => {
               <div className={`${card} p-6`}>
                 <div className="flex items-center gap-3 mb-5">
                   <div className="w-9 h-9 rounded-[10px] bg-velum-50 border border-velum-100 flex items-center justify-center"><ClipboardList size={16} className="text-velum-700" /></div>
-                  <h2 className="font-serif text-xl text-velum-900">Historial de sesiones</h2>
+                  <h2 className="font-sans font-bold text-velum-900 text-xl tracking-tight">Historial de sesiones</h2>
                 </div>
 
                 {isLoadingSessions && (
@@ -1252,10 +1263,10 @@ export const Dashboard: React.FC = () => {
                     <div className="bg-velum-50 rounded-2xl border border-velum-100 p-4">
                       <div className="flex items-center justify-between mb-3">
                         <p className="text-[13px] font-semibold text-velum-900">
-                          <span className="text-[22px] font-serif font-bold animate-count-in">{sessions.length}</span>
-                          <span className="text-velum-500 ml-2 text-[12px]">/ 12 sesiones</span>
+                          <span className="text-[28px] font-sans font-bold tabular-nums tracking-tight animate-count-in">{sessions.length}</span>
+                          <span className="text-velum-500 ml-2 text-[13px]">/ 12 sesiones</span>
                         </p>
-                        <p className="text-[11px] font-bold text-velum-500">{Math.round(sessions.length/12*100)}%</p>
+                        <p className="text-[12px] font-semibold text-velum-500 tabular-nums">{Math.round(sessions.length/12*100)}%</p>
                       </div>
                       <div className="flex gap-1.5 flex-wrap">
                         {Array.from({length: 12}).map((_,i) => (
@@ -1280,49 +1291,49 @@ export const Dashboard: React.FC = () => {
                             <div className={`${card} overflow-hidden`}>
                               <div className="px-4 py-4 flex items-start justify-between gap-3">
                                 <div>
-                                  <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-velum-400">{dateStr}</p>
-                                  {params?.zona && <p className="font-semibold text-velum-900 text-[15px] mt-0.5">{String(params.zona)}</p>}
+                                  <p className="text-[12px] font-semibold text-velum-500 capitalize">{dateStr}</p>
+                                  {params?.zona && <p className="font-semibold text-velum-900 text-[15px] mt-1">{String(params.zona)}</p>}
                                 </div>
-                                <span className="shrink-0 text-[10px] font-bold uppercase px-2.5 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full">Completada</span>
+                                <span className="shrink-0 text-[11px] font-semibold px-2.5 py-1 bg-success-50 text-success-700 border border-success-100 rounded-full">Completada</span>
                               </div>
                               {params && Object.keys(params).length > 0 && (
                                 <div className="px-4 pb-4 space-y-3">
                                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                                    {params.zona && <div className="bg-velum-50 rounded-xl p-3 text-center"><p className="text-[9px] uppercase tracking-widest text-velum-400">Zona</p><p className="text-[13px] font-semibold text-velum-900 mt-0.5">{String(params.zona)}</p></div>}
-                                    {params.fluencia && <div className="bg-velum-50 rounded-xl p-3 text-center"><p className="text-[9px] uppercase tracking-widest text-velum-400">Energía</p><p className="text-[13px] font-semibold text-velum-900 mt-0.5">{String(params.fluencia)} J/cm²</p></div>}
-                                    {params.frecuencia && <div className="bg-velum-50 rounded-xl p-3 text-center"><p className="text-[9px] uppercase tracking-widest text-velum-400">Velocidad</p><p className="text-[13px] font-semibold text-velum-900 mt-0.5">{String(params.frecuencia)} Hz</p></div>}
-                                    {params.passes && <div className="bg-velum-50 rounded-xl p-3 text-center"><p className="text-[9px] uppercase tracking-widest text-velum-400">Pasadas</p><p className="text-[13px] font-semibold text-velum-900 mt-0.5">{String(params.passes)}</p></div>}
+                                    {params.zona && <div className="bg-velum-50 rounded-xl p-3 text-center"><p className="text-[11px] font-medium text-velum-500">Zona</p><p className="text-[14px] font-semibold text-velum-900 mt-1 tabular-nums">{String(params.zona)}</p></div>}
+                                    {params.fluencia && <div className="bg-velum-50 rounded-xl p-3 text-center"><p className="text-[11px] font-medium text-velum-500">Energía</p><p className="text-[14px] font-semibold text-velum-900 mt-1 tabular-nums">{String(params.fluencia)} J/cm²</p></div>}
+                                    {params.frecuencia && <div className="bg-velum-50 rounded-xl p-3 text-center"><p className="text-[11px] font-medium text-velum-500">Velocidad</p><p className="text-[14px] font-semibold text-velum-900 mt-1 tabular-nums">{String(params.frecuencia)} Hz</p></div>}
+                                    {params.passes && <div className="bg-velum-50 rounded-xl p-3 text-center"><p className="text-[11px] font-medium text-velum-500">Pasadas</p><p className="text-[14px] font-semibold text-velum-900 mt-1 tabular-nums">{String(params.passes)}</p></div>}
                                   </div>
                                   <details className="group rounded-xl border border-velum-100 overflow-hidden">
-                                    <summary className="flex items-center justify-between px-3 py-2.5 cursor-pointer text-[12px] font-semibold text-velum-600 hover:bg-velum-50 transition-colors list-none">
+                                    <summary className="flex items-center justify-between px-3 py-2.5 cursor-pointer text-[13px] font-semibold text-velum-600 hover:bg-velum-50 transition-colors duration-base ease-standard list-none">
                                       <span className="flex items-center gap-2"><BookOpen size={12} className="text-velum-400" /> Cuidados post-sesión</span>
-                                      <ChevronDown size={13} className="text-velum-400 group-open:rotate-180 transition-transform" />
+                                      <ChevronDown size={13} className="text-velum-400 group-open:rotate-180 transition-transform duration-base ease-standard" />
                                     </summary>
                                     <div className="px-3 pb-3 space-y-1.5 border-t border-velum-50">
-                                      {CARE.post.map((tip, i) => <div key={i} className="flex items-start gap-2 text-[12px] text-velum-600"><div className="w-1.5 h-1.5 rounded-full bg-velum-300 mt-1.5 shrink-0" />{tip}</div>)}
+                                      {CARE.post.map((tip, i) => <div key={i} className="flex items-start gap-2 text-[13px] text-velum-600"><div className="w-1.5 h-1.5 rounded-full bg-velum-300 mt-1.5 shrink-0" />{tip}</div>)}
                                     </div>
                                   </details>
                                 </div>
                               )}
-                              {session.notes && <div className="px-4 pb-4"><p className="text-[10px] uppercase tracking-widest text-velum-400 mb-1">Notas</p><p className="text-[13px] text-velum-700">{session.notes}</p></div>}
-                              {session.adverseEvents && <div className="mx-4 mb-4 bg-amber-50 border border-amber-200 rounded-xl p-3"><p className="text-[10px] uppercase tracking-widest text-amber-600 mb-1">Eventos adversos</p><p className="text-[13px] text-amber-800">{session.adverseEvents}</p></div>}
+                              {session.notes && <div className="px-4 pb-4"><p className="text-[12px] font-semibold text-velum-500 mb-1">Notas</p><p className="text-[13px] text-velum-700">{session.notes}</p></div>}
+                              {session.adverseEvents && <div className="mx-4 mb-4 bg-warning-50 border border-warning-100 rounded-xl p-3"><p className="text-[12px] font-semibold text-warning-700 mb-1">Eventos adversos</p><p className="text-[13px] text-warning-700/85">{session.adverseEvents}</p></div>}
                               <div className="px-4 pb-4 pt-1 border-t border-velum-50">
                                 {session.memberFeedback ? (
                                   <div className="flex items-start justify-between gap-2">
-                                    <div><p className="text-[10px] uppercase tracking-widest text-velum-400 mb-1">Tu comentario</p><p className="text-[13px] text-velum-700 italic">"{session.memberFeedback}"</p></div>
-                                    <button type="button" onClick={() => { setFeedbackOpenId(session.id); setFeedbackText(session.memberFeedback ?? ""); }} className="shrink-0 text-[11px] text-velum-400 hover:text-velum-900 underline underline-offset-2 transition-colors">Editar</button>
+                                    <div><p className="text-[12px] font-semibold text-velum-500 mb-1">Tu comentario</p><p className="text-[13px] text-velum-700 italic">"{session.memberFeedback}"</p></div>
+                                    <button type="button" onClick={() => { setFeedbackOpenId(session.id); setFeedbackText(session.memberFeedback ?? ""); }} className="shrink-0 text-[12px] text-velum-400 hover:text-velum-900 underline underline-offset-2 transition-colors duration-base ease-standard">Editar</button>
                                   </div>
                                 ) : feedbackOpenId === session.id ? (
                                   <div className="space-y-2">
-                                    <p className="text-[10px] uppercase tracking-widest text-velum-400">Dejar comentario</p>
+                                    <p className="text-[12px] font-semibold text-velum-500">Dejar comentario</p>
                                     <textarea className={`${fld} resize-none`} rows={2} value={feedbackText} onChange={e => setFeedbackText(e.target.value)} placeholder="¿Cómo fue tu experiencia?" />
                                     <div className="flex gap-2">
-                                      <button onClick={() => handleSubmitFeedback(session.id)} disabled={savingFeedbackId === session.id || !feedbackText.trim()} className={`rounded-xl bg-velum-900 text-white text-[12px] font-semibold px-4 py-2 hover:bg-velum-800 disabled:opacity-50 transition-colors ${pressBtn}`}>{savingFeedbackId === session.id ? "Guardando…" : "Guardar"}</button>
-                                      <button onClick={() => { setFeedbackOpenId(null); setFeedbackText(""); }} className={`rounded-xl border border-velum-200 text-[12px] font-medium text-velum-600 px-4 py-2 hover:border-velum-400 transition-colors ${pressBtn}`}>Cancelar</button>
+                                      <button onClick={() => handleSubmitFeedback(session.id)} disabled={savingFeedbackId === session.id || !feedbackText.trim()} className={`rounded-xl bg-velum-900 text-white text-[13px] font-semibold px-4 py-2 hover:bg-velum-800 disabled:opacity-50 transition-colors duration-base ease-standard ${pressBtn}`}>{savingFeedbackId === session.id ? "Guardando…" : "Guardar"}</button>
+                                      <button onClick={() => { setFeedbackOpenId(null); setFeedbackText(""); }} className={`rounded-xl border border-velum-200 text-[13px] font-medium text-velum-600 px-4 py-2 hover:border-velum-400 transition-colors duration-base ease-standard ${pressBtn}`}>Cancelar</button>
                                     </div>
                                   </div>
                                 ) : (
-                                  <button type="button" onClick={() => { setFeedbackOpenId(session.id); setFeedbackText(""); }} className="text-[12px] text-velum-500 hover:text-velum-900 transition-colors">+ Dejar comentario</button>
+                                  <button type="button" onClick={() => { setFeedbackOpenId(session.id); setFeedbackText(""); }} className="text-[13px] text-velum-500 hover:text-velum-900 transition-colors duration-base ease-standard">+ Dejar comentario</button>
                                 )}
                               </div>
                             </div>
@@ -1342,14 +1353,14 @@ export const Dashboard: React.FC = () => {
 
               {/* Failed payment alert */}
               {membershipStatus === "past_due" && (
-                <div className="rounded-2xl border border-red-200 bg-red-50 p-4 flex items-start gap-3">
-                  <AlertTriangle size={18} className="text-red-500 shrink-0 mt-0.5" />
+                <div className="rounded-2xl border border-danger-100 bg-danger-50 px-4 py-3.5 flex items-start gap-3">
+                  <AlertTriangle size={18} className="text-danger-500 shrink-0 mt-0.5" />
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-red-800">Pago pendiente</p>
-                    <p className="text-xs text-red-600 mt-0.5">No se procesó tu último pago. Actualiza tu método de pago para mantener tu membresía activa.</p>
+                    <p className="text-[14px] font-semibold text-danger-700">Pago pendiente</p>
+                    <p className="text-[13px] text-danger-700/85 mt-0.5">No se procesó tu último pago. Actualiza tu método de pago para mantener tu membresía activa.</p>
                   </div>
                   <button type="button" onClick={async () => { try { await redirectToCustomerPortal(); } catch (err: any) { toast.error(asString(err?.message, "")); } }}
-                    className={`shrink-0 bg-red-600 text-white text-xs font-bold px-3 py-1.5 rounded-xl hover:bg-red-700 transition ${pressBtn}`}>
+                    className={`shrink-0 bg-danger-500 text-white text-[12px] font-semibold px-3 py-1.5 rounded-full hover:bg-danger-700 transition-colors duration-base ease-standard ${pressBtn}`}>
                     Actualizar
                   </button>
                 </div>
@@ -1359,10 +1370,10 @@ export const Dashboard: React.FC = () => {
               {membership && membershipStatus === "active" && membership.currentPeriodEnd && (
                 <div className="rounded-2xl border border-velum-100 bg-velum-50 p-4 flex items-center justify-between gap-3">
                   <div>
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-velum-400">Próximo cargo</p>
-                    <p className="text-[15px] font-semibold text-velum-900 mt-1">
+                    <p className="text-[13px] font-semibold text-velum-500">Próximo cargo</p>
+                    <p className="text-[15px] font-semibold text-velum-900 mt-1 tabular-nums">
                       {planDetails?.amount ? new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", maximumFractionDigits: 0 }).format(planDetails.amount) : "—"}
-                      <span className="text-[12px] font-normal text-velum-500 ml-1">
+                      <span className="text-[13px] font-normal text-velum-500 ml-1">
                         el {new Date(membership.currentPeriodEnd).toLocaleDateString("es-MX", { day: "numeric", month: "long" })}
                       </span>
                     </p>
@@ -1371,24 +1382,26 @@ export const Dashboard: React.FC = () => {
                 </div>
               )}
 
-              <div className="bg-velum-900 rounded-2xl p-5 sm:p-6 text-white relative overflow-hidden">
-                <div className="absolute -right-8 -top-8 w-32 h-32 rounded-full bg-velum-800/40 pointer-events-none" />
-                <div className="relative">
-                  <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-velum-400 mb-1">Facturación</p>
-                  <h2 className="font-serif text-xl italic text-white mb-3">Portal de cliente</h2>
-                  <p className="text-[13px] text-velum-300 mb-5 leading-snug">Administra métodos de pago, facturas y renovaciones de membresía en un solo lugar.</p>
-                  <button type="button" onClick={async () => { try { await redirectToCustomerPortal(); } catch (err: any) { toast.error(asString(err?.message, "No se pudo abrir el portal de cliente.")); } }}
-                    className={`flex items-center gap-2 rounded-2xl bg-white text-velum-900 text-[13px] font-bold px-5 py-3 hover:bg-velum-100 transition-colors ${pressBtn}`}>
-                    <ExternalLink size={14} /> Ir al portal
-                  </button>
-                </div>
+              {/* Portal de cliente — Apple híbrido oscuro sin blobs */}
+              <div className="bg-velum-900 rounded-3xl px-6 py-7 sm:px-8 sm:py-8 text-white">
+                <p className="text-[13px] font-semibold text-velum-300">Facturación</p>
+                <h2 className="font-sans font-bold text-white text-2xl tracking-tight mt-2 mb-3">Portal de cliente</h2>
+                <p className="text-[14px] text-velum-200 mb-6 leading-relaxed">Administra métodos de pago, facturas y renovaciones de membresía en un solo lugar.</p>
+                <PillButton
+                  variant="outlineDark"
+                  size="md"
+                  leftIcon={<ExternalLink size={14} aria-hidden="true" />}
+                  onClick={async () => { try { await redirectToCustomerPortal(); } catch (err: any) { toast.error(asString(err?.message, "No se pudo abrir el portal de cliente.")); } }}
+                >
+                  Ir al portal
+                </PillButton>
               </div>
 
               <div className={`${card} p-6`}>
                 <div className="flex items-center justify-between mb-5">
                   <div className="flex items-center gap-3">
                     <div className="w-9 h-9 rounded-[10px] bg-velum-50 border border-velum-100 flex items-center justify-center"><CreditCard size={16} className="text-velum-700" /></div>
-                    <h3 className="font-serif text-xl text-velum-900">Historial de pagos</h3>
+                    <h3 className="font-sans font-bold text-velum-900 text-xl tracking-tight">Historial de pagos</h3>
                   </div>
                   {isLoadingPayments && <Loader2 className="animate-spin text-velum-300" size={16} />}
                 </div>
@@ -1398,15 +1411,15 @@ export const Dashboard: React.FC = () => {
                   <div className="space-y-2">
                     {payments.map(payment => {
                       const dateStr = new Date(payment.paidAt ?? payment.createdAt).toLocaleDateString("es-MX",{day:"2-digit",month:"long",year:"numeric"});
-                      const sMap: Record<string,{label:string;cls:string}> = { paid:{label:"Pagado",cls:"bg-emerald-50 text-emerald-700 border-emerald-200"}, pending:{label:"Pendiente",cls:"bg-amber-50 text-amber-700 border-amber-200"}, failed:{label:"Fallido",cls:"bg-red-50 text-red-600 border-red-200"}, refunded:{label:"Reembolsado",cls:"bg-zinc-100 text-zinc-600 border-zinc-200"} };
-                      const { label: sl, cls: sc } = sMap[payment.status] ?? { label: payment.status, cls: "bg-zinc-100 text-zinc-600 border-zinc-200" };
+                      const sMap: Record<string,{label:string;cls:string}> = { paid:{label:"Pagado",cls:"bg-success-50 text-success-700 border-success-100"}, pending:{label:"Pendiente",cls:"bg-warning-50 text-warning-700 border-warning-100"}, failed:{label:"Fallido",cls:"bg-danger-50 text-danger-700 border-danger-100"}, refunded:{label:"Reembolsado",cls:"bg-velum-50 text-velum-600 border-velum-200"} };
+                      const { label: sl, cls: sc } = sMap[payment.status] ?? { label: payment.status, cls: "bg-velum-50 text-velum-600 border-velum-200" };
                       return (
-                        <div key={payment.id} className="flex items-center justify-between rounded-2xl border border-velum-100 px-4 py-4 hover:border-velum-200 transition-colors">
+                        <div key={payment.id} className="flex items-center justify-between rounded-2xl border border-velum-100 px-4 py-4 hover:border-velum-200 transition-colors duration-base ease-standard">
                           <div>
-                            <p className="text-[15px] font-semibold text-velum-900">{new Intl.NumberFormat("es-MX",{style:"currency",currency:(payment.currency||"mxn").toUpperCase(),maximumFractionDigits:0}).format(payment.amount)}</p>
-                            <p className="text-[12px] text-velum-400 mt-0.5">{dateStr}{planLabel ? ` · ${planLabel}` : ""}</p>
+                            <p className="text-[15px] font-semibold text-velum-900 tabular-nums">{new Intl.NumberFormat("es-MX",{style:"currency",currency:(payment.currency||"mxn").toUpperCase(),maximumFractionDigits:0}).format(payment.amount)}</p>
+                            <p className="text-[12px] text-velum-500 mt-0.5">{dateStr}{planLabel ? ` · ${planLabel}` : ""}</p>
                           </div>
-                          <span className={`text-[10px] font-bold uppercase tracking-[0.1em] px-2.5 py-1 border rounded-full ${sc}`}>{sl}</span>
+                          <span className={`text-[11px] font-semibold px-2.5 py-1 border rounded-full ${sc}`}>{sl}</span>
                         </div>
                       );
                     })}
@@ -1419,40 +1432,38 @@ export const Dashboard: React.FC = () => {
           {/* ══ AYUDA ════════════════════════════════════════════════════════ */}
           {activeTab === "ayuda" && (
             <div className="space-y-4">
-              <div className="bg-velum-900 rounded-2xl p-5 sm:p-6 text-white relative overflow-hidden">
-                <div className="absolute -right-10 -top-10 w-36 h-36 rounded-full bg-velum-800/40 pointer-events-none" />
-                <div className="relative">
-                  <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-velum-400 mb-1">Contacto</p>
-                  <h2 className="font-serif text-2xl italic text-white mb-5">Estamos para ayudarte</h2>
-                  <div className="grid sm:grid-cols-3 gap-3">
-                    {[
-                      { href: `https://wa.me/${clinicConfig.whatsapp}`, icon: <MessageCircle size={15} className="text-white" />, label: "WhatsApp", value: "Escríbenos" },
-                      { href: `tel:${clinicConfig.phone.replace(/\s/g, "")}`, icon: <Phone size={15} className="text-white" />, label: "Teléfono", value: clinicConfig.phone },
-                      { href: `mailto:${clinicConfig.email}`, icon: <Mail size={15} className="text-white" />, label: "Correo", value: clinicConfig.email },
-                    ].map(({ href, icon, label, value }) => (
-                      <a key={label} href={href} target={href.startsWith("http") ? "_blank" : undefined} rel="noreferrer"
-                        className={`flex items-center gap-3 bg-velum-800/80 rounded-2xl px-4 py-4 hover:bg-velum-700 transition-colors group ${pressBtn}`}>
-                        <div className="w-8 h-8 rounded-xl bg-velum-700 group-hover:bg-velum-600 flex items-center justify-center shrink-0 transition-colors">{icon}</div>
-                        <div><p className="text-[9px] font-bold uppercase tracking-widest text-velum-400">{label}</p><p className="text-[13px] font-semibold text-white mt-0.5">{value}</p></div>
-                      </a>
-                    ))}
-                  </div>
-                  <p className="mt-4 text-[11px] text-velum-500">Lunes–Viernes 9:00–19:00 · Sábados 10:00–15:00</p>
+              {/* Hero contacto — Apple híbrido oscuro sin blobs */}
+              <div className="bg-velum-900 rounded-3xl px-6 py-7 sm:px-8 sm:py-8 text-white">
+                <p className="text-[13px] font-semibold text-velum-300">Contacto</p>
+                <h2 className="font-sans font-bold text-white text-2xl sm:text-3xl tracking-tight mt-2 mb-6">Estamos para ayudarte</h2>
+                <div className="grid sm:grid-cols-3 gap-3">
+                  {[
+                    { href: `https://wa.me/${clinicConfig.whatsapp}`, icon: <MessageCircle size={15} className="text-white" />, label: "WhatsApp", value: "Escríbenos" },
+                    { href: `tel:${clinicConfig.phone.replace(/\s/g, "")}`, icon: <Phone size={15} className="text-white" />, label: "Teléfono", value: clinicConfig.phone },
+                    { href: `mailto:${clinicConfig.email}`, icon: <Mail size={15} className="text-white" />, label: "Correo", value: clinicConfig.email },
+                  ].map(({ href, icon, label, value }) => (
+                    <a key={label} href={href} target={href.startsWith("http") ? "_blank" : undefined} rel="noreferrer"
+                      className={`flex items-center gap-3 bg-velum-800/80 rounded-2xl px-4 py-4 hover:bg-velum-700 transition-colors duration-base ease-standard group ${pressBtn}`}>
+                      <div className="w-8 h-8 rounded-xl bg-velum-700 group-hover:bg-velum-600 flex items-center justify-center shrink-0 transition-colors duration-base ease-standard">{icon}</div>
+                      <div><p className="text-[12px] font-medium text-velum-400">{label}</p><p className="text-[13px] font-semibold text-white mt-0.5">{value}</p></div>
+                    </a>
+                  ))}
                 </div>
+                <p className="mt-5 text-[12px] text-velum-400">Lunes–Viernes 9:00–19:00 · Sábados 10:00–15:00</p>
               </div>
 
               <div className={`${card} overflow-hidden`}>
                 <div className="px-6 py-5 border-b border-velum-50">
-                  <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-velum-400 mb-1">Preguntas frecuentes</p>
-                  <h3 className="font-serif text-xl text-velum-900">Todo lo que necesitas saber</h3>
+                  <p className="text-[13px] font-semibold text-velum-500">Preguntas frecuentes</p>
+                  <h3 className="font-sans font-bold text-velum-900 text-xl tracking-tight mt-1">Todo lo que necesitas saber</h3>
                 </div>
                 <div className="divide-y divide-velum-50">
                   {FAQ.map(item => (
                     <div key={item.id}>
                       <button type="button" onClick={() => setOpenFaqId(openFaqId === item.id ? null : item.id)}
-                        className={`w-full flex items-center justify-between px-6 py-4 text-left hover:bg-velum-50/60 transition-colors gap-4 ${pressBtn}`}>
+                        className={`w-full flex items-center justify-between px-6 py-4 text-left hover:bg-velum-50/60 transition-colors duration-base ease-standard gap-4 ${pressBtn}`}>
                         <p className="text-[14px] font-semibold text-velum-900 leading-snug">{item.q}</p>
-                        <ChevronDown size={16} className={`text-velum-400 shrink-0 transition-transform duration-200 ${openFaqId===item.id?"rotate-180":""}`} />
+                        <ChevronDown size={16} className={`text-velum-400 shrink-0 transition-transform duration-base ease-standard ${openFaqId===item.id?"rotate-180":""}`} />
                       </button>
                       {openFaqId === item.id && (
                         <div className="px-6 pb-5 text-[13px] text-velum-600 leading-relaxed border-t border-velum-50 animate-fade-in">{item.a}</div>
@@ -1465,11 +1476,11 @@ export const Dashboard: React.FC = () => {
               <div className="grid sm:grid-cols-2 gap-4">
                 {[{ title: "Antes de cada sesión", items: CARE.pre }, { title: "Después de cada sesión", items: CARE.post }].map(({ title, items }) => (
                   <div key={title} className={`${card} p-5`}>
-                    <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-velum-400 mb-4 flex items-center gap-2"><BookOpen size={12} />{title}</p>
+                    <p className="text-[13px] font-semibold text-velum-500 mb-4 flex items-center gap-2"><BookOpen size={13} />{title}</p>
                     <div className="space-y-2.5">
                       {items.map((tip, i) => (
-                        <div key={i} className="flex items-start gap-3 text-[12px] text-velum-600">
-                          <div className="w-5 h-5 rounded-full bg-velum-900 flex items-center justify-center shrink-0 mt-0.5"><span className="text-[8px] font-bold text-white">{i+1}</span></div>
+                        <div key={i} className="flex items-start gap-3 text-[13px] text-velum-600">
+                          <div className="w-5 h-5 rounded-full bg-velum-900 flex items-center justify-center shrink-0 mt-0.5"><span className="text-[10px] font-bold text-white tabular-nums">{i+1}</span></div>
                           {tip}
                         </div>
                       ))}
@@ -1532,7 +1543,7 @@ export const Dashboard: React.FC = () => {
               <div className="w-8 h-1 rounded-full bg-velum-200" />
             </div>
             <div className="px-5 py-4 pb-safe" style={{ paddingBottom: `max(env(safe-area-inset-bottom), 20px)` }}>
-              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-velum-400 mb-3 px-1">Configuración y expediente</p>
+              <p className="text-[13px] font-semibold text-velum-500 mb-3 px-1">Configuración y expediente</p>
               <div className="space-y-1">
                 {secondaryMobileTabs.map(key => {
                   const tab = allTabs.find(t => t.key === key)!;
@@ -1558,7 +1569,7 @@ export const Dashboard: React.FC = () => {
             <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-velum-50">
               <div className="flex items-center gap-3">
                 <div className="w-8 h-8 rounded-xl bg-velum-50 border border-velum-100 flex items-center justify-center"><Shield size={14} className="text-velum-700" /></div>
-                <h3 className="font-serif text-xl text-velum-900">Actualizar expediente</h3>
+                <h3 className="font-sans font-bold text-velum-900 text-xl tracking-tight">Actualizar expediente</h3>
               </div>
               <button type="button" onClick={() => setShowEditIntake(false)} className={`w-8 h-8 rounded-xl bg-velum-50 hover:bg-velum-100 flex items-center justify-center transition-colors ${pressBtn}`}>
                 <X size={16} className="text-velum-600" />
@@ -1566,9 +1577,9 @@ export const Dashboard: React.FC = () => {
             </div>
             <div className="px-6 py-5 space-y-4 overflow-y-auto max-h-[70vh]">
               {intakeStatus === "approved" && (
-                <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 flex items-start gap-3">
-                  <CheckCircle size={15} className="text-emerald-600 mt-0.5 shrink-0" />
-                  <p className="text-[12px] text-emerald-800 leading-snug">Tu expediente fue <strong>aprobado</strong> por la clínica. Para modificarlo contacta al personal.</p>
+                <div className="rounded-2xl border border-success-100 bg-success-50 px-4 py-3 flex items-start gap-3">
+                  <CheckCircle size={15} className="text-success-700 mt-0.5 shrink-0" />
+                  <p className="text-[13px] text-success-700 leading-snug">Tu expediente fue <strong>aprobado</strong> por la clínica. Para modificarlo contacta al personal.</p>
                 </div>
               )}
               <p className="text-[13px] text-velum-500 leading-snug">Mantén tu información clínica actualizada para garantizar parámetros de tratamiento seguros.</p>
@@ -1615,7 +1626,7 @@ export const Dashboard: React.FC = () => {
             <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-velum-50">
               <div className="flex items-center gap-3">
                 <div className="w-8 h-8 rounded-xl bg-velum-50 border border-velum-100 flex items-center justify-center"><RefreshCw size={14} className="text-velum-700" /></div>
-                <h3 className="font-serif text-xl text-velum-900">Reprogramar cita</h3>
+                <h3 className="font-sans font-bold text-velum-900 text-xl tracking-tight">Reprogramar cita</h3>
               </div>
               <button type="button" onClick={() => setRescheduleApptId(null)} className={`w-8 h-8 rounded-xl bg-velum-50 hover:bg-velum-100 flex items-center justify-center transition-colors ${pressBtn}`}>
                 <X size={16} className="text-velum-600" />
@@ -1685,8 +1696,8 @@ export const Dashboard: React.FC = () => {
           <div className="bg-white w-full sm:max-w-sm rounded-t-3xl sm:rounded-3xl border border-velum-200 shadow-2xl overflow-hidden animate-slide-up sm:animate-scale-in">
             <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-velum-50">
               <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-xl bg-red-50 border border-red-100 flex items-center justify-center"><X size={14} className="text-red-500" /></div>
-                <h3 className="font-serif text-xl text-velum-900">Cancelar cita</h3>
+                <div className="w-8 h-8 rounded-xl bg-danger-50 border border-danger-100 flex items-center justify-center"><X size={14} className="text-danger-500" /></div>
+                <h3 className="font-sans font-bold text-velum-900 text-xl tracking-tight">Cancelar cita</h3>
               </div>
               <button type="button" onClick={() => { setCancelApptId(null); setCancelReason(""); }} className={`w-8 h-8 rounded-xl bg-velum-50 hover:bg-velum-100 flex items-center justify-center transition-colors ${pressBtn}`}>
                 <X size={16} className="text-velum-600" />
@@ -1694,19 +1705,19 @@ export const Dashboard: React.FC = () => {
             </div>
             <div className="px-6 py-5 space-y-4">
               <p className="text-[13px] text-velum-600 leading-snug">¿Confirmas que deseas cancelar esta cita? Esta acción no se puede deshacer.</p>
-              <div className="rounded-2xl bg-amber-50 border border-amber-200/80 px-4 py-3">
-                <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-amber-700 mb-1">Política de cancelación</p>
-                <p className="text-[12px] text-amber-800 leading-snug">Con más de 24h de anticipación: sin cargo. Con menos de 24h: el depósito no será reembolsado.</p>
+              <div className="rounded-2xl bg-warning-50 border border-warning-100 px-4 py-3">
+                <p className="text-[13px] font-semibold text-warning-700 mb-1">Política de cancelación</p>
+                <p className="text-[12px] text-warning-700/85 leading-snug">Con más de 24h de anticipación: sin cargo. Con menos de 24h: el depósito no será reembolsado.</p>
               </div>
               <div><label className={lbl}>Motivo (opcional)</label><textarea className={`${fld} resize-none`} rows={2} value={cancelReason} onChange={e => setCancelReason(e.target.value)} placeholder="¿Por qué cancelas esta cita?" /></div>
             </div>
             <div className="flex gap-3 px-6 py-4 border-t border-velum-50">
               <button type="button" onClick={handleCancelAppointment} disabled={isCancellingAppt}
-                className={`flex-1 rounded-2xl bg-red-500 py-3.5 text-[14px] font-semibold text-white hover:bg-red-600 disabled:opacity-50 transition-colors ${pressBtn}`}>
+                className={`flex-1 rounded-full bg-danger-500 py-3.5 text-[14px] font-semibold text-white hover:bg-danger-700 disabled:opacity-50 transition-colors duration-base ease-standard ${pressBtn}`}>
                 {isCancellingAppt ? "Cancelando…" : "Confirmar cancelación"}
               </button>
               <button type="button" onClick={() => { setCancelApptId(null); setCancelReason(""); }} disabled={isCancellingAppt}
-                className={`px-5 rounded-2xl border border-velum-200 text-[14px] font-medium text-velum-600 hover:border-velum-400 transition-colors ${pressBtn}`}>
+                className={`px-5 rounded-full border border-velum-200 text-[14px] font-medium text-velum-600 hover:border-velum-400 transition-colors duration-base ease-standard ${pressBtn}`}>
                 Mantener
               </button>
             </div>
@@ -1723,8 +1734,8 @@ const NextApptCountdown: React.FC<{ date: string | null }> = ({ date }) => {
   const label = useCountdown(date);
   if (!label) return null;
   return (
-    <span className="inline-flex items-center gap-1.5 bg-velum-800/70 border border-velum-700/50 rounded-full px-3 py-1 text-[11px] font-bold text-velum-300 animate-fade-in">
-      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+    <span className="inline-flex items-center gap-1.5 bg-velum-800/70 border border-velum-700/50 rounded-full px-3 py-1 text-[12px] font-semibold text-velum-300 animate-fade-in">
+      <span className="w-1.5 h-1.5 rounded-full bg-success-500 animate-pulse" />
       {label}
     </span>
   );
