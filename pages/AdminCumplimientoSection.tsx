@@ -3,7 +3,7 @@ import { RefreshCw, CheckCheck, AlertTriangle, Activity, Users, ChevronLeft, Che
 import { AuditLogEntry } from '../types';
 import { KpiCard } from './adminSharedComponents';
 import { apiFetch } from '../services/apiClient';
-import { DataTable, type Column } from '../components/ui';
+import { DataTable, type Column, PageHeader, SectionHeading } from '../components/ui';
 
 interface Props {
   expedientesFirmados: number;
@@ -122,15 +122,16 @@ export const AdminCumplimientoSection: React.FC<Props> = ({
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-serif text-velum-900">Cumplimiento</h1>
-          <p className="text-sm text-velum-500 mt-1">Bitácora de auditoría y control de acceso</p>
-        </div>
-        <button onClick={handleRefresh} className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-velum-200 bg-white text-sm text-velum-600 hover:bg-velum-50 transition">
-          <RefreshCw size={14} />Actualizar
-        </button>
-      </div>
+      <PageHeader
+        title="Cumplimiento"
+        description="Bitácora de auditoría y control de acceso"
+        bordered={false}
+        actions={
+          <button onClick={handleRefresh} className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-velum-200 bg-white text-sm text-velum-600 hover:bg-velum-50 transition">
+            <RefreshCw size={14} />Actualizar
+          </button>
+        }
+      />
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <KpiCard icon={<CheckCheck size={18} />} label="Firmas de consentimiento" value={expedientesFirmados} accent="text-emerald-700" />
         <KpiCard icon={<AlertTriangle size={18} />} label="Eventos fallidos" value={failedAudits} accent={failedAudits > 0 ? 'text-red-600' : 'text-velum-900'} />
@@ -139,18 +140,21 @@ export const AdminCumplimientoSection: React.FC<Props> = ({
       </div>
       {/* Bitácora */}
       <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <p className="text-xs font-bold uppercase tracking-widest text-velum-500">Bitácora de auditoría</p>
-          <div className="flex items-center gap-2">
-            {!loaded && (
-              <button onClick={() => void loadLogs(1)}
-                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-xl bg-velum-900 text-white hover:bg-velum-800 transition">
-                <Activity size={11} /> Cargar bitácora
-              </button>
-            )}
-            {loading && <Loader2 size={14} className="animate-spin text-velum-400" />}
-          </div>
-        </div>
+        <SectionHeading
+          actions={
+            <>
+              {!loaded && (
+                <button onClick={() => void loadLogs(1)}
+                  className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-xl bg-velum-900 text-white hover:bg-velum-800 transition">
+                  <Activity size={11} /> Cargar bitácora
+                </button>
+              )}
+              {loading && <Loader2 size={14} className="animate-spin text-velum-400" />}
+            </>
+          }
+        >
+          Bitácora de auditoría
+        </SectionHeading>
 
         {!loaded && !error ? (
           <div className="bg-white rounded-2xl border border-velum-100 py-12 text-center text-xs text-velum-400">

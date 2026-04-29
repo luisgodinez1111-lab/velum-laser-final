@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import { Users, Wallet, Target, AlertTriangle, FileText, Clock3 } from 'lucide-react';
 import { Member } from '../types';
 import { KpiCard } from './adminSharedComponents';
-import { DataTable, type Column } from '../components/ui';
+import { DataTable, type Column, PageHeader, SectionHeading } from '../components/ui';
 
 const formatMoney = (amount: number) =>
   new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', maximumFractionDigits: 0 }).format(amount);
@@ -81,10 +81,11 @@ export const AdminKPIsSection: React.FC<Props> = ({ analytics, planBreakdown }) 
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-serif text-velum-900">KPIs</h1>
-        <p className="text-sm text-velum-500 mt-1">Indicadores clave de desempeño</p>
-      </div>
+      <PageHeader
+        title="KPIs"
+        description="Indicadores clave de desempeño"
+        bordered={false}
+      />
       {analytics.totalSocios === 0 && (
         <div className="flex items-start gap-3 p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-800 text-sm">
           <AlertTriangle size={16} className="shrink-0 mt-0.5" />
@@ -100,7 +101,7 @@ export const AdminKPIsSection: React.FC<Props> = ({ analytics, planBreakdown }) 
         <KpiCard icon={<Clock3 size={18} />} label="Renovaciones próximas" value={analytics.renewalsIn7Days} sub="en los próximos 7 días" />
       </div>
       <div>
-        <h2 className="text-xs font-bold uppercase tracking-widest text-velum-500 mb-3">Distribución por plan</h2>
+        <SectionHeading>Distribución por plan</SectionHeading>
         <DataTable
           aria-label="Distribución por plan"
           data={planBreakdown}

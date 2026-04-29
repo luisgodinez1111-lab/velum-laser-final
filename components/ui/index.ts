@@ -57,3 +57,7 @@ export type { CommandItem } from './CommandPalette';
 
 export { DataTable } from './DataTable';
 export type { Column, SortDirection } from './DataTable';
+
+export { SectionHeading } from './SectionHeading';
+export { SectionNav } from './SectionNav';
+export type { SectionNavItem } from './SectionNav';

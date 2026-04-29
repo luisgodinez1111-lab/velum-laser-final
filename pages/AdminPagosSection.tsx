@@ -3,7 +3,7 @@ import { Download, Wallet, HandCoins, CheckCheck, Users, AlertTriangle, CheckCir
 import { Member } from '../types';
 import { KpiCard, Pill } from './adminSharedComponents';
 import { statusLabel, statusPill, riskOfMember } from './adminUtils';
-import { DataTable, type Column } from '../components/ui';
+import { DataTable, type Column, PageHeader, SectionHeading, SectionNav, type SectionNavItem } from '../components/ui';
 
 const formatMoney = (amount: number) =>
   new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', maximumFractionDigits: 0 }).format(amount);
@@ -61,6 +61,13 @@ export const AdminPagosSection: React.FC<Props> = ({
 }) => {
   const queue = analytics.collectionQueue;
   const totalRisk = queue.reduce((acc, m) => acc + (m.amount ?? 0), 0);
+
+  // Anchor nav — solo se muestra cuando hay >1 sección visible.
+  const navItems: SectionNavItem[] = [
+    ...(serverReports ? [{ id: 'resumen', label: 'Resumen sistema', icon: <BarChart3 size={11} /> }] : []),
+    { id: 'cobranza', label: 'Cola de cobranza', icon: <HandCoins size={11} /> },
+    { id: 'historial', label: 'Historial', icon: <Wallet size={11} /> },
+  ];
 
   // ─── Columnas: cola de cobranza ─────────────────────────────────────────
   const queueColumns = useMemo<Column<Member>[]>(
@@ -233,24 +240,27 @@ export const AdminPagosSection: React.FC<Props> = ({
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between">
-        <div>
-          <h1 className="text-2xl font-serif text-velum-900">Pagos</h1>
-          <p className="text-sm text-velum-500 mt-1">Estado de cuentas y cobranza</p>
-        </div>
-        <button onClick={onDownloadCSV}
-          className="flex items-center gap-2 px-3 py-2 rounded-xl border border-velum-200 text-velum-600 text-xs font-medium hover:bg-velum-50 transition">
-          <Download size={13} />
-          Exportar CSV
-        </button>
-      </div>
+      <PageHeader
+        title="Pagos"
+        description="Estado de cuentas y cobranza"
+        bordered={false}
+        actions={
+          <button onClick={onDownloadCSV}
+            className="flex items-center gap-2 px-3 py-2 rounded-xl border border-velum-200 text-velum-600 text-xs font-medium hover:bg-velum-50 transition">
+            <Download size={13} />
+            Exportar CSV
+          </button>
+        }
+      />
+
+      <SectionNav items={navItems} />
 
       {/* Server reports */}
       {serverReports && (
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-widest text-velum-400 mb-3 flex items-center gap-2">
-            <BarChart3 size={11} /> Resumen del sistema
-          </p>
+          <SectionHeading id="resumen" icon={<BarChart3 size={11} />}>
+            Resumen del sistema
+          </SectionHeading>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             <KpiCard icon={<Users size={18} />} label="Total usuarios" value={serverReports.users} />
             <KpiCard icon={<CheckCircle2 size={18} />} label="Membresías activas" value={serverReports.activeMemberships} accent="text-emerald-700" />
@@ -262,9 +272,9 @@ export const AdminPagosSection: React.FC<Props> = ({
 
       {/* Collection queue */}
       <div>
-        <p className="text-[10px] font-bold uppercase tracking-widest text-velum-400 mb-3 flex items-center gap-2">
-          <HandCoins size={11} /> Cola de cobranza
-        </p>
+        <SectionHeading id="cobranza" icon={<HandCoins size={11} />}>
+          Cola de cobranza
+        </SectionHeading>
         <div className="grid grid-cols-3 gap-4">
           <KpiCard icon={<HandCoins size={18} />} label="Por recuperar" value={queue.length} accent={queue.length > 0 ? 'text-red-600' : 'text-velum-900'} />
           <KpiCard icon={<Wallet size={18} />} label="Monto en riesgo" value={formatMoney(totalRisk)} accent="text-amber-600" />
@@ -285,9 +295,9 @@ export const AdminPagosSection: React.FC<Props> = ({
 
       {/* Payment history */}
       <div>
-        <p className="text-[10px] font-bold uppercase tracking-widest text-velum-400 mb-3 flex items-center gap-2">
-          <Wallet size={11} /> Historial de pagos
-        </p>
+        <SectionHeading id="historial" icon={<Wallet size={11} />}>
+          Historial de pagos
+        </SectionHeading>
         <div className="bg-white rounded-2xl border border-velum-100 p-4 space-y-3">
           <div className="flex flex-wrap gap-2 items-end">
             <div className="flex flex-col gap-1">

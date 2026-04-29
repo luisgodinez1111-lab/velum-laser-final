@@ -3,7 +3,7 @@ import { Wallet, Target, Users, AlertTriangle } from 'lucide-react';
 import { Member } from '../types';
 import { KpiCard, Pill } from './adminSharedComponents';
 import { statusLabel, statusPill } from './adminUtils';
-import { DataTable, type Column } from '../components/ui';
+import { DataTable, type Column, PageHeader, SectionHeading } from '../components/ui';
 
 const formatMoney = (amount: number) =>
   new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', maximumFractionDigits: 0 }).format(amount);
@@ -106,10 +106,11 @@ export const AdminFinanzasSection: React.FC<Props> = ({ members, analytics, onOp
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-serif text-velum-900">Finanzas</h1>
-        <p className="text-sm text-velum-500 mt-1">Radar de ingresos y facturación</p>
-      </div>
+      <PageHeader
+        title="Finanzas"
+        description="Radar de ingresos y facturación"
+        bordered={false}
+      />
       {analytics.mrr === 0 && analytics.sociosActivos === 0 && (
         <div className="flex items-start gap-3 p-4 rounded-2xl bg-blue-50 border border-blue-200 text-blue-800 text-sm">
           <AlertTriangle size={16} className="shrink-0 mt-0.5" />
@@ -123,7 +124,7 @@ export const AdminFinanzasSection: React.FC<Props> = ({ members, analytics, onOp
         <KpiCard icon={<AlertTriangle size={18} />} label="En cobranza" value={analytics.collectionQueue.length} accent={analytics.collectionQueue.length > 0 ? 'text-red-600' : 'text-velum-900'} />
       </div>
       <div>
-        <h2 className="text-xs font-bold uppercase tracking-widest text-velum-500 mb-3">Top socios por monto</h2>
+        <SectionHeading>Top socios por monto</SectionHeading>
         <DataTable
           aria-label="Top socios por monto"
           data={topMembers}

@@ -3,7 +3,7 @@ import { Search, RefreshCw, ArrowRight, ChevronLeft, ChevronRight, Plus, Downloa
 import { Member } from '../types';
 import { Pill } from './adminSharedComponents';
 import { statusLabel, statusPill, intakeStatusLabel, riskOfMember } from './adminUtils';
-import { DataTable, type Column } from '../components/ui';
+import { DataTable, type Column, PageHeader } from '../components/ui';
 
 interface Props {
   members: Member[];
@@ -112,24 +112,25 @@ export const AdminSociasSection: React.FC<Props> = ({
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-serif text-velum-900">Socias</h1>
-          <p className="text-sm text-velum-500 mt-1">{membersTotal || members.length} pacientes registradas</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <a href="/api/admin/users/export" download
-            className="flex items-center gap-2 border border-velum-200 text-velum-700 rounded-xl px-4 py-2.5 text-sm font-semibold hover:bg-velum-50 transition">
-            <Download size={15} />
-            Exportar CSV
-          </a>
-          <button onClick={onNewPatient}
-            className="flex items-center gap-2 bg-velum-900 text-white rounded-xl px-4 py-2.5 text-sm font-semibold hover:bg-velum-800 transition">
-            <Plus size={15} />
-            Nuevo expediente
-          </button>
-        </div>
-      </div>
+      <PageHeader
+        title="Socias"
+        description={`${membersTotal || members.length} pacientes registradas`}
+        bordered={false}
+        actions={
+          <>
+            <a href="/api/admin/users/export" download
+              className="flex items-center gap-2 border border-velum-200 text-velum-700 rounded-xl px-4 py-2.5 text-sm font-semibold hover:bg-velum-50 transition">
+              <Download size={15} />
+              Exportar CSV
+            </a>
+            <button onClick={onNewPatient}
+              className="flex items-center gap-2 bg-velum-900 text-white rounded-xl px-4 py-2.5 text-sm font-semibold hover:bg-velum-800 transition">
+              <Plus size={15} />
+              Nuevo expediente
+            </button>
+          </>
+        }
+      />
 
       {/* Search + filters (server-side, controlados externamente) */}
       <div className="flex flex-col sm:flex-row gap-3">

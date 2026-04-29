@@ -3,7 +3,7 @@ import { AlertTriangle, CircleAlert, ShieldCheck, Activity } from 'lucide-react'
 import { Member } from '../types';
 import { KpiCard, Pill } from './adminSharedComponents';
 import { riskOfMember, statusLabel, statusPill, intakeStatusLabel } from './adminUtils';
-import { DataTable, type Column } from '../components/ui';
+import { DataTable, type Column, PageHeader } from '../components/ui';
 
 interface Props {
   members: Member[];
@@ -113,10 +113,11 @@ export const AdminRiesgosSection: React.FC<Props> = ({ members, failedAudits, on
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-serif text-velum-900">Riesgos</h1>
-        <p className="text-sm text-velum-500 mt-1">Monitoreo de exposición operativa y clínica</p>
-      </div>
+      <PageHeader
+        title="Riesgos"
+        description="Monitoreo de exposición operativa y clínica"
+        bordered={false}
+      />
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <KpiCard icon={<AlertTriangle size={18} />} label="Críticos" value={critical.length} accent={critical.length > 0 ? 'text-red-600' : 'text-velum-900'} />
         <KpiCard icon={<CircleAlert size={18} />} label="En atención" value={warning.length} accent={warning.length > 0 ? 'text-amber-600' : 'text-velum-900'} />

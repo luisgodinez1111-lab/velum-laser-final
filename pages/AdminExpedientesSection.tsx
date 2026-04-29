@@ -3,7 +3,7 @@ import { CheckCircle2, XCircle } from 'lucide-react';
 import { Member } from '../types';
 import { Pill } from './adminSharedComponents';
 import { intakeStatusLabel } from './adminUtils';
-import { DataTable, type Column } from '../components/ui';
+import { DataTable, type Column, PageHeader, SectionHeading } from '../components/ui';
 
 interface Props {
   members: Member[];
@@ -31,10 +31,11 @@ export const AdminExpedientesSection: React.FC<Props> = ({
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-serif text-velum-900">Expedientes clínicos</h1>
-        <p className="text-sm text-velum-500 mt-1">Gestión de fichas médicas y consentimientos</p>
-      </div>
+      <PageHeader
+        title="Expedientes clínicos"
+        description="Gestión de fichas médicas y consentimientos"
+        bordered={false}
+      />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {expStats.map(({ label, value, cls }) => (
@@ -47,7 +48,7 @@ export const AdminExpedientesSection: React.FC<Props> = ({
 
       {pendingApproval.length > 0 && (
         <div>
-          <h2 className="text-xs font-bold uppercase tracking-widest text-velum-500 mb-3">Cola de aprobación</h2>
+          <SectionHeading>Cola de aprobación</SectionHeading>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {pendingApproval.map((m) => (
               <div key={m.id} className="bg-white rounded-2xl border border-amber-200 bg-amber-50/30 p-4 space-y-3">
@@ -190,9 +191,7 @@ const ExpedientesTable: React.FC<ExpedientesTableProps> = ({
 
   return (
     <div>
-      <h2 className="text-xs font-bold uppercase tracking-widest text-velum-500 mb-3">
-        Todos los expedientes
-      </h2>
+      <SectionHeading>Todos los expedientes</SectionHeading>
       <DataTable
         aria-label="Todos los expedientes"
         data={members}
