@@ -131,14 +131,15 @@ const CmdKButtonMobile: React.FC = () => {
 };
 
 
-const KpiCard: React.FC<{ icon: React.ReactNode; label: string; value: string | number; sub?: string; accent?: string }> = ({ icon, label, value, sub, accent = 'text-velum-900' }) => (
-  <div className="bg-white rounded-2xl border border-velum-100 p-5 flex flex-col gap-3">
+// KpiCard local — alineado con pages/adminSharedComponents.tsx (Apple híbrido).
+const KpiCard: React.FC<{ icon: React.ReactNode; label: string; value: string | number; sub?: string; accent?: string }> = ({ icon, label, value, sub, accent = 'text-velum-900 dark:text-velum-50' }) => (
+  <div className="bg-white dark:bg-velum-900 rounded-2xl border border-velum-100 dark:border-velum-800 p-5 flex flex-col gap-3">
     <div className="flex items-center justify-between">
-      <span className="text-[10px] font-bold uppercase tracking-widest text-velum-500">{label}</span>
-      <span className="text-velum-400">{icon}</span>
+      <span className="text-[11px] font-bold uppercase tracking-[0.18em] text-velum-500 dark:text-velum-400">{label}</span>
+      <span className="text-velum-400 dark:text-velum-500">{icon}</span>
     </div>
-    <p className={`text-3xl font-serif font-bold leading-none ${accent}`}>{value}</p>
-    {sub && <p className="text-xs text-velum-400">{sub}</p>}
+    <p className={`font-sans font-bold tabular-nums text-4xl leading-none tracking-[-0.025em] ${accent}`}>{value}</p>
+    {sub && <p className="text-[12px] text-velum-500 dark:text-velum-400">{sub}</p>}
   </div>
 );
 
@@ -814,7 +815,7 @@ export const Admin: React.FC = () => {
     return (
       <div className="space-y-6">
         <div>
-          <h1 className="text-2xl font-serif text-velum-900">Agenda</h1>
+          <h1 className="font-sans font-bold text-velum-900 text-2xl tracking-tight">Agenda</h1>
           <p className="text-sm text-velum-500 mt-1">Gestión de citas, slots y cabinas</p>
         </div>
         {/* Date navigation */}
@@ -833,14 +834,14 @@ export const Admin: React.FC = () => {
           <div className="flex gap-2 flex-wrap">
             {[
               { label: `${agendaSummary.appointmentsToday} citas`, cls: 'bg-blue-50 text-blue-700 border-blue-200' },
-              { label: `${agendaSummary.availableUnits} disponibles`, cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+              { label: `${agendaSummary.availableUnits} disponibles`, cls: 'bg-success-50 text-success-700 border-success-100' },
               { label: `${agendaSummary.blockedSlots} bloqueados`, cls: 'bg-velum-100 text-velum-600 border-velum-200' }
             ].map(({ label, cls }) => (
               <span key={label} className={`px-3 py-1.5 rounded-xl text-xs font-medium border ${cls}`}>{label}</span>
             ))}
           </div>
           {agendaMessage && (
-            <p className={`text-xs font-medium px-3 py-1.5 rounded-xl ${agendaMessage.type === 'ok' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
+            <p className={`text-xs font-medium px-3 py-1.5 rounded-xl ${agendaMessage.type === 'ok' ? 'bg-success-50 text-success-700 border border-success-100' : 'bg-danger-50 text-danger-700 border border-danger-100'}`}>
               {agendaMessage.text}
             </p>
           )}
@@ -848,7 +849,7 @@ export const Admin: React.FC = () => {
 
         {/* Rule info */}
         {effectiveRule && (
-          <div className={`flex items-center gap-3 p-3 rounded-xl text-xs ${effectiveRule.isOpen ? 'bg-emerald-50 border border-emerald-200 text-emerald-700' : 'bg-red-50 border border-red-200 text-red-700'}`}>
+          <div className={`flex items-center gap-3 p-3 rounded-xl text-xs ${effectiveRule.isOpen ? 'bg-success-50 border border-success-100 text-success-700' : 'bg-danger-50 border border-danger-100 text-danger-700'}`}>
             <span>{effectiveRule.isOpen ? '✓ Abierto' : '✗ Cerrado'}</span>
             {effectiveRule.isOpen && <span>{effectiveRule.startHour ?? 0}:00 – {effectiveRule.endHour ?? 0}:00</span>}
             <span className="text-[10px] opacity-60">[{effectiveRule.source}]</span>
@@ -960,7 +961,7 @@ export const Admin: React.FC = () => {
                         {isCancelConfirm ? (
                           <div className="flex gap-2">
                             <button onClick={() => confirmCancelAppointment(a.id)} disabled={isAgendaSaving}
-                              className="flex-1 text-xs bg-red-600 text-white px-3 py-1.5 rounded-lg hover:bg-red-700 transition disabled:opacity-50">
+                              className="flex-1 text-xs bg-danger-500 text-white px-3 py-1.5 rounded-lg hover:bg-danger-700 transition disabled:opacity-50">
                               Confirmar cancelación
                             </button>
                             <button onClick={() => setCancelConfirmApptId(null)} className="text-xs px-3 py-1.5 rounded-lg border border-velum-200 text-velum-600 hover:bg-velum-50 transition">No</button>
@@ -969,16 +970,16 @@ export const Admin: React.FC = () => {
                           <div className="flex gap-1.5 flex-wrap">
                             {a.status === 'scheduled' && (
                               <button onClick={() => handleAgendaAppointmentAction(a.id, 'confirm', 'Cita confirmada.')} disabled={isAgendaSaving}
-                                className="text-xs px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 transition">Confirmar</button>
+                                className="text-xs px-2.5 py-1 rounded-lg bg-success-50 text-success-700 border border-success-100 hover:bg-success-100 transition">Confirmar</button>
                             )}
                             {(a.status === 'scheduled' || a.status === 'confirmed') && (
                               <>
                                 <button onClick={() => openSessionModalForAppointment(a)} disabled={isAgendaSaving}
                                   className="text-xs px-2.5 py-1 rounded-lg bg-velum-900 text-white hover:bg-velum-800 transition">Completar</button>
                                 <button onClick={() => handleAgendaAppointmentAction(a.id, 'mark_no_show', 'Marcado como no-show.')} disabled={isAgendaSaving}
-                                  className="text-xs px-2.5 py-1 rounded-lg border border-amber-200 text-amber-700 bg-amber-50 hover:bg-amber-100 transition">No show</button>
+                                  className="text-xs px-2.5 py-1 rounded-lg border border-warning-100 text-warning-700 bg-warning-50 hover:bg-warning-100 transition">No show</button>
                                 <button onClick={() => handleAgendaCancelAppointment(a.id)}
-                                  className="text-xs px-2.5 py-1 rounded-lg border border-red-200 text-red-600 bg-red-50 hover:bg-red-100 transition">Cancelar</button>
+                                  className="text-xs px-2.5 py-1 rounded-lg border border-danger-100 text-danger-700 bg-danger-50 hover:bg-danger-100 transition">Cancelar</button>
                               </>
                             )}
                           </div>
@@ -1049,8 +1050,8 @@ export const Admin: React.FC = () => {
                   <p className="text-[10px] font-bold uppercase tracking-widest text-velum-400 mb-2">1. Acción</p>
                   <div className="grid grid-cols-3 gap-2">
                     {([
-                      { id: 'open',  label: '✓ Abrir',           cls: weekBulkAction === 'open'  ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100' },
-                      { id: 'close', label: '✕ Cerrar',          cls: weekBulkAction === 'close' ? 'bg-red-600 text-white border-red-600'         : 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100' },
+                      { id: 'open',  label: '✓ Abrir',           cls: weekBulkAction === 'open'  ? 'bg-success-500 text-white border-emerald-600' : 'bg-success-50 text-success-700 border-success-100 hover:bg-success-100' },
+                      { id: 'close', label: '✕ Cerrar',          cls: weekBulkAction === 'close' ? 'bg-danger-500 text-white border-red-600'         : 'bg-danger-50 text-danger-700 border-danger-100 hover:bg-danger-100' },
                       { id: 'clear', label: '↺ Restaurar base',  cls: weekBulkAction === 'clear' ? 'bg-velum-900 text-white border-velum-900'     : 'bg-velum-50 text-velum-700 border-velum-200 hover:bg-velum-100' },
                     ] as const).map(({ id, label, cls }) => (
                       <button key={id} onClick={() => setWeekBulkAction(id)}
@@ -1135,8 +1136,8 @@ export const Admin: React.FC = () => {
                 {/* Apply + Save */}
                 <button onClick={applyWeekBulk} disabled={isAgendaConfigSaving}
                   className={`w-full py-3 rounded-xl text-sm font-semibold transition disabled:opacity-50 ${
-                    weekBulkAction === 'open'  ? 'bg-emerald-600 text-white hover:bg-emerald-700' :
-                    weekBulkAction === 'close' ? 'bg-red-600 text-white hover:bg-red-700' :
+                    weekBulkAction === 'open'  ? 'bg-success-500 text-white hover:bg-success-700' :
+                    weekBulkAction === 'close' ? 'bg-danger-500 text-white hover:bg-danger-700' :
                     'bg-velum-900 text-white hover:bg-velum-800'
                   }`}>
                   {isAgendaConfigSaving ? 'Guardando...' :
@@ -1278,7 +1279,7 @@ export const Admin: React.FC = () => {
                   <input type="checkbox" checked={cabin.isActive} onChange={(e) => updateCabinDraftField(cabin.id, { isActive: e.target.checked })} className="rounded" />
                   Activa
                 </label>
-                <button onClick={() => removeCabinDraft(cabin.id)} className="p-1.5 rounded-lg text-velum-400 hover:text-red-600 hover:bg-red-50 transition"><Trash2 size={14} /></button>
+                <button onClick={() => removeCabinDraft(cabin.id)} className="p-1.5 rounded-lg text-velum-400 hover:text-danger-700 hover:bg-danger-50 transition"><Trash2 size={14} /></button>
               </div>
             ))}
           </div>
@@ -1306,7 +1307,7 @@ export const Admin: React.FC = () => {
                     <input type="checkbox" checked={t.isActive} onChange={(e) => updateTreatmentDraftField(t.id, { isActive: e.target.checked })} className="rounded" />
                     Activo
                   </label>
-                  <button onClick={() => removeTreatmentDraft(t.id)} className="p-1.5 rounded-lg text-velum-400 hover:text-red-600 hover:bg-red-50 transition"><Trash2 size={14} /></button>
+                  <button onClick={() => removeTreatmentDraft(t.id)} className="p-1.5 rounded-lg text-velum-400 hover:text-danger-700 hover:bg-danger-50 transition"><Trash2 size={14} /></button>
                 </div>
                 <div className="grid grid-cols-3 gap-3">
                   <div>
@@ -1376,7 +1377,7 @@ export const Admin: React.FC = () => {
 
       {/* Save */}
       {agendaMessage && (
-        <div className={`p-4 rounded-xl text-sm ${agendaMessage.type === 'ok' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
+        <div className={`p-4 rounded-xl text-sm ${agendaMessage.type === 'ok' ? 'bg-success-50 text-success-700 border border-success-100' : 'bg-danger-50 text-danger-700 border border-danger-100'}`}>
           {agendaMessage.text}
         </div>
       )}
@@ -1390,7 +1391,7 @@ export const Admin: React.FC = () => {
   const renderConfiguraciones = () => (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-serif text-velum-900">Ajustes</h1>
+        <h1 className="font-sans font-bold text-velum-900 text-2xl tracking-tight">Ajustes</h1>
         <p className="text-sm text-velum-500 mt-1">Configuración del sistema, integraciones y auditoría</p>
       </div>
       {/* Sub-tabs */}
@@ -1430,7 +1431,7 @@ export const Admin: React.FC = () => {
               </div>
             </div>
             {integrationJobsError && (
-              <div className="flex items-center gap-2 p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs">
+              <div className="flex items-center gap-2 p-3 rounded-xl bg-danger-50 border border-danger-100 text-danger-700 text-xs">
                 <AlertTriangle size={13} /> {integrationJobsError}
               </div>
             )}
@@ -1454,16 +1455,16 @@ export const Admin: React.FC = () => {
                         <td className="px-3 py-2.5 font-mono text-velum-700">{job.type}</td>
                         <td className="px-3 py-2.5">
                           <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                            job.status === 'done' ? 'bg-emerald-50 text-emerald-700' :
-                            job.status === 'failed' ? 'bg-red-50 text-red-600' :
+                            job.status === 'done' ? 'bg-success-50 text-success-700' :
+                            job.status === 'failed' ? 'bg-danger-50 text-danger-700' :
                             job.status === 'running' ? 'bg-blue-50 text-blue-600' :
-                            'bg-amber-50 text-amber-700'
+                            'bg-warning-50 text-warning-700'
                           }`}>{job.status}</span>
                         </td>
                         <td className="px-3 py-2.5 text-velum-500">{job.attempts}/{job.maxAttempts}</td>
                         <td className="px-3 py-2.5 text-velum-400 whitespace-nowrap">{new Date(job.runAt).toLocaleString('es-MX', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' })}</td>
                         <td className="px-3 py-2.5 text-velum-400 whitespace-nowrap">{job.finishedAt ? new Date(job.finishedAt).toLocaleString('es-MX', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' }) : '—'}</td>
-                        <td className="px-3 py-2.5 text-red-500 font-mono max-w-[200px] truncate" title={job.lastError ?? ''}>{job.lastError ?? '—'}</td>
+                        <td className="px-3 py-2.5 text-danger-500 font-mono max-w-[200px] truncate" title={job.lastError ?? ''}>{job.lastError ?? '—'}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -1496,14 +1497,14 @@ export const Admin: React.FC = () => {
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-2">
             {[
-              { label: 'Firmas de consentimiento', value: analytics.expedientesFirmados, cls: 'text-emerald-700' },
-              { label: 'Eventos fallidos', value: analytics.failedAudits, cls: analytics.failedAudits > 0 ? 'text-red-600' : 'text-velum-900' },
+              { label: 'Firmas de consentimiento', value: analytics.expedientesFirmados, cls: 'text-success-700' },
+              { label: 'Eventos fallidos', value: analytics.failedAudits, cls: analytics.failedAudits > 0 ? 'text-danger-700' : 'text-velum-900' },
               { label: 'Eventos sensibles', value: analytics.sensitiveEvents, cls: 'text-velum-900' },
               { label: 'Usuarios con acceso', value: members.filter((m) => m.role !== 'member').length + 1, cls: 'text-velum-900' },
             ].map(({ label, value, cls }) => (
               <div key={label} className="bg-white rounded-2xl border border-velum-100 p-4">
                 <p className="text-[10px] font-bold uppercase tracking-widest text-velum-400 mb-2">{label}</p>
-                <p className={`text-2xl font-serif font-bold ${cls}`}>{value}</p>
+                <p className={`font-sans font-bold tabular-nums text-2xl tracking-tight ${cls}`}>{value}</p>
               </div>
             ))}
           </div>
@@ -1538,8 +1539,8 @@ export const Admin: React.FC = () => {
                           <td className="px-4 py-2.5 text-velum-500 font-mono">{log.action}</td>
                           <td className="px-4 py-2.5 text-velum-400 font-mono">{log.ip}</td>
                           <td className="px-4 py-2.5">
-                            <span className={`inline-flex items-center gap-1.5 text-xs font-medium ${isOk ? 'text-emerald-600' : 'text-red-600'}`}>
-                              <span className={`w-1.5 h-1.5 rounded-full ${isOk ? 'bg-emerald-500' : 'bg-red-500'}`} />
+                            <span className={`inline-flex items-center gap-1.5 text-xs font-medium ${isOk ? 'text-success-700' : 'text-danger-700'}`}>
+                              <span className={`w-1.5 h-1.5 rounded-full ${isOk ? 'bg-success-500' : 'bg-danger-500'}`} />
                               {isOk ? 'OK' : 'Error'}
                             </span>
                           </td>
@@ -1562,7 +1563,7 @@ export const Admin: React.FC = () => {
               </button>
             </div>
             {webhookEventsError && (
-              <div className="flex items-center gap-2 p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs">
+              <div className="flex items-center gap-2 p-3 rounded-xl bg-danger-50 border border-danger-100 text-danger-700 text-xs">
                 <AlertTriangle size={13} /> {webhookEventsError}
               </div>
             )}
@@ -1619,8 +1620,8 @@ export const Admin: React.FC = () => {
     if (dataLoadError) {
       return (
         <div className="flex flex-col items-center justify-center py-20 gap-4">
-          <div className="w-12 h-12 rounded-2xl bg-red-50 border border-red-200 flex items-center justify-center">
-            <AlertTriangle size={22} className="text-red-500" />
+          <div className="w-12 h-12 rounded-2xl bg-danger-50 border border-danger-100 flex items-center justify-center">
+            <AlertTriangle size={22} className="text-danger-500" />
           </div>
           <div className="text-center">
             <p className="text-sm font-semibold text-velum-900">Error al cargar datos</p>
@@ -1787,12 +1788,12 @@ export const Admin: React.FC = () => {
         <div className="w-full max-w-sm">
           <div className="text-center mb-8">
             <VelumLogo className="h-8 w-auto mx-auto mb-6 opacity-90" />
-            <h1 className="text-2xl font-serif text-velum-900">Acceso administrativo</h1>
+            <h1 className="font-sans font-bold text-velum-900 text-2xl tracking-tight">Acceso administrativo</h1>
             <p className="text-sm text-velum-500 mt-2">Solo personal autorizado</p>
           </div>
           <form onSubmit={handleLogin} className="bg-white rounded-2xl border border-velum-100 shadow-sm p-8 space-y-5">
             {loginError && (
-              <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-700">{loginError}</div>
+              <div className="bg-danger-50 border border-danger-100 rounded-xl px-4 py-3 text-sm text-danger-700">{loginError}</div>
             )}
             <div>
               <label className="block text-xs font-bold uppercase tracking-widest text-velum-500 mb-2">Correo electrónico</label>
@@ -2088,8 +2089,8 @@ export const Admin: React.FC = () => {
             >
               <div className="pointer-events-auto w-full max-w-sm bg-white rounded-3xl shadow-2xl p-6 space-y-4">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-2xl bg-red-50 border border-red-200 flex items-center justify-center shrink-0">
-                    <XCircle size={18} className="text-red-500" />
+                  <div className="w-10 h-10 rounded-2xl bg-danger-50 border border-danger-100 flex items-center justify-center shrink-0">
+                    <XCircle size={18} className="text-danger-500" />
                   </div>
                   <div>
                     <p id="cancel-membership-title" className="font-semibold text-velum-900 text-sm">Cancelar membresía</p>
@@ -2106,7 +2107,7 @@ export const Admin: React.FC = () => {
                 <p className="text-xs text-velum-600">¿Confirmas que deseas cancelar la membresía de este socio? Su acceso quedará suspendido.</p>
                 <div className="flex gap-2">
                   <button onClick={() => { setConfirmCancelMemberId(null); void doUpdateMember(confirmCancelMemberId, 'canceled'); }}
-                    className="flex-1 bg-red-600 text-white rounded-xl py-2.5 text-sm font-medium hover:bg-red-700 transition">
+                    className="flex-1 bg-danger-500 text-white rounded-xl py-2.5 text-sm font-medium hover:bg-danger-700 transition">
                     Confirmar cancelación
                   </button>
                   <button onClick={() => setConfirmCancelMemberId(null)}
