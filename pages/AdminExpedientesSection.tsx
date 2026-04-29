@@ -23,9 +23,9 @@ export const AdminExpedientesSection: React.FC<Props> = ({
 }) => {
   const pendingApproval = members.filter((m) => m.intakeStatus === 'submitted');
   const expStats = [
-    { label: 'Aprobados',          value: members.filter((m) => m.intakeStatus === 'approved').length,                                  cls: 'text-emerald-700' },
-    { label: 'Pendientes revisión', value: pendingApproval.length,                                                                       cls: 'text-amber-600' },
-    { label: 'Rechazados',          value: members.filter((m) => m.intakeStatus === 'rejected').length,                                  cls: 'text-red-600' },
+    { label: 'Aprobados',          value: members.filter((m) => m.intakeStatus === 'approved').length,                                  cls: 'text-success-700' },
+    { label: 'Pendientes revisión', value: pendingApproval.length,                                                                       cls: 'text-warning-700' },
+    { label: 'Rechazados',          value: members.filter((m) => m.intakeStatus === 'rejected').length,                                  cls: 'text-danger-700' },
     { label: 'Sin expediente',      value: members.filter((m) => !m.intakeStatus || m.intakeStatus === 'draft').length,                  cls: 'text-velum-600' },
   ];
 
@@ -41,7 +41,7 @@ export const AdminExpedientesSection: React.FC<Props> = ({
         {expStats.map(({ label, value, cls }) => (
           <div key={label} className="bg-white rounded-2xl border border-velum-100 p-5">
             <p className="text-[10px] font-bold uppercase tracking-widest text-velum-400 mb-2">{label}</p>
-            <p className={`text-3xl font-serif font-bold ${cls}`}>{value}</p>
+            <p className={`font-sans font-bold tabular-nums text-4xl leading-none tracking-[-0.025em] ${cls}`}>{value}</p>
           </div>
         ))}
       </div>
@@ -51,7 +51,7 @@ export const AdminExpedientesSection: React.FC<Props> = ({
           <SectionHeading>Cola de aprobación</SectionHeading>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {pendingApproval.map((m) => (
-              <div key={m.id} className="bg-white rounded-2xl border border-amber-200 bg-amber-50/30 p-4 space-y-3">
+              <div key={m.id} className="bg-white rounded-2xl border border-warning-100 bg-warning-50/30 p-4 space-y-3">
                 <div className="flex items-start justify-between gap-2">
                   <div>
                     <p className="font-medium text-velum-900 text-sm">{m.name}</p>
@@ -66,10 +66,10 @@ export const AdminExpedientesSection: React.FC<Props> = ({
                   <div className="space-y-2">
                     <textarea value={intakeRejectReason} onChange={(e) => onSetRejectReason(e.target.value)}
                       placeholder="Motivo del rechazo (requerido)" rows={2}
-                      className="w-full rounded-xl border border-red-200 bg-red-50/30 px-3 py-2 text-xs resize-none focus:outline-none focus:ring-2 focus:ring-red-300 transition" />
+                      className="w-full rounded-xl border border-danger-100 bg-danger-50/30 px-3 py-2 text-xs resize-none focus:outline-none focus:ring-2 focus:ring-red-300 transition" />
                     <div className="flex gap-2">
                       <button onClick={() => onApprove(m.id, false)} disabled={!intakeRejectReason.trim() || isApprovingIntake === m.id}
-                        className="flex-1 bg-red-600 text-white rounded-xl py-1.5 text-xs font-medium hover:bg-red-700 transition disabled:opacity-50">Confirmar</button>
+                        className="flex-1 bg-danger-500 text-white rounded-xl py-1.5 text-xs font-medium hover:bg-danger-700 transition disabled:opacity-50">Confirmar</button>
                       <button onClick={() => { onSetReject(null); onSetRejectReason(''); }}
                         className="px-3 py-1.5 rounded-xl border border-velum-200 text-xs text-velum-600 hover:bg-velum-50 transition">Cancelar</button>
                     </div>
@@ -77,11 +77,11 @@ export const AdminExpedientesSection: React.FC<Props> = ({
                 ) : (
                   <div className="flex gap-2">
                     <button onClick={() => onApprove(m.id, true)} disabled={isApprovingIntake === m.id}
-                      className="flex-1 bg-emerald-600 text-white rounded-xl py-2 text-xs font-medium hover:bg-emerald-700 transition disabled:opacity-50">
+                      className="flex-1 bg-success-500 text-white rounded-xl py-2 text-xs font-medium hover:bg-success-700 transition disabled:opacity-50">
                       {isApprovingIntake === m.id ? '...' : 'Aprobar'}
                     </button>
                     <button onClick={() => onSetReject(m.id)}
-                      className="flex-1 border border-red-200 text-red-600 bg-red-50 rounded-xl py-2 text-xs font-medium hover:bg-red-100 transition">Rechazar</button>
+                      className="flex-1 border border-danger-100 text-danger-700 bg-danger-50 rounded-xl py-2 text-xs font-medium hover:bg-danger-100 transition">Rechazar</button>
                   </div>
                 )}
               </div>
@@ -133,7 +133,7 @@ const ExpedientesTable: React.FC<ExpedientesTableProps> = ({
         sortable: true,
         cell: (m) => (
           <span
-            className={`inline-flex items-center gap-1 text-xs font-medium ${m.clinical?.consentFormSigned ? 'text-emerald-600' : 'text-velum-400'}`}
+            className={`inline-flex items-center gap-1 text-xs font-medium ${m.clinical?.consentFormSigned ? 'text-success-700' : 'text-velum-400'}`}
           >
             {m.clinical?.consentFormSigned ? <CheckCircle2 size={13} /> : <XCircle size={13} />}
             {m.clinical?.consentFormSigned ? 'Firmado' : 'Pendiente'}

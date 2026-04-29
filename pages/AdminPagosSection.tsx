@@ -121,10 +121,10 @@ export const AdminPagosSection: React.FC<Props> = ({
           const risk = riskOfMember(m);
           return (
             <span
-              className={`inline-flex items-center gap-1.5 text-xs font-medium ${risk === 'critical' ? 'text-red-600' : 'text-amber-600'}`}
+              className={`inline-flex items-center gap-1.5 text-xs font-medium ${risk === 'critical' ? 'text-danger-700' : 'text-warning-700'}`}
             >
               <span
-                className={`w-2 h-2 rounded-full ${risk === 'critical' ? 'bg-red-500' : 'bg-amber-400'}`}
+                className={`w-2 h-2 rounded-full ${risk === 'critical' ? 'bg-danger-500' : 'bg-warning-500'}`}
               />
               {risk === 'critical' ? 'Crítico' : 'Atención'}
             </span>
@@ -142,7 +142,7 @@ export const AdminPagosSection: React.FC<Props> = ({
                 e.stopPropagation();
                 onRegularize(m.id, 'active');
               }}
-              className="text-xs px-2.5 py-1 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 transition"
+              className="text-xs px-2.5 py-1 rounded-lg bg-success-500 text-white hover:bg-success-700 transition"
             >
               Regularizar
             </button>
@@ -211,12 +211,12 @@ export const AdminPagosSection: React.FC<Props> = ({
           <span
             className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${
               p.status === 'paid'
-                ? 'bg-emerald-50 text-emerald-700'
+                ? 'bg-success-50 text-success-700'
                 : p.status === 'failed'
-                  ? 'bg-red-50 text-red-600'
+                  ? 'bg-danger-50 text-danger-700'
                   : p.status === 'refunded'
                     ? 'bg-blue-50 text-blue-600'
-                    : 'bg-amber-50 text-amber-700'
+                    : 'bg-warning-50 text-warning-700'
             }`}
           >
             {p.status}
@@ -263,9 +263,9 @@ export const AdminPagosSection: React.FC<Props> = ({
           </SectionHeading>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             <KpiCard icon={<Users size={18} />} label="Total usuarios" value={serverReports.users} />
-            <KpiCard icon={<CheckCircle2 size={18} />} label="Membresías activas" value={serverReports.activeMemberships} accent="text-emerald-700" />
-            <KpiCard icon={<AlertTriangle size={18} />} label="Pago vencido" value={serverReports.pastDueMemberships} accent={serverReports.pastDueMemberships > 0 ? 'text-red-600' : 'text-velum-900'} />
-            <KpiCard icon={<FileText size={18} />} label="Docs. pendientes" value={serverReports.pendingDocuments} accent={serverReports.pendingDocuments > 0 ? 'text-amber-600' : 'text-velum-900'} />
+            <KpiCard icon={<CheckCircle2 size={18} />} label="Membresías activas" value={serverReports.activeMemberships} accent="text-success-700" />
+            <KpiCard icon={<AlertTriangle size={18} />} label="Pago vencido" value={serverReports.pastDueMemberships} accent={serverReports.pastDueMemberships > 0 ? 'text-danger-700' : 'text-velum-900'} />
+            <KpiCard icon={<FileText size={18} />} label="Docs. pendientes" value={serverReports.pendingDocuments} accent={serverReports.pendingDocuments > 0 ? 'text-warning-700' : 'text-velum-900'} />
           </div>
         </div>
       )}
@@ -276,9 +276,9 @@ export const AdminPagosSection: React.FC<Props> = ({
           Cola de cobranza
         </SectionHeading>
         <div className="grid grid-cols-3 gap-4">
-          <KpiCard icon={<HandCoins size={18} />} label="Por recuperar" value={queue.length} accent={queue.length > 0 ? 'text-red-600' : 'text-velum-900'} />
-          <KpiCard icon={<Wallet size={18} />} label="Monto en riesgo" value={formatMoney(totalRisk)} accent="text-amber-600" />
-          <KpiCard icon={<CheckCheck size={18} />} label="Activos" value={analytics.sociosActivos} accent="text-emerald-700" />
+          <KpiCard icon={<HandCoins size={18} />} label="Por recuperar" value={queue.length} accent={queue.length > 0 ? 'text-danger-700' : 'text-velum-900'} />
+          <KpiCard icon={<Wallet size={18} />} label="Monto en riesgo" value={formatMoney(totalRisk)} accent="text-warning-700" />
+          <KpiCard icon={<CheckCheck size={18} />} label="Activos" value={analytics.sociosActivos} accent="text-success-700" />
         </div>
       </div>
       <DataTable

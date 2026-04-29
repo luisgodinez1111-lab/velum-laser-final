@@ -131,7 +131,7 @@ export const AdminPanelSection: React.FC<Props> = ({
                 className="group"
               >
                 <div className="flex items-start justify-between mb-3">
-                  <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-velum-500">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-velum-500">
                     {kpi.label}
                   </p>
                   <span
@@ -149,8 +149,8 @@ export const AdminPanelSection: React.FC<Props> = ({
                 </div>
                 <p
                   className={[
-                    'text-4xl font-serif font-bold leading-none',
-                    kpi.tone === 'warning' ? 'text-warning-700' : kpi.tone === 'success' ? 'text-success-700' : 'text-velum-900',
+                    'font-sans font-bold tabular-nums text-4xl leading-none tracking-[-0.025em]',
+                    kpi.tone === 'warning' ? 'text-warning-700' : kpi.tone === 'success' ? 'text-success-700' : 'text-velum-900 dark:text-velum-50',
                   ].join(' ')}
                 >
                   {kpi.value}
@@ -172,7 +172,7 @@ export const AdminPanelSection: React.FC<Props> = ({
       {actionAlerts.length > 0 && (
         <section aria-labelledby="alerts-heading">
           <div className="flex items-center justify-between mb-3">
-            <h2 id="alerts-heading" className="text-[10px] font-bold uppercase tracking-[0.2em] text-velum-500">
+            <h2 id="alerts-heading" className="text-[10px] font-bold uppercase tracking-[0.18em] text-velum-500">
               Requieren atención
             </h2>
             <Badge intent={actionAlerts.some((a) => a.level === 'critical') ? 'danger' : 'warning'} dot>
@@ -253,7 +253,7 @@ export const AdminPanelSection: React.FC<Props> = ({
         {/* Agenda hoy */}
         <section aria-labelledby="agenda-heading">
           <div className="flex items-center justify-between mb-3">
-            <h2 id="agenda-heading" className="text-[10px] font-bold uppercase tracking-[0.2em] text-velum-500">
+            <h2 id="agenda-heading" className="text-[10px] font-bold uppercase tracking-[0.18em] text-velum-500">
               Agenda de hoy
             </h2>
             <button
@@ -320,7 +320,7 @@ export const AdminPanelSection: React.FC<Props> = ({
         {/* Actividad reciente */}
         <section aria-labelledby="audit-heading">
           <div className="flex items-center justify-between mb-3">
-            <h2 id="audit-heading" className="text-[10px] font-bold uppercase tracking-[0.2em] text-velum-500">
+            <h2 id="audit-heading" className="text-[10px] font-bold uppercase tracking-[0.18em] text-velum-500">
               Actividad reciente
             </h2>
             <button
