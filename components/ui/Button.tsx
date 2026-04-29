@@ -71,6 +71,28 @@ const sizeStyles: Record<ButtonSize, string> = {
   lg: 'text-xs    px-9 py-4    rounded-sm',
 };
 
+// Helper exportable: permite a `<Link>`, `<a>`, etc. compartir estilos visuales
+// del Button sin duplicar magic className. Uso:
+//   <Link to="/x" className={buttonStyles({ variant: 'primary', size: 'lg' })}>...</Link>
+export const buttonStyles = ({
+  variant = 'primary',
+  size = 'md',
+  fullWidth = false,
+}: {
+  variant?: ButtonVariant;
+  size?: ButtonSize;
+  fullWidth?: boolean;
+} = {}): string =>
+  [
+    baseStyles,
+    variantStyles[variant],
+    sizeStyles[size],
+    fullWidth ? 'w-full' : '',
+    variant === 'link' ? '!px-0 !py-0' : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
+
 const Spinner: React.FC<{ size: ButtonSize }> = ({ size }) => {
   const px = size === 'xs' ? 12 : size === 'sm' ? 14 : 16;
   return (

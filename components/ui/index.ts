@@ -5,7 +5,7 @@
 //
 // (El alias @ no está configurado aún — usar path relativo por ahora.)
 
-export { Button } from './Button';
+export { Button, buttonStyles } from './Button';
 export type { ButtonVariant, ButtonSize } from './Button';
 
 export { IconButton } from './IconButton';

@@ -4,6 +4,7 @@ import { Menu, X, Instagram, Facebook, LogOut, User, ChevronDown, Settings } fro
 import { VelumLogo } from './VelumLogo';
 import { useAuth } from '../context/AuthContext';
 import { NotificationBell } from './NotificationBell';
+import { buttonStyles } from './ui';
 
 const NAV_LINKS = [
   { name: 'Inicio',     path: '/' },
@@ -153,10 +154,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
                 </div>
                 </div>
               ) : (
-                <Link
-                  to="/agenda"
-                  className="bg-velum-900 text-velum-50 px-5 py-2 rounded-lg text-xs uppercase tracking-widest hover:bg-velum-800 transition-colors"
-                >
+                <Link to="/agenda" className={buttonStyles({ variant: 'primary', size: 'sm' })}>
                   Reservar
                 </Link>
               )}
@@ -225,7 +223,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
                 <Link
                   to="/agenda"
                   onClick={() => setIsMenuOpen(false)}
-                  className="block px-3 py-3 text-center text-sm uppercase tracking-widest bg-velum-900 text-velum-50 rounded-xl hover:bg-velum-800 transition-colors"
+                  className={`${buttonStyles({ variant: 'primary', size: 'md', fullWidth: true })} mt-2`}
                 >
                   Reservar
                 </Link>
@@ -297,9 +295,9 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
               {isAdmin && (
                 <Link
                   to="/admin"
-                  className="inline-flex items-center gap-1.5 text-xs text-velum-400 hover:text-velum-50 uppercase tracking-widest transition-colors border border-velum-700 hover:border-velum-400 rounded px-3 py-1"
+                  className="group inline-flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-velum-400 hover:text-velum-50 border border-velum-700 hover:border-velum-400 rounded-sm transition-all duration-base ease-standard hover:bg-velum-800/50 focus:outline-none focus-visible:shadow-focus"
                 >
-                  <Settings size={11} />
+                  <Settings size={11} className="transition-transform duration-base ease-standard group-hover:rotate-90" />
                   Acceso Administrativo
                 </Link>
               )}
