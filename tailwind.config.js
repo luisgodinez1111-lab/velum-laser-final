@@ -7,7 +7,7 @@
 //   npx tsx design/tokens.css.ts > design/tokens.css
 //   (Tailwind se rebuildea automático en `npm run build` / `npm run dev`)
 
-import { core, space, radius, typography, shadow } from "./design/tokens.ts";
+import { core, space, radius, typography, shadow, motion } from "./design/tokens.ts";
 
 export default {
   content: [
@@ -47,6 +47,31 @@ export default {
         md: shadow.md,
         lg: shadow.lg,
         xl: shadow.xl,
+        // Focus ring elegante — usado por todos los primitivos interactivos
+        focus: `0 0 0 3px ${core.velum[300]}66`,
+        focusDanger: `0 0 0 3px ${core.intent.danger[500]}40`,
+      },
+      // motion tokens (design/tokens.ts) → utility classes:
+      //   duration-fast / duration-base / duration-slow / duration-slower
+      //   ease-standard / ease-decelerate / ease-accelerate
+      transitionDuration: motion.duration,
+      transitionTimingFunction: motion.easing,
+      // Keyframes y animaciones consistentes — usar en lugar de duration-* hardcoded
+      keyframes: {
+        'fade-in':       { '0%': { opacity: '0' }, '100%': { opacity: '1' } },
+        'fade-in-up':    { '0%': { opacity: '0', transform: 'translateY(8px)' }, '100%': { opacity: '1', transform: 'translateY(0)' } },
+        'fade-in-down':  { '0%': { opacity: '0', transform: 'translateY(-8px)' }, '100%': { opacity: '1', transform: 'translateY(0)' } },
+        'scale-in':      { '0%': { opacity: '0', transform: 'scale(0.96)' }, '100%': { opacity: '1', transform: 'scale(1)' } },
+        'shimmer':       { '0%': { backgroundPosition: '-200% 0' }, '100%': { backgroundPosition: '200% 0' } },
+        'spin-slow':     { '0%': { transform: 'rotate(0deg)' }, '100%': { transform: 'rotate(360deg)' } },
+      },
+      animation: {
+        'fade-in':      `fade-in ${motion.duration.base} ${motion.easing.decelerate} both`,
+        'fade-in-up':   `fade-in-up ${motion.duration.slow} ${motion.easing.decelerate} both`,
+        'fade-in-down': `fade-in-down ${motion.duration.slow} ${motion.easing.decelerate} both`,
+        'scale-in':     `scale-in ${motion.duration.base} ${motion.easing.decelerate} both`,
+        'shimmer':      'shimmer 1.6s linear infinite',
+        'spin-slow':    'spin-slow 1s linear infinite',
       },
     },
   },
