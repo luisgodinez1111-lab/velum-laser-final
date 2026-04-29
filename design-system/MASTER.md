@@ -301,9 +301,26 @@ import { Card, CardTitle, CardTitleBrand } from '@/components/ui';
 
 **Razón:** el cliente vive en lenguaje emocional/de respiración. El admin vive en lenguaje funcional/de densidad. Son dos lenguajes hermanos del mismo sistema.
 
-### 6.4. Densidad admin vs cliente ⚪ pendiente (decidir en Fase 11.5)
+### 6.4. Densidad admin vs cliente ✅ resuelto (Fase 11.5): los DOS lenguajes coexisten
 
-`DensityContext` con modo `compact` solo aplica al admin. **Decisión:** se toma cuando se rediseñe el primer módulo admin con KPIs (sugerencia: `AdminKPIsSection`). Por ahora, el piloto Apple sólo se ha aplicado en `comfortable`.
+| Aspecto | Cliente | Admin |
+|---------|---------|-------|
+| Headings (H1, H2, H3, KpiCard value) | sans bold tracking-tight | sans bold tracking-tight (igual) |
+| Microlabels uppercase | ❌ cero | ✅ conservados (`text-[10-11px] font-bold uppercase tracking-[0.18em]`) |
+| Density compact | no aplica | sí — KpiCard padding p-5, headings escala -1 |
+| KPI card stat number | 56px (stats trio Dashboard) | 36px / `text-4xl` (admin más denso) |
+| Padding hero | px-8 py-12 | menos generoso (cards p-5 / p-6) |
+
+**Razón:** son dos lenguajes hermanos del mismo sistema. Admin necesita densidad funcional industrial-standard (Linear/Stripe/Apple Health Insights). Cliente necesita densidad emocional. Ambos usan sans bold como tipografía primaria — pero admin conserva uppercase microlabels para legibilidad denso-funcional.
+
+**KpiCard primitive (`pages/adminSharedComponents.tsx`):**
+- Label uppercase tracking-[0.18em] ✅ conservado
+- Value migrado de `text-3xl font-serif font-bold` a `text-4xl font-sans font-bold tabular-nums tracking-[-0.025em]`
+- Accent props ahora usan tokens semánticos (`text-success-700`, `text-danger-700`) en lugar de hex literales
+
+**PageHeader primitive (`components/ui/PageHeader.tsx`):**
+- Title migrado de `font-serif` a `font-sans font-bold tracking-[-0.02em]`
+- Eyebrow ajustado a `text-[11px] tracking-[0.18em]` (admin convention)
 
 ---
 

@@ -83,11 +83,11 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
       <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
         <div className="flex-1 min-w-0">
           {eyebrow && (
-            <p className={`text-[10px] font-bold uppercase tracking-[0.25em] text-velum-400 dark:text-velum-500 ${s.eyebrowMb}`}>
+            <p className={`text-[11px] font-bold uppercase tracking-[0.18em] text-velum-500 dark:text-velum-400 ${s.eyebrowMb}`}>
               {eyebrow}
             </p>
           )}
-          <h1 className={`font-serif ${s.title} text-velum-900 dark:text-velum-50 leading-tight tracking-tight`}>
+          <h1 className={`font-sans font-bold ${s.title} text-velum-900 dark:text-velum-50 leading-tight tracking-[-0.02em]`}>
             {title}
           </h1>
           {description && (
