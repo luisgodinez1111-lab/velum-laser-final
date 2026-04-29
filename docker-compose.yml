@@ -80,6 +80,44 @@ services:
       timeout: 5s
       retries: 5
 
+  # ── Analytics self-hosted ──────────────────────────────────────────────
+  # Umami v2 — privacy-friendly, GDPR-compliant. Vive bajo /stats vía nginx
+  # proxy (path-based hosting nativo gracias a BASE_PATH). Reusa el Postgres
+  # existente con su propia database 'umami' aislada.
+  #
+  # Setup inicial (UNA vez, antes del primer arranque):
+  #   docker compose exec postgres psql -U postgres -c "CREATE DATABASE umami;"
+  #
+  # Variables requeridas en server/.env (o .env raíz si lo prefieres):
+  #   UMAMI_APP_SECRET — string aleatorio de 64+ chars (openssl rand -hex 64)
+  #   UMAMI_DATABASE_URL — postgresql://postgres:${POSTGRES_PASSWORD}@postgres:5432/umami
+  #
+  # Login admin inicial: usuario 'admin' / password 'umami'. Cambiar en primer login.
+  umami:
+    image: ghcr.io/umami-software/umami:postgresql-v2.13.0
+    environment:
+      DATABASE_URL: ${UMAMI_DATABASE_URL}
+      DATABASE_TYPE: postgresql
+      APP_SECRET: ${UMAMI_APP_SECRET}
+      BASE_PATH: /stats
+      HOSTNAME: 0.0.0.0
+      DISABLE_TELEMETRY: "1"   # No enviar telemetría a Umami software
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 384m
+          cpus: "0.5"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/stats/api/heartbeat"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+
   nginx:
     build:
       context: .
@@ -90,6 +128,8 @@ services:
     depends_on:
       api:
         condition: service_healthy
+      umami:
+        condition: service_started
     volumes:
       - /var/velum/uploads:/var/velum/uploads:ro
       - ./deploy/nginx.conf:/etc/nginx/conf.d/default.conf:ro
