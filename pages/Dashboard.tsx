@@ -30,6 +30,7 @@ import {
 } from "lucide-react";
 import { Button, PillButton } from "../components/ui";
 import { SignaturePad } from "../components/SignaturePad";
+import { SessionFeedbackPrompt } from "../components/SessionFeedbackPrompt";
 import { useAuth } from "../context/AuthContext";
 import { redirectToCustomerPortal, createSubscriptionCheckout } from "../services/stripeService";
 import { MEMBERSHIPS } from "../constants";
@@ -745,6 +746,16 @@ export const Dashboard: React.FC = () => {
                   </button>
                 </div>
               )}
+
+              {/* Session feedback prompt — Fase 12.1
+                  Aparece automáticamente cuando hay sesión <7d sin feedback.
+                  También muestra respuesta del staff si fue respondida <14d. */}
+              <SessionFeedbackPrompt
+                sessions={sessions}
+                onSubmitted={async () => {
+                  try { setSessions(await clinicalService.getMySessions()); } catch { /* ignore */ }
+                }}
+              />
 
               {/* In-app notifications panel */}
               {inAppNotifs.length > 0 && (
