@@ -1,6 +1,6 @@
 import React from "react";
 import { CalendarSync, Link2Off, Link2 } from "lucide-react";
-import { Button } from "../../components/Button";
+import { Button } from "../../components/ui";
 import {
   GoogleCalendarIntegrationStatus,
   GoogleEventFormatMode

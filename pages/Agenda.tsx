@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Button } from "../components/Button";
+import { Button } from "../components/ui";
 import { PasswordInput } from "../components/PasswordInput";
 import { ChevronLeft, ChevronRight, Lock, User, Sparkles, Shield, FileText, Stethoscope, CircleCheck, KeyRound, Mail } from "lucide-react";
 import { useAuth } from "../context/AuthContext";

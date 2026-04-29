@@ -25,3 +25,6 @@ export type { StackDirection, StackGap, StackAlign, StackJustify, StackWrap } fr
 
 export { Skeleton, SkeletonText, SkeletonAvatar, SkeletonCard, SkeletonTable } from './Skeleton';
 export type { SkeletonVariant } from './Skeleton';
+
+export { EmptyState } from './EmptyState';
+export type { EmptyStateSize } from './EmptyState';

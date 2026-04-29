@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../context/AuthContext";
-import { Button } from "../components/Button";
+import { Button } from "../components/ui";
 import { apiFetch, ApiError } from "../services/apiClient";
 
 type Row = {

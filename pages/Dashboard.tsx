@@ -28,7 +28,7 @@ import {
   ClipboardList,
   Download
 } from "lucide-react";
-import { Button } from "../components/Button";
+import { Button } from "../components/ui";
 import { SignaturePad } from "../components/SignaturePad";
 import { useAuth } from "../context/AuthContext";
 import { redirectToCustomerPortal, createSubscriptionCheckout } from "../services/stripeService";

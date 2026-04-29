@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { MEMBERSHIPS, ZONES, MASTER_ZONES, SMALL_ZONE_IDS, MEDIUM_ZONE_IDS, SELECT_MAX_SMALL, SELECT_MAX_MEDIUM } from '../constants';
 import { MembershipTier, ZoneId } from '../types';
-import { Button } from '../components/Button';
+import { Button, Badge, buttonStyles } from '../components/ui';
 import { Check, ArrowDown, Sparkles, ShieldCheck, UserPlus, FileText, CreditCard, ArrowRight } from 'lucide-react';
 import { createSubscriptionCheckout } from '../services/stripeService';
 import { useAuth } from '../context/AuthContext';
@@ -156,25 +156,27 @@ export const Memberships: React.FC = () => {
 
         <div className="relative z-10 max-w-4xl mx-auto text-center">
           {/* Tech badge */}
-          <div className="inline-flex items-center gap-2 border border-white/20 bg-white/10 backdrop-blur-sm px-5 py-2 mb-8 rounded-sm">
-            <span className="w-1.5 h-1.5 rounded-full bg-velum-300 inline-block" />
-            <span className="text-white/70 text-xs font-bold uppercase tracking-[0.25em]">Cuatriodo Láser · 755 · 808 · 980 · 1064 nm</span>
+          <div className="inline-flex items-center gap-2 border border-white/20 bg-white/10 backdrop-blur-md px-5 py-2 mb-8 rounded-full animate-fade-in">
+            <span className="w-1.5 h-1.5 rounded-full bg-velum-300 animate-pulse" />
+            <span className="text-white/85 text-[10px] font-bold uppercase tracking-[0.3em]">Cuatriodo Láser · 755 · 808 · 980 · 1064 nm</span>
           </div>
 
-          <p className="text-xs font-bold uppercase tracking-[0.25em] text-velum-300 mb-4">Filosofía VELUM</p>
-          <h1 className="text-5xl md:text-7xl font-serif text-white italic mb-8 leading-tight">
+          <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-velum-300 mb-4 animate-fade-in-up" style={{ animationDelay: '60ms' }}>Filosofía VELUM</p>
+          <h1 className="text-5xl md:text-7xl font-serif text-white italic mb-8 leading-tight animate-fade-in-up" style={{ animationDelay: '120ms' }}>
             El cuerpo no es<br/>una lista.
           </h1>
-          <p className="text-lg text-white/60 font-light leading-relaxed max-w-2xl mx-auto mb-12">
+          <p className="text-lg text-white/65 font-light leading-relaxed max-w-2xl mx-auto mb-12 animate-fade-in-up" style={{ animationDelay: '240ms' }}>
             Hemos redefinido la depilación láser abandonando el cobro por "parches" aislados.
             Dividimos la anatomía en <span className="text-white font-normal">4 Zonas Maestras</span> basadas
             en la función estética y emocional de cada área.
           </p>
           <button
             onClick={scrollToSelection}
-            className="inline-flex items-center gap-2 text-white/60 hover:text-white text-xs uppercase tracking-widest border-b border-white/20 hover:border-white/60 pb-1 transition-all duration-200"
+            className="group inline-flex items-center gap-2 text-white/65 hover:text-white text-[11px] font-bold uppercase tracking-[0.25em] border-b border-white/25 hover:border-white pb-1.5 transition-all duration-base ease-standard focus:outline-none focus-visible:shadow-focus rounded-sm animate-fade-in-up"
+            style={{ animationDelay: '360ms' }}
           >
-            Diseñar mi plan ahora <ArrowDown size={14} />
+            Diseñar mi plan ahora
+            <ArrowDown size={14} className="transition-transform duration-base ease-standard group-hover:translate-y-0.5" />
           </button>
         </div>
       </section>
@@ -390,55 +392,72 @@ export const Memberships: React.FC = () => {
           {/* Step 1: Membership Tiers */}
           {step === 1 && (
             <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4 animate-fade-in-up">
-              {MEMBERSHIPS.map((tier) => (
-                <div
-                  key={tier.id}
-                  onClick={() => handleTierSelect(tier)}
-                  className={`
-                    relative p-6 border flex flex-col cursor-pointer transition-all duration-300 hover:-translate-y-2 group
-                    ${selectedTier?.id === tier.id
-                      ? 'border-velum-200 bg-white shadow-2xl ring-1 ring-velum-200 z-10'
-                      : 'border-velum-700 bg-velum-800/50 hover:bg-velum-800 hover:border-velum-500 hover:shadow-lg'}
-                  `}
-                >
-                  {tier.isFullBody && (
-                    <div className="absolute top-0 inset-x-0 bg-velum-900 text-velum-50 text-[10px] uppercase font-bold py-1 text-center tracking-widest">
-                      <Sparkles size={10} className="inline mr-1"/> Best Seller
-                    </div>
-                  )}
-                  
-                  <div className={`mt-2 ${tier.isFullBody ? 'pt-4' : ''}`}>
-                     <h3 className={`font-serif text-lg mb-1 transition-colors ${selectedTier?.id === tier.id ? 'text-velum-900' : 'text-velum-50'}`}>{tier.name}</h3>
-                     <div className="flex items-baseline mb-4">
-                       <span className={`text-xl font-bold font-sans ${selectedTier?.id === tier.id ? 'text-velum-900' : 'text-velum-50'}`}>${tier.price}</span>
-                       <span className={`text-[10px] ml-1 ${selectedTier?.id === tier.id ? 'text-velum-500' : 'text-velum-400'}`}>/mes</span>
-                     </div>
-                  </div>
-
-                  <p className={`text-xs mb-6 font-light flex-grow leading-relaxed ${selectedTier?.id === tier.id ? 'text-velum-600' : 'text-velum-400'}`}>
-                    {tier.description}
-                  </p>
-
-                  <div className={`space-y-3 mb-6 border-t pt-4 ${selectedTier?.id === tier.id ? 'border-velum-100' : 'border-velum-700'}`}>
-                     <div className={`flex items-center text-xs ${selectedTier?.id === tier.id ? 'text-velum-700' : 'text-velum-300'}`}>
-                        <div className="w-5 flex justify-center"><Check size={12} className={selectedTier?.id === tier.id ? 'text-velum-900' : 'text-velum-400'} /></div>
-                        {tier.isFullBody ? <strong>Todas las Zonas</strong> : <span>Hasta <strong>{tier.maxZones} Zonas</strong></span>}
-                     </div>
-                     <div className={`flex items-center text-xs ${selectedTier?.id === tier.id ? 'text-velum-700' : 'text-velum-300'}`}>
-                        <div className="w-5 flex justify-center"><Check size={12} className={selectedTier?.id === tier.id ? 'text-velum-900' : 'text-velum-400'} /></div>
-                        Sesión Mensual
-                     </div>
-                  </div>
-
-                  <Button 
-                    variant={selectedTier?.id === tier.id ? 'primary' : 'outline'} 
-                    className="w-full mt-auto"
-                    size="sm"
+              {MEMBERSHIPS.map((tier) => {
+                const isSelected = selectedTier?.id === tier.id;
+                return (
+                  <button
+                    key={tier.id}
+                    type="button"
+                    onClick={() => handleTierSelect(tier)}
+                    aria-pressed={isSelected}
+                    className={[
+                      'group relative p-6 pt-7 border flex flex-col text-left cursor-pointer overflow-hidden',
+                      'rounded-lg transition-all duration-base ease-standard',
+                      'focus:outline-none focus-visible:shadow-focus',
+                      'hover:-translate-y-1',
+                      isSelected
+                        ? 'border-velum-200 bg-white shadow-xl ring-2 ring-velum-300 z-10'
+                        : 'border-velum-700 bg-velum-800/40 hover:bg-velum-800 hover:border-velum-400 hover:shadow-lg',
+                    ].join(' ')}
                   >
-                    {selectedTier?.id === tier.id ? 'Seleccionado' : 'Elegir'}
-                  </Button>
-                </div>
-              ))}
+                    {tier.isFullBody && (
+                      <div className="absolute top-0 inset-x-0 bg-gradient-to-r from-velum-900 via-velum-800 to-velum-900 text-velum-50 text-[9px] uppercase font-bold py-1.5 text-center tracking-[0.2em] flex items-center justify-center gap-1.5">
+                        <Sparkles size={10} className="animate-pulse" /> Best Seller
+                      </div>
+                    )}
+
+                    <div className={tier.isFullBody ? 'mt-5' : 'mt-1'}>
+                      <h3 className={`font-serif text-xl mb-1 transition-colors duration-base ease-standard ${isSelected ? 'text-velum-900' : 'text-velum-50 group-hover:text-white'}`}>
+                        {tier.name}
+                      </h3>
+                      <div className="flex items-baseline mb-4">
+                        <span className={`text-2xl font-bold font-sans transition-colors duration-base ease-standard ${isSelected ? 'text-velum-900' : 'text-velum-50'}`}>
+                          ${tier.price}
+                        </span>
+                        <span className={`text-[10px] ml-1 ${isSelected ? 'text-velum-500' : 'text-velum-400'}`}>/mes</span>
+                      </div>
+                    </div>
+
+                    <p className={`text-xs mb-6 font-light flex-grow leading-relaxed ${isSelected ? 'text-velum-600' : 'text-velum-400'}`}>
+                      {tier.description}
+                    </p>
+
+                    <div className={`space-y-2.5 mb-6 border-t pt-4 ${isSelected ? 'border-velum-100' : 'border-velum-700'}`}>
+                      <div className={`flex items-center gap-2 text-xs ${isSelected ? 'text-velum-700' : 'text-velum-300'}`}>
+                        <Check size={12} className={`flex-shrink-0 ${isSelected ? 'text-velum-900' : 'text-velum-400'}`} />
+                        {tier.isFullBody ? <strong>Todas las Zonas</strong> : <span>Hasta <strong>{tier.maxZones} Zonas</strong></span>}
+                      </div>
+                      <div className={`flex items-center gap-2 text-xs ${isSelected ? 'text-velum-700' : 'text-velum-300'}`}>
+                        <Check size={12} className={`flex-shrink-0 ${isSelected ? 'text-velum-900' : 'text-velum-400'}`} />
+                        Sesión Mensual
+                      </div>
+                    </div>
+
+                    {/* Footer "button-like" — no es <Button> real porque toda la card es clickable */}
+                    <div
+                      className={[
+                        'mt-auto text-center text-[11px] font-bold uppercase tracking-widest py-2.5 rounded-sm border',
+                        'transition-all duration-base ease-standard',
+                        isSelected
+                          ? 'bg-velum-900 text-velum-50 border-velum-900'
+                          : 'bg-transparent text-velum-300 border-velum-600 group-hover:bg-velum-50 group-hover:text-velum-900 group-hover:border-velum-50',
+                      ].join(' ')}
+                    >
+                      {isSelected ? '✓ Seleccionado' : 'Elegir'}
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           )}
 
