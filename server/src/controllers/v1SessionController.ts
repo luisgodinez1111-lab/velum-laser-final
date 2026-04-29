@@ -4,7 +4,9 @@ import { prisma } from "../db/prisma";
 import { withTenantContext } from "../db/withTenantContext";
 import { AuthRequest } from "../middlewares/auth";
 import { createAuditLog } from "../services/auditService";
-import { sessionCreateSchema, sessionFeedbackSchema } from "../validators/sessions";
+import { sessionCreateSchema, sessionFeedbackSchema, sessionFeedbackResponseSchema } from "../validators/sessions";
+import { deriveFeedbackSeverity, isAdverseReaction, summarizeFeedback } from "../utils/sessionFeedback";
+import { onSessionFeedbackReceived, onSessionFeedbackResponded } from "../services/notificationEventHandlers";
 import { parsePagination } from "../utils/pagination";
 import { paginated } from "../utils/response";
 import { queryParams } from "../utils/request";
@@ -126,7 +128,10 @@ export const addSessionFeedback = async (req: AuthRequest, res: Response) => {
   const payload = sessionFeedbackSchema.parse(req.body);
 
   const session = await prisma.sessionTreatment.findUnique({
-    where: { id: req.params.sessionId }
+    where: { id: req.params.sessionId },
+    include: {
+      user: { select: { id: true, email: true, profile: { select: { firstName: true, lastName: true } } } },
+    },
   });
 
   if (!session) {
@@ -140,11 +145,19 @@ export const addSessionFeedback = async (req: AuthRequest, res: Response) => {
     return res.status(403).json({ message: "No puedes editar esta sesión" });
   }
 
+  // Severidad y reacción adversa SE DERIVAN server-side (no se confía en cliente).
+  const chips = payload.feedbackChips ?? [];
+  const severity = deriveFeedbackSeverity(chips);
+  const hasAdverseReaction = isAdverseReaction(severity);
+
   const updated = await prisma.sessionTreatment.update({
     where: { id: session.id },
     data: {
-      memberFeedback: payload.memberFeedback,
-      feedbackAt: new Date()
+      memberFeedback: payload.memberFeedback ?? null,
+      feedbackChipsJson: chips.length > 0 ? chips : Prisma.JsonNull,
+      feedbackSeverity: severity,
+      feedbackHasAdverseReaction: hasAdverseReaction,
+      feedbackAt: new Date(),
     }
   });
 
@@ -155,8 +168,79 @@ export const addSessionFeedback = async (req: AuthRequest, res: Response) => {
     resourceType: "session_treatment",
     resourceId: session.id,
     ip: req.ip,
-    metadata: { byRole: req.user!.role }
+    metadata: { byRole: req.user!.role, severity, chipsCount: chips.length, hasAdverseReaction }
   });
+
+  // Notificación al equipo clínico (solo si paciente es quien envía — staff editando
+  // su propio registro no genera alerta circular). Best-effort, no bloquea respuesta.
+  // Defensive: session.user puede no estar incluido en algunos paths/tests.
+  if (isOwner && session.user?.email) {
+    const profile = session.user.profile;
+    const fullName = profile ? `${profile.firstName ?? ""} ${profile.lastName ?? ""}`.trim() : "";
+    onSessionFeedbackReceived({
+      sessionId: session.id,
+      memberId: session.userId,
+      memberEmail: session.user.email,
+      memberName: fullName || session.user.email,
+      severity,
+      hasAdverseReaction,
+      summary: summarizeFeedback(chips, severity),
+      hasFreeText: Boolean(payload.memberFeedback),
+    }).catch(() => { /* best-effort */ });
+  }
+
+  return res.json(updated);
+};
+
+/**
+ * Respuesta clínica del staff a un feedback del paciente (Fase B).
+ * Solo roles privilegiados. Notifica al paciente (in-app + email).
+ */
+export const respondToSessionFeedback = async (req: AuthRequest, res: Response) => {
+  const payload = sessionFeedbackResponseSchema.parse(req.body);
+
+  const session = await prisma.sessionTreatment.findUnique({
+    where: { id: req.params.sessionId },
+    include: {
+      user: { select: { id: true, email: true, profile: { select: { firstName: true, lastName: true } } } },
+    },
+  });
+
+  if (!session) {
+    return res.status(404).json({ message: "Sesión no encontrada" });
+  }
+
+  if (!session.feedbackAt) {
+    return res.status(400).json({ message: "Esta sesión no tiene feedback del paciente para responder" });
+  }
+
+  const updated = await prisma.sessionTreatment.update({
+    where: { id: session.id },
+    data: {
+      feedbackResponseNote: payload.responseNote,
+      feedbackRespondedBy: req.user!.id,
+      feedbackRespondedAt: new Date(),
+    },
+  });
+
+  await createAuditLog({
+    userId: req.user!.id,
+    targetUserId: session.userId,
+    action: "session.feedback.responded",
+    resourceType: "session_treatment",
+    resourceId: session.id,
+    ip: req.ip,
+    metadata: { responseLength: payload.responseNote.length }
+  });
+
+  // Notif al paciente: el equipo clínico te respondió.
+  onSessionFeedbackResponded({
+    sessionId: session.id,
+    memberId: session.userId,
+    memberEmail: session.user.email,
+    memberName: (session.user.profile?.firstName ?? "").trim() || session.user.email,
+    responseExcerpt: payload.responseNote.slice(0, 140),
+  }).catch(() => { /* best-effort */ });
 
   return res.json(updated);
 };

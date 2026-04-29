@@ -25,7 +25,10 @@ export type NotificationType =
   | "intake_approved"
   | "intake_rejected"
   | "intake_submitted"
-  | "custom_charge_expired";
+  | "custom_charge_expired"
+  // Fase 12 / B — feedback estructurado de sesiones
+  | "session_feedback_received"
+  | "session_feedback_responded";
 
 export interface CreateNotificationParams {
   userId: string;
@@ -161,4 +164,6 @@ export {
   onMembershipActivated,
   onIntakeApproved,
   onIntakeRejected,
+  onSessionFeedbackReceived,
+  onSessionFeedbackResponded,
 } from "./notificationEventHandlers";

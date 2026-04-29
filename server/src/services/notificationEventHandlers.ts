@@ -387,3 +387,98 @@ export const onIntakeRejected = async (params: {
     ctaUrl: `${baseUrl}/#/dashboard`,
   }).catch((err) => logger.error({ err }, "[notifications] email intake_rejected failed"));
 };
+
+// ── Fase 12 / B — Feedback estructurado de sesiones ──────────────────────────
+
+/**
+ * Paciente envió feedback post-sesión.
+ * - In-app SSE: notifica a admins (siempre).
+ * - Email Resend: solo si hay reacción adversa (severidad >= mild).
+ */
+export const onSessionFeedbackReceived = async (params: {
+  sessionId: string;
+  memberId: string;
+  memberEmail: string;
+  memberName: string;
+  severity: "none" | "mild" | "moderate" | "severe";
+  hasAdverseReaction: boolean;
+  summary: string;
+  hasFreeText: boolean;
+}) => {
+  const baseUrl = env.stripeCheckoutBaseUrl;
+
+  // In-app a admins — siempre, marca con severidad para color visual.
+  const titlePrefix = params.hasAdverseReaction
+    ? `⚠ Reacción ${params.severity}: ${params.memberName}`
+    : `Feedback de sesión: ${params.memberName}`;
+
+  await notifyAdmins(
+    "session_feedback_received",
+    titlePrefix,
+    params.summary,
+    {
+      sessionId: params.sessionId,
+      memberId: params.memberId,
+      severity: params.severity,
+      hasAdverseReaction: params.hasAdverseReaction,
+    }
+  );
+
+  // Email a admins — solo si reacción adversa (no spamear feedback rutinario).
+  if (params.hasAdverseReaction) {
+    const severityLabel: Record<typeof params.severity, string> = {
+      none: "Sin reacción",
+      mild: "Reacción leve",
+      moderate: "Reacción moderada",
+      severe: "Reacción SEVERA — atención inmediata",
+    };
+
+    const ctaUrl = `${baseUrl}/#/admin?tab=socias&memberId=${params.memberId}`;
+    sendAdminNotificationEmail({
+      subject: `${severityLabel[params.severity]} — ${params.memberName}`,
+      title: `Reacción reportada: ${severityLabel[params.severity]}`,
+      body:
+        `<strong>${esc(params.memberName)}</strong> (${esc(params.memberEmail)}) ` +
+        `reportó una reacción tras su sesión.<br><br>` +
+        `<strong>Detalle:</strong> ${esc(params.summary)}<br>` +
+        `${params.hasFreeText ? "<em>El paciente incluyó comentario adicional. Revisa el expediente.</em><br>" : ""}` +
+        `<br><a href="${ctaUrl}" style="display:inline-block;padding:10px 20px;background:#544538;color:#fff;text-decoration:none;border-radius:9999px;font-weight:600;">Ver expediente del paciente</a>`,
+    }).catch((err) => logger.error({ err }, "[notifications] email session_feedback_received (admin) failed"));
+  }
+};
+
+/**
+ * Staff respondió al feedback del paciente.
+ * - In-app SSE: notifica al paciente.
+ * - Email Resend: notifica al paciente con extracto de respuesta.
+ */
+export const onSessionFeedbackResponded = async (params: {
+  sessionId: string;
+  memberId: string;
+  memberEmail: string;
+  memberName: string;
+  responseExcerpt: string;
+}) => {
+  const baseUrl = env.stripeCheckoutBaseUrl;
+
+  await createNotification({
+    userId: params.memberId,
+    type: "session_feedback_responded",
+    title: "El equipo clínico respondió a tu feedback",
+    body: params.responseExcerpt,
+    data: { sessionId: params.sessionId },
+  });
+
+  sendNotificationEmail(params.memberEmail, {
+    name: params.memberName,
+    subject: "Respuesta de tu equipo clínico — Velum Laser",
+    title: "Tu equipo clínico te respondió",
+    body:
+      `Hola <strong>${esc(params.memberName)}</strong>, recibimos tu reporte ` +
+      `post-sesión y nuestro equipo clínico ha respondido:<br><br>` +
+      `<em>"${esc(params.responseExcerpt)}${params.responseExcerpt.length === 140 ? "…" : ""}"</em>` +
+      `<br><br>Puedes ver la respuesta completa en tu portal.`,
+    ctaLabel: "Ver respuesta completa",
+    ctaUrl: `${baseUrl}/#/dashboard?tab=historial&session=${params.sessionId}`,
+  }).catch((err) => logger.error({ err }, "[notifications] email session_feedback_responded failed"));
+};

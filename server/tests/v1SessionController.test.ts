@@ -66,6 +66,13 @@ vi.mock("../src/services/auditService", () => ({
   createAuditLog: mockCreateAuditLog,
 }));
 
+// Fase 12 / B: el controller llama a notificationEventHandlers que importan
+// emailService (Resend). Mockeamos los handlers para evitar la cadena de email.
+vi.mock("../src/services/notificationEventHandlers", () => ({
+  onSessionFeedbackReceived: vi.fn().mockResolvedValue(undefined),
+  onSessionFeedbackResponded: vi.fn().mockResolvedValue(undefined),
+}));
+
 vi.mock("../src/utils/env", () => ({
   env: { nodeEnv: "test" },
 }));
