@@ -1,11 +1,12 @@
 import React, { useState } from "react";
 import {
-  X, User, Stethoscope, Sparkles, CreditCard,
+  User, Stethoscope, Sparkles, CreditCard,
   ChevronRight, ChevronLeft, CheckCircle2, Mail, Shield
 } from "lucide-react";
 import { memberService } from "../services/dataService";
 import { DEFAULT_PHOTOTYPE_QUESTIONS, getFototipo } from "./PhototypeQuestionnaire";
 import { MEMBERSHIPS } from "../constants";
+import { Drawer, Button } from "./ui";
 
 interface Props {
   open: boolean;
@@ -140,26 +141,56 @@ export const AdminCreatePatientDrawer: React.FC<Props> = ({ open, onClose, onCre
 
   if (!open) return null;
 
+  // Footer adaptativo según step y estado
+  const footer = !success ? (
+    <div className="flex gap-3 w-full">
+      <Button
+        variant="ghost"
+        size="md"
+        leftIcon={<ChevronLeft size={15} />}
+        onClick={() => { setError(null); setStep((s) => Math.max(s - 1, 1)); }}
+        disabled={step === 1 || saving}
+      >
+        Atrás
+      </Button>
+      {step < 4 ? (
+        <Button
+          variant="primary"
+          size="md"
+          rightIcon={<ChevronRight size={15} />}
+          onClick={handleNext}
+          disabled={saving}
+          fullWidth
+        >
+          Siguiente
+        </Button>
+      ) : (
+        <Button
+          variant="primary"
+          size="md"
+          onClick={handleSubmit}
+          isLoading={saving}
+          loadingLabel="Creando expediente…"
+          fullWidth
+        >
+          Crear expediente
+        </Button>
+      )}
+    </div>
+  ) : null;
+
   return (
-    <div className="fixed inset-0 z-50 flex">
-      {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={handleClose} />
-
-      {/* Drawer */}
-      <div className="absolute right-0 top-0 h-full w-full max-w-xl bg-white shadow-2xl flex flex-col overflow-hidden">
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-5 border-b border-velum-100 shrink-0">
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-velum-400">Nuevo expediente</p>
-            <h2 className="text-lg font-serif text-velum-900 mt-0.5">Crear paciente</h2>
-          </div>
-          <button onClick={handleClose} className="w-8 h-8 rounded-xl flex items-center justify-center hover:bg-velum-100 transition text-velum-500">
-            <X size={16} />
-          </button>
-        </div>
-
+    <Drawer
+      isOpen={open}
+      onClose={handleClose}
+      side="right"
+      size="xl"
+      title="Crear paciente"
+      description="Nuevo expediente clínico"
+      footer={footer}
+    >
         {/* Step indicator */}
-        <div className="flex border-b border-velum-100 shrink-0">
+        <div className="flex border-b border-velum-100 -mx-6 -mt-5 mb-5">
           {STEP_META.map((meta, idx) => {
             const n = idx + 1;
             const Icon = meta.icon;
@@ -327,27 +358,6 @@ export const AdminCreatePatientDrawer: React.FC<Props> = ({ open, onClose, onCre
           )}
         </div>
 
-        {/* Footer */}
-        {!success && (
-          <div className="px-6 py-4 border-t border-velum-100 flex gap-3 shrink-0">
-            <button onClick={() => { setError(null); setStep((s) => Math.max(s - 1, 1)); }} disabled={step === 1 || saving}
-              className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl border border-velum-200 text-sm text-velum-600 hover:bg-velum-50 transition disabled:opacity-40">
-              <ChevronLeft size={15} /> Atrás
-            </button>
-            {step < 4 ? (
-              <button onClick={handleNext} disabled={saving}
-                className="flex-1 flex items-center justify-center gap-1.5 bg-velum-900 text-white rounded-xl py-2.5 text-sm font-semibold hover:bg-velum-800 transition disabled:opacity-50">
-                Siguiente <ChevronRight size={15} />
-              </button>
-            ) : (
-              <button onClick={handleSubmit} disabled={saving}
-                className="flex-1 bg-velum-900 text-white rounded-xl py-2.5 text-sm font-semibold hover:bg-velum-800 transition disabled:opacity-50">
-                {saving ? "Creando expediente..." : "Crear expediente"}
-              </button>
-            )}
-          </div>
-        )}
-      </div>
-    </div>
+    </Drawer>
   );
 };

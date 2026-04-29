@@ -2,6 +2,7 @@ import React, { useCallback, useRef, useState } from 'react';
 import { CheckCircle2, ChevronRight, Eraser, Pen, Sparkles } from 'lucide-react';
 import { apiFetch } from '../services/apiClient';
 import { useAuth } from '../context/AuthContext';
+import { Modal } from './ui';
 
 // ─── Fototipo tiles ──────────────────────────────────────────────────────────
 
@@ -197,13 +198,23 @@ export const MemberOnboardingFlow: React.FC = () => {
   const fieldCls = "w-full rounded-xl border border-velum-200 bg-velum-50 px-4 py-3 text-sm text-velum-900 placeholder:text-velum-400 outline-none focus:bg-white focus:border-velum-900 focus:ring-2 focus:ring-velum-900/10 transition resize-none";
 
   return (
-    <div className="fixed inset-0 z-[9998] flex items-center justify-center p-4 bg-velum-900/80 backdrop-blur-md">
-      <div className="w-full max-w-lg bg-white rounded-[28px] shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
+    <Modal
+      isOpen
+      // Bloqueante — el miembro nuevo debe completar el onboarding
+      onClose={() => {}}
+      closeOnBackdrop={false}
+      closeOnEsc={false}
+      hideCloseButton
+      aria-label="Activar expediente clínico"
+      size="md"
+      className="!p-0 overflow-hidden"
+    >
+      <div className="-mx-6 -my-5">
 
-        {/* Header */}
-        <div className="bg-velum-900 px-7 py-6 shrink-0">
+        {/* Custom dark header — preserva branding institucional */}
+        <div className="bg-velum-900 px-7 py-6">
           <div className="flex items-center gap-3 mb-4">
-            <div className="w-9 h-9 rounded-2xl bg-white/10 flex items-center justify-center">
+            <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-white/10">
               <Sparkles className="w-4 h-4 text-white" />
             </div>
             <div>
@@ -215,7 +226,7 @@ export const MemberOnboardingFlow: React.FC = () => {
         </div>
 
         {/* Body */}
-        <div className="flex-1 overflow-y-auto px-7 py-6 space-y-5">
+        <div className="px-7 py-6 space-y-5 max-h-[60vh] overflow-y-auto">
 
           {/* ── STEP 0: Historia clínica ── */}
           {step === 0 && (
@@ -376,12 +387,12 @@ export const MemberOnboardingFlow: React.FC = () => {
           )}
           {step === 3 && (
             <button onClick={completeOnboarding}
-              className="w-full flex items-center justify-center gap-2 bg-velum-900 text-white rounded-2xl py-3.5 text-[15px] font-semibold hover:bg-velum-800 transition">
+              className="w-full flex items-center justify-center gap-2 bg-velum-900 text-white rounded-2xl py-3.5 text-[15px] font-semibold hover:bg-velum-800 transition-colors duration-base ease-standard focus:outline-none focus-visible:shadow-focus">
               Ir a mi panel <ChevronRight size={16} />
             </button>
           )}
         </div>
       </div>
-    </div>
+    </Modal>
   );
 };

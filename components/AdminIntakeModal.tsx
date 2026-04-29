@@ -1,11 +1,12 @@
 import React from 'react';
 import {
-  X, FolderOpen, AlertTriangle, FileText, Activity,
+  FolderOpen, AlertTriangle, FileText, Activity,
   CheckCircle2, XCircle, CheckCheck
 } from 'lucide-react';
 import { Member } from '../types';
 import { MedicalIntake } from '../services/clinicalService';
 import { intakeStatusLabel, Pill } from '../pages/adminShared';
+import { Modal, EmptyState, Skeleton } from './ui';
 
 const FITZPATRICK = [
   { type: 1, label: 'Tipo I',   desc: 'Muy clara. Siempre se quema, nunca broncea.',         color: '#FDEBD0', textCls: 'text-amber-900' },
@@ -47,42 +48,33 @@ export const AdminIntakeModal: React.FC<AdminIntakeModalProps> = ({
   const intakeStatus = intakeStatusLabel(m.intakeStatus);
 
   return (
-    <>
-      <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50" onClick={onClose} />
-      <div
-        className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="intake-modal-title"
-      >
-        <div className="pointer-events-auto w-full max-w-2xl max-h-[90vh] bg-white rounded-3xl shadow-2xl flex flex-col overflow-hidden">
-          {/* Header */}
-          <div className="px-6 py-5 border-b border-velum-100 flex items-start justify-between shrink-0">
-            <div>
-              <p className="text-[10px] font-bold uppercase tracking-widest text-velum-400">Expediente clínico</p>
-              <h2 id="intake-modal-title" className="font-serif text-xl text-velum-900 mt-0.5">{m.name || m.email}</h2>
-              <p className="text-xs text-velum-500 mt-0.5">{m.email}</p>
-            </div>
-            <div className="flex items-center gap-2">
-              <Pill label={intakeStatus.label} cls={intakeStatus.cls} />
-              <button onClick={onClose} className="p-2 rounded-xl hover:bg-velum-50 text-velum-400 hover:text-velum-700 transition ml-1">
-                <X size={18} />
-              </button>
-            </div>
-          </div>
+    <Modal
+      isOpen
+      onClose={onClose}
+      title={m.name || m.email || 'Paciente'}
+      description={`Expediente clínico · ${m.email}`}
+      size="xl"
+    >
+      {/* Status pill anclado en el body */}
+      <div className="-mt-1 mb-4 flex justify-end">
+        <Pill label={intakeStatus.label} cls={intakeStatus.cls} />
+      </div>
 
-          {/* Body */}
-          <div className="flex-1 overflow-y-auto">
+      <div>
             {intakeModalLoading ? (
-              <div className="p-8 flex flex-col items-center gap-3">
-                <div className="w-10 h-10 border-2 border-velum-200 border-t-velum-700 rounded-full animate-spin" />
-                <p className="text-sm text-velum-500">Cargando expediente...</p>
+              <div className="space-y-3 p-2">
+                <Skeleton height={20} width="40%" />
+                <Skeleton height={60} />
+                <Skeleton height={120} />
+                <Skeleton height={120} />
               </div>
             ) : !intake ? (
-              <div className="p-8 text-center">
-                <FolderOpen size={32} className="mx-auto text-velum-300 mb-3" />
-                <p className="text-sm text-velum-500">Este paciente aún no tiene expediente registrado.</p>
-              </div>
+              <EmptyState
+                icon={<FolderOpen />}
+                title="Sin expediente"
+                description="Este paciente aún no tiene expediente clínico registrado."
+                size="comfortable"
+              />
             ) : (
               <div className="divide-y divide-velum-50">
                 {/* Fototipo Fitzpatrick */}
@@ -221,23 +213,21 @@ export const AdminIntakeModal: React.FC<AdminIntakeModalProps> = ({
             </div>
           )}
           {!intakeModalLoading && intake && m.intakeStatus === 'approved' && (
-            <div className="px-6 py-4 border-t border-velum-100 bg-emerald-50/50 shrink-0">
-              <div className="flex items-center gap-2 text-emerald-700">
+            <div className="-mx-6 -mb-5 mt-6 px-6 py-4 border-t border-velum-100 bg-success-50/50">
+              <div className="flex items-center gap-2 text-success-700">
                 <CheckCircle2 size={16} />
                 <p className="text-sm font-medium">Expediente aprobado. Paciente candidata confirmada.</p>
               </div>
             </div>
           )}
           {!intakeModalLoading && intake && m.intakeStatus === 'rejected' && (
-            <div className="px-6 py-4 border-t border-velum-100 bg-red-50/50 shrink-0">
-              <div className="flex items-center gap-2 text-red-700">
+            <div className="-mx-6 -mb-5 mt-6 px-6 py-4 border-t border-velum-100 bg-danger-50/50">
+              <div className="flex items-center gap-2 text-danger-700">
                 <XCircle size={16} />
                 <p className="text-sm font-medium">Expediente rechazado. Revisar con la paciente.</p>
               </div>
             </div>
           )}
-        </div>
-      </div>
-    </>
+    </Modal>
   );
 };
