@@ -8,13 +8,16 @@
 export { Button, buttonStyles } from './Button';
 export type { ButtonVariant, ButtonSize } from './Button';
 
+export { PillButton } from './PillButton';
+export type { PillButtonVariant, PillButtonSize } from './PillButton';
+
 export { IconButton } from './IconButton';
 export type { IconButtonSize } from './IconButton';
 
 export { TextField } from './TextField';
 export type { TextFieldSize } from './TextField';
 
-export { Card, CardHeader, CardTitle, CardDescription, CardFooter } from './Card';
+export { Card, CardHeader, CardTitle, CardTitleBrand, CardDescription, CardFooter } from './Card';
 export type { CardVariant, CardPadding } from './Card';
 
 export { Badge } from './Badge';

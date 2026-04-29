@@ -109,12 +109,28 @@ export const CardHeader: React.FC<React.HTMLAttributes<HTMLDivElement>> = ({
   />
 );
 
+// CardTitle — default Apple híbrido: sans bold con tracking-tight.
+// Para títulos que SON momento brand (nombre del paciente, nombre del plan,
+// pieza singular de carácter editorial), usar <CardTitleBrand /> en su lugar.
 export const CardTitle: React.FC<React.HTMLAttributes<HTMLHeadingElement>> = ({
   className = '',
   ...props
 }) => (
   <h3
-    className={['font-serif text-xl text-velum-900 dark:text-velum-50 leading-tight', className].filter(Boolean).join(' ')}
+    className={['font-sans font-bold text-xl text-velum-900 dark:text-velum-50 leading-tight tracking-tight', className].filter(Boolean).join(' ')}
+    {...props}
+  />
+);
+
+// CardTitleBrand — variante editorial con Playfair Display italic.
+// Uso reservado a momentos brand puntuales (no para títulos genéricos).
+// El default sigue siendo CardTitle.
+export const CardTitleBrand: React.FC<React.HTMLAttributes<HTMLHeadingElement>> = ({
+  className = '',
+  ...props
+}) => (
+  <h3
+    className={['font-serif italic text-xl text-velum-900 dark:text-velum-50 leading-tight', className].filter(Boolean).join(' ')}
     {...props}
   />
 );
