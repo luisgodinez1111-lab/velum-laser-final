@@ -52,6 +52,24 @@ const card = "bg-white rounded-2xl border border-velum-100 shadow-sm";
 const pressBtn = "transition-transform duration-100 active:scale-[0.96]";
 // ────────────────────────────────────────────────────────────────────────────
 
+// Saludo según la hora (ES MX). Devuelve la mayúscula correcta.
+function greetingByHour(): string {
+  const h = new Date().getHours();
+  if (h < 12) return "Buenos días";
+  if (h < 19) return "Buenas tardes";
+  return "Buenas noches";
+}
+
+// Fecha larga formateada en español para usar como kicker editorial.
+function formatTodayLong(): string {
+  return new Date().toLocaleDateString("es-MX", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+}
+
 // ── Countdown hook ───────────────────────────────────────────────────────────
 const useCountdown = (targetDate: string | null): string => {
   const [label, setLabel] = useState("");
@@ -662,7 +680,25 @@ export const Dashboard: React.FC = () => {
 
           {/* ══ OVERVIEW ════════════════════════════════════════════════════ */}
           {activeTab === "overview" && (
-            <div className="space-y-4">
+            <div className="space-y-8 sm:space-y-10">
+
+              {/* ── Hero personal — Apple híbrido ─────────────────────────
+                   Playfair sólo en el nombre (momento marca). Saludo y
+                   fecha en sans con tracking-tight para densidad Apple. */}
+              <section aria-labelledby="hero-greeting" className="pt-2 pb-2">
+                <p className="text-[13px] font-semibold text-velum-500">
+                  {greetingByHour()},
+                </p>
+                <h1
+                  id="hero-greeting"
+                  className="mt-1 font-serif text-velum-900 text-5xl sm:text-6xl lg:text-[88px] leading-[0.95] tracking-[-0.025em]"
+                >
+                  {firstName}.
+                </h1>
+                <p className="mt-4 text-[13px] font-medium text-velum-400 capitalize">
+                  {formatTodayLong()}
+                </p>
+              </section>
 
               {/* Status alerts */}
               {intakeStatus === "submitted" && (
@@ -734,71 +770,134 @@ export const Dashboard: React.FC = () => {
                 </div>
               )}
 
-              {/* Next appointment hero */}
-              {upcomingAppointments.length > 0 ? (
-                <div className="bg-velum-900 rounded-2xl p-5 sm:p-6 text-white relative overflow-hidden">
-                  <div className="absolute -right-12 -top-12 w-40 h-40 rounded-full bg-velum-800/40 pointer-events-none" />
-                  <div className="absolute right-4 bottom-4 w-20 h-20 rounded-full bg-velum-800/25 pointer-events-none" />
-                  <div className="relative">
-                    <div className="flex items-start justify-between gap-3 mb-1">
-                      <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-velum-400">Próxima cita</p>
-                      <NextApptCountdown date={nextApptDate} />
+              {/* ── Próxima cita — Apple híbrido ───────────────────────────
+                   Sans bold tight, monocromo sobre velum-900. Sin blobs ni
+                   ornamentos. Jerarquía por escala extrema (fecha 64px, hora
+                   inline). CTA pill con border sutil tipo apple.com. */}
+              {upcomingAppointments.length > 0 ? (() => {
+                const next = upcomingAppointments[0];
+                const d = new Date(next.startAt);
+                const weekdayShort = d.toLocaleDateString("es-MX", { weekday: "short" }).replace(".", "");
+                const dayNum = d.toLocaleDateString("es-MX", { day: "numeric" });
+                const monthShort = d.toLocaleDateString("es-MX", { month: "short" }).replace(".", "");
+                const timeStr = d.toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" });
+                const treatment = next.treatment?.name;
+                return (
+                  <section
+                    aria-labelledby="next-appt-heading"
+                    className="rounded-3xl bg-velum-900 text-white px-8 py-12 sm:px-12 sm:py-16 lg:px-14"
+                  >
+                    <div className="flex flex-col gap-10">
+                      <p
+                        id="next-appt-heading"
+                        className="text-[13px] font-semibold text-velum-300"
+                      >
+                        Próxima sesión
+                      </p>
+
+                      {/* Headline — escala extrema Apple */}
+                      <h2 className="font-sans font-bold text-white text-[44px] sm:text-[64px] lg:text-[80px] leading-[1] tracking-[-0.035em] capitalize">
+                        {weekdayShort} {dayNum} {monthShort}
+                        <span className="text-velum-400"> · </span>
+                        <span className="tabular-nums">{timeStr}</span>
+                      </h2>
+
+                      {/* Meta secundaria — sans regular sobrio */}
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-8 text-[15px]">
+                        {treatment && (
+                          <p className="text-velum-100">{treatment}</p>
+                        )}
+                        <span className="hidden sm:inline text-velum-600">·</span>
+                        <p className="text-velum-300">
+                          en <NextApptCountdown date={nextApptDate} />
+                        </p>
+                      </div>
+
+                      {/* CTA pill estilo apple.com — border sutil + arrow */}
+                      <button
+                        onClick={() => switchTab("citas")}
+                        className={`group inline-flex items-center gap-1.5 self-start text-[14px] font-semibold text-white border border-white/30 hover:border-white hover:bg-white hover:text-velum-900 rounded-full pl-5 pr-4 py-2.5 transition-all duration-200 ${pressBtn}`}
+                      >
+                        Ver todas las citas
+                        <ChevronRight size={15} className="transition-transform group-hover:translate-x-0.5" />
+                      </button>
                     </div>
-                    <p className="font-serif text-[28px] sm:text-[34px] italic text-white leading-tight mt-1">
-                      {new Date(upcomingAppointments[0].startAt).toLocaleDateString("es-MX", { weekday: "long", day: "numeric", month: "long" })}
-                    </p>
-                    <p className="text-[14px] text-velum-300 mt-2">
-                      {new Date(upcomingAppointments[0].startAt).toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" })}
-                      {upcomingAppointments[0].treatment ? ` · ${upcomingAppointments[0].treatment.name}` : ""}
-                    </p>
-                    <button onClick={() => switchTab("citas")}
-                      className={`mt-4 flex items-center gap-1.5 text-[12px] font-semibold text-velum-400 hover:text-white transition-colors ${pressBtn}`}>
-                      Ver todas las citas <ChevronRight size={13} />
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div className={`${card} card-hover p-5 flex items-center gap-4`}>
-                  <div className="w-12 h-12 rounded-2xl bg-velum-50 border border-velum-100 flex items-center justify-center">
-                    <Calendar size={20} className="text-velum-400" />
-                  </div>
-                  <div className="flex-1">
-                    <p className="font-semibold text-velum-900 text-[15px]">Sin citas programadas</p>
-                    <p className="text-[12px] text-velum-500 mt-0.5">Agenda tu próxima sesión para comenzar</p>
-                  </div>
-                  <Link to="/agenda">
-                    <button className={`shrink-0 rounded-2xl bg-velum-900 text-white text-[13px] font-semibold px-4 py-2.5 hover:bg-velum-800 transition-colors ${pressBtn}`}>
-                      Agendar
+                  </section>
+                );
+              })() : (
+                <section className="rounded-3xl bg-white border border-velum-200/70 px-8 py-12 sm:px-12 sm:py-16">
+                  <p className="text-[13px] font-semibold text-velum-500">
+                    Sin sesiones agendadas
+                  </p>
+                  <h2 className="mt-4 font-sans font-bold text-velum-900 text-4xl sm:text-5xl leading-tight tracking-[-0.025em]">
+                    Reserva tu próxima visita.
+                  </h2>
+                  <p className="mt-4 text-[15px] text-velum-500 max-w-md leading-relaxed">
+                    Tu calendario está abierto. Selecciona la sesión que más te convenga.
+                  </p>
+                  <Link to="/agenda" className="inline-block mt-8">
+                    <button className={`group inline-flex items-center gap-1.5 text-[14px] font-semibold bg-velum-900 hover:bg-velum-800 text-white px-5 py-2.5 rounded-full transition-colors ${pressBtn}`}>
+                      Agendar sesión
+                      <ChevronRight size={15} className="transition-transform group-hover:translate-x-0.5" />
                     </button>
                   </Link>
-                </div>
+                </section>
               )}
 
-              {/* Stats row */}
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                {/* Sessions with ring */}
-                <div className={`${card} card-hover p-4 flex items-center gap-4`}>
-                  <ProgressRing done={sessions.length} total={12} size={64} />
-                  <div>
-                    <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-velum-400">Sesiones</p>
-                    <button onClick={() => switchTab("historial")} className="flex items-center gap-1 text-[11px] text-velum-500 hover:text-velum-900 transition-colors mt-1">
-                      Ver historial <ChevronRight size={11} />
-                    </button>
+              {/* ── Stats trio — Apple híbrido ─────────────────────────────
+                   Sans bold tight para números (no serif italic). Labels
+                   sans semibold sin uppercase. Tabular-nums para alineación
+                   precisa. Divisores hairline minimal. */}
+              <section aria-label="Resumen de tu actividad" className="bg-white rounded-3xl border border-velum-200/70 overflow-hidden">
+                <div className="grid grid-cols-1 sm:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x divide-velum-100">
+                  {/* Sesiones */}
+                  <button
+                    type="button"
+                    onClick={() => switchTab("historial")}
+                    className="group text-left px-8 py-10 sm:px-10 sm:py-12 hover:bg-velum-50/50 transition-colors duration-base focus:outline-none focus-visible:bg-velum-50"
+                  >
+                    <p className="text-[13px] font-semibold text-velum-500">
+                      Sesiones completadas
+                    </p>
+                    <p className="mt-4 font-sans font-bold text-velum-900 text-[56px] leading-none tracking-[-0.035em] tabular-nums animate-count-in">
+                      {sessions.length}
+                      <span className="text-velum-300 font-medium">/12</span>
+                    </p>
+                    <div className="mt-5 flex items-center gap-1 text-[14px] font-semibold text-velum-500 group-hover:text-velum-900 transition-colors">
+                      Ver historial
+                      <ChevronRight size={14} className="transition-transform group-hover:translate-x-0.5" />
+                    </div>
+                  </button>
+
+                  {/* Documentos */}
+                  <div className="px-8 py-10 sm:px-10 sm:py-12">
+                    <p className="text-[13px] font-semibold text-velum-500">
+                      Documentos
+                    </p>
+                    <p className="mt-4 font-sans font-bold text-velum-900 text-[56px] leading-none tracking-[-0.035em] tabular-nums animate-count-in">
+                      {pendingDocs}
+                    </p>
+                    <p className="mt-5 text-[14px] text-velum-500">
+                      Pendientes de firma
+                    </p>
+                  </div>
+
+                  {/* Plan */}
+                  <div className="px-8 py-10 sm:px-10 sm:py-12">
+                    <p className="text-[13px] font-semibold text-velum-500">
+                      Membresía
+                    </p>
+                    <p className="mt-4 font-sans font-bold text-velum-900 text-[28px] sm:text-[32px] leading-tight tracking-[-0.025em]">
+                      {planLabel ?? "Sin plan"}
+                    </p>
+                    <span
+                      className={`mt-5 inline-flex items-center text-[11px] font-semibold uppercase tracking-wide px-2.5 py-1 border rounded-full ${msCls}`}
+                    >
+                      {msLabel}
+                    </span>
                   </div>
                 </div>
-                {/* Docs */}
-                <div className={`${card} card-hover p-4`}>
-                  <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-velum-400">Documentos</p>
-                  <p className="text-[30px] font-serif font-bold text-velum-900 leading-tight mt-1 animate-count-in">{pendingDocs}</p>
-                  <p className="text-[11px] text-velum-500 mt-0.5">pendientes de firma</p>
-                </div>
-                {/* Membership */}
-                <div className={`${card} card-hover p-4 col-span-2 sm:col-span-1`}>
-                  <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-velum-400">Plan</p>
-                  <p className="text-[16px] font-semibold text-velum-900 mt-1">{planLabel ?? "—"}</p>
-                  <span className={`inline-flex mt-1.5 items-center text-[10px] font-bold uppercase tracking-[0.1em] px-2 py-0.5 border rounded-full ${msCls}`}>{msLabel}</span>
-                </div>
-              </div>
+              </section>
 
               {/* Banner: plan pre-seleccionado sin membresía activa */}
               {interestedPlanCode && (!membership || membershipStatus === "inactive" || membershipStatus === "canceled") && (() => {
