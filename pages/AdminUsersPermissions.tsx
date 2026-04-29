@@ -36,8 +36,8 @@ const api = (path: string, init?: RequestInit) =>
 const ROLE_CONFIG: Record<string, { label: string; cls: string }> = {
   admin:  { label: "Admin",   cls: "bg-velum-900 text-white" },
   staff:  { label: "Staff",   cls: "bg-velum-100 text-velum-700 border border-velum-200" },
-  member: { label: "Paciente", cls: "bg-emerald-50 text-emerald-700 border border-emerald-200" },
-  system: { label: "Sistema", cls: "bg-amber-50 text-amber-700 border border-amber-200" },
+  member: { label: "Paciente", cls: "bg-success-50 text-success-700 border border-success-100" },
+  system: { label: "Sistema", cls: "bg-warning-50 text-warning-700 border border-warning-100" },
 };
 
 const initials = (email: string) => {
@@ -294,26 +294,26 @@ export const AdminUsersPermissions: React.FC<Props> = ({ embedded = false }) => 
         {[
           { label: "Administradores", value: adminCount, icon: <Shield size={14} />, cls: "text-velum-900" },
           { label: "Staff", value: staffCount, icon: <Users size={14} />, cls: "text-velum-700" },
-          { label: "Pacientes", value: memberCount, icon: <User size={14} />, cls: "text-emerald-700" },
+          { label: "Pacientes", value: memberCount, icon: <User size={14} />, cls: "text-success-700" },
         ].map(({ label, value, icon, cls }) => (
           <div key={label} className="bg-white rounded-2xl border border-velum-100 p-4">
             <div className={`flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest mb-2 ${cls}`}>{icon}{label}</div>
-            <p className={`text-2xl font-serif font-bold ${cls}`}>{value}</p>
+            <p className={`font-sans font-bold tabular-nums text-3xl leading-none tracking-[-0.025em] ${cls}`}>{value}</p>
           </div>
         ))}
       </div>
 
       {/* Feedback */}
       {error && (
-        <div className="flex items-center gap-2.5 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
-          <XCircle size={15} className="text-red-500 shrink-0" />
-          <p className="text-sm text-red-700">{error}</p>
+        <div className="flex items-center gap-2.5 bg-danger-50 border border-danger-100 rounded-xl px-4 py-3">
+          <XCircle size={15} className="text-danger-500 shrink-0" />
+          <p className="text-sm text-danger-700">{error}</p>
         </div>
       )}
       {message && (
-        <div className="flex items-center gap-2.5 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3">
-          <CheckCircle2 size={15} className="text-emerald-600 shrink-0" />
-          <p className="text-sm text-emerald-700">{message}</p>
+        <div className="flex items-center gap-2.5 bg-success-50 border border-success-100 rounded-xl px-4 py-3">
+          <CheckCircle2 size={15} className="text-success-700 shrink-0" />
+          <p className="text-sm text-success-700">{message}</p>
         </div>
       )}
 
@@ -445,7 +445,7 @@ export const AdminUsersPermissions: React.FC<Props> = ({ embedded = false }) => 
                     <div className="flex items-center gap-2 mt-0.5">
                       <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md ${roleCfg.cls}`}>{roleCfg.label}</span>
                       {!u.isActive && (
-                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-red-100 text-red-600">Inactivo</span>
+                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-danger-100 text-danger-700">Inactivo</span>
                       )}
                       {u.isActive && u.membershipStatus && (
                         <span className="text-[10px] text-velum-400">{u.membershipStatus}</span>
@@ -481,7 +481,7 @@ export const AdminUsersPermissions: React.FC<Props> = ({ embedded = false }) => 
                           );
                         })}
                         {u.role === "system" && (
-                          <span className="px-3 py-1.5 rounded-xl text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200">Sistema (no modificable)</span>
+                          <span className="px-3 py-1.5 rounded-xl text-xs font-medium bg-warning-50 text-warning-700 border border-warning-100">Sistema (no modificable)</span>
                         )}
                       </div>
                     </div>
@@ -518,8 +518,8 @@ export const AdminUsersPermissions: React.FC<Props> = ({ embedded = false }) => 
                         disabled={togglingActive === u.id}
                         className={`flex-1 py-2 rounded-xl text-xs font-medium border transition disabled:opacity-50 ${
                           u.isActive
-                            ? "border-amber-300 text-amber-700 hover:bg-amber-50"
-                            : "border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+                            ? "border-warning-100 text-warning-700 hover:bg-warning-50"
+                            : "border-success-100 text-success-700 hover:bg-success-50"
                         }`}
                       >
                         {togglingActive === u.id
@@ -563,11 +563,11 @@ export const AdminUsersPermissions: React.FC<Props> = ({ embedded = false }) => 
                     </div>
 
                     {/* Delete user */}
-                    <div className="pt-1 border-t border-red-100">
-                      <p className="text-[10px] font-bold uppercase tracking-widest text-red-400 mb-2">Zona de peligro</p>
+                    <div className="pt-1 border-t border-danger-100">
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-danger-500 mb-2">Zona de peligro</p>
                       <button
                         onClick={() => openDeleteModal(u)}
-                        className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-red-200 text-sm text-red-600 hover:bg-red-50 hover:border-red-400 transition w-full"
+                        className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-danger-100 text-sm text-danger-700 hover:bg-danger-50 hover:border-danger-500 transition w-full"
                       >
                         <Trash2 size={14} />
                         Eliminar usuario permanentemente
@@ -614,11 +614,11 @@ export const AdminUsersPermissions: React.FC<Props> = ({ embedded = false }) => 
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={closeDeleteModal} />
 
       {/* Dialog */}
-      <div className="relative bg-white rounded-2xl shadow-2xl border border-red-200 max-w-md w-full p-6 space-y-5">
+      <div className="relative bg-white rounded-2xl shadow-2xl border border-danger-100 max-w-md w-full p-6 space-y-5">
         {/* Header */}
         <div className="flex items-start gap-3">
-          <div className="w-10 h-10 rounded-xl bg-red-100 flex items-center justify-center shrink-0">
-            <AlertTriangle size={18} className="text-red-600" />
+          <div className="w-10 h-10 rounded-xl bg-danger-100 flex items-center justify-center shrink-0">
+            <AlertTriangle size={18} className="text-danger-700" />
           </div>
           <div>
             <h3 className="text-base font-bold text-velum-900">Eliminar usuario</h3>
@@ -627,11 +627,11 @@ export const AdminUsersPermissions: React.FC<Props> = ({ embedded = false }) => 
         </div>
 
         {/* Target info */}
-        <div className="bg-red-50 border border-red-100 rounded-xl p-4 space-y-1">
+        <div className="bg-danger-50 border border-danger-100 rounded-xl p-4 space-y-1">
           <p className="text-xs text-velum-500 uppercase tracking-widest font-bold">Usuario a eliminar</p>
           <p className="text-sm font-semibold text-velum-900">{deleteTarget.email}</p>
           <p className="text-xs text-velum-500">Rol: {ROLE_CONFIG[deleteTarget.role]?.label ?? deleteTarget.role}</p>
-          <p className="text-xs text-red-600 mt-2 font-medium">
+          <p className="text-xs text-danger-700 mt-2 font-medium">
             Se eliminarán también: perfil, membresía, expediente clínico, citas, documentos y pagos.
           </p>
         </div>
@@ -643,7 +643,7 @@ export const AdminUsersPermissions: React.FC<Props> = ({ embedded = false }) => 
               Para confirmar, enviaremos un código OTP de seguridad a tu número de WhatsApp registrado.
             </p>
             {deleteOtpMsg && (
-              <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-xl px-3 py-2">{deleteOtpMsg}</p>
+              <p className="text-sm text-danger-700 bg-danger-50 border border-danger-100 rounded-xl px-3 py-2">{deleteOtpMsg}</p>
             )}
             <button
               onClick={requestDeleteOtp}
@@ -658,8 +658,8 @@ export const AdminUsersPermissions: React.FC<Props> = ({ embedded = false }) => 
             {deleteOtpMsg && (
               <p className={`text-sm rounded-xl px-3 py-2 ${
                 deleteOtpMsg.toLowerCase().includes("error") || deleteOtpMsg.toLowerCase().includes("incorrecto") || deleteOtpMsg.toLowerCase().includes("expirado")
-                  ? "text-red-600 bg-red-50 border border-red-100"
-                  : "text-emerald-700 bg-emerald-50 border border-emerald-100"
+                  ? "text-danger-700 bg-danger-50 border border-danger-100"
+                  : "text-success-700 bg-success-50 border border-success-100"
               }`}>{deleteOtpMsg}</p>
             )}
             <div>
@@ -671,7 +671,7 @@ export const AdminUsersPermissions: React.FC<Props> = ({ embedded = false }) => 
                 type="text"
                 inputMode="numeric"
                 maxLength={6}
-                className="w-full rounded-xl border border-velum-200 px-3.5 py-3 text-center text-xl font-bold tracking-[0.5em] focus:outline-none focus:ring-2 focus:ring-red-400/30 focus:border-red-400 transition"
+                className="w-full rounded-xl border border-velum-200 px-3.5 py-3 text-center text-xl font-bold tracking-[0.5em] focus:outline-none focus:ring-2 focus:ring-danger-500/30 focus:border-danger-500 transition"
                 placeholder="000000"
                 value={deleteOtpCode}
                 onChange={(e) => setDeleteOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
@@ -687,7 +687,7 @@ export const AdminUsersPermissions: React.FC<Props> = ({ embedded = false }) => 
             <button
               onClick={confirmDeleteUser}
               disabled={isDeletingUser || deleteOtpCode.length !== 6}
-              className="w-full py-2.5 rounded-xl bg-red-600 text-white text-sm font-bold hover:bg-red-700 transition disabled:opacity-50"
+              className="w-full py-2.5 rounded-xl bg-danger-500 text-white text-sm font-bold hover:bg-danger-700 transition disabled:opacity-50"
             >
               {isDeletingUser ? "Eliminando..." : "Confirmar eliminación"}
             </button>
@@ -712,7 +712,7 @@ export const AdminUsersPermissions: React.FC<Props> = ({ embedded = false }) => 
     <div className="max-w-2xl mx-auto px-4 py-10">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-serif text-velum-900">Usuarios y permisos</h1>
+          <h1 className="font-sans font-bold text-velum-900 text-2xl tracking-tight">Usuarios y permisos</h1>
           <p className="text-sm text-velum-500 mt-1">Gestión de acceso al panel administrativo</p>
         </div>
         <Link to="/admin" className="px-4 py-2 rounded-xl border border-velum-200 text-sm text-velum-600 hover:bg-velum-50 transition">
