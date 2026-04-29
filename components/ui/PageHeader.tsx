@@ -73,7 +73,7 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
       className={[
         'flex flex-col',
         s.wrapper,
-        bordered ? 'border-b border-velum-200' : '',
+        bordered ? 'border-b border-velum-200 dark:border-velum-800' : '',
         className,
       ]
         .filter(Boolean)
@@ -83,15 +83,15 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
       <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
         <div className="flex-1 min-w-0">
           {eyebrow && (
-            <p className={`text-[10px] font-bold uppercase tracking-[0.25em] text-velum-400 ${s.eyebrowMb}`}>
+            <p className={`text-[10px] font-bold uppercase tracking-[0.25em] text-velum-400 dark:text-velum-500 ${s.eyebrowMb}`}>
               {eyebrow}
             </p>
           )}
-          <h1 className={`font-serif ${s.title} text-velum-900 leading-tight tracking-tight`}>
+          <h1 className={`font-serif ${s.title} text-velum-900 dark:text-velum-50 leading-tight tracking-tight`}>
             {title}
           </h1>
           {description && (
-            <p className={`${s.descMt} text-velum-500 text-sm leading-relaxed max-w-2xl`}>
+            <p className={`${s.descMt} text-velum-500 dark:text-velum-400 text-sm leading-relaxed max-w-2xl`}>
               {description}
             </p>
           )}
@@ -114,7 +114,7 @@ interface BreadcrumbsProps {
 
 export const Breadcrumbs: React.FC<BreadcrumbsProps> = ({ items, className = '' }) => (
   <nav aria-label="Migas de pan" className={className}>
-    <ol className="flex items-center gap-1.5 text-xs text-velum-500 flex-wrap">
+    <ol className="flex items-center gap-1.5 text-xs text-velum-500 dark:text-velum-400 flex-wrap">
       {items.map((item, i) => {
         const isLast = i === items.length - 1;
         return (
@@ -122,20 +122,20 @@ export const Breadcrumbs: React.FC<BreadcrumbsProps> = ({ items, className = '' 
             {item.to && !isLast ? (
               <Link
                 to={item.to}
-                className="text-velum-500 hover:text-velum-900 transition-colors duration-base ease-standard focus:outline-none focus-visible:shadow-focus rounded px-0.5"
+                className="text-velum-500 dark:text-velum-400 hover:text-velum-900 dark:hover:text-velum-50 transition-colors duration-base ease-standard focus:outline-none focus-visible:shadow-focus rounded px-0.5"
               >
                 {item.label}
               </Link>
             ) : (
               <span
-                className={isLast ? 'text-velum-900 font-semibold' : 'text-velum-500'}
+                className={isLast ? 'text-velum-900 dark:text-velum-50 font-semibold' : 'text-velum-500 dark:text-velum-400'}
                 aria-current={isLast ? 'page' : undefined}
               >
                 {item.label}
               </span>
             )}
             {!isLast && (
-              <ChevronRight size={12} className="text-velum-300 flex-shrink-0" aria-hidden="true" />
+              <ChevronRight size={12} className="text-velum-300 dark:text-velum-600 flex-shrink-0" aria-hidden="true" />
             )}
           </li>
         );

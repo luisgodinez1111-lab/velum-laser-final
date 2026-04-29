@@ -32,6 +32,7 @@ const variantClass: Record<SkeletonVariant, string> = {
 
 const baseClass =
   'bg-gradient-to-r from-velum-100 via-velum-200 to-velum-100 ' +
+  'dark:from-velum-800 dark:via-velum-700 dark:to-velum-800 ' +
   'bg-[length:200%_100%] animate-shimmer';
 
 const toCss = (v?: string | number): string | undefined =>

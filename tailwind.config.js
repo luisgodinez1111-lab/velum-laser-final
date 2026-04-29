@@ -10,6 +10,9 @@
 import { core, space, radius, typography, shadow, motion } from "./design/tokens.ts";
 
 export default {
+  // Dark mode opt-in vía .dark en <html>. ThemeProvider lo gestiona y
+  // persiste preferencia en localStorage. Default sigue siendo light.
+  darkMode: 'class',
   content: [
     './index.html',
     './index.tsx',

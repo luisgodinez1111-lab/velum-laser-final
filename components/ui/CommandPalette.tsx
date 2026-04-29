@@ -222,15 +222,15 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
     >
       {/* Backdrop — click cierra */}
       <div
-        className="absolute inset-0 bg-velum-900/40 backdrop-blur-sm"
+        className="absolute inset-0 bg-velum-900/40 dark:bg-black/70 backdrop-blur-sm"
         aria-hidden="true"
         onClick={close}
       />
 
       {/* Panel */}
-      <div className="relative w-full max-w-xl bg-white rounded-xl shadow-xl border border-velum-100 overflow-hidden animate-scale-in">
+      <div className="relative w-full max-w-xl bg-white dark:bg-velum-900 rounded-xl shadow-xl border border-velum-100 dark:border-velum-800 overflow-hidden animate-scale-in">
         {/* Search input */}
-        <div className="flex items-center gap-3 px-4 border-b border-velum-100">
+        <div className="flex items-center gap-3 px-4 border-b border-velum-100 dark:border-velum-800">
           <Search size={16} className="text-velum-400 shrink-0" aria-hidden="true" />
           <input
             ref={inputRef}
@@ -242,9 +242,9 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
             aria-label="Buscar"
             aria-autocomplete="list"
             aria-controls="command-palette-listbox"
-            className="flex-1 py-3.5 bg-transparent text-velum-900 placeholder:text-velum-400 text-sm outline-none"
+            className="flex-1 py-3.5 bg-transparent text-velum-900 dark:text-velum-50 placeholder:text-velum-400 dark:placeholder:text-velum-500 text-sm outline-none"
           />
-          <kbd className="hidden sm:inline-flex items-center px-2 h-6 rounded text-[10px] font-mono font-bold uppercase tracking-wide text-velum-500 bg-velum-50 border border-velum-200">
+          <kbd className="hidden sm:inline-flex items-center px-2 h-6 rounded text-[10px] font-mono font-bold uppercase tracking-wide text-velum-500 dark:text-velum-400 bg-velum-50 dark:bg-velum-800 border border-velum-200 dark:border-velum-700">
             esc
           </kbd>
         </div>
@@ -258,11 +258,11 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
           className="max-h-[50vh] overflow-y-auto py-2"
         >
           {filtered.length === 0 ? (
-            <p className="px-4 py-8 text-sm text-center text-velum-500">{emptyText}</p>
+            <p className="px-4 py-8 text-sm text-center text-velum-500 dark:text-velum-400">{emptyText}</p>
           ) : (
             grouped.map(([group, items]) => (
               <div key={group} className="mb-1 last:mb-0">
-                <p className="px-4 py-1 text-[10px] font-bold uppercase tracking-widest text-velum-400">
+                <p className="px-4 py-1 text-[10px] font-bold uppercase tracking-widest text-velum-400 dark:text-velum-500">
                   {group}
                 </p>
                 <ul>
@@ -282,24 +282,24 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
                           className={[
                             'w-full flex items-center gap-3 px-4 py-2.5 text-left text-sm transition-colors duration-fast',
                             active
-                              ? 'bg-velum-100 text-velum-900'
-                              : 'text-velum-700 hover:bg-velum-50',
+                              ? 'bg-velum-100 text-velum-900 dark:bg-velum-800 dark:text-velum-50'
+                              : 'text-velum-700 hover:bg-velum-50 dark:text-velum-300 dark:hover:bg-velum-800/40',
                           ].join(' ')}
                         >
                           {Icon && (
                             <Icon
                               size={16}
-                              className="shrink-0 text-velum-500"
+                              className="shrink-0 text-velum-500 dark:text-velum-400"
                             />
                           )}
                           <span className="flex-1 truncate">{c.label}</span>
                           {c.hint && (
-                            <span className="hidden sm:inline text-xs text-velum-400 truncate max-w-[40%]">
+                            <span className="hidden sm:inline text-xs text-velum-400 dark:text-velum-500 truncate max-w-[40%]">
                               {c.hint}
                             </span>
                           )}
                           {c.shortcut && (
-                            <kbd className="text-[10px] font-mono text-velum-500 bg-velum-50 border border-velum-200 rounded px-1.5 py-0.5">
+                            <kbd className="text-[10px] font-mono text-velum-500 dark:text-velum-400 bg-velum-50 dark:bg-velum-800 border border-velum-200 dark:border-velum-700 rounded px-1.5 py-0.5">
                               {c.shortcut}
                             </kbd>
                           )}
@@ -314,7 +314,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
         </div>
 
         {/* Footer hints */}
-        <div className="flex items-center justify-between px-4 py-2 border-t border-velum-100 bg-velum-50/60 text-[11px] text-velum-500">
+        <div className="flex items-center justify-between px-4 py-2 border-t border-velum-100 dark:border-velum-800 bg-velum-50/60 dark:bg-velum-800/30 text-[11px] text-velum-500 dark:text-velum-400">
           <div className="flex items-center gap-3">
             <span className="inline-flex items-center gap-1">
               <ArrowUp size={11} aria-hidden="true" />

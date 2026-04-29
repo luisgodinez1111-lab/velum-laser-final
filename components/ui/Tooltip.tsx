@@ -107,7 +107,7 @@ export const Tooltip: React.FC<TooltipProps> = ({
           id={tooltipId}
           className={[
             'absolute z-50 px-2.5 py-1.5 rounded-md',
-            'bg-velum-900 text-velum-50 text-xs font-medium leading-tight',
+            'bg-velum-900 text-velum-50 dark:bg-velum-50 dark:text-velum-900 text-xs font-medium leading-tight',
             'whitespace-nowrap pointer-events-none shadow-lg',
             'animate-fade-in',
             placementStyles[placement],

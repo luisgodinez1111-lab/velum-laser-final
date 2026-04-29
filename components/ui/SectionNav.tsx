@@ -101,7 +101,7 @@ export const SectionNav: React.FC<SectionNavProps> = ({
       aria-label={ariaLabel}
       style={{ top: topOffset }}
       className={[
-        'hidden md:block sticky z-[15] -mx-1 px-1 py-2 bg-velum-50/85 backdrop-blur-sm border-b border-velum-100',
+        'hidden md:block sticky z-[15] -mx-1 px-1 py-2 bg-velum-50/85 dark:bg-neutral-950/85 backdrop-blur-sm border-b border-velum-100 dark:border-velum-800',
         className,
       ]
         .filter(Boolean)
@@ -120,8 +120,8 @@ export const SectionNav: React.FC<SectionNavProps> = ({
                   'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors duration-fast',
                   'focus:outline-none focus-visible:shadow-focus',
                   active
-                    ? 'bg-velum-900 text-velum-50'
-                    : 'text-velum-600 hover:bg-velum-100 hover:text-velum-900',
+                    ? 'bg-velum-900 text-velum-50 dark:bg-velum-50 dark:text-velum-900'
+                    : 'text-velum-600 hover:bg-velum-100 hover:text-velum-900 dark:text-velum-400 dark:hover:bg-velum-800 dark:hover:text-velum-50',
                 ].join(' ')}
               >
                 {it.icon && (

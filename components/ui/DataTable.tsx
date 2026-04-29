@@ -201,7 +201,7 @@ export function DataTable<T>({
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder={searchPlaceholder}
                 aria-label="Filtrar tabla"
-                className="w-full h-9 pl-8 pr-3 text-sm rounded-md border border-velum-200 bg-white text-velum-900 placeholder:text-velum-400 focus:outline-none focus-visible:shadow-focus focus:border-velum-400 transition"
+                className="w-full h-9 pl-8 pr-3 text-sm rounded-md border border-velum-200 bg-white text-velum-900 placeholder:text-velum-400 focus:outline-none focus-visible:shadow-focus focus:border-velum-400 transition dark:bg-velum-900 dark:border-velum-700 dark:text-velum-50 dark:placeholder:text-velum-500 dark:focus:border-velum-500"
               />
             </div>
           )}
@@ -212,12 +212,12 @@ export function DataTable<T>({
       )}
 
       {/* Tabla */}
-      <div className="rounded-lg border border-velum-200 bg-white overflow-hidden">
+      <div className="rounded-lg border border-velum-200 dark:border-velum-800 bg-white dark:bg-velum-900 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm" aria-label={ariaLabel}>
             <thead
               className={[
-                'bg-velum-50 text-velum-700',
+                'bg-velum-50 dark:bg-velum-800/40 text-velum-700 dark:text-velum-300',
                 stickyHeader ? 'sticky top-0 z-[1]' : '',
               ]
                 .filter(Boolean)
@@ -241,7 +241,7 @@ export function DataTable<T>({
                       style={col.width ? { width: col.width } : undefined}
                       className={[
                         s.th,
-                        'text-[11px] font-bold uppercase tracking-widest border-b border-velum-200',
+                        'text-[11px] font-bold uppercase tracking-widest border-b border-velum-200 dark:border-velum-800',
                         col.align === 'right'
                           ? 'text-right'
                           : col.align === 'center'
@@ -256,7 +256,7 @@ export function DataTable<T>({
                         <button
                           type="button"
                           onClick={() => handleSort(col)}
-                          className="inline-flex items-center gap-1.5 hover:text-velum-900 transition-colors duration-fast focus:outline-none focus-visible:shadow-focus rounded"
+                          className="inline-flex items-center gap-1.5 hover:text-velum-900 dark:hover:text-velum-50 transition-colors duration-fast focus:outline-none focus-visible:shadow-focus rounded"
                         >
                           <span>{col.header}</span>
                           {isSorted ? (
@@ -285,15 +285,15 @@ export function DataTable<T>({
                   <td colSpan={colCount} className="px-4 py-12">
                     <div className="flex flex-col items-center text-center gap-2">
                       <AlertCircle size={20} className="text-danger-500" />
-                      <p className="text-sm text-velum-900 font-medium">No se pudo cargar la tabla</p>
-                      <p className="text-xs text-velum-500 max-w-sm">{error}</p>
+                      <p className="text-sm text-velum-900 dark:text-velum-50 font-medium">No se pudo cargar la tabla</p>
+                      <p className="text-xs text-velum-500 dark:text-velum-400 max-w-sm">{error}</p>
                     </div>
                   </td>
                 </tr>
               ) : isLoading ? (
                 /* Estado: loading — 5 filas skeleton del color del sistema */
                 Array.from({ length: 5 }).map((_, i) => (
-                  <tr key={`skl-${i}`} className="border-b border-velum-100 last:border-b-0">
+                  <tr key={`skl-${i}`} className="border-b border-velum-100 dark:border-velum-800 last:border-b-0">
                     {visibleCols.map((col) => (
                       <td key={col.id} className={s.td}>
                         <div className="h-3 rounded skeleton" style={{ maxWidth: '70%' }} />
@@ -346,9 +346,9 @@ export function DataTable<T>({
                       tabIndex={clickable ? 0 : undefined}
                       role={clickable ? 'button' : undefined}
                       className={[
-                        'border-b border-velum-100 last:border-b-0',
+                        'border-b border-velum-100 dark:border-velum-800 last:border-b-0',
                         clickable
-                          ? 'cursor-pointer transition-colors duration-fast hover:bg-velum-50 focus:outline-none focus-visible:bg-velum-100'
+                          ? 'cursor-pointer transition-colors duration-fast hover:bg-velum-50 dark:hover:bg-velum-800/40 focus:outline-none focus-visible:bg-velum-100 dark:focus-visible:bg-velum-800'
                           : '',
                         rowClassName?.(row) ?? '',
                       ]
@@ -362,7 +362,7 @@ export function DataTable<T>({
                             key={col.id}
                             className={[
                               s.td,
-                              'text-velum-700',
+                              'text-velum-700 dark:text-velum-300',
                               col.align === 'right'
                                 ? 'text-right tabular-nums'
                                 : col.align === 'center'

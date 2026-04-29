@@ -80,16 +80,16 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
     >
       {icon && (
         <div
-          className={`flex items-center justify-center rounded-full bg-velum-100 text-velum-500 ${styles.iconBox}`}
+          className={`flex items-center justify-center rounded-full bg-velum-100 text-velum-500 dark:bg-velum-800 dark:text-velum-400 ${styles.iconBox}`}
           aria-hidden="true"
         >
           {icon}
         </div>
       )}
       <div className="flex flex-col gap-1.5 max-w-sm">
-        <h3 className={`font-serif text-velum-900 ${styles.title}`}>{title}</h3>
+        <h3 className={`font-serif text-velum-900 dark:text-velum-50 ${styles.title}`}>{title}</h3>
         {description && (
-          <p className={`text-velum-500 leading-relaxed font-light ${styles.desc}`}>
+          <p className={`text-velum-500 dark:text-velum-400 leading-relaxed font-light ${styles.desc}`}>
             {description}
           </p>
         )}

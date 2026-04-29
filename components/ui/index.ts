@@ -47,6 +47,7 @@ export { MobileBottomNav } from './MobileBottomNav';
 export type { BottomNavItem } from './MobileBottomNav';
 
 export { DensityToggle } from './DensityToggle';
+export { ThemeToggle } from './ThemeToggle';
 
 export {
   CommandPalette,

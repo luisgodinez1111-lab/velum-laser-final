@@ -32,8 +32,10 @@ import { AdminSection, HealthFlag, AgendaPolicyDraft, AgendaTemplatePreset, Sett
 import { AdminSidebarContent, riskOfMember, sectionMeta, weekDayLabel, allowedRoles, NAV_SECTIONS } from './admin/AdminSidebar';
 import { AdminErrorBoundary } from '../components/AdminErrorBoundary';
 import { DensityProvider } from '../context/DensityContext';
+import { ThemeProvider } from '../context/ThemeContext';
 import {
   DensityToggle,
+  ThemeToggle,
   CommandPaletteProvider,
   CommandPalette,
   useCommandPalette,
@@ -102,11 +104,11 @@ const CmdKButton: React.FC = () => {
       type="button"
       onClick={open}
       aria-label={`Buscar (${shortcut})`}
-      className="hidden md:inline-flex items-center gap-2 px-2.5 py-1.5 rounded-lg border border-velum-200 bg-velum-50/60 text-velum-500 text-xs hover:bg-velum-100 hover:text-velum-700 transition-colors duration-base ease-standard focus:outline-none focus-visible:shadow-focus"
+      className="hidden md:inline-flex items-center gap-2 px-2.5 py-1.5 rounded-lg border border-velum-200 bg-velum-50/60 text-velum-500 text-xs hover:bg-velum-100 hover:text-velum-700 transition-colors duration-base ease-standard focus:outline-none focus-visible:shadow-focus dark:border-velum-700 dark:bg-velum-800/50 dark:text-velum-400 dark:hover:bg-velum-800 dark:hover:text-velum-100"
     >
       <Search size={13} aria-hidden="true" />
       <span>Buscar</span>
-      <kbd className="ml-2 px-1.5 py-0.5 text-[10px] font-mono font-semibold tracking-wide text-velum-500 bg-white border border-velum-200 rounded">
+      <kbd className="ml-2 px-1.5 py-0.5 text-[10px] font-mono font-semibold tracking-wide text-velum-500 bg-white border border-velum-200 rounded dark:bg-velum-900 dark:border-velum-700 dark:text-velum-300">
         {shortcut}
       </kbd>
     </button>
@@ -121,7 +123,7 @@ const CmdKButtonMobile: React.FC = () => {
       type="button"
       onClick={open}
       aria-label="Buscar"
-      className="md:hidden p-2 rounded-xl text-velum-400 hover:text-velum-700 hover:bg-velum-50 transition"
+      className="md:hidden p-2 rounded-xl text-velum-400 hover:text-velum-700 hover:bg-velum-50 dark:hover:text-velum-200 dark:hover:bg-velum-800 transition"
     >
       <Search size={18} />
     </button>
@@ -1909,9 +1911,10 @@ export const Admin: React.FC = () => {
   }, [members]);
 
   return (
+    <ThemeProvider>
     <DensityProvider>
     <CommandPaletteProvider>
-    <div className="min-h-screen bg-velum-50 flex">
+    <div className="min-h-screen bg-velum-50 dark:bg-neutral-950 flex">
 
       {/* ── Sidebar desktop (always visible ≥ md) ── */}
       <aside
@@ -1958,31 +1961,32 @@ export const Admin: React.FC = () => {
         style={{ marginLeft: isDesktop ? sidebarPx : 0 }}
       >
         {/* Top bar */}
-        <header className="sticky top-0 z-20 h-14 bg-white border-b border-velum-100 flex items-center justify-between px-5 shrink-0">
+        <header className="sticky top-0 z-20 h-14 bg-white dark:bg-velum-900 border-b border-velum-100 dark:border-velum-800 flex items-center justify-between px-5 shrink-0">
           <div className="flex items-center gap-2">
             {/* Mobile hamburger */}
             <button
               onClick={() => setSidebarOpen((v) => !v)}
-              className="p-2 rounded-xl text-velum-400 hover:text-velum-700 hover:bg-velum-50 transition md:hidden"
+              className="p-2 rounded-xl text-velum-400 hover:text-velum-700 hover:bg-velum-50 dark:text-velum-400 dark:hover:text-velum-200 dark:hover:bg-velum-800 transition md:hidden"
             >
               <Menu size={18} />
             </button>
-            <span className="text-velum-300 text-xs font-medium uppercase tracking-widest hidden sm:block">Admin</span>
-            <ChevronRight size={13} className="text-velum-200 hidden sm:block" />
-            <span className="text-sm font-semibold text-velum-900">{sectionMeta[activeSection].label}</span>
+            <span className="text-velum-300 dark:text-velum-500 text-xs font-medium uppercase tracking-widest hidden sm:block">Admin</span>
+            <ChevronRight size={13} className="text-velum-200 dark:text-velum-600 hidden sm:block" />
+            <span className="text-sm font-semibold text-velum-900 dark:text-velum-50">{sectionMeta[activeSection].label}</span>
           </div>
           <div className="flex items-center gap-2">
             <CmdKButton />
             <CmdKButtonMobile />
+            <ThemeToggle />
             <DensityToggle />
             <button
               onClick={() => void triggerLoadData()}
-              className="p-2 rounded-xl text-velum-400 hover:text-velum-700 hover:bg-velum-50 transition"
+              className="p-2 rounded-xl text-velum-400 hover:text-velum-700 hover:bg-velum-50 dark:hover:text-velum-200 dark:hover:bg-velum-800 transition"
               title="Actualizar datos"
             >
               <RefreshCw size={15} className={isLoadingData ? 'animate-spin' : ''} />
             </button>
-            <div className="w-8 h-8 rounded-full bg-velum-900 flex items-center justify-center text-white text-xs font-bold select-none">
+            <div className="w-8 h-8 rounded-full bg-velum-900 dark:bg-velum-50 flex items-center justify-center text-white dark:text-velum-900 text-xs font-bold select-none">
               {user?.email?.[0]?.toUpperCase() ?? 'A'}
             </div>
           </div>
@@ -2121,5 +2125,6 @@ export const Admin: React.FC = () => {
     </div>
     </CommandPaletteProvider>
     </DensityProvider>
+    </ThemeProvider>
   );
 };

@@ -144,7 +144,7 @@ export const Drawer: React.FC<DrawerProps> = ({
 
   const drawerContent = (
     <div className="fixed inset-0 z-[60] animate-fade-in" onClick={handleBackdropClick}>
-      <div className="absolute inset-0 bg-velum-900/50 backdrop-blur-sm" aria-hidden="true" />
+      <div className="absolute inset-0 bg-velum-900/50 dark:bg-black/70 backdrop-blur-sm" aria-hidden="true" />
       <div
         ref={panelRef}
         role="dialog"
@@ -153,7 +153,7 @@ export const Drawer: React.FC<DrawerProps> = ({
         aria-label={ariaLabel}
         aria-describedby={description ? descId : undefined}
         className={[
-          'absolute bg-white shadow-2xl flex flex-col',
+          'absolute bg-white dark:bg-velum-900 shadow-2xl flex flex-col',
           positionStyles[side],
           sizeStyles[side][size],
           enterAnimation[side],
@@ -166,21 +166,21 @@ export const Drawer: React.FC<DrawerProps> = ({
         {/* Drag handle visual en bottom-sheet (cosmético, no funcional) */}
         {side === 'bottom' && (
           <div className="flex justify-center pt-3 pb-1" aria-hidden="true">
-            <div className="h-1 w-10 rounded-full bg-velum-200" />
+            <div className="h-1 w-10 rounded-full bg-velum-200 dark:bg-velum-700" />
           </div>
         )}
 
         {/* Header */}
         {(title || !hideCloseButton) && (
-          <div className="flex items-start justify-between gap-4 px-6 pt-5 pb-4 border-b border-velum-100">
+          <div className="flex items-start justify-between gap-4 px-6 pt-5 pb-4 border-b border-velum-100 dark:border-velum-800">
             <div className="flex-1 min-w-0">
               {title && (
-                <h2 id={titleId} className="font-serif text-xl text-velum-900 leading-tight">
+                <h2 id={titleId} className="font-serif text-xl text-velum-900 dark:text-velum-50 leading-tight">
                   {title}
                 </h2>
               )}
               {description && (
-                <p id={descId} className="mt-1.5 text-sm text-velum-500 leading-relaxed">
+                <p id={descId} className="mt-1.5 text-sm text-velum-500 dark:text-velum-400 leading-relaxed">
                   {description}
                 </p>
               )}
@@ -202,7 +202,7 @@ export const Drawer: React.FC<DrawerProps> = ({
 
         {/* Footer persistente — útil para "Guardar / Cancelar" siempre visibles */}
         {footer && (
-          <div className="px-6 py-4 border-t border-velum-100 bg-velum-50/50 flex items-center justify-end gap-3">
+          <div className="px-6 py-4 border-t border-velum-100 dark:border-velum-800 bg-velum-50/50 dark:bg-velum-800/30 flex items-center justify-end gap-3">
             {footer}
           </div>
         )}

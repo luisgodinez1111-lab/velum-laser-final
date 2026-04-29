@@ -29,9 +29,9 @@ interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
 }
 
 const variantStyles: Record<CardVariant, string> = {
-  elevated: 'bg-white border border-velum-100 shadow-md',
-  bordered: 'bg-white border border-velum-200 shadow-sm',
-  subtle:   'bg-velum-50 border border-velum-100',
+  elevated: 'bg-white border border-velum-100 shadow-md dark:bg-velum-900 dark:border-velum-800',
+  bordered: 'bg-white border border-velum-200 shadow-sm dark:bg-velum-900 dark:border-velum-800',
+  subtle:   'bg-velum-50 border border-velum-100 dark:bg-velum-800/40 dark:border-velum-800',
 };
 
 // Padding por densidad. `compact` baja un escalón en md/lg para ahorrar
@@ -53,7 +53,7 @@ const paddingStyles: Record<Density, Record<CardPadding, string>> = {
 
 const interactiveStyles =
   'cursor-pointer transition-all duration-base ease-standard ' +
-  'hover:shadow-lg hover:-translate-y-0.5 hover:border-velum-300 ' +
+  'hover:shadow-lg hover:-translate-y-0.5 hover:border-velum-300 dark:hover:border-velum-700 ' +
   'focus:outline-none focus-visible:shadow-focus active:translate-y-0';
 
 export const Card = forwardRef<HTMLDivElement, CardProps>(
@@ -104,7 +104,7 @@ export const CardHeader: React.FC<React.HTMLAttributes<HTMLDivElement>> = ({
   ...props
 }) => (
   <div
-    className={['mb-4 pb-4 border-b border-velum-100', className].filter(Boolean).join(' ')}
+    className={['mb-4 pb-4 border-b border-velum-100 dark:border-velum-800', className].filter(Boolean).join(' ')}
     {...props}
   />
 );
@@ -114,7 +114,7 @@ export const CardTitle: React.FC<React.HTMLAttributes<HTMLHeadingElement>> = ({
   ...props
 }) => (
   <h3
-    className={['font-serif text-xl text-velum-900 leading-tight', className].filter(Boolean).join(' ')}
+    className={['font-serif text-xl text-velum-900 dark:text-velum-50 leading-tight', className].filter(Boolean).join(' ')}
     {...props}
   />
 );
@@ -124,7 +124,7 @@ export const CardDescription: React.FC<React.HTMLAttributes<HTMLParagraphElement
   ...props
 }) => (
   <p
-    className={['mt-1.5 text-sm text-velum-500 leading-relaxed', className].filter(Boolean).join(' ')}
+    className={['mt-1.5 text-sm text-velum-500 dark:text-velum-400 leading-relaxed', className].filter(Boolean).join(' ')}
     {...props}
   />
 );
@@ -134,7 +134,7 @@ export const CardFooter: React.FC<React.HTMLAttributes<HTMLDivElement>> = ({
   ...props
 }) => (
   <div
-    className={['mt-6 pt-4 border-t border-velum-100 flex items-center justify-end gap-3', className]
+    className={['mt-6 pt-4 border-t border-velum-100 dark:border-velum-800 flex items-center justify-end gap-3', className]
       .filter(Boolean)
       .join(' ')}
     {...props}

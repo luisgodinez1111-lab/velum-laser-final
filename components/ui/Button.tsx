@@ -39,19 +39,26 @@ const variantStyles: Record<ButtonVariant, string> = {
     'bg-velum-900 text-velum-50 border border-velum-900 ' +
     'hover:bg-velum-800 hover:border-velum-800 ' +
     'active:scale-[0.98] active:bg-velum-900 ' +
-    'shadow-sm hover:shadow-md',
+    'shadow-sm hover:shadow-md ' +
+    'dark:bg-velum-50 dark:text-velum-900 dark:border-velum-50 ' +
+    'dark:hover:bg-velum-200 dark:hover:border-velum-200',
   secondary:
     'bg-velum-100 text-velum-900 border border-velum-200 ' +
     'hover:bg-velum-200 hover:border-velum-300 ' +
-    'active:scale-[0.98]',
+    'active:scale-[0.98] ' +
+    'dark:bg-velum-800 dark:text-velum-50 dark:border-velum-700 ' +
+    'dark:hover:bg-velum-700 dark:hover:border-velum-600',
   outline:
     'bg-transparent text-velum-900 border border-velum-900 ' +
     'hover:bg-velum-900 hover:text-velum-50 ' +
-    'active:scale-[0.98]',
+    'active:scale-[0.98] ' +
+    'dark:text-velum-50 dark:border-velum-300 ' +
+    'dark:hover:bg-velum-50 dark:hover:text-velum-900',
   ghost:
     'bg-transparent text-velum-700 border border-transparent ' +
     'hover:bg-velum-100 hover:text-velum-900 ' +
-    'active:scale-[0.98]',
+    'active:scale-[0.98] ' +
+    'dark:text-velum-300 dark:hover:bg-velum-800 dark:hover:text-velum-50',
   danger:
     'bg-danger-500 text-white border border-danger-500 ' +
     'hover:bg-danger-700 hover:border-danger-700 ' +

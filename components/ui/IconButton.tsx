@@ -25,16 +25,20 @@ const baseStyles =
 
 const variantStyles: Record<ButtonVariant, string> = {
   primary:
-    'bg-velum-900 text-velum-50 border border-velum-900 hover:bg-velum-800 active:scale-[0.95] shadow-sm hover:shadow-md',
+    'bg-velum-900 text-velum-50 border border-velum-900 hover:bg-velum-800 active:scale-[0.95] shadow-sm hover:shadow-md ' +
+    'dark:bg-velum-50 dark:text-velum-900 dark:border-velum-50 dark:hover:bg-velum-200',
   secondary:
-    'bg-velum-100 text-velum-900 border border-velum-200 hover:bg-velum-200 active:scale-[0.95]',
+    'bg-velum-100 text-velum-900 border border-velum-200 hover:bg-velum-200 active:scale-[0.95] ' +
+    'dark:bg-velum-800 dark:text-velum-50 dark:border-velum-700 dark:hover:bg-velum-700',
   outline:
-    'bg-transparent text-velum-900 border border-velum-300 hover:bg-velum-900 hover:text-velum-50 hover:border-velum-900 active:scale-[0.95]',
+    'bg-transparent text-velum-900 border border-velum-300 hover:bg-velum-900 hover:text-velum-50 hover:border-velum-900 active:scale-[0.95] ' +
+    'dark:text-velum-50 dark:border-velum-700 dark:hover:bg-velum-50 dark:hover:text-velum-900 dark:hover:border-velum-50',
   ghost:
-    'bg-transparent text-velum-700 hover:bg-velum-100 hover:text-velum-900 active:scale-[0.95]',
+    'bg-transparent text-velum-700 hover:bg-velum-100 hover:text-velum-900 active:scale-[0.95] ' +
+    'dark:text-velum-300 dark:hover:bg-velum-800 dark:hover:text-velum-50',
   danger:
     'bg-danger-500 text-white border border-danger-500 hover:bg-danger-700 active:scale-[0.95] focus-visible:shadow-focusDanger',
-  link: 'bg-transparent text-velum-900 hover:text-velum-600',
+  link: 'bg-transparent text-velum-900 hover:text-velum-600 dark:text-velum-50 dark:hover:text-velum-300',
 };
 
 const sizeStyles: Record<IconButtonSize, string> = {

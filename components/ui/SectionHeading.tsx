@@ -43,9 +43,9 @@ export const SectionHeading: React.FC<SectionHeadingProps> = ({
   >
     <Tag
       id={id}
-      className="text-[11px] font-bold uppercase tracking-widest text-velum-500 flex items-center gap-2 scroll-mt-20"
+      className="text-[11px] font-bold uppercase tracking-widest text-velum-500 dark:text-velum-400 flex items-center gap-2 scroll-mt-20"
     >
-      {icon && <span aria-hidden="true" className="text-velum-400">{icon}</span>}
+      {icon && <span aria-hidden="true" className="text-velum-400 dark:text-velum-500">{icon}</span>}
       {children}
     </Tag>
     {actions && <div className="flex items-center gap-2 shrink-0">{actions}</div>}

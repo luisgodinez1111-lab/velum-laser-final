@@ -58,13 +58,15 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(
 
     const inputClasses = [
       'w-full bg-white text-velum-900 placeholder:text-velum-400',
+      'dark:bg-velum-900 dark:text-velum-50 dark:placeholder:text-velum-500',
       'border rounded-md transition-all duration-base ease-standard',
       'focus:outline-none focus-visible:shadow-focus',
       'disabled:bg-velum-50 disabled:text-velum-400 disabled:cursor-not-allowed',
+      'dark:disabled:bg-velum-800/40 dark:disabled:text-velum-500',
       sizeStyles[size].input,
       hasError
         ? 'border-danger-500 focus-visible:shadow-focusDanger'
-        : 'border-velum-200 hover:border-velum-300 focus:border-velum-900',
+        : 'border-velum-200 hover:border-velum-300 focus:border-velum-900 dark:border-velum-700 dark:hover:border-velum-600 dark:focus:border-velum-400',
       prefix ? 'pl-10' : '',
       suffix ? 'pr-10' : '',
     ]
@@ -76,7 +78,7 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(
         {label && (
           <label
             htmlFor={id}
-            className="text-[11px] font-bold uppercase tracking-widest text-velum-700"
+            className="text-[11px] font-bold uppercase tracking-widest text-velum-700 dark:text-velum-300"
           >
             {label}
             {required && !hideRequiredAsterisk && (
@@ -87,7 +89,7 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(
 
         <div className="relative">
           {prefix && (
-            <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-velum-400" aria-hidden="true">
+            <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-velum-400 dark:text-velum-500" aria-hidden="true">
               {prefix}
             </div>
           )}
@@ -102,7 +104,7 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(
             {...props}
           />
           {suffix && (
-            <div className="absolute inset-y-0 right-0 flex items-center pr-3 text-velum-400">
+            <div className="absolute inset-y-0 right-0 flex items-center pr-3 text-velum-400 dark:text-velum-500">
               {suffix}
             </div>
           )}
@@ -114,7 +116,7 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(
           </p>
         )}
         {!error && helperText && (
-          <p id={helperId} className="text-xs text-velum-500 leading-tight">
+          <p id={helperId} className="text-xs text-velum-500 dark:text-velum-400 leading-tight">
             {helperText}
           </p>
         )}

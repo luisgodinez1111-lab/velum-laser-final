@@ -139,7 +139,7 @@ export const Modal: React.FC<ModalProps> = ({
       onClick={handleBackdropClick}
     >
       {/* Backdrop con blur */}
-      <div className="absolute inset-0 bg-velum-900/60 backdrop-blur-sm" aria-hidden="true" />
+      <div className="absolute inset-0 bg-velum-900/60 dark:bg-black/70 backdrop-blur-sm" aria-hidden="true" />
 
       {/* Panel */}
       <div
@@ -150,7 +150,7 @@ export const Modal: React.FC<ModalProps> = ({
         aria-label={ariaLabel}
         aria-describedby={description ? descId : undefined}
         className={[
-          'relative w-full bg-white rounded-xl shadow-xl border border-velum-100',
+          'relative w-full bg-white dark:bg-velum-900 rounded-xl shadow-xl border border-velum-100 dark:border-velum-800',
           'flex flex-col max-h-[90vh] overflow-hidden',
           'animate-scale-in',
           sizeStyles[size],
@@ -161,15 +161,15 @@ export const Modal: React.FC<ModalProps> = ({
       >
         {/* Header */}
         {(title || !hideCloseButton) && (
-          <div className="flex items-start justify-between gap-4 px-6 pt-6 pb-4 border-b border-velum-100">
+          <div className="flex items-start justify-between gap-4 px-6 pt-6 pb-4 border-b border-velum-100 dark:border-velum-800">
             <div className="flex-1 min-w-0">
               {title && (
-                <h2 id={titleId} className="font-serif text-xl text-velum-900 leading-tight">
+                <h2 id={titleId} className="font-serif text-xl text-velum-900 dark:text-velum-50 leading-tight">
                   {title}
                 </h2>
               )}
               {description && (
-                <p id={descId} className="mt-1.5 text-sm text-velum-500 leading-relaxed">
+                <p id={descId} className="mt-1.5 text-sm text-velum-500 dark:text-velum-400 leading-relaxed">
                   {description}
                 </p>
               )}
@@ -204,7 +204,7 @@ export const ModalFooter: React.FC<React.HTMLAttributes<HTMLDivElement>> = ({
 }) => (
   <div
     className={[
-      'flex items-center justify-end gap-3 px-6 py-4 border-t border-velum-100 bg-velum-50/50 -mx-6 -mb-5 mt-6',
+      'flex items-center justify-end gap-3 px-6 py-4 border-t border-velum-100 dark:border-velum-800 bg-velum-50/50 dark:bg-velum-800/30 -mx-6 -mb-5 mt-6',
       className,
     ]
       .filter(Boolean)

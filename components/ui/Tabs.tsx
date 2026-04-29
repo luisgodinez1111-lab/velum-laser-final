@@ -76,9 +76,9 @@ export const TabsList: React.FC<TabsListProps> = ({
   fullWidth = false,
 }) => {
   const variantClass: Record<NonNullable<TabsListProps['variant']>, string> = {
-    underline:  'border-b border-velum-200 gap-1',
-    pills:      'gap-1.5 p-1 bg-velum-100 rounded-lg',
-    segmented:  'border border-velum-200 rounded-lg overflow-hidden divide-x divide-velum-200',
+    underline:  'border-b border-velum-200 dark:border-velum-800 gap-1',
+    pills:      'gap-1.5 p-1 bg-velum-100 dark:bg-velum-800/40 rounded-lg',
+    segmented:  'border border-velum-200 dark:border-velum-800 rounded-lg overflow-hidden divide-x divide-velum-200 dark:divide-velum-800',
   };
 
   return (
@@ -176,13 +176,13 @@ export const TabsTrigger: React.FC<TabsTriggerProps> = ({
         // Para underline:
         'data-[variant=underline]:border-b-2 data-[variant=underline]:-mb-px',
         isActive
-          ? 'text-velum-900 group-data-[variant=underline]:border-velum-900'
-          : 'text-velum-500 hover:text-velum-900',
+          ? 'text-velum-900 dark:text-velum-50 group-data-[variant=underline]:border-velum-900 dark:group-data-[variant=underline]:border-velum-50'
+          : 'text-velum-500 hover:text-velum-900 dark:text-velum-400 dark:hover:text-velum-50',
         // Pills variant
         'group-data-[variant=pills]:rounded-md',
-        isActive ? 'group-data-[variant=pills]:bg-white group-data-[variant=pills]:shadow-sm' : '',
+        isActive ? 'group-data-[variant=pills]:bg-white group-data-[variant=pills]:shadow-sm dark:group-data-[variant=pills]:bg-velum-700' : '',
         // Segmented variant
-        isActive ? 'group-data-[variant=segmented]:bg-velum-900 group-data-[variant=segmented]:text-velum-50' : '',
+        isActive ? 'group-data-[variant=segmented]:bg-velum-900 group-data-[variant=segmented]:text-velum-50 dark:group-data-[variant=segmented]:bg-velum-50 dark:group-data-[variant=segmented]:text-velum-900' : '',
         className,
       ]
         .filter(Boolean)
