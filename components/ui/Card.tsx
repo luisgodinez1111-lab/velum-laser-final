@@ -1,4 +1,5 @@
 import React, { forwardRef } from 'react';
+import { useDensity, type Density } from '../../context/DensityContext';
 
 // Card — superficie genérica para agrupar contenido relacionado.
 //
@@ -10,6 +11,9 @@ import React, { forwardRef } from 'react';
 //   (típico en grid de membresías, tarjetas de pacientes, etc.).
 // - padding como prop separado — algunos casos quieren padding cero (cards
 //   con imagen full-bleed arriba).
+// - density: hereda del DensityContext si no se pasa explícito. En modo
+//   `compact` el padding `md` y `lg` se reducen un escalón para vistas admin
+//   con alta densidad de datos. `none` y `sm` no cambian.
 // - asChild no implementado para mantener simplicidad — si se necesita Link
 //   wrapper, hacer <Link><Card>...</Card></Link>.
 
@@ -20,6 +24,8 @@ interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
   variant?: CardVariant;
   padding?: CardPadding;
   interactive?: boolean;
+  /** Override del DensityContext. Si se omite, hereda. */
+  density?: Density;
 }
 
 const variantStyles: Record<CardVariant, string> = {
@@ -28,11 +34,21 @@ const variantStyles: Record<CardVariant, string> = {
   subtle:   'bg-velum-50 border border-velum-100',
 };
 
-const paddingStyles: Record<CardPadding, string> = {
-  none: 'p-0',
-  sm:   'p-4',
-  md:   'p-6',
-  lg:   'p-8',
+// Padding por densidad. `compact` baja un escalón en md/lg para ahorrar
+// vertical en tablas admin sin volver el contenido cramped.
+const paddingStyles: Record<Density, Record<CardPadding, string>> = {
+  comfortable: {
+    none: 'p-0',
+    sm:   'p-4',
+    md:   'p-6',
+    lg:   'p-8',
+  },
+  compact: {
+    none: 'p-0',
+    sm:   'p-3',
+    md:   'p-4',
+    lg:   'p-6',
+  },
 };
 
 const interactiveStyles =
@@ -46,30 +62,35 @@ export const Card = forwardRef<HTMLDivElement, CardProps>(
       variant = 'bordered',
       padding = 'md',
       interactive = false,
+      density,
       className = '',
       children,
       tabIndex,
       ...props
     },
     ref,
-  ) => (
-    <div
-      ref={ref}
-      className={[
-        'rounded-lg',
-        variantStyles[variant],
-        paddingStyles[padding],
-        interactive ? interactiveStyles : '',
-        className,
-      ]
-        .filter(Boolean)
-        .join(' ')}
-      tabIndex={interactive && tabIndex === undefined ? 0 : tabIndex}
-      {...props}
-    >
-      {children}
-    </div>
-  ),
+  ) => {
+    const ctxDensity = useDensity();
+    const effectiveDensity = density ?? ctxDensity;
+    return (
+      <div
+        ref={ref}
+        className={[
+          'rounded-lg',
+          variantStyles[variant],
+          paddingStyles[effectiveDensity][padding],
+          interactive ? interactiveStyles : '',
+          className,
+        ]
+          .filter(Boolean)
+          .join(' ')}
+        tabIndex={interactive && tabIndex === undefined ? 0 : tabIndex}
+        {...props}
+      >
+        {children}
+      </div>
+    );
+  },
 );
 
 Card.displayName = 'Card';

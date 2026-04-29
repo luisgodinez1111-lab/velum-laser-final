@@ -45,3 +45,5 @@ export type { BreadcrumbItem } from './PageHeader';
 
 export { MobileBottomNav } from './MobileBottomNav';
 export type { BottomNavItem } from './MobileBottomNav';
+
+export { DensityToggle } from './DensityToggle';

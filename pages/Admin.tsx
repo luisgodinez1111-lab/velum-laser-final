@@ -29,6 +29,8 @@ import { AuditLogEntry, Member, UserRole } from '../types';
 import { AdminSection, HealthFlag, AgendaPolicyDraft, AgendaTemplatePreset, SettingsCategory, ControlAlert } from './admin/adminTypes';
 import { AdminSidebarContent, riskOfMember, sectionMeta, weekDayLabel, allowedRoles } from './admin/AdminSidebar';
 import { AdminErrorBoundary } from '../components/AdminErrorBoundary';
+import { DensityProvider } from '../context/DensityContext';
+import { DensityToggle } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
 import { memberService, auditService } from '../services/dataService';
 import { SessionTreatment, SessionCreatePayload, MedicalIntake } from '../services/clinicalService';
@@ -1798,6 +1800,7 @@ export const Admin: React.FC = () => {
   // para evitar que React lo trate como tipo nuevo en cada render.
 
   return (
+    <DensityProvider>
     <div className="min-h-screen bg-velum-50 flex">
 
       {/* ── Sidebar desktop (always visible ≥ md) ── */}
@@ -1859,6 +1862,7 @@ export const Admin: React.FC = () => {
             <span className="text-sm font-semibold text-velum-900">{sectionMeta[activeSection].label}</span>
           </div>
           <div className="flex items-center gap-2">
+            <DensityToggle />
             <button
               onClick={() => void triggerLoadData()}
               className="p-2 rounded-xl text-velum-400 hover:text-velum-700 hover:bg-velum-50 transition"
@@ -2000,5 +2004,6 @@ export const Admin: React.FC = () => {
         );
       })()}
     </div>
+    </DensityProvider>
   );
 };
