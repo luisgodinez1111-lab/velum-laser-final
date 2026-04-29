@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { CheckCircle2, XCircle } from 'lucide-react';
 import { Member } from '../types';
 import { Pill } from './adminSharedComponents';
 import { intakeStatusLabel } from './adminUtils';
+import { DataTable, type Column } from '../components/ui';
 
 interface Props {
   members: Member[];
@@ -89,49 +90,118 @@ export const AdminExpedientesSection: React.FC<Props> = ({
       )}
 
       {/* Full table */}
-      <div>
-        <h2 className="text-xs font-bold uppercase tracking-widest text-velum-500 mb-3">Todos los expedientes</h2>
-        <div className="bg-white rounded-2xl border border-velum-100 overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-velum-100 bg-velum-50/50">
-                  {['Socio', 'Consentimiento', 'Estado expediente', 'Docs', 'Acciones'].map((h) => (
-                    <th key={h} className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-widest text-velum-400">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {members.map((m, i) => {
-                  const intake = intakeStatusLabel(m.intakeStatus);
-                  return (
-                    <tr key={m.id} className={`hover:bg-velum-50 transition ${i < members.length - 1 ? 'border-b border-velum-50' : ''}`}>
-                      <td className="px-4 py-3">
-                        <p className="font-medium text-velum-900">{m.name}</p>
-                        <p className="text-xs text-velum-400">{m.email}</p>
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className={`inline-flex items-center gap-1 text-xs font-medium ${m.clinical?.consentFormSigned ? 'text-emerald-600' : 'text-velum-400'}`}>
-                          {m.clinical?.consentFormSigned ? <CheckCircle2 size={13} /> : <XCircle size={13} />}
-                          {m.clinical?.consentFormSigned ? 'Firmado' : 'Pendiente'}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3"><Pill label={intake.label} cls={intake.cls} /></td>
-                      <td className="px-4 py-3 text-velum-500">{m.clinical?.documents?.length ?? 0}</td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-3">
-                          <button onClick={() => onOpenIntake(m)} className="text-xs text-velum-900 font-semibold hover:underline transition">Ver expediente</button>
-                          <button onClick={() => onOpenMember(m)} className="text-xs text-velum-400 hover:text-velum-700 transition">Perfil</button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+      <ExpedientesTable
+        members={members}
+        onOpenIntake={onOpenIntake}
+        onOpenMember={onOpenMember}
+      />
+    </div>
+  );
+};
+
+// ── Tabla de expedientes con DataTable ─────────────────────────────────────
+interface ExpedientesTableProps {
+  members: Member[];
+  onOpenIntake: (m: Member) => void;
+  onOpenMember: (m: Member) => void;
+}
+
+const ExpedientesTable: React.FC<ExpedientesTableProps> = ({
+  members,
+  onOpenIntake,
+  onOpenMember,
+}) => {
+  const columns = useMemo<Column<Member>[]>(
+    () => [
+      {
+        id: 'socio',
+        header: 'Socio',
+        accessor: (m) => m.name ?? m.email ?? '',
+        sortable: true,
+        cell: (m) => (
+          <div>
+            <p className="font-medium text-velum-900">{m.name}</p>
+            <p className="text-xs text-velum-400">{m.email}</p>
           </div>
-        </div>
-      </div>
+        ),
+      },
+      {
+        id: 'consentimiento',
+        header: 'Consentimiento',
+        accessor: (m) => (m.clinical?.consentFormSigned ? 1 : 0),
+        sortable: true,
+        cell: (m) => (
+          <span
+            className={`inline-flex items-center gap-1 text-xs font-medium ${m.clinical?.consentFormSigned ? 'text-emerald-600' : 'text-velum-400'}`}
+          >
+            {m.clinical?.consentFormSigned ? <CheckCircle2 size={13} /> : <XCircle size={13} />}
+            {m.clinical?.consentFormSigned ? 'Firmado' : 'Pendiente'}
+          </span>
+        ),
+      },
+      {
+        id: 'expediente',
+        header: 'Estado expediente',
+        accessor: (m) => intakeStatusLabel(m.intakeStatus).label,
+        sortable: true,
+        cell: (m) => {
+          const intake = intakeStatusLabel(m.intakeStatus);
+          return <Pill label={intake.label} cls={intake.cls} />;
+        },
+      },
+      {
+        id: 'docs',
+        header: 'Docs',
+        accessor: (m) => m.clinical?.documents?.length ?? 0,
+        sortable: true,
+        align: 'right',
+        cell: (m) => <span className="text-velum-500">{m.clinical?.documents?.length ?? 0}</span>,
+      },
+      {
+        id: 'acciones',
+        header: 'Acciones',
+        accessor: () => null,
+        cell: (m) => (
+          <div className="flex items-center gap-3">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onOpenIntake(m);
+              }}
+              className="text-xs text-velum-900 font-semibold hover:underline transition"
+            >
+              Ver expediente
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onOpenMember(m);
+              }}
+              className="text-xs text-velum-400 hover:text-velum-700 transition"
+            >
+              Perfil
+            </button>
+          </div>
+        ),
+      },
+    ],
+    [onOpenIntake, onOpenMember],
+  );
+
+  return (
+    <div>
+      <h2 className="text-xs font-bold uppercase tracking-widest text-velum-500 mb-3">
+        Todos los expedientes
+      </h2>
+      <DataTable
+        aria-label="Todos los expedientes"
+        data={members}
+        columns={columns}
+        rowKey={(m) => m.id}
+        searchable
+        searchPlaceholder="Buscar por nombre o correo..."
+        empty={{ title: 'Sin expedientes', description: 'No hay socios registrados todavía.' }}
+      />
     </div>
   );
 };

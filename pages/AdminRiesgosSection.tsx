@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { AlertTriangle, CircleAlert, ShieldCheck, Activity } from 'lucide-react';
-import { Member, AuditLogEntry } from '../types';
+import { Member } from '../types';
 import { KpiCard, Pill } from './adminSharedComponents';
 import { riskOfMember, statusLabel, statusPill, intakeStatusLabel } from './adminUtils';
+import { DataTable, type Column } from '../components/ui';
 
 interface Props {
   members: Member[];
@@ -10,9 +11,105 @@ interface Props {
   onOpenMember: (m: Member) => void;
 }
 
+// Orden numérico para sort por nivel de riesgo: critical > warning > ok.
+const riskRank: Record<'ok' | 'warning' | 'critical', number> = {
+  critical: 0,
+  warning: 1,
+  ok: 2,
+};
+
 export const AdminRiesgosSection: React.FC<Props> = ({ members, failedAudits, onOpenMember }) => {
-  const critical = members.filter((m) => riskOfMember(m) === 'critical');
-  const warning = members.filter((m) => riskOfMember(m) === 'warning');
+  const critical = useMemo(() => members.filter((m) => riskOfMember(m) === 'critical'), [members]);
+  const warning = useMemo(() => members.filter((m) => riskOfMember(m) === 'warning'), [members]);
+
+  const atRisk = useMemo(() => [...critical, ...warning], [critical, warning]);
+
+  const columns = useMemo<Column<Member>[]>(
+    () => [
+      {
+        id: 'socio',
+        header: 'Socio',
+        accessor: (m) => m.name ?? m.email ?? '',
+        sortable: true,
+        cell: (m) => (
+          <div>
+            <p className="font-medium text-velum-900">{m.name}</p>
+            <p className="text-xs text-velum-400">{m.email}</p>
+          </div>
+        ),
+      },
+      {
+        id: 'estado',
+        header: 'Estado',
+        accessor: (m) => m.subscriptionStatus ?? '',
+        sortable: true,
+        cell: (m) => (
+          <Pill label={statusLabel(m.subscriptionStatus)} cls={statusPill(m.subscriptionStatus)} />
+        ),
+      },
+      {
+        id: 'consentimiento',
+        header: 'Consentimiento',
+        accessor: (m) => (m.clinical?.consentFormSigned ? 1 : 0),
+        sortable: true,
+        cell: (m) => (
+          <span
+            className={`text-xs font-medium ${m.clinical?.consentFormSigned ? 'text-emerald-600' : 'text-red-500'}`}
+          >
+            {m.clinical?.consentFormSigned ? 'Firmado' : 'Sin firma'}
+          </span>
+        ),
+      },
+      {
+        id: 'expediente',
+        header: 'Expediente',
+        accessor: (m) => intakeStatusLabel(m.intakeStatus).label,
+        sortable: true,
+        cell: (m) => {
+          const intake = intakeStatusLabel(m.intakeStatus);
+          return <Pill label={intake.label} cls={intake.cls} />;
+        },
+      },
+      {
+        id: 'nivel',
+        header: 'Nivel',
+        accessor: (m) => riskRank[riskOfMember(m)],
+        sortable: true,
+        cell: (m) => {
+          const risk = riskOfMember(m);
+          return (
+            <span
+              className={`inline-flex items-center gap-1.5 text-xs font-bold ${
+                risk === 'critical' ? 'text-red-600' : 'text-amber-600'
+              }`}
+            >
+              <span
+                className={`w-2 h-2 rounded-full ${risk === 'critical' ? 'bg-red-500' : 'bg-amber-400'}`}
+              />
+              {risk === 'critical' ? 'Crítico' : 'Atención'}
+            </span>
+          );
+        },
+      },
+      {
+        id: 'acciones',
+        header: 'Acciones',
+        accessor: () => null,
+        cell: (m) => (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpenMember(m);
+            }}
+            className="text-xs text-velum-600 hover:text-velum-900 transition font-medium"
+          >
+            Ver perfil
+          </button>
+        ),
+      },
+    ],
+    [onOpenMember],
+  );
 
   return (
     <div className="space-y-6">
@@ -26,56 +123,18 @@ export const AdminRiesgosSection: React.FC<Props> = ({ members, failedAudits, on
         <KpiCard icon={<ShieldCheck size={18} />} label="Sin consentimiento" value={members.filter((m) => !m.clinical?.consentFormSigned).length} />
         <KpiCard icon={<Activity size={18} />} label="Eventos fallidos" value={failedAudits} accent={failedAudits > 0 ? 'text-red-600' : 'text-velum-900'} />
       </div>
-      <div className="bg-white rounded-2xl border border-velum-100 overflow-hidden">
-        {critical.length === 0 && warning.length === 0 ? (
-          <div className="py-16 text-center">
-            <ShieldCheck size={32} className="mx-auto text-emerald-300 mb-3" />
-            <p className="text-sm text-velum-400">No hay socios en situación de riesgo</p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-velum-100 bg-velum-50/50">
-                  {['Socio', 'Estado', 'Consentimiento', 'Expediente', 'Nivel', 'Acciones'].map((h) => (
-                    <th key={h} className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-widest text-velum-400">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {[...critical, ...warning].map((m, i) => {
-                  const risk = riskOfMember(m);
-                  const intake = intakeStatusLabel(m.intakeStatus);
-                  return (
-                    <tr key={m.id} className={`hover:bg-velum-50 transition ${i < critical.length + warning.length - 1 ? 'border-b border-velum-50' : ''} ${risk === 'critical' ? 'bg-red-50/30' : ''}`}>
-                      <td className="px-4 py-3">
-                        <p className="font-medium text-velum-900">{m.name}</p>
-                        <p className="text-xs text-velum-400">{m.email}</p>
-                      </td>
-                      <td className="px-4 py-3"><Pill label={statusLabel(m.subscriptionStatus)} cls={statusPill(m.subscriptionStatus)} /></td>
-                      <td className="px-4 py-3">
-                        <span className={`text-xs font-medium ${m.clinical?.consentFormSigned ? 'text-emerald-600' : 'text-red-500'}`}>
-                          {m.clinical?.consentFormSigned ? 'Firmado' : 'Sin firma'}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3"><Pill label={intake.label} cls={intake.cls} /></td>
-                      <td className="px-4 py-3">
-                        <span className={`inline-flex items-center gap-1.5 text-xs font-bold ${risk === 'critical' ? 'text-red-600' : 'text-amber-600'}`}>
-                          <span className={`w-2 h-2 rounded-full ${risk === 'critical' ? 'bg-red-500' : 'bg-amber-400'}`} />
-                          {risk === 'critical' ? 'Crítico' : 'Atención'}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <button onClick={() => onOpenMember(m)} className="text-xs text-velum-600 hover:text-velum-900 transition font-medium">Ver perfil</button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+      <DataTable
+        aria-label="Socios en situación de riesgo"
+        data={atRisk}
+        columns={columns}
+        rowKey={(m) => m.id}
+        rowClassName={(m) => (riskOfMember(m) === 'critical' ? 'bg-red-50/30' : '')}
+        defaultSort={{ id: 'nivel', dir: 'asc' }}
+        empty={{
+          title: 'Sin socios en riesgo',
+          description: 'Todos los socios están al corriente con consentimiento y suscripción.',
+        }}
+      />
     </div>
   );
 };

@@ -55,6 +55,8 @@ interface DataTableProps<T> {
   rowKey: (row: T) => string;
   /** Si se pasa, las filas son clickeables con focus ring. */
   onRowClick?: (row: T) => void;
+  /** Clase adicional por fila (ej: bg-red-50/30 para riesgos críticos). */
+  rowClassName?: (row: T) => string | undefined;
   /** Activa búsqueda global en la toolbar. */
   searchable?: boolean;
   searchPlaceholder?: string;
@@ -111,6 +113,7 @@ export function DataTable<T>({
   columns,
   rowKey,
   onRowClick,
+  rowClassName,
   searchable = false,
   searchPlaceholder = 'Buscar...',
   stickyHeader = true,
@@ -347,6 +350,7 @@ export function DataTable<T>({
                         clickable
                           ? 'cursor-pointer transition-colors duration-fast hover:bg-velum-50 focus:outline-none focus-visible:bg-velum-100'
                           : '',
+                        rowClassName?.(row) ?? '',
                       ]
                         .filter(Boolean)
                         .join(' ')}

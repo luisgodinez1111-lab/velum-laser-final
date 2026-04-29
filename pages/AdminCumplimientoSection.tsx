@@ -1,8 +1,9 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { RefreshCw, CheckCheck, AlertTriangle, Activity, Users, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import { AuditLogEntry } from '../types';
 import { KpiCard } from './adminSharedComponents';
 import { apiFetch } from '../services/apiClient';
+import { DataTable, type Column } from '../components/ui';
 
 interface Props {
   expedientesFirmados: number;
@@ -52,6 +53,73 @@ export const AdminCumplimientoSection: React.FC<Props> = ({
     void loadLogs(page);
   };
 
+  const auditColumns = useMemo<Column<AuditLogEntry>[]>(
+    () => [
+      {
+        id: 'timestamp',
+        header: 'Timestamp',
+        accessor: (log) => new Date(log.timestamp).getTime(),
+        sortable: true,
+        cell: (log) => (
+          <span className="text-velum-400 whitespace-nowrap font-mono">
+            {new Date(log.timestamp).toLocaleString('es-MX', {
+              day: '2-digit',
+              month: '2-digit',
+              hour: '2-digit',
+              minute: '2-digit',
+            })}
+          </span>
+        ),
+      },
+      {
+        id: 'usuario',
+        header: 'Usuario',
+        accessor: (log) => log.user ?? '',
+        sortable: true,
+        cell: (log) => (
+          <span className="text-velum-700 max-w-[140px] truncate inline-block">
+            {log.user ?? '—'}
+          </span>
+        ),
+      },
+      {
+        id: 'accion',
+        header: 'Acción',
+        accessor: (log) => log.action,
+        sortable: true,
+        cell: (log) => (
+          <span className="text-velum-500 font-mono max-w-[200px] truncate inline-block">
+            {log.action}
+          </span>
+        ),
+      },
+      {
+        id: 'ip',
+        header: 'IP',
+        accessor: (log) => log.ip ?? '',
+        sortable: true,
+        cell: (log) => <span className="text-velum-400 font-mono">{log.ip ?? '—'}</span>,
+      },
+      {
+        id: 'estado',
+        header: 'Estado',
+        accessor: (log) => log.status,
+        sortable: true,
+        cell: (log) => (
+          <span
+            className={`inline-flex items-center gap-1 text-xs font-medium ${log.status === 'success' ? 'text-emerald-600' : 'text-red-600'}`}
+          >
+            <span
+              className={`w-1.5 h-1.5 rounded-full ${log.status === 'success' ? 'bg-emerald-500' : 'bg-red-500'}`}
+            />
+            {log.status === 'success' ? 'OK' : 'ERROR'}
+          </span>
+        ),
+      },
+    ],
+    [],
+  );
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -69,59 +137,42 @@ export const AdminCumplimientoSection: React.FC<Props> = ({
         <KpiCard icon={<Activity size={18} />} label="Eventos sensibles" value={sensitiveEvents} />
         <KpiCard icon={<Users size={18} />} label="Usuarios con acceso" value={staffCount} />
       </div>
-      <div className="bg-white rounded-2xl border border-velum-100 overflow-hidden">
-        <div className="px-5 py-4 border-b border-velum-100 flex items-center justify-between">
+      {/* Bitácora */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
           <p className="text-xs font-bold uppercase tracking-widest text-velum-500">Bitácora de auditoría</p>
-          {!loaded && (
-            <button onClick={() => void loadLogs(1)}
-              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-xl bg-velum-900 text-white hover:bg-velum-800 transition">
-              <Activity size={11} /> Cargar bitácora
-            </button>
-          )}
-          {loading && <Loader2 size={14} className="animate-spin text-velum-400" />}
-        </div>
-        {error && (
-          <div className="flex items-center gap-2 m-4 p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs">
-            <AlertTriangle size={13} /> {error}
+          <div className="flex items-center gap-2">
+            {!loaded && (
+              <button onClick={() => void loadLogs(1)}
+                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-xl bg-velum-900 text-white hover:bg-velum-800 transition">
+                <Activity size={11} /> Cargar bitácora
+              </button>
+            )}
+            {loading && <Loader2 size={14} className="animate-spin text-velum-400" />}
           </div>
-        )}
+        </div>
+
         {!loaded && !error ? (
-          <div className="py-12 text-center text-xs text-velum-400">Presiona "Cargar bitácora" para ver los registros</div>
-        ) : loaded && logs.length === 0 ? (
-          <div className="py-12 text-center text-xs text-velum-400">Sin registros de auditoría disponibles</div>
-        ) : loaded && (
+          <div className="bg-white rounded-2xl border border-velum-100 py-12 text-center text-xs text-velum-400">
+            Presiona &ldquo;Cargar bitácora&rdquo; para ver los registros
+          </div>
+        ) : (
           <>
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="border-b border-velum-100 bg-velum-50/50">
-                    {['Timestamp', 'Usuario', 'Acción', 'IP', 'Estado'].map((h) => (
-                      <th key={h} className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-widest text-velum-400">{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {logs.map((log, i) => (
-                    <tr key={log.id ?? i} className={`hover:bg-velum-50 transition ${i < logs.length - 1 ? 'border-b border-velum-50' : ''}`}>
-                      <td className="px-4 py-3 text-velum-400 whitespace-nowrap font-mono">
-                        {new Date(log.timestamp).toLocaleString('es-MX', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
-                      </td>
-                      <td className="px-4 py-3 text-velum-700 max-w-[140px] truncate">{log.user ?? '—'}</td>
-                      <td className="px-4 py-3 text-velum-500 font-mono max-w-[200px] truncate">{log.action}</td>
-                      <td className="px-4 py-3 text-velum-400 font-mono">{log.ip ?? '—'}</td>
-                      <td className="px-4 py-3">
-                        <span className={`inline-flex items-center gap-1 text-xs font-medium ${log.status === 'success' ? 'text-emerald-600' : 'text-red-600'}`}>
-                          <span className={`w-1.5 h-1.5 rounded-full ${log.status === 'success' ? 'bg-emerald-500' : 'bg-red-500'}`} />
-                          {log.status === 'success' ? 'OK' : 'ERROR'}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <DataTable
+              aria-label="Bitácora de auditoría"
+              data={logs}
+              columns={auditColumns}
+              rowKey={(log) => log.id ?? `${log.timestamp}-${log.action}`}
+              isLoading={loading && logs.length === 0}
+              error={error || null}
+              defaultSort={{ id: 'timestamp', dir: 'desc' }}
+              empty={{
+                title: 'Sin registros',
+                description: 'No hay eventos de auditoría disponibles para mostrar.',
+              }}
+            />
             {pages > 1 && (
-              <div className="flex items-center justify-between px-5 py-3 border-t border-velum-100">
+              <div className="flex items-center justify-between">
                 <p className="text-[11px] text-velum-400">{total} registros · página {page} de {pages}</p>
                 <div className="flex gap-1">
                   <button onClick={() => void loadLogs(page - 1)} disabled={page <= 1 || loading}
