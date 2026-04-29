@@ -54,7 +54,7 @@ export const AdminRiesgosSection: React.FC<Props> = ({ members, failedAudits, on
         sortable: true,
         cell: (m) => (
           <span
-            className={`text-xs font-medium ${m.clinical?.consentFormSigned ? 'text-emerald-600' : 'text-red-500'}`}
+            className={`text-xs font-medium ${m.clinical?.consentFormSigned ? 'text-success-700' : 'text-danger-500'}`}
           >
             {m.clinical?.consentFormSigned ? 'Firmado' : 'Sin firma'}
           </span>
@@ -80,11 +80,11 @@ export const AdminRiesgosSection: React.FC<Props> = ({ members, failedAudits, on
           return (
             <span
               className={`inline-flex items-center gap-1.5 text-xs font-bold ${
-                risk === 'critical' ? 'text-red-600' : 'text-amber-600'
+                risk === 'critical' ? 'text-danger-700' : 'text-warning-700'
               }`}
             >
               <span
-                className={`w-2 h-2 rounded-full ${risk === 'critical' ? 'bg-red-500' : 'bg-amber-400'}`}
+                className={`w-2 h-2 rounded-full ${risk === 'critical' ? 'bg-danger-500' : 'bg-warning-500'}`}
               />
               {risk === 'critical' ? 'Crítico' : 'Atención'}
             </span>
@@ -119,17 +119,17 @@ export const AdminRiesgosSection: React.FC<Props> = ({ members, failedAudits, on
         bordered={false}
       />
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <KpiCard icon={<AlertTriangle size={18} />} label="Críticos" value={critical.length} accent={critical.length > 0 ? 'text-red-600' : 'text-velum-900'} />
-        <KpiCard icon={<CircleAlert size={18} />} label="En atención" value={warning.length} accent={warning.length > 0 ? 'text-amber-600' : 'text-velum-900'} />
+        <KpiCard icon={<AlertTriangle size={18} />} label="Críticos" value={critical.length} accent={critical.length > 0 ? 'text-danger-700' : 'text-velum-900'} />
+        <KpiCard icon={<CircleAlert size={18} />} label="En atención" value={warning.length} accent={warning.length > 0 ? 'text-warning-700' : 'text-velum-900'} />
         <KpiCard icon={<ShieldCheck size={18} />} label="Sin consentimiento" value={members.filter((m) => !m.clinical?.consentFormSigned).length} />
-        <KpiCard icon={<Activity size={18} />} label="Eventos fallidos" value={failedAudits} accent={failedAudits > 0 ? 'text-red-600' : 'text-velum-900'} />
+        <KpiCard icon={<Activity size={18} />} label="Eventos fallidos" value={failedAudits} accent={failedAudits > 0 ? 'text-danger-700' : 'text-velum-900'} />
       </div>
       <DataTable
         aria-label="Socios en situación de riesgo"
         data={atRisk}
         columns={columns}
         rowKey={(m) => m.id}
-        rowClassName={(m) => (riskOfMember(m) === 'critical' ? 'bg-red-50/30' : '')}
+        rowClassName={(m) => (riskOfMember(m) === 'critical' ? 'bg-danger-50/30' : '')}
         defaultSort={{ id: 'nivel', dir: 'asc' }}
         empty={{
           title: 'Sin socios en riesgo',

@@ -83,10 +83,10 @@ export const AdminSociasSection: React.FC<Props> = ({
           const risk = riskOfMember(m);
           return (
             <span
-              className={`inline-flex items-center gap-1.5 text-xs font-medium ${risk === 'ok' ? 'text-emerald-600' : risk === 'warning' ? 'text-amber-600' : 'text-red-600'}`}
+              className={`inline-flex items-center gap-1.5 text-xs font-medium ${risk === 'ok' ? 'text-success-700' : risk === 'warning' ? 'text-warning-700' : 'text-danger-700'}`}
             >
               <span
-                className={`w-2 h-2 rounded-full ${risk === 'ok' ? 'bg-emerald-500' : risk === 'warning' ? 'bg-amber-400' : 'bg-red-500'}`}
+                className={`w-2 h-2 rounded-full ${risk === 'ok' ? 'bg-success-500' : risk === 'warning' ? 'bg-warning-500' : 'bg-danger-500'}`}
               />
               {risk === 'ok' ? 'Normal' : risk === 'warning' ? 'Atención' : 'Crítico'}
             </span>

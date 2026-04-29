@@ -107,10 +107,10 @@ export const AdminCumplimientoSection: React.FC<Props> = ({
         sortable: true,
         cell: (log) => (
           <span
-            className={`inline-flex items-center gap-1 text-xs font-medium ${log.status === 'success' ? 'text-emerald-600' : 'text-red-600'}`}
+            className={`inline-flex items-center gap-1 text-xs font-medium ${log.status === 'success' ? 'text-success-700' : 'text-danger-700'}`}
           >
             <span
-              className={`w-1.5 h-1.5 rounded-full ${log.status === 'success' ? 'bg-emerald-500' : 'bg-red-500'}`}
+              className={`w-1.5 h-1.5 rounded-full ${log.status === 'success' ? 'bg-success-500' : 'bg-danger-500'}`}
             />
             {log.status === 'success' ? 'OK' : 'ERROR'}
           </span>
@@ -133,8 +133,8 @@ export const AdminCumplimientoSection: React.FC<Props> = ({
         }
       />
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <KpiCard icon={<CheckCheck size={18} />} label="Firmas de consentimiento" value={expedientesFirmados} accent="text-emerald-700" />
-        <KpiCard icon={<AlertTriangle size={18} />} label="Eventos fallidos" value={failedAudits} accent={failedAudits > 0 ? 'text-red-600' : 'text-velum-900'} />
+        <KpiCard icon={<CheckCheck size={18} />} label="Firmas de consentimiento" value={expedientesFirmados} accent="text-success-700" />
+        <KpiCard icon={<AlertTriangle size={18} />} label="Eventos fallidos" value={failedAudits} accent={failedAudits > 0 ? 'text-danger-700' : 'text-velum-900'} />
         <KpiCard icon={<Activity size={18} />} label="Eventos sensibles" value={sensitiveEvents} />
         <KpiCard icon={<Users size={18} />} label="Usuarios con acceso" value={staffCount} />
       </div>

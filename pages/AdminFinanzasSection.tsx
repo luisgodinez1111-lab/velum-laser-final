@@ -118,10 +118,10 @@ export const AdminFinanzasSection: React.FC<Props> = ({ members, analytics, onOp
         </div>
       )}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <KpiCard icon={<Wallet size={18} />} label="MRR total" value={formatMoney(analytics.mrr)} accent="text-emerald-700" />
+        <KpiCard icon={<Wallet size={18} />} label="MRR total" value={formatMoney(analytics.mrr)} accent="text-success-700" />
         <KpiCard icon={<Target size={18} />} label="ARPU" value={formatMoney(analytics.arpu)} />
         <KpiCard icon={<Users size={18} />} label="Socios activos" value={analytics.sociosActivos} />
-        <KpiCard icon={<AlertTriangle size={18} />} label="En cobranza" value={analytics.collectionQueue.length} accent={analytics.collectionQueue.length > 0 ? 'text-red-600' : 'text-velum-900'} />
+        <KpiCard icon={<AlertTriangle size={18} />} label="En cobranza" value={analytics.collectionQueue.length} accent={analytics.collectionQueue.length > 0 ? 'text-danger-700' : 'text-velum-900'} />
       </div>
       <div>
         <SectionHeading>Top socios por monto</SectionHeading>
