@@ -28,7 +28,7 @@ export const ResetPassword: React.FC = () => {
   const checks = getPasswordChecks(password);
   const score = Object.values(checks).filter(Boolean).length;
   const strength = score <= 2 ? "Débil" : score <= 4 ? "Media" : "Fuerte";
-  const strengthClass = score <= 2 ? "text-red-600" : score <= 4 ? "text-amber-600" : "text-green-700";
+  const strengthClass = score <= 2 ? "text-danger-700" : score <= 4 ? "text-warning-700" : "text-success-700";
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -73,11 +73,11 @@ export const ResetPassword: React.FC = () => {
     return (
       <div className="min-h-[calc(100vh-7rem)] flex items-center justify-center bg-white px-6 py-12 animate-fade-in">
         <div className="w-full max-w-sm text-center">
-          <div className="w-16 h-16 rounded-2xl bg-green-50 border border-green-200 flex items-center justify-center mx-auto mb-6">
-            <CheckCircle2 size={28} className="text-green-600" />
+          <div className="w-16 h-16 rounded-2xl bg-success-50 border border-success-100 flex items-center justify-center mx-auto mb-6">
+            <CheckCircle2 size={28} className="text-success-700" />
           </div>
-          <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-velum-500 mb-2">Listo</p>
-          <h2 className="font-serif text-[2.25rem] italic text-velum-900 mb-3 leading-tight">Contraseña actualizada</h2>
+          <p className="text-[13px] font-semibold text-velum-500 mb-3">Listo</p>
+          <h2 className="font-sans font-bold text-velum-900 text-4xl tracking-[-0.025em] leading-[1.05] mb-4">Contraseña actualizada</h2>
           <p className="text-[14px] text-velum-500 leading-relaxed">
             Tu contraseña fue cambiada correctamente. Redirigiendo al inicio de sesión…
           </p>
@@ -93,8 +93,8 @@ export const ResetPassword: React.FC = () => {
           <div className="w-14 h-14 rounded-2xl bg-velum-50 border border-velum-200 flex items-center justify-center mb-6">
             <KeyRound size={24} className="text-velum-700" />
           </div>
-          <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-velum-500 mb-2">Nueva contraseña</p>
-          <h2 className="font-serif text-[2.25rem] italic text-velum-900 mb-3 leading-tight">Crear contraseña</h2>
+          <p className="text-[13px] font-semibold text-velum-500 mb-3">Nueva contraseña</p>
+          <h2 className="font-sans font-bold text-velum-900 text-4xl tracking-[-0.025em] leading-[1.05] mb-4">Crear contraseña</h2>
           <p className="text-[14px] text-velum-500 leading-relaxed">
             Elige una contraseña segura para tu cuenta Velum Laser.
           </p>
@@ -102,7 +102,7 @@ export const ResetPassword: React.FC = () => {
 
         <form onSubmit={handleSubmit} className="space-y-5">
           <div>
-            <label className="mb-2 block text-[11px] font-bold uppercase tracking-[0.18em] text-velum-500">
+            <label className="mb-2 block text-[13px] font-semibold text-velum-500">
               Nueva contraseña
             </label>
             <PasswordInput
@@ -116,12 +116,12 @@ export const ResetPassword: React.FC = () => {
             {password.length > 0 && (
               <div className="mt-3 rounded-2xl bg-velum-50 border border-velum-200/60 px-4 py-3 space-y-2">
                 <div className="flex items-center justify-between">
-                  <p className="text-[11px] uppercase tracking-[0.16em] text-velum-500">Fortaleza</p>
+                  <p className="text-[12px] font-medium text-velum-500">Fortaleza</p>
                   <p className={`text-[11px] font-bold ${strengthClass}`}>{strength}</p>
                 </div>
                 <div className="flex gap-1">
                   {[1,2,3,4,5].map((i) => (
-                    <div key={i} className={`h-1 flex-1 rounded-full transition-all duration-300 ${i <= score ? (score <= 2 ? "bg-red-400" : score <= 4 ? "bg-amber-400" : "bg-green-500") : "bg-velum-200"}`} />
+                    <div key={i} className={`h-1 flex-1 rounded-full transition-all duration-300 ${i <= score ? (score <= 2 ? "bg-danger-500" : score <= 4 ? "bg-warning-500" : "bg-success-500") : "bg-velum-200"}`} />
                   ))}
                 </div>
                 <ul className="space-y-1 pt-1">
@@ -132,8 +132,8 @@ export const ResetPassword: React.FC = () => {
                     { key: "number",  label: "Un número" },
                     { key: "special", label: "Un símbolo (!@#$...)" },
                   ].map(({ key, label }) => (
-                    <li key={key} className={`flex items-center gap-2 text-[12px] ${checks[key as keyof typeof checks] ? "text-green-700" : "text-velum-400"}`}>
-                      <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${checks[key as keyof typeof checks] ? "bg-green-500" : "bg-velum-300"}`} />
+                    <li key={key} className={`flex items-center gap-2 text-[12px] ${checks[key as keyof typeof checks] ? "text-success-700" : "text-velum-400"}`}>
+                      <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${checks[key as keyof typeof checks] ? "bg-success-500" : "bg-velum-300"}`} />
                       {label}
                     </li>
                   ))}
@@ -143,18 +143,18 @@ export const ResetPassword: React.FC = () => {
           </div>
 
           <div>
-            <label className="mb-2 block text-[11px] font-bold uppercase tracking-[0.18em] text-velum-500">
+            <label className="mb-2 block text-[13px] font-semibold text-velum-500">
               Confirmar contraseña
             </label>
             <PasswordInput
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
               required
-              className={`w-full rounded-2xl bg-velum-50 border px-5 py-4 text-[15px] text-velum-900 placeholder:text-velum-400 outline-none transition-all duration-200 focus:bg-white focus:ring-4 focus:ring-velum-900/[0.07] ${confirmPassword && confirmPassword !== password ? "border-red-400 focus:border-red-400" : "border-velum-200/60 focus:border-velum-900"}`}
+              className={`w-full rounded-2xl bg-velum-50 border px-5 py-4 text-[15px] text-velum-900 placeholder:text-velum-400 outline-none transition-all duration-200 focus:bg-white focus:ring-4 focus:ring-velum-900/[0.07] ${confirmPassword && confirmPassword !== password ? "border-danger-500 focus:border-danger-500" : "border-velum-200/60 focus:border-velum-900"}`}
               placeholder="••••••••"
             />
             {confirmPassword && confirmPassword !== password && (
-              <p className="mt-1.5 text-[12px] text-red-500">Las contraseñas no coinciden</p>
+              <p className="mt-1.5 text-[12px] text-danger-500">Las contraseñas no coinciden</p>
             )}
           </div>
 
@@ -168,7 +168,7 @@ export const ResetPassword: React.FC = () => {
         </form>
 
         {error && (
-          <div className="mt-5 rounded-2xl bg-red-50 border border-red-200 px-4 py-3 text-[13px] text-red-600">
+          <div className="mt-5 rounded-2xl bg-danger-50 border border-danger-100 px-4 py-3 text-[13px] text-danger-700">
             {error}
           </div>
         )}

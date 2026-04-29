@@ -128,7 +128,7 @@ export const AdminWhatsAppSettings: React.FC<{ embedded?: boolean }> = ({ embedd
     if (embedded) return null;
     return (
       <div className="max-w-4xl mx-auto px-4 py-10">
-        <h1 className="text-2xl font-serif text-velum-900">Acceso denegado</h1>
+        <h1 className="font-sans font-bold text-velum-900 text-2xl tracking-tight">Acceso denegado</h1>
         <p className="text-sm text-velum-600 mt-2">Solo admin/system puede configurar WhatsApp.</p>
       </div>
     );
@@ -139,7 +139,7 @@ export const AdminWhatsAppSettings: React.FC<{ embedded?: boolean }> = ({ embedd
       {/* Status + config */}
       <div className="rounded-2xl border border-velum-200 bg-white p-6 space-y-4">
         <div className="flex items-center gap-3">
-          <div className={`h-2.5 w-2.5 rounded-full ${configured ? "bg-green-500" : "bg-amber-400"}`} />
+          <div className={`h-2.5 w-2.5 rounded-full ${configured ? "bg-success-500" : "bg-warning-500"}`} />
           <p className="text-sm text-velum-700">
             <strong>Estado:</strong> {configured ? "Configurado" : "Incompleto"}
             {tokenMasked && <span className="ml-1 text-velum-500">({tokenMasked})</span>}
@@ -224,7 +224,7 @@ export const AdminWhatsAppSettings: React.FC<{ embedded?: boolean }> = ({ embedd
 
       {/* Test send */}
       <div className="rounded-2xl border border-velum-200 bg-white p-6 space-y-4">
-        <h3 className="font-serif text-lg text-velum-900">Prueba de envío</h3>
+        <h3 className="font-sans font-bold text-velum-900 text-lg tracking-tight">Prueba de envío</h3>
         <p className="text-xs text-velum-500">
           Envía un mensaje de prueba al número indicado para verificar que la integración funciona.
         </p>
@@ -255,7 +255,7 @@ export const AdminWhatsAppSettings: React.FC<{ embedded?: boolean }> = ({ embedd
         </Button>
 
         {!configured && (
-          <p className="text-xs text-amber-600">Guarda una configuración válida antes de enviar pruebas.</p>
+          <p className="text-xs text-warning-700">Guarda una configuración válida antes de enviar pruebas.</p>
         )}
       </div>
     </div>
@@ -268,7 +268,7 @@ export const AdminWhatsAppSettings: React.FC<{ embedded?: boolean }> = ({ embedd
   return (
     <div className="max-w-5xl mx-auto px-4 py-10">
       <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-3xl font-serif text-velum-900">Configuración WhatsApp (Meta)</h1>
+        <h1 className="font-sans font-bold text-velum-900 text-3xl tracking-[-0.02em]">Configuración WhatsApp (Meta)</h1>
         <Link to="/admin">
           <Button variant="outline">Volver a Admin</Button>
         </Link>

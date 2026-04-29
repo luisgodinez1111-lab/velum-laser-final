@@ -53,7 +53,7 @@ export const AgendaIntegrations: React.FC<Props> = ({
       <div className="flex items-start justify-between gap-4">
         <div>
           <p className="text-xs uppercase tracking-widest text-velum-500">Configuración → Agenda → Integraciones</p>
-          <h3 className="text-lg font-serif text-velum-900 mt-1 flex items-center gap-2">
+          <h3 className="font-sans font-bold text-velum-900 text-lg tracking-tight mt-1 flex items-center gap-2">
             <CalendarSync size={18} /> Google Calendar
           </h3>
           <p className="text-xs text-velum-500 mt-1">
@@ -128,8 +128,8 @@ export const AgendaIntegrations: React.FC<Props> = ({
         <div
           className={`text-xs border px-3 py-2 ${
             message.type === "ok"
-              ? "bg-emerald-50 border-emerald-200 text-emerald-700"
-              : "bg-red-50 border-red-200 text-red-700"
+              ? "bg-success-50 border-success-100 text-success-700"
+              : "bg-danger-50 border-danger-100 text-danger-700"
           }`}
         >
           {message.text}

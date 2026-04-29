@@ -19,24 +19,24 @@ const WAVELENGTHS = [
     name: 'Diodo',
     desc: 'El estándar de oro mundial. Penetración profunda, todos los fototipos.',
     accent: 'from-blue-50 to-sky-50',
-    border: 'border-blue-200',
-    dot:    'bg-blue-400',
+    border: 'border-info-100',
+    dot:    'bg-info-500',
   },
   {
     nm: '980 nm',
     name: 'Infrarrojo',
     desc: 'Tratamiento vascular y folicular de alta precisión sin irritación.',
     accent: 'from-amber-50 to-orange-50',
-    border: 'border-amber-200',
-    dot:    'bg-amber-400',
+    border: 'border-warning-100',
+    dot:    'bg-warning-500',
   },
   {
     nm: '1064 nm',
     name: 'Nd:YAG',
     desc: 'Penetración máxima. Piel oscura y vello grueso tratados con total seguridad.',
     accent: 'from-red-50 to-rose-50',
-    border: 'border-red-200',
-    dot:    'bg-red-400',
+    border: 'border-danger-100',
+    dot:    'bg-danger-500',
   },
 ] as const;
 
@@ -82,7 +82,7 @@ export const Home: React.FC = () => {
           {/* Eyebrow chip */}
           <div className="inline-flex items-center gap-2 border border-white/20 bg-white/10 backdrop-blur-md px-5 py-2 mb-8 rounded-full animate-fade-in">
             <span className="w-1.5 h-1.5 rounded-full bg-velum-300 animate-pulse" />
-            <span className="text-white/85 text-[10px] font-bold uppercase tracking-[0.3em]">
+            <span className="text-white/90 text-[12px] font-medium tracking-wide">
               Chihuahua · Tecnología Cuatriodo
             </span>
           </div>
@@ -154,10 +154,10 @@ export const Home: React.FC = () => {
             { num: '1',    label: 'Cabina privada' },
           ].map((stat) => (
             <div key={stat.label} className="group">
-              <p className="font-serif text-4xl md:text-5xl text-velum-200 mb-2 transition-colors duration-base ease-standard group-hover:text-velum-50">
+              <p className="font-sans font-bold text-4xl md:text-5xl tracking-tight text-velum-200 mb-2 transition-colors duration-base ease-standard group-hover:text-velum-50">
                 {stat.num}
               </p>
-              <p className="text-velum-400 text-[10px] uppercase tracking-[0.25em]">{stat.label}</p>
+              <p className="text-velum-400 text-[12px] font-medium">{stat.label}</p>
             </div>
           ))}
         </div>
@@ -168,7 +168,7 @@ export const Home: React.FC = () => {
         <div className="max-w-6xl mx-auto">
           <VStack gap={3} align="center" className="text-center max-w-2xl mx-auto mb-20">
             <Badge intent="neutral">Tecnología</Badge>
-            <h2 className="text-4xl md:text-5xl font-serif text-velum-900 italic">Cuatriodo Láser.</h2>
+            <h2 className="font-sans font-bold text-4xl md:text-5xl tracking-[-0.025em] text-velum-900">Cuatriodo Láser.</h2>
             <p className="text-velum-600 font-light text-lg leading-relaxed">
               Cuatro longitudes de onda en un solo sistema. El estándar más alto
               de eficacia disponible para depilación permanente — el mismo que usan
@@ -186,8 +186,8 @@ export const Home: React.FC = () => {
                 className={`bg-gradient-to-br ${w.accent} ${w.border} flex flex-col`}
               >
                 <span className={`w-2.5 h-2.5 rounded-full ${w.dot} mb-4`} aria-hidden="true" />
-                <p className="font-serif text-2xl text-velum-900 mb-1">{w.nm}</p>
-                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-velum-500 mb-3">{w.name}</p>
+                <p className="font-sans font-bold tabular-nums text-2xl tracking-tight text-velum-900 mb-1">{w.nm}</p>
+                <p className="text-[13px] font-semibold text-velum-500 mb-3">{w.name}</p>
                 <p className="text-xs text-velum-600 leading-relaxed font-light flex-1">{w.desc}</p>
               </Card>
             ))}
@@ -205,7 +205,7 @@ export const Home: React.FC = () => {
           <VStack gap={8}>
             <div>
               <Badge intent="neutral" className="mb-4">Por qué VELUM</Badge>
-              <h2 className="text-4xl md:text-5xl font-serif text-velum-900 italic leading-snug">
+              <h2 className="font-sans font-bold text-4xl md:text-5xl tracking-[-0.025em] text-velum-900 leading-snug">
                 El Esteta<br />Minimalista.
               </h2>
             </div>
@@ -228,12 +228,12 @@ export const Home: React.FC = () => {
             </ul>
             <div className="pt-6 border-t border-velum-200 grid grid-cols-2 gap-8">
               <div>
-                <p className="font-serif text-3xl text-velum-900">10 meses</p>
-                <p className="text-[10px] text-velum-500 uppercase tracking-[0.2em] mt-1">Programa completo</p>
+                <p className="font-sans font-bold tabular-nums text-3xl tracking-tight text-velum-900">10 meses</p>
+                <p className="text-[13px] font-semibold text-velum-500 mt-1">Programa completo</p>
               </div>
               <div>
-                <p className="font-serif text-3xl text-velum-900">4 λ</p>
-                <p className="text-[10px] text-velum-500 uppercase tracking-[0.2em] mt-1">Longitudes de onda</p>
+                <p className="font-sans font-bold tabular-nums text-3xl tracking-tight text-velum-900">4 λ</p>
+                <p className="text-[13px] font-semibold text-velum-500 mt-1">Longitudes de onda</p>
               </div>
             </div>
           </VStack>
@@ -259,7 +259,7 @@ export const Home: React.FC = () => {
         <div className="max-w-5xl mx-auto">
           <VStack gap={3} align="center" className="text-center mb-20">
             <Badge intent="neutral">El proceso</Badge>
-            <h2 className="text-4xl md:text-5xl font-serif text-velum-900 italic">Tres pasos. Nada más.</h2>
+            <h2 className="font-sans font-bold text-4xl md:text-5xl tracking-[-0.025em] text-velum-900">Tres pasos. Nada más.</h2>
           </VStack>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-0 relative">
@@ -274,7 +274,7 @@ export const Home: React.FC = () => {
                     {step.num}
                   </span>
                 </div>
-                <h3 className="text-sm font-bold uppercase tracking-[0.2em] text-velum-900 mb-3">{step.title}</h3>
+                <h3 className="text-base font-bold tracking-tight text-velum-900 mb-3">{step.title}</h3>
                 <p className="text-velum-500 text-sm leading-relaxed font-light">{step.desc}</p>
               </div>
             ))}
@@ -283,7 +283,7 @@ export const Home: React.FC = () => {
           <div className="text-center mt-16">
             <Link
               to="/agenda"
-              className="group inline-flex items-center gap-2 text-velum-900 text-xs font-bold uppercase tracking-[0.2em] border-b border-velum-400 pb-1 hover:border-velum-900 transition-colors duration-base ease-standard"
+              className="group inline-flex items-center gap-2 text-velum-900 text-[13px] font-semibold border-b border-velum-400 pb-1 hover:border-velum-900 transition-colors duration-base ease-standard"
             >
               Comenzar ahora
               <ArrowRight size={13} className="transition-transform duration-base ease-standard group-hover:translate-x-1" />
@@ -304,7 +304,7 @@ export const Home: React.FC = () => {
         <div className="relative max-w-6xl mx-auto">
           <VStack gap={3} align="center" className="text-center max-w-2xl mx-auto mb-16">
             <Badge intent="accent">Nuestra diferencia</Badge>
-            <h2 className="text-4xl md:text-5xl font-serif text-velum-50 italic">Experiencia VELUM</h2>
+            <h2 className="font-sans font-bold text-4xl md:text-5xl tracking-[-0.025em] text-velum-50">Experiencia VELUM</h2>
             <p className="text-velum-400 font-light text-lg leading-relaxed">
               No compras sesiones. Compras pertenencia a un estilo de vida
               donde cuidarte es un hábito, no un lujo ocasional.
@@ -320,7 +320,7 @@ export const Home: React.FC = () => {
                 <div className="text-velum-600 group-hover:text-velum-300 transition-colors duration-base ease-standard mb-5">
                   {card.icon}
                 </div>
-                <h4 className="font-bold text-sm uppercase tracking-[0.2em] text-velum-50 mb-3">{card.label}</h4>
+                <h4 className="font-bold text-base tracking-tight text-velum-50 mb-3">{card.label}</h4>
                 <p className="text-xs text-velum-400 leading-relaxed font-light">{card.desc}</p>
               </div>
             ))}
@@ -333,7 +333,7 @@ export const Home: React.FC = () => {
         <div className="max-w-5xl mx-auto">
           <VStack gap={3} align="center" className="text-center mb-16">
             <Badge intent="neutral">Lo que dicen</Badge>
-            <h2 className="text-4xl md:text-5xl font-serif text-velum-900 italic">Ellas ya lo viven.</h2>
+            <h2 className="font-sans font-bold text-4xl md:text-5xl tracking-[-0.025em] text-velum-900">Ellas ya lo viven.</h2>
           </VStack>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -353,7 +353,7 @@ export const Home: React.FC = () => {
                 <p className="text-velum-700 text-sm leading-relaxed font-light flex-1">"{t.quote}"</p>
                 <div className="border-t border-velum-100 pt-5">
                   <p className="text-velum-900 text-sm font-semibold">{t.name}</p>
-                  <p className="text-velum-400 text-[10px] uppercase tracking-[0.2em] mt-0.5">{t.detail}</p>
+                  <p className="text-velum-400 text-[12px] font-medium mt-0.5">{t.detail}</p>
                 </div>
               </Card>
             ))}
