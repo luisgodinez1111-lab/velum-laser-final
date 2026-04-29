@@ -28,3 +28,17 @@ export type { SkeletonVariant } from './Skeleton';
 
 export { EmptyState } from './EmptyState';
 export type { EmptyStateSize } from './EmptyState';
+
+export { Modal, ModalFooter } from './Modal';
+export type { ModalSize } from './Modal';
+
+export { Drawer } from './Drawer';
+export type { DrawerSide, DrawerSize } from './Drawer';
+
+export { Tabs, TabsList, TabsTrigger, TabsContent } from './Tabs';
+
+export { Tooltip } from './Tooltip';
+export type { TooltipPlacement } from './Tooltip';
+
+export { PageHeader, Breadcrumbs } from './PageHeader';
+export type { BreadcrumbItem } from './PageHeader';
