@@ -4,7 +4,8 @@ import { Menu, X, Instagram, Facebook, LogOut, User, ChevronDown, Settings } fro
 import { VelumLogo } from './VelumLogo';
 import { useAuth } from '../context/AuthContext';
 import { NotificationBell } from './NotificationBell';
-import { buttonStyles } from './ui';
+import { buttonStyles, MobileBottomNav, type BottomNavItem } from './ui';
+import { Home as HomeIcon, Calendar, CreditCard, LayoutGrid } from 'lucide-react';
 
 const NAV_LINKS = [
   { name: 'Inicio',     path: '/' },
@@ -242,9 +243,24 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
         />
       )}
 
-      <main id="main-content" className="flex-grow pt-16" tabIndex={-1}>
+      <main id="main-content" className={`flex-grow pt-16 ${isAuthenticated ? 'pb-20 md:pb-0' : ''}`} tabIndex={-1}>
         {children}
       </main>
+
+      {/* ── Mobile Bottom Nav (solo autenticados, solo móvil) ─────────────── */}
+      {isAuthenticated && (
+        <MobileBottomNav
+          items={[
+            { to: '/',            label: 'Inicio',  icon: <HomeIcon size={20} />,    exact: true },
+            { to: '/agenda',      label: 'Agenda',  icon: <Calendar size={20} /> },
+            { to: '/dashboard',   label: 'Cuenta',  icon: <User size={20} /> },
+            { to: '/memberships', label: 'Plan',    icon: <CreditCard size={20} /> },
+            ...(isAdmin
+              ? ([{ to: '/admin', label: 'Admin', icon: <LayoutGrid size={20} /> }] satisfies BottomNavItem[])
+              : []),
+          ]}
+        />
+      )}
 
       {/* ── Footer ─────────────────────────────────────────────────────────── */}
       <footer className="bg-velum-900 text-velum-300 py-12">

@@ -1,7 +1,8 @@
 import React from 'react';
-import { CalendarDays, Activity, ArrowRight, AlertTriangle, CircleAlert } from 'lucide-react';
+import { CalendarDays, Activity, ArrowRight, AlertTriangle, CircleAlert, Users, ClipboardList } from 'lucide-react';
 import { AuditLogEntry } from '../types';
 import { apptStatusLabel } from './adminUtils';
+import { Card, Badge, EmptyState, PageHeader, Tooltip, type BadgeIntent } from '../components/ui';
 
 type HealthFlag = 'ok' | 'warning' | 'critical';
 type AdminSection = 'panel' | 'socias' | 'agenda' | 'expedientes' | 'pagos' | 'kpis' | 'finanzas' | 'riesgos' | 'cumplimiento' | 'ajustes';
@@ -44,144 +45,332 @@ interface Props {
   onNavigateToAudit: () => void;
 }
 
+// ── Helpers ──────────────────────────────────────────────────────────────────
+const alertIntent = (level: HealthFlag): BadgeIntent =>
+  level === 'critical' ? 'danger' : level === 'warning' ? 'warning' : 'success';
+
+// ── Componente principal ─────────────────────────────────────────────────────
 export const AdminPanelSection: React.FC<Props> = ({
-  userName, analytics, agendaSummary, controlAlerts,
-  dayAppointments, memberById, auditLogs, onNavigate, onNavigateToAudit,
+  userName,
+  analytics,
+  agendaSummary,
+  controlAlerts,
+  dayAppointments,
+  memberById,
+  auditLogs,
+  onNavigate,
+  onNavigateToAudit,
 }) => {
-  const todayLabel = new Date().toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' });
+  const todayLabel = new Date().toLocaleDateString('es-MX', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+  });
   const actionAlerts = controlAlerts.filter((a) => a.level !== 'ok');
+
+  // KPI primarios — cada uno navegable a su sección con tooltip explicativo
+  const primaryKpis = [
+    {
+      label: 'Socias activas',
+      value: analytics.sociosActivos,
+      sub: `de ${analytics.totalSocios} registradas`,
+      tooltip: 'Miembros con membresía activa o en grace period.',
+      icon: <Users size={16} />,
+      section: 'socias' as AdminSection,
+      tone: 'neutral' as const,
+    },
+    {
+      label: 'Citas hoy',
+      value: agendaSummary.appointmentsToday,
+      sub: `${agendaSummary.completedToday} completadas`,
+      tooltip: 'Citas confirmadas o asistidas para el día actual.',
+      icon: <CalendarDays size={16} />,
+      section: 'agenda' as AdminSection,
+      tone: 'neutral' as const,
+    },
+    {
+      label: 'Expedientes pendientes',
+      value: analytics.expedientesPendientes,
+      sub: 'requieren revisión clínica',
+      tooltip: 'Pacientes con expediente médico pendiente de aprobación.',
+      icon: <ClipboardList size={16} />,
+      section: 'expedientes' as AdminSection,
+      tone: (analytics.expedientesPendientes > 0 ? 'warning' : 'success') as 'warning' | 'success',
+    },
+  ];
 
   return (
     <div className="space-y-8">
-      {/* Greeting */}
-      <div>
-        <p className="text-xs text-velum-400 capitalize">{todayLabel}</p>
-        <h1 className="text-2xl font-serif text-velum-900 mt-0.5">Hola, {userName}</h1>
-      </div>
+      {/* ── Page header con greeting y fecha ───────────────────────────────── */}
+      <PageHeader
+        eyebrow={todayLabel}
+        title={`Hola, ${userName}`}
+        description="Resumen operativo en tiempo real — atajos a todas las secciones del panel."
+        bordered={false}
+      />
 
-      {/* 3 primary metrics */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        {[
-          { label: 'Socias activas', value: analytics.sociosActivos, sub: `de ${analytics.totalSocios} registradas`, accent: 'text-velum-900', section: 'socias' as AdminSection },
-          { label: 'Citas hoy', value: agendaSummary.appointmentsToday, sub: `${agendaSummary.completedToday} completadas`, accent: 'text-velum-900', section: 'agenda' as AdminSection },
-          { label: 'Expedientes pendientes', value: analytics.expedientesPendientes, sub: 'requieren revisión clínica', accent: analytics.expedientesPendientes > 0 ? 'text-amber-600' : 'text-emerald-600', section: 'expedientes' as AdminSection },
-        ].map(({ label, value, sub, accent, section }) => (
-          <button key={label} onClick={() => onNavigate(section)}
-            className="bg-white rounded-2xl border border-velum-100 p-5 text-left hover:border-velum-300 hover:shadow-sm transition group">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-velum-400 mb-2">{label}</p>
-            <p className={`text-4xl font-serif font-bold ${accent}`}>{value}</p>
-            <p className="text-xs text-velum-400 mt-1.5 group-hover:text-velum-600 transition flex items-center gap-1">
-              {sub} <ArrowRight size={11} />
-            </p>
-          </button>
-        ))}
-      </div>
-
-      {/* Action alerts */}
-      {actionAlerts.length > 0 && (
-        <div>
-          <p className="text-[10px] font-bold uppercase tracking-widest text-velum-400 mb-3">Requieren atención</p>
-          <div className="space-y-2">
-            {actionAlerts.map((alert) => (
-              <div key={alert.id}
-                className={`flex items-center gap-3 px-4 py-3 rounded-2xl border ${alert.level === 'warning' ? 'bg-amber-50 border-amber-200' : 'bg-red-50 border-red-200'}`}>
-                <div className={`shrink-0 ${alert.level === 'warning' ? 'text-amber-500' : 'text-red-500'}`}>
-                  {alert.level === 'warning' ? <CircleAlert size={16} /> : <AlertTriangle size={16} />}
+      {/* ── KPIs primarios — interactive cards ─────────────────────────────── */}
+      <section aria-labelledby="kpis-heading">
+        <h2 id="kpis-heading" className="sr-only">Métricas clave</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {primaryKpis.map((kpi) => (
+            <Tooltip key={kpi.label} content={kpi.tooltip} placement="bottom" delay={500}>
+              <Card
+                variant="bordered"
+                padding="md"
+                interactive
+                onClick={() => onNavigate(kpi.section)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    onNavigate(kpi.section);
+                  }
+                }}
+                role="button"
+                aria-label={`${kpi.label}: ${kpi.value}. ${kpi.sub}. Ir a ${kpi.label}`}
+                className="group"
+              >
+                <div className="flex items-start justify-between mb-3">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-velum-500">
+                    {kpi.label}
+                  </p>
+                  <span
+                    className={[
+                      'flex items-center justify-center h-7 w-7 rounded-full transition-colors duration-base ease-standard',
+                      kpi.tone === 'warning'
+                        ? 'bg-warning-50 text-warning-700'
+                        : kpi.tone === 'success'
+                          ? 'bg-success-50 text-success-700'
+                          : 'bg-velum-100 text-velum-700 group-hover:bg-velum-200',
+                    ].join(' ')}
+                  >
+                    {kpi.icon}
+                  </span>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className={`text-sm font-semibold ${alert.level === 'warning' ? 'text-amber-900' : 'text-red-900'}`}>{alert.title}</p>
-                  <p className={`text-xs ${alert.level === 'warning' ? 'text-amber-700' : 'text-red-700'}`}>{alert.detail}</p>
-                </div>
-                {alert.section !== 'panel' && (
-                  <button onClick={() => {
-                    if (alert.section === 'ajustes') { onNavigateToAudit(); } else { onNavigate(alert.section); }
-                  }}
-                    className={`shrink-0 text-xs font-medium px-3 py-1.5 rounded-xl transition
-                      ${alert.level === 'warning' ? 'bg-amber-100 text-amber-700 hover:bg-amber-200' : 'bg-red-100 text-red-700 hover:bg-red-200'}`}>
-                    Ver <ArrowRight size={11} className="inline ml-0.5" />
-                  </button>
-                )}
-              </div>
-            ))}
-          </div>
+                <p
+                  className={[
+                    'text-4xl font-serif font-bold leading-none',
+                    kpi.tone === 'warning' ? 'text-warning-700' : kpi.tone === 'success' ? 'text-success-700' : 'text-velum-900',
+                  ].join(' ')}
+                >
+                  {kpi.value}
+                </p>
+                <p className="text-xs text-velum-500 mt-3 flex items-center gap-1.5 group-hover:text-velum-900 transition-colors duration-base ease-standard">
+                  {kpi.sub}
+                  <ArrowRight
+                    size={11}
+                    className="transition-transform duration-base ease-standard group-hover:translate-x-0.5"
+                  />
+                </p>
+              </Card>
+            </Tooltip>
+          ))}
         </div>
+      </section>
+
+      {/* ── Action alerts ──────────────────────────────────────────────────── */}
+      {actionAlerts.length > 0 && (
+        <section aria-labelledby="alerts-heading">
+          <div className="flex items-center justify-between mb-3">
+            <h2 id="alerts-heading" className="text-[10px] font-bold uppercase tracking-[0.2em] text-velum-500">
+              Requieren atención
+            </h2>
+            <Badge intent={actionAlerts.some((a) => a.level === 'critical') ? 'danger' : 'warning'} dot>
+              {actionAlerts.length}
+            </Badge>
+          </div>
+          <div className="space-y-2">
+            {actionAlerts.map((alert) => {
+              const intent = alertIntent(alert.level);
+              const isWarning = alert.level === 'warning';
+              return (
+                <div
+                  key={alert.id}
+                  className={[
+                    'flex items-center gap-3 px-4 py-3.5 rounded-lg border transition-all duration-base ease-standard',
+                    isWarning
+                      ? 'bg-warning-50 border-warning-100 hover:border-warning-500/40'
+                      : 'bg-danger-50 border-danger-100 hover:border-danger-500/40',
+                  ].join(' ')}
+                >
+                  <div
+                    className={[
+                      'shrink-0 flex items-center justify-center h-8 w-8 rounded-full',
+                      isWarning ? 'bg-warning-100 text-warning-700' : 'bg-danger-100 text-danger-700',
+                    ].join(' ')}
+                    aria-hidden="true"
+                  >
+                    {isWarning ? <CircleAlert size={15} /> : <AlertTriangle size={15} />}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p
+                      className={[
+                        'text-sm font-semibold leading-tight',
+                        isWarning ? 'text-warning-700' : 'text-danger-700',
+                      ].join(' ')}
+                    >
+                      {alert.title}
+                    </p>
+                    <p
+                      className={[
+                        'text-xs mt-0.5 leading-relaxed',
+                        isWarning ? 'text-warning-700/80' : 'text-danger-700/80',
+                      ].join(' ')}
+                    >
+                      {alert.detail}
+                    </p>
+                  </div>
+                  {alert.section !== 'panel' && (
+                    <button
+                      onClick={() => {
+                        if (alert.section === 'ajustes') onNavigateToAudit();
+                        else onNavigate(alert.section);
+                      }}
+                      className={[
+                        'group shrink-0 inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-widest px-3 py-1.5 rounded-full transition-all duration-base ease-standard',
+                        'focus:outline-none focus-visible:shadow-focus',
+                        isWarning
+                          ? 'bg-warning-100 text-warning-700 hover:bg-warning-500 hover:text-white'
+                          : 'bg-danger-100 text-danger-700 hover:bg-danger-500 hover:text-white',
+                      ].join(' ')}
+                    >
+                      Ver
+                      <ArrowRight
+                        size={11}
+                        className="transition-transform duration-base ease-standard group-hover:translate-x-0.5"
+                      />
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </section>
       )}
 
-      {/* Two-column: agenda + actividad */}
+      {/* ── Agenda + Actividad reciente (2-col) ────────────────────────────── */}
       <div className="grid lg:grid-cols-2 gap-6">
-        <div>
+        {/* Agenda hoy */}
+        <section aria-labelledby="agenda-heading">
           <div className="flex items-center justify-between mb-3">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-velum-400">Agenda de hoy</p>
-            <button onClick={() => onNavigate('agenda')} className="text-xs text-velum-400 hover:text-velum-900 transition flex items-center gap-1">
-              Ver agenda <ArrowRight size={11} />
+            <h2 id="agenda-heading" className="text-[10px] font-bold uppercase tracking-[0.2em] text-velum-500">
+              Agenda de hoy
+            </h2>
+            <button
+              onClick={() => onNavigate('agenda')}
+              className="group inline-flex items-center gap-1 text-xs text-velum-500 hover:text-velum-900 transition-colors duration-base ease-standard focus:outline-none focus-visible:shadow-focus rounded px-1 py-0.5"
+            >
+              Ver agenda
+              <ArrowRight
+                size={11}
+                className="transition-transform duration-base ease-standard group-hover:translate-x-0.5"
+              />
             </button>
           </div>
-          <div className="bg-white rounded-2xl border border-velum-100 overflow-hidden">
+          <Card variant="bordered" padding="none">
             {dayAppointments.length === 0 ? (
-              <div className="py-10 text-center">
-                <CalendarDays size={24} className="mx-auto text-velum-200 mb-2" />
-                <p className="text-sm text-velum-400">Sin citas programadas hoy</p>
-              </div>
+              <EmptyState
+                icon={<CalendarDays />}
+                title="Sin citas hoy"
+                description="No hay citas programadas para el día actual."
+                size="comfortable"
+              />
             ) : (
               <div className="divide-y divide-velum-50">
                 {dayAppointments.slice(0, 6).map((appt) => {
                   const m = memberById.get(appt.userId ?? '');
                   const s = apptStatusLabel(appt.status);
                   return (
-                    <div key={appt.id} className="flex items-center gap-3 px-4 py-3">
-                      <p className="text-xs font-mono text-velum-400 w-12 shrink-0">
-                        {new Date(appt.startAt).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}
+                    <div
+                      key={appt.id}
+                      className="flex items-center gap-3 px-4 py-3 hover:bg-velum-50/50 transition-colors duration-base ease-standard"
+                    >
+                      <p className="text-xs font-mono text-velum-700 w-12 shrink-0 font-medium">
+                        {new Date(appt.startAt).toLocaleTimeString('es-MX', {
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}
                       </p>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-velum-900 truncate">{m?.name || m?.email || 'Paciente'}</p>
+                        <p className="text-sm font-medium text-velum-900 truncate">
+                          {m?.name || m?.email || 'Paciente'}
+                        </p>
                       </div>
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${s.cls}`}>{s.label}</span>
+                      <span
+                        className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${s.cls}`}
+                      >
+                        {s.label}
+                      </span>
                     </div>
                   );
                 })}
                 {dayAppointments.length > 6 && (
-                  <button onClick={() => onNavigate('agenda')}
-                    className="w-full py-2.5 text-xs text-velum-400 hover:text-velum-700 hover:bg-velum-50 transition">
+                  <button
+                    onClick={() => onNavigate('agenda')}
+                    className="w-full py-3 text-xs text-velum-500 hover:text-velum-900 hover:bg-velum-50 transition-colors duration-base ease-standard font-medium border-t border-velum-100"
+                  >
                     +{dayAppointments.length - 6} más → Ver agenda completa
                   </button>
                 )}
               </div>
             )}
-          </div>
-        </div>
+          </Card>
+        </section>
 
-        <div>
+        {/* Actividad reciente */}
+        <section aria-labelledby="audit-heading">
           <div className="flex items-center justify-between mb-3">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-velum-400">Actividad reciente</p>
-            <button onClick={onNavigateToAudit}
-              className="text-xs text-velum-400 hover:text-velum-900 transition flex items-center gap-1">
-              Ver todo <ArrowRight size={11} />
+            <h2 id="audit-heading" className="text-[10px] font-bold uppercase tracking-[0.2em] text-velum-500">
+              Actividad reciente
+            </h2>
+            <button
+              onClick={onNavigateToAudit}
+              className="group inline-flex items-center gap-1 text-xs text-velum-500 hover:text-velum-900 transition-colors duration-base ease-standard focus:outline-none focus-visible:shadow-focus rounded px-1 py-0.5"
+            >
+              Ver todo
+              <ArrowRight
+                size={11}
+                className="transition-transform duration-base ease-standard group-hover:translate-x-0.5"
+              />
             </button>
           </div>
-          <div className="bg-white rounded-2xl border border-velum-100 overflow-hidden">
+          <Card variant="bordered" padding="none">
             {auditLogs.length === 0 ? (
-              <div className="py-10 text-center">
-                <Activity size={24} className="mx-auto text-velum-200 mb-2" />
-                <p className="text-sm text-velum-400">Sin actividad registrada</p>
-              </div>
+              <EmptyState
+                icon={<Activity />}
+                title="Sin actividad"
+                description="Las acciones del equipo aparecerán aquí en tiempo real."
+                size="comfortable"
+              />
             ) : (
               <div className="divide-y divide-velum-50">
                 {auditLogs.slice(0, 6).map((log, i) => (
-                  <div key={log.id ?? i} className="flex items-center gap-3 px-4 py-2.5">
-                    <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${log.status === 'success' ? 'bg-emerald-500' : 'bg-red-500'}`} />
+                  <div
+                    key={log.id ?? i}
+                    className="flex items-center gap-3 px-4 py-2.5 hover:bg-velum-50/50 transition-colors duration-base ease-standard"
+                  >
+                    <span
+                      className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                        log.status === 'success' ? 'bg-success-500' : 'bg-danger-500'
+                      }`}
+                      aria-label={log.status === 'success' ? 'Exitoso' : 'Falló'}
+                    />
                     <div className="flex-1 min-w-0">
-                      <p className="text-xs font-mono text-velum-600 truncate">{log.action}</p>
-                      <p className="text-[10px] text-velum-400">{log.user ?? '—'}</p>
+                      <p className="text-xs font-mono text-velum-700 truncate">{log.action}</p>
+                      <p className="text-[10px] text-velum-500">{log.user ?? '—'}</p>
                     </div>
-                    <p className="text-[10px] text-velum-300 shrink-0 whitespace-nowrap">
-                      {new Date(log.timestamp).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}
+                    <p className="text-[10px] text-velum-400 shrink-0 whitespace-nowrap font-mono">
+                      {new Date(log.timestamp).toLocaleTimeString('es-MX', {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
                     </p>
                   </div>
                 ))}
               </div>
             )}
-          </div>
-        </div>
+          </Card>
+        </section>
       </div>
     </div>
   );

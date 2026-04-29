@@ -42,3 +42,6 @@ export type { TooltipPlacement } from './Tooltip';
 
 export { PageHeader, Breadcrumbs } from './PageHeader';
 export type { BreadcrumbItem } from './PageHeader';
+
+export { MobileBottomNav } from './MobileBottomNav';
+export type { BottomNavItem } from './MobileBottomNav';
