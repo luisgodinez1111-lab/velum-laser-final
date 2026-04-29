@@ -268,9 +268,11 @@ export const Dashboard: React.FC = () => {
 
   const passwordChecks = useMemo(() => getPasswordChecks(newPassword), [newPassword]);
 
-  // Tab switch → animate content
+  // Tab switch → animate content. Redirige 'security' legacy a 'profile'
+  // (Cuenta unificada) per Fase 12.0 reorganización IA.
   const switchTab = (key: TabKey) => {
-    setActiveTab(key);
+    const redirected = key === "security" ? "profile" : key;
+    setActiveTab(redirected);
     setTabKey(k => k + 1);
     setShowMoreSheet(false);
   };
@@ -594,19 +596,26 @@ export const Dashboard: React.FC = () => {
   // countdown
   const nextApptDate = upcomingAppointments[0]?.startAt ?? null;
 
-  // ── Tabs config ────────────────────────────────────────────────────────────
+  // ── Tabs config (Fase 12.0 — Reorganización IA Dashboard) ──────────────────
+  // Labels en español natural alineados con tareas reina del paciente.
+  // 'security' se fusiona dentro de la vista 'profile' (renombrada Cuenta) per
+  // dashboard-redesign §3 — eliminado del menú top-level por baja frecuencia
+  // de uso. La TabKey "security" se conserva en el type para compatibilidad
+  // con URLs antiguas (?tab=security redirecciona implícitamente a Cuenta).
   const allTabs: Array<{ key: TabKey; label: string; short: string }> = [
-    { key: "overview",  label: "Resumen",     short: "Inicio"   },
+    { key: "overview",  label: "Inicio",      short: "Inicio"   },
     { key: "citas",     label: `Citas${appointments.length > 0 ? ` (${appointments.length})` : ""}`, short: "Citas" },
-    { key: "historial", label: `Historial${sessions.length > 0 ? ` (${sessions.length})` : ""}`, short: "Sesiones" },
+    { key: "historial", label: `Sesiones${sessions.length > 0 ? ` (${sessions.length})` : ""}`, short: "Sesiones" },
     { key: "billing",   label: "Pagos",       short: "Pagos"    },
+    { key: "records",   label: "Expediente",  short: "Expediente" },
+    { key: "profile",   label: "Cuenta",      short: "Cuenta"   },
     { key: "ayuda",     label: "Ayuda",       short: "Ayuda"    },
-    { key: "profile",   label: "Perfil",      short: "Perfil"   },
-    { key: "security",  label: "Seguridad",   short: "Seguridad"},
-    { key: "records",   label: "Expedientes", short: "Docs"     },
   ];
-  const primaryMobileTabs: TabKey[] = ["overview", "citas", "historial", "billing", "ayuda"];
-  const secondaryMobileTabs: TabKey[] = ["profile", "security", "records"];
+  // Mobile bottom nav: 4 primarios + Más (per MASTER §9 max 5).
+  // Tareas reina del paciente: Inicio · Citas · Sesiones · Pagos.
+  const primaryMobileTabs: TabKey[] = ["overview", "citas", "historial", "billing"];
+  // En "Más": Expediente · Cuenta · Ayuda. 'security' redirige a 'profile' (Cuenta).
+  const secondaryMobileTabs: TabKey[] = ["records", "profile", "ayuda"];
 
   const tabIcons: Record<TabKey, React.ReactNode> = {
     overview:  <User size={18} />,
@@ -621,7 +630,9 @@ export const Dashboard: React.FC = () => {
 
   // Label for the desktop sidebar (all tabs)
   const sidebarTabs = allTabs;
-  const tabLabel = allTabs.find(t => t.key === activeTab)?.label ?? "";
+  // 'security' redirige a 'profile' (Cuenta) per Fase 12.0 — tabLabel respeta esa fusión.
+  const effectiveTabKey: TabKey = activeTab === "security" ? "profile" : activeTab;
+  const tabLabel = allTabs.find(t => t.key === effectiveTabKey)?.label ?? "";
 
   // ── RENDER ────────────────────────────────────────────────────────────────
   return (
@@ -1103,8 +1114,8 @@ export const Dashboard: React.FC = () => {
             </div>
           )}
 
-          {/* ══ SECURITY ═════════════════════════════════════════════════════ */}
-          {activeTab === "security" && (
+          {/* ══ SECURITY (Fase 12.0: fusionada en Cuenta) ════════════════════ */}
+          {activeTab === "profile" && (
             <div className={`${card} p-6 space-y-5`}>
               <div className="flex items-center gap-3">
                 <div className="w-9 h-9 rounded-[10px] bg-velum-50 border border-velum-100 flex items-center justify-center">
