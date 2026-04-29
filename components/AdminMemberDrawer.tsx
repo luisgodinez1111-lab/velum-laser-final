@@ -1,12 +1,13 @@
 import React from 'react';
 import {
-  X, Zap, CheckCircle2, CircleAlert, XCircle, FolderOpen, Trash2
+  Zap, CheckCircle2, CircleAlert, XCircle, FolderOpen, Trash2
 } from 'lucide-react';
 import { Member } from '../types';
 import { Appointment, SessionTreatment } from '../services/clinicalService';
 import {
   Pill, formatMoney, statusLabel, statusPill, intakeStatusLabel, apptStatusLabel
 } from '../pages/adminShared';
+import { Drawer } from './ui';
 
 type DrawerDeleteStep = 'idle' | 'otp-send' | 'otp-confirm';
 
@@ -96,20 +97,17 @@ export const AdminMemberDrawer: React.FC<AdminMemberDrawerProps> = ({
   const intake = intakeStatusLabel(member.intakeStatus);
 
   return (
-    <>
-      <div className="fixed inset-0 bg-black/20 backdrop-blur-sm z-40" onClick={onClose} />
-      <div className="fixed right-0 top-0 h-full w-full max-w-md bg-white shadow-2xl z-50 flex flex-col overflow-hidden">
-        {/* Header */}
-        <div className="px-6 py-5 border-b border-velum-100 flex items-start justify-between">
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-widest text-velum-400">Perfil del socio</p>
-            <h2 className="font-serif text-xl text-velum-900 mt-1">{member.name}</h2>
-            <p className="text-xs text-velum-500 mt-0.5">{member.email}</p>
-          </div>
-          <button onClick={onClose} aria-label="Cerrar perfil de paciente" className="p-2 rounded-xl hover:bg-velum-50 text-velum-400 hover:text-velum-700 transition"><X size={18} /></button>
-        </div>
-        {/* Stats */}
-        <div className="grid grid-cols-2 gap-3 p-4 border-b border-velum-100">
+    <Drawer
+      isOpen
+      onClose={onClose}
+      side="right"
+      size="md"
+      title={member.name ?? 'Paciente'}
+      description={member.email ?? undefined}
+      className="flex flex-col"
+    >
+      {/* Stats */}
+      <div className="grid grid-cols-2 gap-3 pb-4 border-b border-velum-100 -mx-6 -mt-5 px-6 pt-2">
           {[
             { label: 'Plan', value: member.plan ?? '—' },
             { label: 'Estado', value: <Pill label={statusLabel(member.subscriptionStatus)} cls={statusPill(member.subscriptionStatus)} /> },
@@ -134,10 +132,10 @@ export const AdminMemberDrawer: React.FC<AdminMemberDrawerProps> = ({
             </span>
           )}
         </div>
-        {/* Scrollable body */}
-        <div className="flex-1 overflow-y-auto">
+        {/* Body — Drawer ya scrollea, removemos wrapper redundante */}
+        <div>
           {/* Acciones */}
-          <div className="p-4 border-b border-velum-100 space-y-2">
+          <div className="py-4 border-b border-velum-100 space-y-2 -mx-6 px-6">
             <p className="text-[10px] font-bold uppercase tracking-widest text-velum-400 mb-3">Acciones</p>
             <button onClick={() => { onOpenSessionModal(member); onClose(); }}
               className="w-full flex items-center gap-2 px-4 py-2.5 bg-velum-900 text-white rounded-xl text-sm font-medium hover:bg-velum-800 transition">
@@ -460,7 +458,6 @@ export const AdminMemberDrawer: React.FC<AdminMemberDrawerProps> = ({
             )}
           </div>
         </div>
-      </div>
-    </>
+    </Drawer>
   );
 };
