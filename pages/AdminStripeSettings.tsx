@@ -268,11 +268,11 @@ export const AdminStripeSettings: React.FC<Props> = ({ embedded = false }) => {
   };
 
   const chargeStatusLabel: Record<string, { label: string; cls: string }> = {
-    PENDING_ACCEPTANCE: { label: "Pendiente", cls: "text-amber-700 bg-amber-50 border-amber-200" },
-    ACCEPTED:           { label: "Aceptado",  cls: "text-blue-700 bg-blue-50 border-blue-200" },
-    PAID:               { label: "Pagado",    cls: "text-emerald-700 bg-emerald-50 border-emerald-200" },
+    PENDING_ACCEPTANCE: { label: "Pendiente", cls: "text-warning-700 bg-warning-50 border-warning-100" },
+    ACCEPTED:           { label: "Aceptado",  cls: "text-info-700 bg-info-50 border-info-100" },
+    PAID:               { label: "Pagado",    cls: "text-success-700 bg-success-50 border-success-100" },
     EXPIRED:            { label: "Expirado",  cls: "text-gray-500 bg-gray-50 border-gray-200" },
-    CANCELLED:          { label: "Cancelado", cls: "text-red-600 bg-red-50 border-red-200" },
+    CANCELLED:          { label: "Cancelado", cls: "text-danger-700 bg-danger-50 border-danger-100" },
   };
 
   const formatAmount = (cents: number, currency: string) =>
@@ -281,51 +281,51 @@ export const AdminStripeSettings: React.FC<Props> = ({ embedded = false }) => {
   const INTERVAL_LABELS: Record<string, string> = { day: "Diario", week: "Semanal", month: "Mensual", year: "Anual" };
 
   const StatusDot = ({ ok }: { ok: boolean }) => (
-    <span className={`w-2 h-2 rounded-full shrink-0 ${ok ? "bg-emerald-500" : "bg-amber-400"}`} />
+    <span className={`w-2 h-2 rounded-full shrink-0 ${ok ? "bg-success-500" : "bg-warning-500"}`} />
   );
 
   const content = (
     <div className="space-y-5">
       {/* Feedback — al tope para visibilidad inmediata */}
       {error && (
-        <div className="flex items-center gap-2.5 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
-          <XCircle size={15} className="text-red-500 shrink-0" />
-          <p className="text-sm text-red-700">{error}</p>
+        <div className="flex items-center gap-2.5 bg-danger-50 border border-danger-100 rounded-xl px-4 py-3">
+          <XCircle size={15} className="text-danger-500 shrink-0" />
+          <p className="text-sm text-danger-700">{error}</p>
         </div>
       )}
       {ok && (
-        <div className="flex items-center gap-2.5 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3">
-          <CheckCircle2 size={15} className="text-emerald-600 shrink-0" />
-          <p className="text-sm text-emerald-700">{ok}</p>
+        <div className="flex items-center gap-2.5 bg-success-50 border border-success-100 rounded-xl px-4 py-3">
+          <CheckCircle2 size={15} className="text-success-700 shrink-0" />
+          <p className="text-sm text-success-700">{ok}</p>
         </div>
       )}
 
       {/* Status card */}
-      <div className={`rounded-2xl border p-5 ${masked.configured ? "bg-emerald-50 border-emerald-200" : "bg-amber-50 border-amber-200"}`}>
+      <div className={`rounded-2xl border p-5 ${masked.configured ? "bg-success-50 border-success-100" : "bg-warning-50 border-warning-100"}`}>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             {masked.configured
-              ? <CheckCircle2 size={20} className="text-emerald-600 shrink-0" />
-              : <AlertTriangle size={20} className="text-amber-600 shrink-0" />
+              ? <CheckCircle2 size={20} className="text-success-700 shrink-0" />
+              : <AlertTriangle size={20} className="text-warning-700 shrink-0" />
             }
             <div>
-              <p className={`text-sm font-semibold ${masked.configured ? "text-emerald-800" : "text-amber-800"}`}>
+              <p className={`text-sm font-semibold ${masked.configured ? "text-success-700" : "text-warning-700"}`}>
                 {masked.configured ? "Stripe configurado" : "Configuración incompleta"}
               </p>
-              <p className={`text-xs mt-0.5 ${masked.configured ? "text-emerald-600" : "text-amber-600"}`}>
+              <p className={`text-xs mt-0.5 ${masked.configured ? "text-success-700" : "text-warning-700"}`}>
                 Fuente: {masked.source === "database" ? "Base de datos" : "Variables de entorno"}
               </p>
             </div>
           </div>
           <button onClick={testStripe} disabled={testing || !masked.configured}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-current text-xs font-medium transition disabled:opacity-40
-              text-emerald-700 border-emerald-300 hover:bg-emerald-100">
+              text-success-700 border-success-100 hover:bg-success-100">
             {testing ? <RefreshCw size={12} className="animate-spin" /> : <Zap size={12} />}
             {testing ? "Probando..." : "Probar conexión"}
           </button>
         </div>
         {testResult && (
-          <div className={`mt-3 flex items-center gap-2 text-xs font-medium px-3 py-2 rounded-xl ${testResult.ok ? "bg-emerald-100 text-emerald-800" : "bg-red-100 text-red-700"}`}>
+          <div className={`mt-3 flex items-center gap-2 text-xs font-medium px-3 py-2 rounded-xl ${testResult.ok ? "bg-success-100 text-success-700" : "bg-danger-100 text-danger-700"}`}>
             {testResult.ok ? <CheckCircle2 size={13} /> : <XCircle size={13} />}
             {testResult.text}
           </div>
@@ -413,7 +413,7 @@ export const AdminStripeSettings: React.FC<Props> = ({ embedded = false }) => {
                           <input type="checkbox" className="rounded" checked={p.active} onChange={(e) => updatePlan(idx, "active", e.target.checked)} />
                           Activo
                         </label>
-                        <button onClick={() => removePlan(idx)} className="p-1.5 rounded-lg text-velum-300 hover:text-red-500 hover:bg-red-50 transition">
+                        <button onClick={() => removePlan(idx)} className="p-1.5 rounded-lg text-velum-300 hover:text-danger-500 hover:bg-danger-50 transition">
                           <Trash2 size={13} />
                         </button>
                       </div>
@@ -488,15 +488,15 @@ export const AdminStripeSettings: React.FC<Props> = ({ embedded = false }) => {
 
             {/* Feedback */}
             {chargeError && (
-              <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
-                <XCircle size={14} className="text-red-500 shrink-0" />
-                <p className="text-sm text-red-700">{chargeError}</p>
+              <div className="flex items-center gap-2 bg-danger-50 border border-danger-100 rounded-xl px-4 py-3">
+                <XCircle size={14} className="text-danger-500 shrink-0" />
+                <p className="text-sm text-danger-700">{chargeError}</p>
               </div>
             )}
             {chargeOk && (
-              <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3">
-                <CheckCircle2 size={14} className="text-emerald-600 shrink-0" />
-                <p className="text-sm text-emerald-700">{chargeOk}</p>
+              <div className="flex items-center gap-2 bg-success-50 border border-success-100 rounded-xl px-4 py-3">
+                <CheckCircle2 size={14} className="text-success-700 shrink-0" />
+                <p className="text-sm text-success-700">{chargeOk}</p>
               </div>
             )}
 
@@ -516,7 +516,7 @@ export const AdminStripeSettings: React.FC<Props> = ({ embedded = false }) => {
                     className="w-full rounded-lg border border-velum-200 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-velum-900/20 focus:border-velum-700"
                   />
                   {newCharge.userId && (
-                    <p className="mt-1 text-xs text-emerald-700 font-medium">
+                    <p className="mt-1 text-xs text-success-700 font-medium">
                       ✓ {users.find(u => u.id === newCharge.userId)?.email}
                     </p>
                   )}
@@ -670,11 +670,11 @@ export const AdminStripeSettings: React.FC<Props> = ({ embedded = false }) => {
                           {c.status === "PENDING_ACCEPTANCE" && (
                             <>
                               <button onClick={() => handleResendOtp(c.id)} title="Reenviar OTP"
-                                className="p-1.5 rounded-lg text-velum-400 hover:text-blue-600 hover:bg-blue-50 transition">
+                                className="p-1.5 rounded-lg text-velum-400 hover:text-info-700 hover:bg-info-50 transition">
                                 <RotateCcw size={13} />
                               </button>
                               <button onClick={() => handleCancelCharge(c.id)} title="Cancelar cobro"
-                                className="p-1.5 rounded-lg text-velum-400 hover:text-red-500 hover:bg-red-50 transition">
+                                className="p-1.5 rounded-lg text-velum-400 hover:text-danger-500 hover:bg-danger-50 transition">
                                 <Ban size={13} />
                               </button>
                             </>
@@ -714,7 +714,7 @@ export const AdminStripeSettings: React.FC<Props> = ({ embedded = false }) => {
     <div className="max-w-2xl mx-auto px-4 py-10">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-serif text-velum-900">Configuración Stripe</h1>
+          <h1 className="font-sans font-bold text-velum-900 text-2xl tracking-tight">Configuración Stripe</h1>
           <p className="text-sm text-velum-500 mt-1">Pagos y membresías en línea</p>
         </div>
         <Link to="/admin" className="px-4 py-2 rounded-xl border border-velum-200 text-sm text-velum-600 hover:bg-velum-50 transition">
