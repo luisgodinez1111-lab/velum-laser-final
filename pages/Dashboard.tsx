@@ -390,7 +390,7 @@ export const Dashboard: React.FC = () => {
     if (!feedbackText.trim()) return;
     setSavingFeedbackId(sessionId);
     try {
-      const updated = await clinicalService.addSessionFeedback(sessionId, feedbackText.trim());
+      const updated = await clinicalService.addSessionFeedback(sessionId, { memberFeedback: feedbackText.trim() });
       setSessions(prev => prev.map(s => s.id === sessionId ? updated : s));
       setFeedbackOpenId(null); setFeedbackText(""); toast.success("Comentario guardado.");
     } catch (err: any) { toast.error(asString(err?.message, "No se pudo guardar.")); }

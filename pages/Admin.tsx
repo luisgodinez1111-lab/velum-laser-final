@@ -2053,6 +2053,7 @@ export const Admin: React.FC = () => {
           memberAppointments={memberAppointments}
           memberPayments={memberPayments}
           memberSessions={memberSessions}
+          onReloadMemberHistory={() => selectedMember && loadMemberHistory(selectedMember)}
         />
         </SectionErrorBoundary>
       )}

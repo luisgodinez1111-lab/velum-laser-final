@@ -254,6 +254,14 @@ export interface AgendaConfigUpdatePayload {
   }>;
 }
 
+export type FeedbackSeverity = "none" | "mild" | "moderate" | "severe";
+
+export interface FeedbackChip {
+  id: string;
+  label: string;
+  severity: FeedbackSeverity;
+}
+
 export interface SessionTreatment {
   id: string;
   appointmentId?: string | null;
@@ -262,13 +270,22 @@ export interface SessionTreatment {
   laserParametersJson?: Record<string, unknown> | null;
   notes?: string | null;
   adverseEvents?: string | null;
+  // Feedback estructurado del paciente — Fase 12 / B
   memberFeedback?: string | null;
+  feedbackChipsJson?: string[] | null;
+  feedbackSeverity?: FeedbackSeverity | null;
+  feedbackHasAdverseReaction?: boolean;
   feedbackAt?: string | null;
+  // Respuesta clínica del staff
+  feedbackResponseNote?: string | null;
+  feedbackRespondedBy?: string | null;
+  feedbackRespondedAt?: string | null;
   createdAt: string;
   updatedAt: string;
   appointment?: Appointment | null;
   staffUser?: { id: string; email: string };
   user?: { id: string; email: string };
+  feedbackResponder?: { id: string; email: string; profile?: { firstName?: string; lastName?: string } } | null;
 }
 
 export interface SessionCreatePayload {
@@ -415,11 +432,28 @@ export const clinicalService = {
     });
   },
 
-  addSessionFeedback: async (sessionId: string, memberFeedback: string): Promise<SessionTreatment> => {
+  addSessionFeedback: async (
+    sessionId: string,
+    payload: { memberFeedback?: string; feedbackChips?: string[] }
+  ): Promise<SessionTreatment> => {
     return apiFetch<SessionTreatment>(`/v1/sessions/${sessionId}/feedback`, {
       method: "PATCH",
-      body: JSON.stringify({ memberFeedback })
+      body: JSON.stringify(payload)
     });
+  },
+
+  /** Staff respond to patient feedback — Fase 12 / B */
+  respondToSessionFeedback: async (sessionId: string, responseNote: string): Promise<SessionTreatment> => {
+    return apiFetch<SessionTreatment>(`/v1/sessions/${sessionId}/feedback/respond`, {
+      method: "POST",
+      body: JSON.stringify({ responseNote })
+    });
+  },
+
+  /** Catálogo público de chips de feedback (cache compartido cliente y admin). */
+  getFeedbackChips: async (): Promise<FeedbackChip[]> => {
+    const r = await apiFetch<{ chips: FeedbackChip[] }>("/v1/session-feedback/chips");
+    return r.chips ?? [];
   },
 
   getMyPayments: async (): Promise<Payment[]> => {

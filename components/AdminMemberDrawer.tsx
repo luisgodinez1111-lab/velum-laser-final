@@ -8,6 +8,7 @@ import {
   Pill, formatMoney, statusLabel, statusPill, intakeStatusLabel, apptStatusLabel
 } from '../pages/adminShared';
 import { Drawer } from './ui';
+import { SessionFeedbackTimeline } from './admin/SessionFeedbackTimeline';
 
 type DrawerDeleteStep = 'idle' | 'otp-send' | 'otp-confirm';
 
@@ -51,6 +52,8 @@ export type AdminMemberDrawerProps = {
   memberAppointments: Appointment[];
   memberPayments: unknown[];
   memberSessions: SessionTreatment[];
+  /** Refresca el historial tras una mutación (e.g. responder feedback). */
+  onReloadMemberHistory?: () => void;
 };
 
 export const AdminMemberDrawer: React.FC<AdminMemberDrawerProps> = ({
@@ -88,6 +91,7 @@ export const AdminMemberDrawer: React.FC<AdminMemberDrawerProps> = ({
   memberHistoryError,
   memberAppointments,
   memberPayments,
+  onReloadMemberHistory,
   memberSessions,
 }) => {
   const [showAllAppointments, setShowAllAppointments] = React.useState(false);
@@ -423,9 +427,28 @@ export const AdminMemberDrawer: React.FC<AdminMemberDrawerProps> = ({
               </div>
             )}
           </div>
+          {/* Feedback de sesiones (Fase 12 / B.3) — visible si hay al menos 1 con feedback */}
+          {Array.isArray(memberSessions) && memberSessions.some((s) => s.feedbackAt) && (
+            <div className="p-4 border-b border-velum-100">
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-velum-500">Feedback de sesiones</p>
+                {memberSessions.some((s) => s.feedbackHasAdverseReaction && !s.feedbackRespondedAt) && (
+                  <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-[0.14em] text-danger-700">
+                    <span className="w-1.5 h-1.5 rounded-full bg-danger-500 animate-pulse" />
+                    Pendiente respuesta
+                  </span>
+                )}
+              </div>
+              <SessionFeedbackTimeline
+                sessions={memberSessions}
+                onResponseSent={onReloadMemberHistory}
+              />
+            </div>
+          )}
+
           {/* Sesiones */}
           <div className="p-4">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-velum-400 mb-3">Sesiones clínicas</p>
+            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-velum-500 mb-3">Sesiones clínicas</p>
             {isLoadingMemberHistory ? (
               <div className="space-y-2">{[1,2].map(i => <div key={i} className="h-12 bg-velum-100 rounded-xl animate-pulse" />)}</div>
             ) : !Array.isArray(memberSessions) || memberSessions.length === 0 ? (
