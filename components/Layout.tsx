@@ -242,7 +242,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
         />
       )}
 
-      <main className="flex-grow pt-16">
+      <main id="main-content" className="flex-grow pt-16" tabIndex={-1}>
         {children}
       </main>
 

@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Bell, Check, CheckCheck, Loader2, AlertCircle } from "lucide-react";
+import { Bell, Check, CheckCheck, AlertCircle, BellOff } from "lucide-react";
 import { apiFetch, buildApiUrl } from "../services/apiClient";
+import { EmptyState, Skeleton } from "./ui";
 
 const SSE_BACKOFF_INITIAL_MS = 1_000;
 const SSE_BACKOFF_MAX_MS = 30_000;
@@ -178,20 +179,19 @@ export const NotificationBell: React.FC = () => {
       {/* Bell button */}
       <button
         onClick={openPanel}
-        className={`relative flex items-center justify-center w-9 h-9 rounded-full border bg-white hover:border-velum-400 transition shadow-sm ${
-          sseError ? "border-amber-300" : "border-velum-200"
+        className={`group relative flex items-center justify-center w-9 h-9 rounded-full border bg-white shadow-sm transition-all duration-base ease-standard hover:border-velum-400 hover:shadow focus:outline-none focus-visible:shadow-focus active:scale-95 ${
+          sseError ? "border-warning-500" : "border-velum-200"
         }`}
-        aria-label="Notificaciones"
+        aria-label={count > 0 ? `Notificaciones — ${count} sin leer` : "Notificaciones"}
         aria-expanded={open}
-        title={sseError ? "Sin conexión en tiempo real — recargando..." : undefined}
+        title={sseError ? "Sin conexión en tiempo real — reintentando" : undefined}
       >
-        <Bell size={16} className={sseError ? "text-amber-500" : "text-velum-700"} />
+        <Bell size={16} className={`transition-transform duration-base ease-standard group-hover:scale-110 ${sseError ? "text-warning-500" : "text-velum-700"}`} />
         {count > 0 && (
           <span
             aria-live="polite"
             aria-atomic="true"
-            aria-label={`${count > 99 ? "Más de 99" : count} notificaciones sin leer`}
-            className="absolute -top-1 -right-1 min-w-[18px] h-[18px] flex items-center justify-center rounded-full bg-red-500 text-white text-[10px] font-bold px-1 leading-none"
+            className="absolute -top-1 -right-1 min-w-[18px] h-[18px] flex items-center justify-center rounded-full bg-danger-500 text-white text-[10px] font-bold px-1 leading-none ring-2 ring-white animate-scale-in"
           >
             {count > 99 ? "99+" : count}
           </span>
@@ -205,74 +205,91 @@ export const NotificationBell: React.FC = () => {
 
       {/* Panel */}
       {open && (
-        <div className="absolute right-0 mt-2 w-80 sm:w-96 z-50 origin-top-right rounded-2xl border border-velum-200 bg-white shadow-xl ring-1 ring-black/5 flex flex-col max-h-[480px]">
+        <div className="absolute right-0 mt-2 w-80 sm:w-96 z-50 origin-top-right rounded-xl border border-velum-200 bg-white/95 backdrop-blur-md shadow-xl ring-1 ring-black/5 flex flex-col max-h-[480px] animate-scale-in">
           {/* Header */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-velum-100">
             <p className="text-[11px] font-bold uppercase tracking-widest text-velum-500">Notificaciones</p>
             {count > 0 && (
               <button
                 onClick={markAll}
-                className="flex items-center gap-1 text-[11px] text-velum-500 hover:text-velum-800 transition"
+                className="group flex items-center gap-1.5 text-[11px] font-medium text-velum-500 hover:text-velum-900 transition-colors duration-base ease-standard focus:outline-none focus-visible:shadow-focus rounded px-1.5 py-0.5"
               >
-                <CheckCheck size={13} />
-                Marcar todas como leídas
+                <CheckCheck size={13} className="transition-transform duration-base ease-standard group-hover:scale-110" />
+                Marcar todas
               </button>
             )}
           </div>
 
           {/* Fetch error banner */}
           {fetchError && (
-            <div className="px-4 py-2 bg-red-50 border-b border-red-100 text-xs text-red-700 flex items-center gap-1.5">
+            <div className="px-4 py-2.5 bg-danger-50 border-b border-danger-100 text-xs text-danger-700 flex items-center gap-2">
               <AlertCircle size={12} className="shrink-0" />
-              <span>No se pudieron cargar las notificaciones. Intenta de nuevo.</span>
+              <span>No se pudieron cargar las notificaciones.</span>
             </div>
           )}
 
           {/* SSE error banner */}
           {sseError && (
-            <div className="px-4 py-2 bg-amber-50 border-b border-amber-100 text-xs text-amber-700 flex items-center gap-1.5">
-              <span>⚠️</span>
-              <span>Sin tiempo real — intentando reconectar</span>
+            <div className="px-4 py-2.5 bg-warning-50 border-b border-warning-100 text-xs text-warning-700 flex items-center gap-2">
+              <AlertCircle size={12} className="shrink-0" />
+              <span>Sin tiempo real — reintentando…</span>
             </div>
           )}
 
           {/* Body */}
           <div className="overflow-y-auto flex-1">
             {loading ? (
-              <div className="flex items-center justify-center py-10">
-                <Loader2 size={20} className="animate-spin text-velum-300" />
+              <div className="flex flex-col gap-3 p-4">
+                {Array.from({ length: 3 }, (_, i) => (
+                  <div key={i} className="flex items-start gap-3">
+                    <Skeleton variant="circle" size={28} />
+                    <div className="flex-1 flex flex-col gap-1.5">
+                      <Skeleton height={12} width="70%" />
+                      <Skeleton height={10} width="50%" />
+                    </div>
+                  </div>
+                ))}
               </div>
             ) : items.length === 0 ? (
-              <div className="py-10 text-center">
-                <Bell size={28} className="text-velum-200 mx-auto mb-2" />
-                <p className="text-sm text-velum-400">Sin notificaciones</p>
-              </div>
+              <EmptyState
+                icon={<BellOff />}
+                title="Sin notificaciones"
+                description="Te avisaremos aquí cuando haya algo nuevo."
+                size="comfortable"
+              />
             ) : (
               <ul>
                 {items.map((n) => (
                   <li
                     key={n.id}
-                    className={`flex items-start gap-3 px-4 py-3 border-b border-velum-50 last:border-0 transition ${
-                      n.read ? "bg-white" : "bg-amber-50/40"
+                    className={`group flex items-start gap-3 px-4 py-3 border-b border-velum-50 last:border-0 transition-colors duration-base ease-standard ${
+                      n.read ? "bg-transparent hover:bg-velum-50" : "bg-velum-50/60 hover:bg-velum-100/60"
                     }`}
                   >
-                    <span className="text-lg leading-none mt-0.5 shrink-0">
-                      {typeIcon[n.type] ?? "🔔"}
+                    {/* Unread indicator dot */}
+                    <span className="relative shrink-0 mt-1.5">
+                      <span className="text-lg leading-none" aria-hidden="true">
+                        {typeIcon[n.type] ?? "🔔"}
+                      </span>
+                      {!n.read && (
+                        <span className="absolute -top-0.5 -left-0.5 w-2 h-2 rounded-full bg-danger-500 ring-2 ring-white" aria-hidden="true" />
+                      )}
                     </span>
                     <div className="flex-1 min-w-0">
                       <p className={`text-sm leading-snug ${n.read ? "text-velum-600" : "text-velum-900 font-semibold"}`}>
                         {n.title}
                       </p>
                       {n.body && (
-                        <p className="text-xs text-velum-400 mt-0.5 line-clamp-2">{n.body}</p>
+                        <p className="text-xs text-velum-500 mt-0.5 line-clamp-2 leading-relaxed">{n.body}</p>
                       )}
-                      <p className="text-[10px] text-velum-300 mt-1">{timeAgo(n.createdAt)}</p>
+                      <p className="text-[10px] text-velum-400 mt-1.5 uppercase tracking-wider">{timeAgo(n.createdAt)}</p>
                     </div>
                     {!n.read && (
                       <button
                         onClick={() => markOne(n.id)}
+                        aria-label="Marcar como leída"
                         title="Marcar como leída"
-                        className="shrink-0 p-1 rounded-lg text-velum-300 hover:text-velum-700 hover:bg-velum-100 transition"
+                        className="shrink-0 flex items-center justify-center h-7 w-7 rounded-full text-velum-400 opacity-0 group-hover:opacity-100 hover:text-velum-900 hover:bg-white transition-all duration-base ease-standard focus:outline-none focus-visible:shadow-focus focus-visible:opacity-100"
                       >
                         <Check size={13} />
                       </button>

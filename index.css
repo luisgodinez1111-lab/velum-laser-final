@@ -12,6 +12,61 @@
 /* Smooth scroll */
 html { scroll-behavior: smooth; }
 
+/* ── Skip-to-content link — visible solo cuando recibe focus por keyboard ───── */
+.skip-to-content {
+  position: fixed;
+  top: 0;
+  left: 50%;
+  transform: translate(-50%, -120%);
+  z-index: 100;
+  padding: 0.625rem 1.25rem;
+  background: #544538;
+  color: #fdfcfb;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  border-radius: 0 0 8px 8px;
+  text-decoration: none;
+  box-shadow: 0 12px 28px -8px rgb(0 0 0 / 0.18);
+  transition: transform 220ms cubic-bezier(0.2, 0, 0.2, 1);
+}
+.skip-to-content:focus,
+.skip-to-content:focus-visible {
+  transform: translate(-50%, 0);
+  outline: none;
+}
+
+/* ── Scrollbar elegante (WebKit + Firefox) ──────────────────────────────────── */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(126, 102, 77, 0.32) transparent;
+}
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb {
+  background: rgba(126, 102, 77, 0.28);
+  border: 2px solid transparent;
+  border-radius: 9999px;
+  background-clip: content-box;
+  transition: background 180ms ease;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: rgba(126, 102, 77, 0.5);
+  background-clip: content-box;
+}
+*::-webkit-scrollbar-corner { background: transparent; }
+
+/* ── Default focus-visible — sutil pero visible para keyboard nav ─────────────
+   Componentes (Button/IconButton/Card/TextField) overridean con
+   `focus-visible:outline-none focus-visible:shadow-focus` para un ring más
+   elegante. Este default cubre links/textos sin componente. */
+:focus-visible {
+  outline: 2px solid rgba(184, 156, 118, 0.55);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
 /* ── Keyframes ────────────────────────────────────────────────────────────── */
 @keyframes fadeSlideIn {
   from { opacity: 0; transform: translateY(14px); }

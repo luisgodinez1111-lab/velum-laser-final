@@ -43,6 +43,8 @@ const InnerApp: React.FC = () => {
   const { mustChangePassword, needsOnboarding } = useAuth();
   return (
     <>
+      {/* Skip-to-content — visible solo cuando recibe focus (keyboard a11y) */}
+      <a href="#main-content" className="skip-to-content">Saltar al contenido</a>
       <Router>
         <AppErrorBoundary>
           <Layout>
