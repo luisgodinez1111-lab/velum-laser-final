@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Wallet, Target, Users, AlertTriangle } from 'lucide-react';
 import { Member } from '../types';
 import { KpiCard, Pill } from './adminSharedComponents';
 import { statusLabel, statusPill } from './adminUtils';
+import { DataTable, type Column } from '../components/ui';
 
 const formatMoney = (amount: number) =>
   new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', maximumFractionDigits: 0 }).format(amount);
@@ -21,7 +22,87 @@ interface Props {
 }
 
 export const AdminFinanzasSection: React.FC<Props> = ({ members, analytics, onOpenMember }) => {
-  const topMembers = [...members].sort((a, b) => (b.amount ?? 0) - (a.amount ?? 0)).slice(0, 20);
+  const topMembers = useMemo(
+    () => [...members].sort((a, b) => (b.amount ?? 0) - (a.amount ?? 0)).slice(0, 20),
+    [members],
+  );
+
+  // Columnas memoizadas — DataTable las consume estable y evita re-sort.
+  const columns = useMemo<Column<Member>[]>(
+    () => [
+      {
+        id: 'idx',
+        header: '#',
+        accessor: () => null, // index visual, no se ordena
+        width: '48px',
+        cell: () => null, // sobrescrito abajo con renderIndex
+        sortable: false,
+      },
+      {
+        id: 'socio',
+        header: 'Socio',
+        accessor: (m) => m.name ?? m.email ?? '',
+        sortable: true,
+        cell: (m) => (
+          <div>
+            <p className="font-medium text-velum-900">{m.name}</p>
+            <p className="text-xs text-velum-400">{m.email}</p>
+          </div>
+        ),
+      },
+      {
+        id: 'plan',
+        header: 'Plan',
+        accessor: (m) => m.plan ?? '',
+        sortable: true,
+        cell: (m) => <span className="text-velum-600">{m.plan ?? '—'}</span>,
+      },
+      {
+        id: 'monto',
+        header: 'Monto',
+        accessor: (m) => m.amount ?? 0,
+        sortable: true,
+        align: 'right',
+        cell: (m) => (
+          <span className="font-medium text-velum-900">
+            {m.amount ? formatMoney(m.amount) : '—'}
+          </span>
+        ),
+      },
+      {
+        id: 'estado',
+        header: 'Estado',
+        accessor: (m) => m.subscriptionStatus ?? '',
+        sortable: true,
+        cell: (m) => (
+          <Pill label={statusLabel(m.subscriptionStatus)} cls={statusPill(m.subscriptionStatus)} />
+        ),
+      },
+    ],
+    [],
+  );
+
+  // El index visual se inyecta como cell override por fila — necesitamos saber
+  // la posición tras sort, así que en lugar de columna fija usamos un wrapper.
+  // Solución simple: dejamos columna #, pero con cell que mapea por id.
+  const rankByMember = useMemo(() => {
+    const map = new Map<string, number>();
+    topMembers.forEach((m, i) => map.set(m.id, i + 1));
+    return map;
+  }, [topMembers]);
+
+  const finalColumns = useMemo<Column<Member>[]>(() => {
+    return columns.map((c) =>
+      c.id === 'idx'
+        ? {
+            ...c,
+            cell: (m) => (
+              <span className="text-velum-400 text-xs tabular-nums">{rankByMember.get(m.id)}</span>
+            ),
+          }
+        : c,
+    );
+  }, [columns, rankByMember]);
 
   return (
     <div className="space-y-6">
@@ -43,36 +124,17 @@ export const AdminFinanzasSection: React.FC<Props> = ({ members, analytics, onOp
       </div>
       <div>
         <h2 className="text-xs font-bold uppercase tracking-widest text-velum-500 mb-3">Top socios por monto</h2>
-        <div className="bg-white rounded-2xl border border-velum-100 overflow-hidden">
-          {topMembers.length === 0 ? (
-            <div className="py-12 text-center text-xs text-velum-400">Sin datos</div>
-          ) : (
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-velum-100 bg-velum-50/50">
-                  {['#', 'Socio', 'Plan', 'Monto', 'Estado'].map((h) => (
-                    <th key={h} className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-widest text-velum-400">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {topMembers.map((m, i) => (
-                  <tr key={m.id} className={`hover:bg-velum-50 transition cursor-pointer ${i < topMembers.length - 1 ? 'border-b border-velum-50' : ''}`}
-                    onClick={() => onOpenMember(m)}>
-                    <td className="px-4 py-3 text-velum-400 text-xs">{i + 1}</td>
-                    <td className="px-4 py-3">
-                      <p className="font-medium text-velum-900">{m.name}</p>
-                      <p className="text-xs text-velum-400">{m.email}</p>
-                    </td>
-                    <td className="px-4 py-3 text-velum-600">{m.plan ?? '—'}</td>
-                    <td className="px-4 py-3 font-medium text-velum-900">{m.amount ? formatMoney(m.amount) : '—'}</td>
-                    <td className="px-4 py-3"><Pill label={statusLabel(m.subscriptionStatus)} cls={statusPill(m.subscriptionStatus)} /></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
+        <DataTable
+          aria-label="Top socios por monto"
+          data={topMembers}
+          columns={finalColumns}
+          rowKey={(m) => m.id}
+          onRowClick={onOpenMember}
+          searchable
+          searchPlaceholder="Buscar por nombre, email o plan..."
+          defaultSort={{ id: 'monto', dir: 'desc' }}
+          empty={{ title: 'Sin socios', description: 'Aún no hay membresías activas con pagos.' }}
+        />
       </div>
     </div>
   );

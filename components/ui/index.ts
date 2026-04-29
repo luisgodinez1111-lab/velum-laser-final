@@ -54,3 +54,6 @@ export {
   useCommandPalette,
 } from './CommandPalette';
 export type { CommandItem } from './CommandPalette';
+
+export { DataTable } from './DataTable';
+export type { Column, SortDirection } from './DataTable';
