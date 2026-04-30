@@ -31,6 +31,7 @@ import {
 import { Button, PillButton } from "../components/ui";
 import { SignaturePad } from "../components/SignaturePad";
 import { SessionFeedbackPrompt } from "../components/SessionFeedbackPrompt";
+import { AgendaQuickBook } from "../components/AgendaQuickBook";
 import { track } from "../services/analytics";
 import { useAuth } from "../context/AuthContext";
 import { redirectToCustomerPortal, createSubscriptionCheckout } from "../services/stripeService";
@@ -860,23 +861,11 @@ export const Dashboard: React.FC = () => {
                   </section>
                 );
               })() : (
-                <section className="rounded-3xl bg-white border border-velum-200/70 px-8 py-12 sm:px-12 sm:py-16">
-                  <p className="text-[13px] font-semibold text-velum-500">
-                    Sin sesiones agendadas
-                  </p>
-                  <h2 className="mt-4 font-sans font-bold text-velum-900 text-4xl sm:text-5xl leading-tight tracking-[-0.025em]">
-                    Reserva tu próxima visita.
-                  </h2>
-                  <p className="mt-4 text-[15px] text-velum-500 max-w-md leading-relaxed">
-                    Tu calendario está abierto. Selecciona la sesión que más te convenga.
-                  </p>
-                  <Link to="/agenda" className="inline-block mt-8">
-                    <button className={`group inline-flex items-center gap-1.5 text-[14px] font-semibold bg-velum-900 hover:bg-velum-800 text-white px-5 py-2.5 rounded-full transition-colors ${pressBtn}`}>
-                      Agendar sesión
-                      <ChevronRight size={15} className="transition-transform group-hover:translate-x-0.5" />
-                    </button>
-                  </Link>
-                </section>
+                /* Fase 12.2 — AgendaQuickBook reemplaza el empty-state genérico.
+                   Cuando no hay próxima cita, muestra próximos 3 días con slots
+                   disponibles inline. Si el componente no encuentra slots, él
+                   mismo hace fallback a "Ver calendario completo". */
+                <AgendaQuickBook />
               )}
 
               {/* ── Stats trio — Apple híbrido ─────────────────────────────

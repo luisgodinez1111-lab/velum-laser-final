@@ -597,6 +597,45 @@ export const Agenda: React.FC = () => {
     }
   }, [isAuthenticated]);
 
+  // Fase 12.2 — preselect date+slot desde query params (AgendaQuickBook).
+  // Si el paciente entra con /agenda?date=2026-05-02&slot=10:30, hacemos
+  // el fetch de slots de ese día y seleccionamos automáticamente el slot que
+  // coincida. Reduce de 8 acciones a 3 desde Dashboard overview.
+  useEffect(() => {
+    if (!isAuthenticated || viewState !== "calendar") return;
+    const search = window.location.hash.includes("?") ? window.location.hash.split("?")[1] : "";
+    const params = new URLSearchParams(search);
+    const preDate = params.get("date");
+    const preSlot = params.get("slot");
+    if (!preDate || !preSlot) return;
+    if (selectedDate === preDate) return; // ya estamos en ese día
+
+    setSelectedDate(preDate);
+    setSelectedSlot(null);
+    setDaySlots([]);
+    setSlotsError(null);
+    setIsLoadingSlots(true);
+
+    clinicalService.getPublicAgendaSlots(preDate)
+      .then((result) => {
+        if (!result.isOpen || result.slots.length === 0) {
+          setSlotsError("Ese día ya no tiene disponibilidad.");
+          setDaySlots([]);
+          return;
+        }
+        setDaySlots(result.slots);
+        // Auto-seleccionar el slot pre-elegido si aún está disponible.
+        const match = result.slots.find((s) => s.label === preSlot && s.available);
+        if (match) {
+          setSelectedSlot(match);
+          // Limpiar query params para que reload no re-dispare.
+          window.history.replaceState(null, "", window.location.pathname + "#/agenda");
+        }
+      })
+      .catch(() => setSlotsError("No se pudo cargar la disponibilidad. Intenta de nuevo."))
+      .finally(() => setIsLoadingSlots(false));
+  }, [isAuthenticated, viewState]);
+
     const __guestMode = typeof window !== "undefined"
     ? new URLSearchParams((window.location.hash.split("?")[1] ?? "")).get("mode")
     : null;
