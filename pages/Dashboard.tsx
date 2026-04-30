@@ -32,6 +32,9 @@ import { Button, PillButton } from "../components/ui";
 import { SignaturePad } from "../components/SignaturePad";
 import { SessionFeedbackPrompt } from "../components/SessionFeedbackPrompt";
 import { AgendaQuickBook } from "../components/AgendaQuickBook";
+import { PaymentStatusCard } from "../components/dashboard/PaymentStatusCard";
+import { ProgressJourney } from "../components/dashboard/ProgressJourney";
+import { MembershipMicroCard } from "../components/dashboard/MembershipMicroCard";
 import { track } from "../services/analytics";
 import { useAuth } from "../context/AuthContext";
 import { redirectToCustomerPortal, createSubscriptionCheckout } from "../services/stripeService";
@@ -868,60 +871,49 @@ export const Dashboard: React.FC = () => {
                 <AgendaQuickBook />
               )}
 
-              {/* ── Stats trio — Apple híbrido ─────────────────────────────
-                   Sans bold tight para números (no serif italic). Labels
-                   sans semibold sin uppercase. Tabular-nums para alineación
-                   precisa. Divisores hairline minimal. */}
-              <section aria-label="Resumen de tu actividad" className="bg-white rounded-3xl border border-velum-200/70 overflow-hidden">
-                <div className="grid grid-cols-1 sm:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x divide-velum-100">
-                  {/* Sesiones */}
-                  <button
-                    type="button"
-                    onClick={() => switchTab("historial")}
-                    className="group text-left px-8 py-10 sm:px-10 sm:py-12 hover:bg-velum-50/50 transition-colors duration-base focus:outline-none focus-visible:bg-velum-50"
-                  >
-                    <p className="text-[13px] font-semibold text-velum-500">
-                      Sesiones completadas
-                    </p>
-                    <p className="mt-4 font-sans font-bold text-velum-900 text-[56px] leading-none tracking-[-0.035em] tabular-nums animate-count-in">
-                      {sessions.length}
-                      <span className="text-velum-300 font-medium">/12</span>
-                    </p>
-                    <div className="mt-5 flex items-center gap-1 text-[14px] font-semibold text-velum-500 group-hover:text-velum-900 transition-colors">
-                      Ver historial
-                      <ChevronRight size={14} className="transition-transform group-hover:translate-x-0.5" />
+              {/* ── Quick Actions Trio — Fase 12.3 ─────────────────────────
+                   Reemplaza el stats trio decorativo (sesiones / documentos /
+                   plan) por trio accionable: Progreso · Próximo cargo · Plan.
+                   Cada uno con CTA contextual y storytelling concreto.
+                   Documentos pendientes ya viven en alerts arriba — no
+                   duplicar aquí. */}
+              {(() => {
+                // Derivar datos para los 3 cards (memo-friendly via IIFE).
+                const currentTier = membership?.planId
+                  ? MEMBERSHIPS.find((t) => t.stripePriceId === asString(membership.planId))
+                  : null;
+                const isFullBodyPlan = currentTier?.isFullBody ?? false;
+                const nextChargeAmount = planDetails?.amount
+                  ? new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", maximumFractionDigits: 0 }).format(planDetails.amount)
+                  : undefined;
+                const nextChargeDate = membership?.currentPeriodEnd
+                  ? new Date(membership.currentPeriodEnd).toLocaleDateString("es-MX", { day: "numeric", month: "long" })
+                  : undefined;
+                return (
+                  <section aria-label="Resumen accionable" className="bg-white rounded-3xl border border-velum-200/70 overflow-hidden">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x divide-velum-100">
+                      <ProgressJourney
+                        sessionsCompleted={sessions.length}
+                        onViewHistory={() => switchTab("historial")}
+                      />
+                      <PaymentStatusCard
+                        membershipStatus={membershipStatus}
+                        nextChargeAmount={nextChargeAmount}
+                        nextChargeDate={nextChargeDate}
+                        onOpenPortal={() => openCustomerPortal('trio_payment_card')}
+                        onViewBilling={() => switchTab("billing")}
+                      />
+                      <MembershipMicroCard
+                        planLabel={planLabel}
+                        membershipStatus={membershipStatus}
+                        msLabel={msLabel}
+                        msCls={msCls}
+                        isFullBodyPlan={isFullBodyPlan}
+                      />
                     </div>
-                  </button>
-
-                  {/* Documentos */}
-                  <div className="px-8 py-10 sm:px-10 sm:py-12">
-                    <p className="text-[13px] font-semibold text-velum-500">
-                      Documentos
-                    </p>
-                    <p className="mt-4 font-sans font-bold text-velum-900 text-[56px] leading-none tracking-[-0.035em] tabular-nums animate-count-in">
-                      {pendingDocs}
-                    </p>
-                    <p className="mt-5 text-[14px] text-velum-500">
-                      Pendientes de firma
-                    </p>
-                  </div>
-
-                  {/* Plan */}
-                  <div className="px-8 py-10 sm:px-10 sm:py-12">
-                    <p className="text-[13px] font-semibold text-velum-500">
-                      Membresía
-                    </p>
-                    <p className="mt-4 font-sans font-bold text-velum-900 text-[28px] sm:text-[32px] leading-tight tracking-[-0.025em]">
-                      {planLabel ?? "Sin plan"}
-                    </p>
-                    <span
-                      className={`mt-5 inline-flex items-center text-[11px] font-semibold uppercase tracking-wide px-2.5 py-1 border rounded-full ${msCls}`}
-                    >
-                      {msLabel}
-                    </span>
-                  </div>
-                </div>
-              </section>
+                  </section>
+                );
+              })()}
 
               {/* Banner: plan pre-seleccionado sin membresía activa */}
               {interestedPlanCode && (!membership || membershipStatus === "inactive" || membershipStatus === "canceled") && (() => {
