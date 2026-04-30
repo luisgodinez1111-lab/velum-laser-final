@@ -3,6 +3,7 @@ import { useParams, useSearchParams } from "react-router-dom";
 import { CheckCircle2, XCircle, Loader2, CreditCard, ArrowRight, Clock } from "lucide-react";
 import { PillButton } from "../components/ui";
 import { apiFetch } from "../services/apiClient";
+import { track } from "../services/analytics";
 
 type ChargeInfo = {
   id: string;
@@ -98,6 +99,10 @@ export const CustomChargePage: React.FC = () => {
         body: JSON.stringify({ otp: code }),
       });
       if (data.checkoutUrl) {
+        track('custom_charge_authorize', {
+          chargeId: id,
+          type: charge?.type ?? 'unknown',
+        });
         window.location.href = data.checkoutUrl;
       }
     } catch (e: unknown) {
@@ -105,6 +110,7 @@ export const CustomChargePage: React.FC = () => {
       const isTerminal = msg.toLowerCase().includes("demasiados intentos") ||
                          msg.toLowerCase().includes("too many");
       if (isTerminal) setOtpBlocked(true);
+      track('error_payment', { context: 'custom_charge_otp', terminal: isTerminal });
       setVerifyError(msg);
       setVerifying(false);
     }

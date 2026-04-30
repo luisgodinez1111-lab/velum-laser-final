@@ -8,6 +8,7 @@ import { createSubscriptionCheckout } from '../services/stripeService';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { apiFetch } from '../services/apiClient';
+import { track } from '../services/analytics';
 
 const PENDING_PLAN_KEY = 'velum_pending_plan';
 
@@ -55,6 +56,13 @@ export const Memberships: React.FC = () => {
   }, [isAuthenticated]);
 
   const handleTierSelect = (tier: MembershipTier) => {
+    track('membership_plan_select', {
+      tierId: tier.id,
+      tierName: tier.name,
+      price: tier.price,
+      isFullBody: tier.isFullBody,
+      authenticated: isAuthenticated,
+    });
     setSelectedTier(tier);
     setSelectedZones([]);
     if (tier.isFullBody) {
@@ -75,6 +83,11 @@ export const Memberships: React.FC = () => {
   const toggleZone = (zoneId: ZoneId) => {
     if (!selectedTier) return;
     const isSelected = selectedZones.includes(zoneId);
+    track('membership_zone_toggle', {
+      zoneId,
+      action: isSelected ? 'deselect' : 'select',
+      tierId: selectedTier.id,
+    });
     if (isSelected) {
       setSelectedZones(prev => prev.filter(id => id !== zoneId));
       return;
@@ -124,6 +137,12 @@ export const Memberships: React.FC = () => {
 
   const handleCheckout = async () => {
     if (!selectedTier) return;
+    track('membership_checkout_click', {
+      tierId: selectedTier.id,
+      tierName: selectedTier.name,
+      zonesCount: selectedZones.length,
+      authenticated: isAuthenticated,
+    });
     if (!isAuthenticated) {
       toast.info("Inicia sesión para continuar con el pago.");
       navigate('/agenda?mode=login');

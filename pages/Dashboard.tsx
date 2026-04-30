@@ -31,6 +31,7 @@ import {
 import { Button, PillButton } from "../components/ui";
 import { SignaturePad } from "../components/SignaturePad";
 import { SessionFeedbackPrompt } from "../components/SessionFeedbackPrompt";
+import { track } from "../services/analytics";
 import { useAuth } from "../context/AuthContext";
 import { redirectToCustomerPortal, createSubscriptionCheckout } from "../services/stripeService";
 import { MEMBERSHIPS } from "../constants";
@@ -273,9 +274,20 @@ export const Dashboard: React.FC = () => {
   // (Cuenta unificada) per Fase 12.0 reorganización IA.
   const switchTab = (key: TabKey) => {
     const redirected = key === "security" ? "profile" : key;
+    track('dashboard_tab_change', { from: activeTab, to: redirected });
     setActiveTab(redirected);
     setTabKey(k => k + 1);
     setShowMoreSheet(false);
+  };
+
+  // Helper: abre portal Stripe + reporta a analytics.
+  const openCustomerPortal = async (context: string) => {
+    track('payment_portal_open', { context });
+    try {
+      await redirectToCustomerPortal();
+    } catch (err: any) {
+      toast.error(asString(err?.message, "No se pudo abrir el portal de cliente."));
+    }
   };
 
   useEffect(() => {
@@ -1027,7 +1039,7 @@ export const Dashboard: React.FC = () => {
                     <Calendar size={18} className="text-velum-600 group-hover:text-velum-900 transition-colors" />
                     <span className="text-[13px] font-semibold text-velum-700 group-hover:text-velum-900 transition-colors">Agendar cita</span>
                   </Link>
-                  <button type="button" onClick={async () => { try { await redirectToCustomerPortal(); } catch (err: any) { toast.error(asString(err?.message, "No se pudo abrir el portal de cliente.")); } }}
+                  <button type="button" onClick={() => openCustomerPortal('overview_quick_actions')}
                     className={`flex items-center gap-3 rounded-2xl border border-velum-100 bg-velum-50 px-4 py-3.5 hover:border-velum-300 hover:bg-white transition-all group card-hover text-left ${pressBtn}`}>
                     <ExternalLink size={18} className="text-velum-600 group-hover:text-velum-900 transition-colors" />
                     <span className="text-[13px] font-semibold text-velum-700 group-hover:text-velum-900 transition-colors">Portal cliente</span>
@@ -1381,7 +1393,7 @@ export const Dashboard: React.FC = () => {
                     <p className="text-[14px] font-semibold text-danger-700">Pago pendiente</p>
                     <p className="text-[13px] text-danger-700/85 mt-0.5">No se procesó tu último pago. Actualiza tu método de pago para mantener tu membresía activa.</p>
                   </div>
-                  <button type="button" onClick={async () => { try { await redirectToCustomerPortal(); } catch (err: any) { toast.error(asString(err?.message, "")); } }}
+                  <button type="button" onClick={() => openCustomerPortal('billing_past_due_alert')}
                     className={`shrink-0 bg-danger-500 text-white text-[12px] font-semibold px-3 py-1.5 rounded-full hover:bg-danger-700 transition-colors duration-base ease-standard ${pressBtn}`}>
                     Actualizar
                   </button>
@@ -1413,7 +1425,7 @@ export const Dashboard: React.FC = () => {
                   variant="outlineDark"
                   size="md"
                   leftIcon={<ExternalLink size={14} aria-hidden="true" />}
-                  onClick={async () => { try { await redirectToCustomerPortal(); } catch (err: any) { toast.error(asString(err?.message, "No se pudo abrir el portal de cliente.")); } }}
+                  onClick={() => openCustomerPortal('billing_tab_main_cta')}
                 >
                   Ir al portal
                 </PillButton>

@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Button, PillButton } from "../components/ui";
 import { PasswordInput } from "../components/PasswordInput";
+import { track } from "../services/analytics";
 import { ChevronLeft, ChevronRight, Lock, User, Sparkles, Shield, FileText, Stethoscope, CircleCheck, KeyRound, Mail, Check } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { Link, useLocation, useNavigate } from "react-router-dom";
@@ -150,6 +151,9 @@ export const Agenda: React.FC = () => {
   const [slotsError, setSlotsError] = useState<string | null>(null);
 
   const setGuestViewState = (target: "intro" | "login" | "register") => {
+    if (target === "login" || target === "register") {
+      track("agenda_intro_choose", { choice: target });
+    }
     setViewState(target);
     if (isAuthenticated) return;
 
@@ -556,6 +560,11 @@ export const Agenda: React.FC = () => {
     setIsScheduling(true);
     setAppointmentMessage(null);
 
+    track("agenda_book_attempt", {
+      reason: appointmentType,
+      hasInterestedPlan: Boolean(selectedPlanCode),
+    });
+
     try {
       const [year, month, day] = selectedDate.split("-").map(Number);
       const startAt = new Date(year, month - 1, day, 0, selectedSlot.startMinute, 0, 0);
@@ -568,8 +577,10 @@ export const Agenda: React.FC = () => {
         interestedPlanCode: selectedPlanCode ?? undefined,
       });
 
+      track("agenda_book_success", { reason: appointmentType });
       window.location.href = checkoutUrl;
     } catch (error: any) {
+      track("error_payment", { context: "agenda_deposit" });
       toast.error(error?.message ?? "No se pudo iniciar el pago. Intenta de nuevo.");
       setIsScheduling(false);
     }
@@ -1711,7 +1722,7 @@ export const Agenda: React.FC = () => {
                   <button
                     key={slot.label}
                     disabled={!slot.available}
-                    onClick={() => setSelectedSlot(slot)}
+                    onClick={() => { setSelectedSlot(slot); track('agenda_slot_select', { reason: appointmentType }); }}
                     className={`
                       rounded-xl border py-2.5 text-[14px] font-medium tabular-nums transition-all duration-base ease-standard
                       ${!slot.available

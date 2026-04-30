@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { CheckCircle2, MessageSquare, Sparkles } from 'lucide-react';
 import type { SessionTreatment, FeedbackChip, FeedbackSeverity } from '../services/clinicalService';
 import { clinicalService } from '../services/clinicalService';
+import { track } from '../services/analytics';
 import { PillButton } from './ui';
 
 // SessionFeedbackPrompt — Fase 12.1
@@ -76,6 +77,17 @@ export const SessionFeedbackPrompt: React.FC<Props> = ({ sessions, onSubmitted }
     clinicalService.getFeedbackChips().then(setChips).catch(() => setChips([]));
   }, [chips, candidate]);
 
+  // Trackear cuando el paciente VE la respuesta del staff (engagement loop completo).
+  // Una sola vez por sesión respondida (key del effect = sessionId).
+  useEffect(() => {
+    if (!recentlyResponded || candidate) return;
+    track('feedback_response_view', {
+      sessionId: recentlyResponded.id,
+      daysSinceResponse: Math.max(0, Math.floor((Date.now() - new Date(recentlyResponded.feedbackRespondedAt!).getTime()) / (1000 * 60 * 60 * 24))),
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recentlyResponded?.id, candidate]);
+
   // Si no hay candidato pendiente Y no hay respuesta reciente, no renderizar.
   if (!candidate && !recentlyResponded) return null;
 
@@ -141,10 +153,18 @@ export const SessionFeedbackPrompt: React.FC<Props> = ({ sessions, onSubmitted }
     if (!canSubmit) return;
     setSubmitting(true);
     setSubmitError(null);
+    const chipsArray = Array.from(selectedChips);
     try {
-      await clinicalService.addSessionFeedback(candidate.id, {
-        feedbackChips: Array.from(selectedChips),
+      const updated = await clinicalService.addSessionFeedback(candidate.id, {
+        feedbackChips: chipsArray,
         memberFeedback: text.trim() ? text.trim() : undefined,
+      });
+      // Reportar a analytics (sin PII — solo metadatos categóricos).
+      track('feedback_submit', {
+        severity: updated.feedbackSeverity ?? 'unknown',
+        chipsCount: chipsArray.length,
+        hasFreeText: text.trim().length > 0,
+        sessionAgeDays: Math.max(0, Math.floor((Date.now() - new Date(candidate.createdAt).getTime()) / (1000 * 60 * 60 * 24))),
       });
       onSubmitted?.();
     } catch (e: unknown) {
