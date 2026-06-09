@@ -1,0 +1,137 @@
+# ══════════════════════════════════════════════════════════════════════════════
+# VELUM OS — Render Blueprint (deploy $0, 1 proceso)
+# ──────────────────────────────────────────────────────────────────────────────
+# Un único servicio web Docker que corre el API + el worker inline
+# (RUN_WORKER_INLINE=true). Base de datos en Neon (externa). Uploads en
+# Cloudflare R2 (STORAGE_DRIVER=r2) porque el filesystem de Render free es
+# EFÍMERO — sin R2 los documentos firmados se pierden en cada redeploy.
+#
+# Cómo usar:
+#   1. Sube este archivo al repo (ya en la raíz).
+#   2. Render Dashboard > New > Blueprint > conecta el repo.
+#   3. Render detecta render.yaml y crea el servicio.
+#   4. Rellena las env vars marcadas `sync: false` (secretos) en el dashboard.
+#
+# ⚠️ Plan free: el servicio SE DUERME tras ~15 min de inactividad. Configura un
+#    keep-alive (cron-job.org) que pegue a https://<tu-api>/health cada 10 min,
+#    o webhooks de Stripe/Google que lleguen mientras duerme se reintentan tarde.
+# ⚠️ Plan free: 512 MB RAM para API+worker juntos. Si hay OOM, subir a Starter.
+# ══════════════════════════════════════════════════════════════════════════════
+
+services:
+  - type: web
+    name: velum-api
+    runtime: docker
+    plan: free
+    region: oregon                 # us-west; elige el más cercano disponible
+    dockerfilePath: ./server/Dockerfile
+    dockerContext: ./server
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      # ── Servidor ──────────────────────────────────────────────────────────
+      - key: NODE_ENV
+        value: production
+      # PORT lo inyecta Render automáticamente; env.ts lo lee de process.env.PORT.
+      - key: RUN_WORKER_INLINE       # ← clave del deploy $0: worker en el mismo proceso
+        value: "true"
+
+      # ── URLs (ajusta a tus dominios reales) ───────────────────────────────
+      - key: APP_URL
+        value: https://velumlaser.com
+      - key: API_URL
+        value: https://api.velumlaser.com
+      - key: BASE_URL
+        value: https://api.velumlaser.com
+      - key: CORS_ORIGIN
+        value: https://velumlaser.com
+      - key: STRIPE_PORTAL_RETURN_URL
+        value: https://velumlaser.com/account
+      - key: STRIPE_CHECKOUT_BASE_URL
+        value: https://velumlaser.com
+      - key: GOOGLE_REDIRECT_URI
+        value: https://api.velumlaser.com/api/integrations/google-calendar/callback
+
+      # ── Cookies (cross-subdomain: frontend velumlaser.com ↔ api.velumlaser.com)
+      - key: COOKIE_DOMAIN
+        value: .velumlaser.com
+      - key: COOKIE_SAME_SITE
+        value: lax
+
+      # ── Storage R2 (efímero → obligatorio) ────────────────────────────────
+      - key: STORAGE_DRIVER
+        value: r2
+      - key: R2_REGION
+        value: auto
+      - key: R2_BUCKET
+        sync: false
+      - key: R2_ENDPOINT
+        sync: false
+      - key: R2_ACCESS_KEY_ID
+        sync: false
+      - key: R2_SECRET_ACCESS_KEY
+        sync: false
+
+      # ── Base de datos (Neon) ──────────────────────────────────────────────
+      - key: DATABASE_URL            # postgresql://...neon.tech/velum?sslmode=require
+        sync: false
+
+      # ── Secretos auth/cifrado ─────────────────────────────────────────────
+      - key: JWT_SECRET
+        sync: false
+      - key: INTEGRATIONS_ENC_KEY
+        sync: false
+      - key: PHI_MASTER_KEY
+        sync: false
+      - key: GOOGLE_WEBHOOK_TOKEN
+        sync: false
+      - key: HEALTH_API_KEY
+        sync: false
+
+      # ── Stripe ────────────────────────────────────────────────────────────
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_PUBLISHABLE_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET   # ← regenerar: nuevo endpoint = nuevo whsec_
+        sync: false
+
+      # ── Resend (6 claves dedicadas) ───────────────────────────────────────
+      - key: RESEND_FROM_EMAIL
+        value: noreply@velumlaser.com
+      - key: RESEND_KEY_VERIFICATION
+        sync: false
+      - key: RESEND_KEY_RESET
+        sync: false
+      - key: RESEND_KEY_REMINDERS
+        sync: false
+      - key: RESEND_KEY_DOCUMENTS
+        sync: false
+      - key: RESEND_KEY_ADMIN_INVITE
+        sync: false
+      - key: RESEND_KEY_NOTIFICATIONS
+        sync: false
+      - key: ADMIN_NOTIFICATION_EMAIL
+        sync: false
+
+      # ── Google Calendar ───────────────────────────────────────────────────
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+
+      # ── WhatsApp / Meta ───────────────────────────────────────────────────
+      - key: META_WA_ACCESS_TOKEN
+        sync: false
+      - key: META_WA_PHONE_NUMBER_ID
+        sync: false
+
+      # ── IA (opcional) ─────────────────────────────────────────────────────
+      - key: ANTHROPIC_API_KEY
+        sync: false
+
+      # ── Seed (déjalo en false; el seed inicial ya corrió en producción) ────
+      - key: RUN_SEED
+        value: "false"
+      - key: LOG_LEVEL
+        value: info

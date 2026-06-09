@@ -2,7 +2,7 @@ import { Response } from "express";
 import path from "path";
 import { AuthRequest } from "../middlewares/auth";
 import { documentSignSchema, documentUploadSchema } from "../validators/documents";
-import { generateStorageKey, getFilePath, saveFile } from "../services/storageService";
+import { generateStorageKey, readFile, saveFile } from "../services/storageService";
 import { prisma } from "../db/prisma";
 import { withTenantContext } from "../db/withTenantContext";
 import { requireTenantId } from "../utils/tenantContext";
@@ -83,10 +83,10 @@ export const downloadDocument = async (req: AuthRequest, res: Response) => {
   if (!document.storageKey) {
     return res.status(404).json({ message: "Documento sin archivo" });
   }
-  const filePath = await getFilePath(document.storageKey);
+  const buffer = await readFile(document.storageKey);
   res.setHeader("Content-Type", document.contentType ?? "application/octet-stream");
   res.setHeader("Content-Disposition", `attachment; filename="${path.basename(document.storageKey)}"`);
-  return res.sendFile(filePath);
+  return res.send(buffer);
 };
 
 export const signDocument = async (req: AuthRequest, res: Response) => {

@@ -57,6 +57,7 @@ import { requestContext } from "./utils/requestContext";
 import { getWorkerStatus } from "./utils/workerRegistry";
 import { requireAuth, requireRole } from "./middlewares/auth";
 import type { AuthRequest } from "./middlewares/auth";
+import { startWorkerTasks } from "./workers/startWorkerTasks";
 
 if (!env.jwtSecret) {
   throw new Error("JWT_SECRET is required");
@@ -320,16 +321,32 @@ const warnIfMigrationsPending = async () => {
   }
 };
 
+// Resuelve en shutdown para drenar el worker inline (si está activo).
+let triggerWorkerStop: (() => void) | null = null;
+
 const server = app.listen(env.port, () => {
   logger.info(`API running on :${env.port}`);
   void warnIfMigrationsPending();
-  // Crons + integrationWorker viven ahora en el proceso `worker`.
-  // No iniciar nada de eso aquí: el API es stateless.
+
+  // Por defecto el API es stateless: crons + integrationWorker viven en el
+  // proceso `worker` dedicado. PERO en deploys $0 (1 solo servicio always-on,
+  // ej. Render/Koyeb free) se activa RUN_WORKER_INLINE=true y el API hospeda
+  // también el outbox dispatcher + crons en este mismo proceso.
+  if (env.runWorkerInline) {
+    const workerStopSignal = new Promise<void>((resolve) => { triggerWorkerStop = resolve; });
+    logger.info("[startup] RUN_WORKER_INLINE=true — worker arrancando en el proceso del API");
+    void startWorkerTasks(workerStopSignal).catch((err) => {
+      logger.error({ err }, "[startup] worker inline terminó con error");
+    });
+  }
 });
 
 // ── Graceful shutdown ─────────────────────────────────────────────────
 const shutdown = (signal: string) => {
   logger.info(`[shutdown] ${signal} received — stopping gracefully`);
+  // Señaliza al worker inline para que drene el batch en curso (SKIP LOCKED
+  // hace seguro re-procesar un batch a medias si el drain no alcanza).
+  triggerWorkerStop?.();
   server.close(() => {
     prisma.$disconnect().then(() => {
       logger.info("[shutdown] Clean shutdown complete");

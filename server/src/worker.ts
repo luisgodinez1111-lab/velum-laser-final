@@ -24,14 +24,7 @@ initSentry();
 
 import { prisma } from "./db/prisma";
 import { logger } from "./utils/logger";
-import { env } from "./utils/env";
-import { runDispatcher } from "./workers/outboxDispatcher";
-import { registerAllOutboxHandlers } from "./workers/outboxHandlers";
-import { startPaymentReminderCron } from "./services/paymentReminderService";
-import { startAppointmentReminderCron } from "./services/appointmentReminderService";
-import { startIntegrationJobCleanupCron } from "./services/integrationJobCleanupService";
-import { startIntegrationWorker, stopIntegrationWorker } from "./services/integrationWorker";
-import { renewRecurringCharges } from "./services/customChargeService";
+import { startWorkerTasks } from "./workers/startWorkerTasks";
 
 async function main(): Promise<void> {
   logger.info({ pid: process.pid, node: process.version }, "[worker] booting");
@@ -39,35 +32,6 @@ async function main(): Promise<void> {
   // Verifica conectividad DB antes de empezar a polear.
   await prisma.$queryRaw`SELECT 1`;
   logger.info("[worker] DB reachable");
-
-  // Registrar todos los handlers conocidos. Si nuevo evento llega sin
-  // handler, el dispatcher lo marca 'done' con warn — no bloquea la cola.
-  registerAllOutboxHandlers();
-
-  // ── Crons (Fase 1.2.c) ─────────────────────────────────────────────
-  // Los crons que antes vivían en el API ahora corren acá. Los services
-  // (paymentReminderService, etc.) se mantuvieron intactos — solo cambia
-  // el proceso que invoca start*Cron().
-  //
-  // Hoy hay 1 worker → cada cron corre exactamente una vez. Cuando
-  // escalemos a múltiples workers, envolver cada cron con `withCronLock`
-  // de ./workers/cronLock.ts (ya está disponible como utility).
-  startPaymentReminderCron();
-  startAppointmentReminderCron();
-  startIntegrationJobCleanupCron();
-
-  // Recurring charge renewal — antes vivía en setInterval del API.
-  const recurringTimer = setInterval(() => {
-    renewRecurringCharges()
-      .then((n) => { if (n > 0) logger.info({ renewed: n }, "[recurring-charges] renewed"); })
-      .catch((err) => logger.error({ err }, "[recurring-charges] cron error"));
-  }, env.recurringChargeRenewMs);
-  recurringTimer.unref();
-
-  // Integration worker — poller del IntegrationJob queue.
-  await startIntegrationWorker().catch((err) => {
-    logger.error({ err }, "[worker] failed to start integration worker");
-  });
 
   // Promise que resuelve en shutdown.
   let triggerStop: (() => void) | null = null;
@@ -105,21 +69,10 @@ async function main(): Promise<void> {
     stopSignal.then(() => server.close());
   }
 
-  await runDispatcher(
-    {
-      prisma,
-      batchSize: Number(process.env.OUTBOX_BATCH_SIZE ?? 50),
-      idleSleepMs: Number(process.env.OUTBOX_IDLE_SLEEP_MS ?? 2000),
-      handlerTimeoutMs: Number(process.env.OUTBOX_HANDLER_TIMEOUT_MS ?? 30_000),
-    },
-    stopSignal,
-  );
-
-  // Apagar cron workers — node-cron no expone shutdown global, los timers
-  // son desreferenciados (.unref()) así que no bloquean el proceso. El
-  // integrationWorker sí necesita stop explícito para terminar el polling
-  // en curso antes de cerrar la conexión DB.
-  stopIntegrationWorker();
+  // Outbox dispatcher + crons + integration worker. Fuente única en
+  // startWorkerTasks, compartida con el modo inline del API (RUN_WORKER_INLINE).
+  // Bloquea hasta que stopSignal resuelva (shutdown) y drene el batch en curso.
+  await startWorkerTasks(stopSignal);
 
   await prisma.$disconnect();
   logger.info("[worker] exited cleanly");

@@ -70,6 +70,26 @@ export const env = {
   stripePortalReturnUrl: process.env.STRIPE_PORTAL_RETURN_URL ?? "http://localhost:5173/account",
   uploadDir: process.env.UPLOAD_DIR ?? "/var/velum/uploads",
   uploadMaxSize: Number(process.env.UPLOAD_MAX_SIZE ?? 10 * 1024 * 1024),
+
+  // ── Worker inline (deploy $0, 1 proceso) ───────────────────────────
+  // Cuando true, el API arranca TAMBIÉN el outbox dispatcher + crons en el
+  // mismo proceso (startWorkerTasks). Para hosts que solo permiten 1 servicio
+  // always-on (Render/Koyeb free). En deploy con worker dedicado: false.
+  runWorkerInline: process.env.RUN_WORKER_INLINE === "true",
+
+  // ── Storage driver ─────────────────────────────────────────────────
+  // "local" → filesystem (VPS con volumen persistente).
+  // "r2"    → Cloudflare R2 (S3-compatible). Obligatorio en hosts con
+  //           filesystem efímero, o los documentos firmados se pierden en
+  //           cada redeploy. R2: 10 GB gratis, sin cargos de egress.
+  storageDriver: (process.env.STORAGE_DRIVER ?? "local").toLowerCase(),
+  r2: {
+    bucket:          process.env.R2_BUCKET            ?? "",
+    endpoint:        process.env.R2_ENDPOINT          ?? "", // https://<accountid>.r2.cloudflarestorage.com
+    accessKeyId:     process.env.R2_ACCESS_KEY_ID     ?? "",
+    secretAccessKey: process.env.R2_SECRET_ACCESS_KEY ?? "",
+    region:          process.env.R2_REGION            ?? "auto",
+  },
   gracePeriodDays: Number(process.env.GRACE_PERIOD_DAYS ?? 5),
   corsOrigin: (() => {
     const origin = process.env.CORS_ORIGIN ?? "http://localhost:5173";
