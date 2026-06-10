@@ -11,16 +11,24 @@
 -- app conecte como app_user) se hace cambiando DATABASE_URL en .env y
 -- redeploy. Hasta entonces, el rol existe pero nadie lo usa — cero riesgo.
 --
--- Password: leído desde la variable de sesión `app.bootstrap_password` que
--- el operador setea ANTES de correr la migración. La migración falla en
--- voz alta si no se setea — preferimos boot ruidoso a default inseguro.
+-- PORTABILIDAD (migración a Postgres gestionado, ej. Neon): un Postgres
+-- gestionado no expone superusuario `postgres` ni permite setear GUCs custom
+-- vía ALTER DATABASE/ROLE. Por eso:
+--   - Si `app.bootstrap_password` no está seteado, se genera uno aleatorio
+--     (app_user no se usa mientras RLS_ENFORCE=false; el password se rota al
+--     activar RLS de verdad).
+--   - DATABASE y FOR ROLE se resuelven dinámicamente (current_database /
+--     current_user) en vez de hardcodear `velum` / `postgres`.
 
 DO $$
 DECLARE
-  pwd TEXT := NULLIF(current_setting('app.bootstrap_password', true), '');
+  pwd  TEXT := NULLIF(current_setting('app.bootstrap_password', true), '');
+  ownr TEXT := current_user;
+  dbn  TEXT := current_database();
 BEGIN
   IF pwd IS NULL THEN
-    RAISE EXCEPTION 'Pasar password vía: SET app.bootstrap_password = ''<password-fuerte>''; antes de aplicar esta migración';
+    pwd := replace(gen_random_uuid()::text, '-', '') || replace(gen_random_uuid()::text, '-', '');
+    RAISE NOTICE 'app.bootstrap_password no seteado — app_user recibe un password aleatorio (sin uso mientras RLS_ENFORCE=false)';
   END IF;
 
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'app_user') THEN
@@ -30,31 +38,28 @@ BEGIN
     EXECUTE format('ALTER ROLE app_user WITH LOGIN PASSWORD %L NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE', pwd);
     RAISE NOTICE 'Updated role app_user';
   END IF;
+
+  -- ── Permiso de conexión sobre la DB actual (portable) ────────────────
+  EXECUTE format('GRANT CONNECT ON DATABASE %I TO app_user', dbn);
+
+  -- ── Permisos sobre tablas/sequences FUTURAS ──────────────────────────
+  -- Default privileges del rol que corre las migraciones (postgres en
+  -- self-host, neondb_owner en Neon) → current_user, portable. Cada vez que
+  -- ese rol cree una tabla nueva (prisma migrate), app_user recibe estos grants.
+  EXECUTE format('ALTER DEFAULT PRIVILEGES FOR ROLE %I IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO app_user', ownr);
+  EXECUTE format('ALTER DEFAULT PRIVILEGES FOR ROLE %I IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO app_user', ownr);
+  EXECUTE format('ALTER DEFAULT PRIVILEGES FOR ROLE %I IN SCHEMA public GRANT EXECUTE ON FUNCTIONS TO app_user', ownr);
 END $$;
 
--- ── Permisos sobre la DB y schema ─────────────────────────────────────
-GRANT CONNECT ON DATABASE velum TO app_user;
-GRANT USAGE ON SCHEMA public TO app_user;
-
--- ── Permisos sobre tablas y sequences existentes ──────────────────────
+-- ── Permisos sobre schema y objetos EXISTENTES ────────────────────────
 -- DML completo. NO DDL — app_user no debe poder ALTER/DROP/CREATE.
+GRANT USAGE ON SCHEMA public TO app_user;
 GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO app_user;
 GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO app_user;
 GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO app_user;
 
--- ── Permisos sobre tablas/sequences FUTURAS ───────────────────────────
--- Cada vez que `postgres` cree una tabla nueva (vía prisma migrate),
--- app_user automáticamente recibe estos grants. Sin esto, cada migración
--- requeriría un GRANT manual.
-ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public
-  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO app_user;
-ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public
-  GRANT USAGE, SELECT ON SEQUENCES TO app_user;
-ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public
-  GRANT EXECUTE ON FUNCTIONS TO app_user;
-
 -- ── Tabla _prisma_migrations: solo lectura ────────────────────────────
--- Prisma migrate deploy corre como postgres. La app no debe poder modificar
--- el historial de migraciones (eso es claro elemento de DBA, no de app).
+-- Prisma migrate deploy corre como el rol owner. La app no debe poder
+-- modificar el historial de migraciones (es tarea de DBA, no de app).
 REVOKE INSERT, UPDATE, DELETE ON _prisma_migrations FROM app_user;
 GRANT SELECT ON _prisma_migrations TO app_user;

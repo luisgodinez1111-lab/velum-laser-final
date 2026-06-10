@@ -67,6 +67,10 @@ BEGIN
   -- Crear rol efímero
   EXECUTE format('CREATE ROLE %I NOLOGIN', rls_test_role);
   EXECUTE format('GRANT SELECT ON "User" TO %I', rls_test_role);
+  -- Portabilidad: en Postgres gestionado (Neon) el rol que migra NO es
+  -- superusuario, así que necesita ser miembro del rol efímero para poder
+  -- hacer SET ROLE. En self-host (postgres superuser) este GRANT es inocuo.
+  EXECUTE format('GRANT %I TO current_user', rls_test_role);
 
   -- Cambiar al rol de prueba — ahora SÍ aplica RLS
   EXECUTE format('SET LOCAL ROLE %I', rls_test_role);

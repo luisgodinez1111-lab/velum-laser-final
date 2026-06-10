@@ -33,6 +33,14 @@ DECLARE
   visible_default INT;
   visible_bogus INT;
 BEGIN
+  -- Portabilidad: en Postgres gestionado (Neon) el rol velumapp no existe
+  -- (la app conecta como el owner). Si no está, saltamos el sanity — igual
+  -- que las slices RLS hijas. El FORCE RLS de arriba ya quedó aplicado.
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'velumapp') THEN
+    RAISE NOTICE 'sanity skip: rol velumapp no existe en este entorno';
+    RETURN;
+  END IF;
+
   -- Cambiar al rol velumapp (que es el que la app usa)
   EXECUTE 'SET LOCAL ROLE velumapp';
 

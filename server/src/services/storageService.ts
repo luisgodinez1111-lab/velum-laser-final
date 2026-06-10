@@ -31,11 +31,35 @@ const resolveStoragePath = (key: string) => {
   return resolvedPath;
 };
 
-// ── Cliente R2 (S3) — singleton perezoso ───────────────────────────────
-// Import dinámico: en driver "local" nunca se carga @aws-sdk/client-s3,
+// ── Frontera tipada mínima sobre @aws-sdk/client-s3 ────────────────────
+// Tipamos SOLO el subset de la SDK que usamos (cliente + 2 comandos). Esto:
+//   1. Mantiene type-safety en nuestro uso (sin `any` en el código cliente).
+//   2. Evita que tsc tenga que resolver el árbol de tipos completo de aws-sdk
+//      — con moduleResolution "Bundler" + el `exports` map gigante de la SDK,
+//      esa resolución es patológica y cuelga el typecheck del proyecto.
+// El runtime carga el módulo real vía import dinámico (especificador en
+// variable string → tsc no lo resuelve estáticamente; Node sí en ejecución).
+interface S3PutInput { Bucket: string; Key: string; Body: Buffer; ContentType?: string }
+interface S3GetInput { Bucket: string; Key: string }
+interface S3GetResult { Body?: { transformToByteArray(): Promise<Uint8Array> } }
+interface S3ClientLike { send(command: unknown): Promise<S3GetResult> }
+interface S3Module {
+  S3Client: new (config: {
+    region: string;
+    endpoint: string;
+    credentials: { accessKeyId: string; secretAccessKey: string };
+  }) => S3ClientLike;
+  PutObjectCommand: new (input: S3PutInput) => unknown;
+  GetObjectCommand: new (input: S3GetInput) => unknown;
+}
+
+const S3_MODULE_ID: string = "@aws-sdk/client-s3";
+const loadS3 = (): Promise<S3Module> => import(S3_MODULE_ID) as Promise<S3Module>;
+
+// Cliente R2 — singleton perezoso. En driver "local" nunca se carga la SDK,
 // así que entornos de test/dev sin la dependencia siguen funcionando.
-let r2ClientPromise: Promise<import("@aws-sdk/client-s3").S3Client> | null = null;
-const getR2Client = () => {
+let r2ClientPromise: Promise<S3ClientLike> | null = null;
+const getR2Client = (): Promise<S3ClientLike> => {
   if (!r2ClientPromise) {
     if (!env.r2.bucket || !env.r2.endpoint || !env.r2.accessKeyId || !env.r2.secretAccessKey) {
       throw new Error(
@@ -43,7 +67,7 @@ const getR2Client = () => {
         "(R2_BUCKET / R2_ENDPOINT / R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY).",
       );
     }
-    r2ClientPromise = import("@aws-sdk/client-s3").then(({ S3Client }) =>
+    r2ClientPromise = loadS3().then(({ S3Client }) =>
       new S3Client({
         region: env.r2.region,
         endpoint: env.r2.endpoint,
@@ -78,7 +102,7 @@ export const saveFile = async ({
 }) => {
   if (isR2) {
     const client = await getR2Client();
-    const { PutObjectCommand } = await import("@aws-sdk/client-s3");
+    const { PutObjectCommand } = await loadS3();
     const objectKey = r2Key(key);
     await client.send(new PutObjectCommand({
       Bucket: env.r2.bucket,
@@ -101,7 +125,7 @@ export const saveFile = async ({
 export const readFile = async (key: string): Promise<Buffer> => {
   if (isR2) {
     const client = await getR2Client();
-    const { GetObjectCommand } = await import("@aws-sdk/client-s3");
+    const { GetObjectCommand } = await loadS3();
     const res = await client.send(new GetObjectCommand({
       Bucket: env.r2.bucket,
       Key: r2Key(key),
@@ -109,7 +133,7 @@ export const readFile = async (key: string): Promise<Buffer> => {
     if (!res.Body) {
       throw new Error(`[storage] objeto R2 sin cuerpo: ${key}`);
     }
-    const bytes = await (res.Body as { transformToByteArray: () => Promise<Uint8Array> }).transformToByteArray();
+    const bytes = await res.Body.transformToByteArray();
     return Buffer.from(bytes);
   }
 
