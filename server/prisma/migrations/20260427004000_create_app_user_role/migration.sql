@@ -35,8 +35,12 @@ BEGIN
     EXECUTE format('CREATE ROLE app_user LOGIN PASSWORD %L NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE', pwd);
     RAISE NOTICE 'Created role app_user';
   ELSE
-    EXECUTE format('ALTER ROLE app_user WITH LOGIN PASSWORD %L NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE', pwd);
-    RAISE NOTICE 'Updated role app_user';
+    -- Portabilidad: en Postgres gestionado (Neon) un rol no-superuser NO puede
+    -- hacer ALTER ROLE ... NOSUPERUSER/NOBYPASSRLS aunque el valor no cambie
+    -- ("only roles with SUPERUSER may change the SUPERUSER attribute"). Como
+    -- app_user ya existe con los atributos correctos del CREATE y su password
+    -- no se usa (RLS_ENFORCE=false), NO lo alteramos — no-op idempotente.
+    RAISE NOTICE 'Role app_user ya existe — sin cambios';
   END IF;
 
   -- ── Permiso de conexión sobre la DB actual (portable) ────────────────
