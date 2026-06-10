@@ -6,13 +6,22 @@ import { emailCircuit } from "../utils/circuitBreaker";
 import { escapeHtml as esc } from "../utils/html";
 
 // ──────────────────────────────────────────────────────────────────────
-// 4 clientes Resend dedicados, uno por propósito
+// Clientes Resend dedicados, uno por propósito.
+//
+// El SDK de Resend lanza en el constructor si la key está vacía. Para no
+// tumbar el boot cuando una key no está configurada — degradación grácil,
+// igual que notificationEmailService, Anthropic y Sentry — usamos un
+// placeholder: el cliente se construye, pero un envío real fallará de forma
+// controlada (circuit breaker + retry lo loguean) en vez de crashear el
+// proceso al importar el módulo. Configurar las RESEND_KEY_* habilita el envío.
 // ──────────────────────────────────────────────────────────────────────
-const resendVerification = new Resend(env.resendKeyVerification);
-const resendReset        = new Resend(env.resendKeyReset);
-const resendReminders    = new Resend(env.resendKeyReminders);
-const resendDocuments    = new Resend(env.resendKeyDocuments);
-const resendAdminInvite  = new Resend(env.resendKeyAdminInvite);
+const resendClient = (key: string): Resend => new Resend(key || "re_unconfigured");
+
+const resendVerification = resendClient(env.resendKeyVerification);
+const resendReset        = resendClient(env.resendKeyReset);
+const resendReminders    = resendClient(env.resendKeyReminders);
+const resendDocuments    = resendClient(env.resendKeyDocuments);
+const resendAdminInvite  = resendClient(env.resendKeyAdminInvite);
 
 const FROM = `Velum Laser <${env.resendFromEmail}>`;
 
