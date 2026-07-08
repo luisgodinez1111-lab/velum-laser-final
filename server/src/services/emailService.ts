@@ -2,28 +2,66 @@ import { Resend } from "resend";
 import { env } from "../utils/env";
 import { getRequestId } from "../utils/requestContext";
 import { withRetry } from "../utils/retry";
-import { emailCircuit } from "../utils/circuitBreaker";
+import { CircuitBreaker } from "../utils/circuitBreaker";
+import { logger } from "../utils/logger";
 import { escapeHtml as esc } from "../utils/html";
 
 // ──────────────────────────────────────────────────────────────────────
 // Clientes Resend dedicados, uno por propósito.
 //
-// El SDK de Resend lanza en el constructor si la key está vacía. Para no
-// tumbar el boot cuando una key no está configurada — degradación grácil,
-// igual que notificationEmailService, Anthropic y Sentry — usamos un
-// placeholder: el cliente se construye, pero un envío real fallará de forma
-// controlada (circuit breaker + retry lo loguean) en vez de crashear el
-// proceso al importar el módulo. Configurar las RESEND_KEY_* habilita el envío.
+// Dos hechos del SDK de Resend que este módulo encapsula:
+//  1. `new Resend(key)` lanza si la key está vacía. Para no tumbar el boot
+//     (degradación grácil), un propósito sin key queda con `client: null`
+//     y sus envíos lanzan un error claro ANTES de tocar el circuit breaker
+//     (así una key faltante no envenena a los propósitos que sí funcionan).
+//  2. `emails.send()` NO lanza: devuelve `{ data, error }`. Convertimos
+//     `error` en throw para que el retry con backoff y el circuit breaker
+//     reaccionen y los callers se enteren del fallo, en vez de creer que el
+//     correo salió (bug crítico previo: emails perdidos en silencio absoluto).
+//
+// Un circuit breaker POR PROPÓSITO evita que una caída de, p. ej., los
+// recordatorios bloquee los correos de verificación / reset / OTP.
 // ──────────────────────────────────────────────────────────────────────
-const resendClient = (key: string): Resend => new Resend(key || "re_unconfigured");
+type EmailPurpose = "verification" | "reset" | "reminders" | "documents" | "adminInvite";
 
-const resendVerification = resendClient(env.resendKeyVerification);
-const resendReset        = resendClient(env.resendKeyReset);
-const resendReminders    = resendClient(env.resendKeyReminders);
-const resendDocuments    = resendClient(env.resendKeyDocuments);
-const resendAdminInvite  = resendClient(env.resendKeyAdminInvite);
+interface ResendChannel {
+  purpose: EmailPurpose;
+  envName: string;
+  client: Resend | null;
+  breaker: CircuitBreaker;
+}
+
+const makeChannel = (purpose: EmailPurpose, envName: string, key: string): ResendChannel => ({
+  purpose,
+  envName,
+  client: key ? new Resend(key) : null,
+  breaker: new CircuitBreaker({ name: `email:${purpose}`, failureThreshold: 5, recoveryTimeMs: 30_000 }),
+});
+
+const resendVerification = makeChannel("verification", "RESEND_KEY_VERIFICATION", env.resendKeyVerification);
+const resendReset        = makeChannel("reset",        "RESEND_KEY_RESET",        env.resendKeyReset);
+const resendReminders    = makeChannel("reminders",    "RESEND_KEY_REMINDERS",    env.resendKeyReminders);
+const resendDocuments    = makeChannel("documents",    "RESEND_KEY_DOCUMENTS",    env.resendKeyDocuments);
+const resendAdminInvite  = makeChannel("adminInvite",  "RESEND_KEY_ADMIN_INVITE", env.resendKeyAdminInvite);
+
+// Aviso único al boot: qué claves Resend faltan. Los envíos de esos propósitos
+// fallarán de forma controlada (throw + log) hasta que se configuren.
+const missingResendKeys = [resendVerification, resendReset, resendReminders, resendDocuments, resendAdminInvite]
+  .filter((c) => !c.client)
+  .map((c) => c.envName);
+if (missingResendKeys.length > 0) {
+  logger.warn({ missing: missingResendKeys }, "[email] Claves Resend sin configurar — esos correos fallarán de forma controlada");
+}
 
 const FROM = `Velum Laser <${env.resendFromEmail}>`;
+
+/** Error de entrega de correo. Permite a los callers distinguir un fallo de email. */
+export class EmailDeliveryError extends Error {
+  constructor(public readonly purpose: EmailPurpose, message: string) {
+    super(`[resend:${purpose}] ${message}`);
+    this.name = "EmailDeliveryError";
+  }
+}
 
 /** Resend tags from current request context for tracing across services. */
 const getResendTags = (): Array<{ name: string; value: string }> => {
@@ -31,19 +69,30 @@ const getResendTags = (): Array<{ name: string; value: string }> => {
   return requestId ? [{ name: "requestId", value: requestId }] : [];
 };
 
-// ── Helper de resiliencia — circuit breaker + retry con backoff ─────────────
-const sendWithResilience = (
-  client: Resend,
+// ── Helper de resiliencia — short-circuit sin key · retry · breaker · throw ──
+const sendWithResilience = async (
+  channel: ResendChannel,
   payload: Parameters<Resend["emails"]["send"]>[0]
-) =>
-  emailCircuit.execute(() =>
-    withRetry(() => client.emails.send(payload), {
+): Promise<void> => {
+  const { client, breaker, purpose } = channel;
+  if (!client) {
+    logger.warn({ purpose, to: payload.to }, "[email] Envío omitido — RESEND_KEY no configurada");
+    throw new EmailDeliveryError(purpose, "RESEND_KEY no configurada");
+  }
+  await breaker.execute(() =>
+    withRetry(async () => {
+      const { error } = await client.emails.send(payload);
+      if (error) {
+        throw new EmailDeliveryError(purpose, `${error.name ?? "error"}: ${error.message ?? "envío rechazado por Resend"}`);
+      }
+    }, {
       maxAttempts: 3,
       initialDelayMs: 500,
       backoffFactor: 2,
-      context: "email",
+      context: `email:${purpose}`,
     })
   );
+};
 
 // ──────────────────────────────────────────────────────────────────────
 // Utilidad de layout base

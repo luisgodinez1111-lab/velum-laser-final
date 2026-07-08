@@ -21,21 +21,24 @@ export const registerSseClient = (userId: string, res: Response): void => {
   }
   clients.add(res);
 
-  // Limpiar cliente al desconectar (browser cerrado, navegación, etc.)
-  res.on('close', () => {
-    const clientSet = sseClients.get(userId);
-    if (clientSet) {
-      clientSet.delete(res);
-      if (clientSet.size === 0) sseClients.delete(userId);
-    }
-  });
-
   // Force reconnect after max session lifetime to prevent zombie connections
   const maxSessionTimer = setTimeout(() => {
     try { res.end(); } catch { /* already closed */ }
     unregisterSseClient(userId, res);
   }, SSE_MAX_SESSION_MS);
   if (maxSessionTimer.unref) maxSessionTimer.unref();
+
+  // Limpiar cliente al desconectar (browser cerrado, navegación, etc.).
+  // clearTimeout evita retener el closure (res, userId) hasta 4h en conexiones
+  // que se cierran temprano (proxies, navegación) — fuga de memoria en 512 MB.
+  res.on('close', () => {
+    clearTimeout(maxSessionTimer);
+    const clientSet = sseClients.get(userId);
+    if (clientSet) {
+      clientSet.delete(res);
+      if (clientSet.size === 0) sseClients.delete(userId);
+    }
+  });
 };
 
 export const unregisterSseClient = (userId: string, res: Response): void => {

@@ -60,8 +60,25 @@ const {
 // Mock del módulo resend
 vi.mock("resend", () => ({ Resend: MockResend }));
 
+// Mock de env: por el hoisting de ESM, los imports corren ANTES de las
+// asignaciones a process.env de arriba, así que env leería las keys vacías.
+// Proveemos las keys directamente para que cada canal construya su cliente.
+vi.mock("../src/utils/env", () => ({
+  env: {
+    resendKeyVerification: "re-test-verification",
+    resendKeyReset:        "re-test-reset",
+    resendKeyReminders:    "re-test-reminders",
+    resendKeyDocuments:    "re-test-documents",
+    resendKeyAdminInvite:  "re-test-admin-invite",
+    resendFromEmail:       "test@velum.test",
+  },
+}));
+
 // Circuit breaker y retry → pass-through para no complicar los tests
 vi.mock("../src/utils/circuitBreaker", () => ({
+  CircuitBreaker: class {
+    async execute<T>(fn: () => Promise<T>): Promise<T> { return fn(); }
+  },
   emailCircuit: { execute: (fn: () => unknown) => fn() },
 }));
 vi.mock("../src/utils/retry", () => ({

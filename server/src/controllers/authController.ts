@@ -1,8 +1,8 @@
 import { CookieOptions, Request, Response } from "express";
-import { AuthRequest } from "../middlewares/auth";
+import { AuthRequest, invalidateUserAuthCache } from "../middlewares/auth";
 import { registerSchema, loginSchema, forgotSchema, resetSchema, verifyEmailSchema, consentOtpVerifySchema } from "../validators/auth";
 import { createUser, getUserByEmail } from "../services/userService";
-import { verifyTotpCode } from "../utils/totp";
+import { verifyTotpCode, decryptTotpSecret } from "../utils/totp";
 import { hashPassword, signToken, verifyPassword, createRefreshToken, rotateRefreshToken, revokeRefreshToken, revokeAllRefreshTokens, recordPasswordHistory, isPasswordReused, validatePasswordStrength } from "../utils/auth";
 import { env, isProduction } from "../utils/env";
 import { createEmailVerification, createPasswordReset, consumeEmailVerification, consumePasswordReset, createConsentOtp, consumeConsentOtp } from "../services/authService";
@@ -24,6 +24,11 @@ import { parseDurationMs } from "../utils/time";
 
 // Re-exportar para compatibilidad con tests que importan desde este módulo
 export { LOGIN_LOCKOUT_MS, _forceLoginLockout };
+
+// Hash dummy precomputado: el login contra un email inexistente ejecuta un
+// bcrypt.compare contra este hash para igualar el tiempo del camino con email
+// existente y no filtrar qué emails están registrados por canal lateral de tiempo.
+const dummyHashPromise = hashPassword("timing-equalizer-not-a-real-password-9f3a");
 
 const baseCookieOptions = (): CookieOptions => {
   const options: CookieOptions = {
@@ -132,6 +137,9 @@ export const login = async (req: Request, res: Response) => {
 
   const user = await getUserByEmail(payload.email);
   if (!user) {
+    // Igualar el tiempo con el camino de email existente (un bcrypt.compare)
+    // para no revelar qué emails existen por canal lateral de tiempo.
+    await verifyPassword(payload.password, await dummyHashPromise);
     await recordLoginFailure(payload.email);
     return res.status(401).json({ message: "Credenciales inválidas" });
   }
@@ -150,7 +158,7 @@ export const login = async (req: Request, res: Response) => {
     if (!totpCode) {
       return res.status(200).json({ requiresTotp: true });
     }
-    if (!user.totpSecret || !verifyTotpCode(user.totpSecret, totpCode)) {
+    if (!user.totpSecret || !verifyTotpCode(decryptTotpSecret(user.totpSecret), totpCode)) {
       return res.status(401).json({ message: "Código 2FA incorrecto" });
     }
   }
@@ -258,6 +266,10 @@ export const resetPassword = async (req: Request, res: Response) => {
     data: { passwordHash: newHash, passwordChangedAt: new Date() }
   }));
   await recordPasswordHistory(reset.userId, newHash);
+  // Revocar refresh tokens (mata sesiones/tokens robados) e invalidar la caché
+  // de auth para que el nuevo passwordChangedAt aplique de inmediato (no en 30s).
+  await revokeAllRefreshTokens(reset.userId).catch((err) => logger.warn({ err, userId: reset.userId }, "[auth] reset: revoke refresh tokens failed"));
+  invalidateUserAuthCache(reset.userId);
 
   await createAuditLog({
     userId: reset.userId,
@@ -399,6 +411,9 @@ export const changeInitialPassword = async (req: AuthRequest, res: Response) => 
     }
   }));
   await recordPasswordHistory(userId, passwordHash);
+  // Revocar refresh tokens e invalidar la caché de auth tras el cambio.
+  await revokeAllRefreshTokens(userId).catch((err) => logger.warn({ err, userId }, "[auth] initial-change: revoke refresh tokens failed"));
+  invalidateUserAuthCache(userId);
 
   await createAuditLog({
     userId,

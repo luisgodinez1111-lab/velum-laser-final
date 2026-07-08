@@ -6,13 +6,15 @@ const ensureUser = async ({
   password,
   role,
   firstName,
-  lastName
+  lastName,
+  mustChangePassword = false
 }: {
   email: string;
   password: string;
   role: "member" | "staff" | "admin" | "system";
   firstName: string;
   lastName: string;
+  mustChangePassword?: boolean;
 }) => {
   const existing = await prisma.user.findUnique({ where: { email } });
   if (existing) {
@@ -24,6 +26,7 @@ const ensureUser = async ({
       email,
       passwordHash: await hashPassword(password),
       role,
+      mustChangePassword,
       profile: {
         create: {
           firstName,
@@ -47,40 +50,58 @@ const ensureUser = async ({
 };
 
 const seed = async () => {
+  const isProd = process.env.NODE_ENV === "production";
+
+  // Admin: la contraseña SIEMPRE viene de env, sin fallback hardcodeado. Si
+  // falta, se aborta el seed (nunca creamos una cuenta admin con contraseña
+  // pública). Se fuerza el cambio en el primer login.
   const adminEmail = process.env.ADMIN_EMAIL ?? "admin@velum.mx";
-  const adminPassword = process.env.ADMIN_PASSWORD ?? "ChangeMe123456!";
+  const adminPassword = process.env.ADMIN_PASSWORD;
+  if (!adminPassword) {
+    throw new Error("[seed] ADMIN_PASSWORD es obligatoria (sin contraseña por defecto). Configúrala antes de seedear.");
+  }
 
   await ensureUser({
     email: adminEmail,
     password: adminPassword,
     role: "admin",
     firstName: "Admin",
-    lastName: "Velum"
+    lastName: "Velum",
+    mustChangePassword: true
   });
 
-  await ensureUser({
-    email: "staff@velum.mx",
-    password: "ChangeMe123456!",
-    role: "staff",
-    firstName: "Staff",
-    lastName: "Velum"
-  });
+  // Cuentas demo (staff/system/member): SOLO fuera de producción y con
+  // contraseñas de env (o una demo explícita en dev). En producción NO se
+  // crean cuentas con credenciales de ejemplo.
+  if (!isProd) {
+    const demoPassword = process.env.SEED_DEMO_PASSWORD ?? "ChangeMe123456!";
+    await ensureUser({
+      email: "staff@velum.mx",
+      password: process.env.STAFF_PASSWORD ?? demoPassword,
+      role: "staff",
+      firstName: "Staff",
+      lastName: "Velum",
+      mustChangePassword: true
+    });
 
-  await ensureUser({
-    email: "system@velum.mx",
-    password: "ChangeMe123456!",
-    role: "system",
-    firstName: "System",
-    lastName: "Velum"
-  });
+    await ensureUser({
+      email: "system@velum.mx",
+      password: process.env.SYSTEM_PASSWORD ?? demoPassword,
+      role: "system",
+      firstName: "System",
+      lastName: "Velum",
+      mustChangePassword: true
+    });
 
-  await ensureUser({
-    email: "member@velum.mx",
-    password: "ChangeMe123456!",
-    role: "member",
-    firstName: "Member",
-    lastName: "Velum"
-  });
+    await ensureUser({
+      email: "member@velum.mx",
+      password: process.env.MEMBER_PASSWORD ?? demoPassword,
+      role: "member",
+      firstName: "Member",
+      lastName: "Velum",
+      mustChangePassword: true
+    });
+  }
 
   const policy = await prisma.agendaPolicy.findFirst();
   if (!policy) {

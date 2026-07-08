@@ -1,4 +1,19 @@
 import { createHmac, randomBytes, timingSafeEqual } from "crypto";
+import { encrypt, decrypt } from "./crypto";
+
+// ── Cifrado at-rest del secreto TOTP ────────────────────────────────────────
+// El secreto TOTP no debe guardarse en claro: una filtración de la BD anularía
+// el 2FA de todos los admins. Se cifra con AES-256-GCM (misma key at-rest que
+// los tokens de integraciones). El prefijo marca los valores cifrados para dar
+// compatibilidad con secretos legacy en claro (se leen tal cual, sin migración).
+const TOTP_ENC_PREFIX = "enc:v1:";
+
+/** Cifra un secreto TOTP para almacenarlo. */
+export const encryptTotpSecret = (secret: string): string => TOTP_ENC_PREFIX + encrypt(secret);
+
+/** Descifra un secreto TOTP almacenado (o lo devuelve tal cual si es legacy en claro). */
+export const decryptTotpSecret = (stored: string): string =>
+  stored.startsWith(TOTP_ENC_PREFIX) ? decrypt(stored.slice(TOTP_ENC_PREFIX.length)) : stored;
 
 const BASE32 = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
 const TIME_STEP = 30;

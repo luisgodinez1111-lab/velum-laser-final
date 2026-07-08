@@ -1,7 +1,6 @@
 import { Response } from "express";
 import crypto from "crypto";
 import { AuthRequest } from "../middlewares/auth";
-import { prisma } from "../db/prisma";
 import { withTenantContext } from "../db/withTenantContext";
 import { resolveStripeConfig } from "../services/stripeConfigService";
 import { resolveBaseUrl } from "../utils/baseUrl";
@@ -53,20 +52,15 @@ export const createAppointmentDepositCheckout = async (req: AuthRequest, res: Re
     const successUrl = `${base}/#/agenda?booking=success`;
     const cancelUrl = `${base}/#/agenda`;
 
-    const me = await withTenantContext(async (tx) => tx.user.findUnique({ where: { id: req.user!.id }, select: { email: true, clinicId: true } }));
+    const me = await withTenantContext(async (tx) => tx.user.findUnique({ where: { id: req.user!.id }, select: { email: true, clinicId: true, appointmentDepositAvailable: true } }));
     if (!me) return res.status(404).json({ message: "Usuario no encontrado" });
 
-    // Prevent duplicate deposits: block if user already has a recent pending or paid deposit
-    const existingDeposit = await prisma.payment.findFirst({
-      where: {
-        userId: req.user.id,
-        status: { in: ["pending", "paid"] },
-        createdAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) }, // within last 24h
-      },
-      select: { id: true, status: true },
-    });
-    if (existingDeposit) {
-      return res.status(409).json({ message: "Ya tienes un depósito reciente. Si necesitas ayuda, contacta al equipo de Velum Laser." });
+    // Anti-duplicado: los depósitos NO crean Payment — se reflejan en el flag
+    // appointmentDepositAvailable del User al confirmar el pago. Si el usuario ya
+    // tiene un depósito disponible sin usar, no dejamos pagar otro. El doble-submit
+    // del mismo slot lo cubre la Idempotency-Key de Stripe (abajo).
+    if (me.appointmentDepositAvailable) {
+      return res.status(409).json({ message: "Ya tienes un depósito disponible. Si necesitas ayuda, contacta al equipo de Velum Laser." });
     }
 
     const reason = asString(body.reason);
@@ -94,10 +88,14 @@ export const createAppointmentDepositCheckout = async (req: AuthRequest, res: Re
     if (treatmentId) params.set("metadata[treatmentId]", treatmentId);
     if (interestedPlanCode) params.set("metadata[interestedPlanCode]", interestedPlanCode);
 
-    // Idempotency key: scoped to userId + slot to prevent duplicate deposits on retry
+    // Idempotency key estable por userId + slot: dos requests (retry, doble click,
+    // dos pestañas) para el mismo usuario y horario devuelven la MISMA Checkout
+    // Session de Stripe → no se puede pagar el depósito dos veces. Antes incluía
+    // Math.floor(Date.now()/60_000), que cambiaba la key cada minuto y permitía
+    // múltiples sesiones pagables.
     const idempotencyKey = crypto
       .createHash("sha256")
-      .update(`deposit:${req.user.id}:${startAt}:${Math.floor(Date.now() / 60_000)}`)
+      .update(`deposit:${req.user.id}:${startAt}`)
       .digest("hex");
 
     const rsp = await fetch("https://api.stripe.com/v1/checkout/sessions", {

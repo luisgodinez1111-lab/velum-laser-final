@@ -35,6 +35,10 @@ services:
       # PORT lo inyecta Render automáticamente; env.ts lo lee de process.env.PORT.
       - key: RUN_WORKER_INLINE       # ← clave del deploy $0: worker en el mismo proceso
         value: "true"
+      # Limita el heap de V8 al cgroup del plan (API+worker comparten 512 MB) para
+      # evitar OOM-kills "misteriosos". Subir si se migra a un plan con más RAM.
+      - key: NODE_OPTIONS
+        value: "--max-old-space-size=384"
 
       # ── URLs (ajusta a tus dominios reales) ───────────────────────────────
       - key: APP_URL

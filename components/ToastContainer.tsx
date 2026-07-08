@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Toast, useToast } from "../context/ToastContext";
+import { Toast, useToast, useToastState } from "../context/ToastContext";
 import { CheckCircle2, XCircle, AlertTriangle, Info, X } from "lucide-react";
 
 // ── Intent → tokens del design system ─────────────────────────────────────────
@@ -106,7 +106,7 @@ const ToastItem: React.FC<{ toast: Toast }> = ({ toast }) => {
 
 // ── Contenedor global ─────────────────────────────────────────────────────────
 export const ToastContainer: React.FC = () => {
-  const { toasts } = useToast();
+  const toasts = useToastState();
 
   return (
     <div

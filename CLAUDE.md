@@ -41,7 +41,7 @@ docker compose logs -f api            # logs del backend
 docker compose exec api sh            # entrar al contenedor
 npx prisma migrate dev                # nueva migración (desarrollo)
 npx prisma migrate deploy             # aplicar en producción
-npm test                              # correr los 161 tests
+npm test                              # frontend: ~50 tests (root). Backend: cd server && npm test (~741 tests)
 docker compose build api              # rebuild imagen
 docker compose up -d --no-deps api    # redeploy solo el API
 
@@ -131,7 +131,7 @@ Sync bidireccional de citas + webhooks de cambios externos
 5. Migraciones — nunca modificar las ya aplicadas en producción
 6. Clases velum-* — no reemplazar con Tailwind genérico
 7. scripts/start.sh — mantener idempotente
-8. 161 tests — no romperlos al refactorizar
+8. ~791 tests (≈50 frontend en root + ≈741 backend en server/) — no romperlos. Usa `npm run test:all`
 9. /docs/ Swagger — bloqueado por nginx, no tocar esa config
 
 ---

@@ -5,7 +5,7 @@ import { prisma } from "../db/prisma";
 import { withTenantContext } from "../db/withTenantContext";
 import { AuthRequest } from "../middlewares/auth";
 import { createAuditLog } from "../services/auditService";
-import { generateTotpSecret, verifyTotpCode, getTotpUri } from "../utils/totp";
+import { generateTotpSecret, verifyTotpCode, getTotpUri, encryptTotpSecret, decryptTotpSecret } from "../utils/totp";
 import { requireTenantId } from "../utils/tenantContext";
 import {
   PERMISSIONS_CATALOG,
@@ -42,7 +42,7 @@ export const getTotpSetup = async (req: AuthRequest, res: Response) => {
   const secret = generateTotpSecret();
   const uri = getTotpUri(secret, user.email);
   // Almacena secreto temporal para verificación — se activa solo tras confirmar
-  await withTenantContext(async (tx) => tx.user.update({ where: { id: userId }, data: { totpSecret: secret } }));
+  await withTenantContext(async (tx) => tx.user.update({ where: { id: userId }, data: { totpSecret: encryptTotpSecret(secret) } }));
   return res.json({ secret, uri });
 };
 
@@ -55,7 +55,7 @@ export const enableTotp = async (req: AuthRequest, res: Response) => {
   const user = await withTenantContext(async (tx) => tx.user.findUnique({ where: { id: userId }, select: { totpSecret: true, totpEnabled: true } }));
   if (!user?.totpSecret) return res.status(400).json({ message: "Inicia el setup primero con GET /totp/setup" });
   if (user.totpEnabled) return res.status(409).json({ message: "2FA ya está habilitado" });
-  if (!verifyTotpCode(user.totpSecret, code)) return res.status(400).json({ message: "Código incorrecto" });
+  if (!verifyTotpCode(decryptTotpSecret(user.totpSecret), code)) return res.status(400).json({ message: "Código incorrecto" });
   await withTenantContext(async (tx) => tx.user.update({ where: { id: userId }, data: { totpEnabled: true } }));
   await createAuditLog({ userId, actorUserId: userId, action: "auth.totp_enabled", resourceType: "user", resourceId: userId, ip: req.ip, metadata: {} });
   return res.json({ message: "2FA activado correctamente" });
@@ -69,7 +69,7 @@ export const disableTotp = async (req: AuthRequest, res: Response) => {
   if (!code) return res.status(400).json({ message: "Código requerido para desactivar 2FA" });
   const user = await withTenantContext(async (tx) => tx.user.findUnique({ where: { id: userId }, select: { totpSecret: true, totpEnabled: true } }));
   if (!user?.totpEnabled || !user.totpSecret) return res.status(400).json({ message: "2FA no está habilitado" });
-  if (!verifyTotpCode(user.totpSecret, code)) return res.status(400).json({ message: "Código incorrecto" });
+  if (!verifyTotpCode(decryptTotpSecret(user.totpSecret), code)) return res.status(400).json({ message: "Código incorrecto" });
   await withTenantContext(async (tx) => tx.user.update({ where: { id: userId }, data: { totpEnabled: false, totpSecret: null } }));
   await createAuditLog({ userId, actorUserId: userId, action: "auth.totp_disabled", resourceType: "user", resourceId: userId, ip: req.ip, metadata: {} });
   return res.json({ message: "2FA desactivado" });

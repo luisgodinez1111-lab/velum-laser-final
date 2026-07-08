@@ -126,6 +126,17 @@ const centsToMajor = (value: unknown): number | null => {
   return Math.round(n) / 100;
 };
 
+// Monto almacenado en Payment.amount y Membership.amount: PESOS ENTEROS (Int).
+// Stripe entrega centavos; los pasamos a pesos y redondeamos para no reventar
+// el campo Int con importes fraccionarios (proration/impuestos) — un write
+// fraccionario lanzaba y el catch lo tragaba, perdiendo el pago con 200 a Stripe.
+// El UI muestra siempre pesos sin decimales (maximumFractionDigits:0), así que
+// no se pierde nada visible. (centsToMajor se sigue usando para FORMATEAR.)
+const toStoredPesos = (value: unknown): number | null => {
+  const major = centsToMajor(value);
+  return major === null ? null : Math.round(major);
+};
+
 const unixToDate = (value: unknown): Date | null => {
   const n = Number(value);
   if (!Number.isFinite(n) || n <= 0) return null;
@@ -304,7 +315,10 @@ const toMembershipStatus = (stripeStatus: string | null | undefined): string => 
   if (value === "past_due" || value === "unpaid") return "past_due";
   if (value === "canceled") return "canceled";
   if (value === "paused") return "paused";
-  if (value === "incomplete" || value === "incomplete_expired") return "pending";
+  // Stripe "incomplete"/"incomplete_expired" (p. ej. 3DS pendiente) → "inactive".
+  // NB: "pending" NO existe en enum MembershipStatus; escribirlo lanzaba
+  // PrismaClientValidationError → 500 → Stripe reintentaba 72h fallando siempre.
+  if (value === "incomplete" || value === "incomplete_expired") return "inactive";
   return "inactive";
 };
 
@@ -616,7 +630,7 @@ const processCheckoutCompleted = async (event: Stripe.Event, stripe: Stripe): Pr
     status: subCtx.status,
     currentPeriodEnd: subCtx.currentPeriodEnd,
     cancelAtPeriodEnd: subCtx.cancelAtPeriodEnd,
-    amount: centsToMajor(session.amount_total),
+    amount: toStoredPesos(session.amount_total),
     currency: cleanString(session.currency) || null,
   });
 
@@ -672,7 +686,7 @@ const processCheckoutCompleted = async (event: Stripe.Event, stripe: Stripe): Pr
         stripeSubscriptionId: subCtx.stripeSubscriptionId,
         userId,
         membershipId: checkoutMembership?.id ?? null,
-        amount: centsToMajor(session.amount_total),
+        amount: toStoredPesos(session.amount_total),
         currency: cleanString(session.currency) || null,
         status: "paid",
       });
@@ -733,7 +747,12 @@ const upsertPaymentRecord = async (input: {
       },
     });
   } catch (err) {
-    logger.error({ err }, "[stripe-webhook] payment upsert failed");
+    // El evento ya quedó marcado como procesado (idempotencia at-most-once), así
+    // que NO reintentamos aquí para no duplicar side effects; pero alertamos a
+    // Sentry para reconciliación manual — un fallo de escritura de pago no puede
+    // pasar en silencio. (Ideal futuro: idempotencia at-least-once por handler.)
+    logger.error({ err, invoiceId: input.stripeInvoiceId }, "[stripe-webhook] payment upsert failed");
+    reportError(err instanceof Error ? err : new Error(String(err)), { context: "stripe-webhook.upsertPaymentRecord", invoiceId: input.stripeInvoiceId ?? undefined });
   }
 };
 
@@ -769,7 +788,7 @@ const processInvoiceEvent = async (event: Stripe.Event, stripe: Stripe, success:
     currentPeriodEnd: subCtx?.currentPeriodEnd ?? null,
     cancelAtPeriodEnd: subCtx?.cancelAtPeriodEnd ?? null,
     gracePeriodEndsAt,
-    amount: centsToMajor(success ? invoice.amount_paid : invoice.amount_due),
+    amount: toStoredPesos(success ? invoice.amount_paid : invoice.amount_due),
     currency: cleanString(invoice.currency) || null,
   });
 
@@ -789,7 +808,7 @@ const processInvoiceEvent = async (event: Stripe.Event, stripe: Stripe, success:
       stripeSubscriptionId: subscriptionId,
       userId,
       membershipId: membership?.id ?? null,
-      amount: centsToMajor(success ? invoice.amount_paid : invoice.amount_due),
+      amount: toStoredPesos(success ? invoice.amount_paid : invoice.amount_due),
       currency: cleanString(invoice.currency) || null,
       status: success ? "paid" : "failed",
       failureCode: !success ? (cleanString(lastPaymentError?.code as string | undefined) || null) : null,

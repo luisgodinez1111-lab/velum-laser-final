@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useRef, useState } from "react";
+import React, { createContext, useCallback, useContext, useMemo, useRef, useState } from "react";
 
 export type ToastType = "success" | "error" | "warning" | "info";
 
@@ -9,8 +9,11 @@ export interface Toast {
   duration: number;
 }
 
-interface ToastContextType {
-  toasts: Toast[];
+// Acciones (estables) y estado (toasts) van en contextos SEPARADOS: los
+// consumidores que solo disparan toasts (useToast) no se re-renderizan cuando
+// cambia la lista — solo ToastContainer (useToastState) lo hace. Antes un solo
+// context con `toasts` re-renderizaba todas las páginas en cada toast.
+interface ToastActions {
   success: (message: string, duration?: number) => void;
   error: (message: string, duration?: number) => void;
   warning: (message: string, duration?: number) => void;
@@ -18,7 +21,8 @@ interface ToastContextType {
   dismiss: (id: string) => void;
 }
 
-const ToastContext = createContext<ToastContextType | undefined>(undefined);
+const ToastActionsContext = createContext<ToastActions | undefined>(undefined);
+const ToastStateContext = createContext<Toast[] | undefined>(undefined);
 
 export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [toasts, setToasts] = useState<Toast[]>([]);
@@ -45,15 +49,31 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const warning = useCallback((m: string, d?: number) => add("warning", m, d), [add]);
   const info    = useCallback((m: string, d?: number) => add("info",    m, d), [add]);
 
+  // Objeto de acciones con referencia estable durante toda la vida del provider.
+  const actions = useMemo<ToastActions>(
+    () => ({ success, error, warning, info, dismiss }),
+    [success, error, warning, info, dismiss]
+  );
+
   return (
-    <ToastContext.Provider value={{ toasts, success, error, warning, info, dismiss }}>
-      {children}
-    </ToastContext.Provider>
+    <ToastActionsContext.Provider value={actions}>
+      <ToastStateContext.Provider value={toasts}>
+        {children}
+      </ToastStateContext.Provider>
+    </ToastActionsContext.Provider>
   );
 };
 
-export const useToast = (): ToastContextType => {
-  const ctx = useContext(ToastContext);
+/** Acciones de toast (referencia estable — no re-renderiza al cambiar la lista). */
+export const useToast = (): ToastActions => {
+  const ctx = useContext(ToastActionsContext);
   if (!ctx) throw new Error("useToast must be used within a ToastProvider");
+  return ctx;
+};
+
+/** Lista de toasts (solo la consume ToastContainer). */
+export const useToastState = (): Toast[] => {
+  const ctx = useContext(ToastStateContext);
+  if (!ctx) throw new Error("useToastState must be used within a ToastProvider");
   return ctx;
 };

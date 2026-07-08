@@ -14,10 +14,9 @@ vi.mock("../src/services/stripeConfigService", () => ({
 vi.mock("../src/db/prisma", () => ({
   prisma: {
     user: {
-      findUnique: vi.fn().mockResolvedValue({ email: "test@velum.mx", clinicId: null }),
-    },
-    payment: {
-      findFirst: vi.fn(),
+      // El anti-duplicado ahora se basa en el flag appointmentDepositAvailable
+      // del User (los depósitos NO crean Payment); cada test define el valor.
+      findUnique: vi.fn(),
     },
   },
 }));
@@ -46,12 +45,11 @@ const validBody = {
 describe("POST /deposit — depósito duplicado", () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it("retorna 409 si ya existe un depósito reciente para el mismo usuario", async () => {
-    (prisma.payment.findFirst as any).mockResolvedValue({
-      id: "pay-1",
-      userId: "user-1",
-      status: "pending",
-      createdAt: new Date(),
+  it("retorna 409 si el usuario ya tiene un depósito disponible sin usar", async () => {
+    (prisma.user.findUnique as any).mockResolvedValue({
+      email: "test@velum.mx",
+      clinicId: null,
+      appointmentDepositAvailable: true,
     });
 
     const app = await buildApp();
@@ -63,15 +61,19 @@ describe("POST /deposit — depósito duplicado", () => {
     expect(res.body.message).toMatch(/depósito/i);
   });
 
-  it("no retorna 409 si no hay depósito reciente", async () => {
-    (prisma.payment.findFirst as any).mockResolvedValue(null);
+  it("no retorna 409 si el usuario no tiene depósito disponible", async () => {
+    (prisma.user.findUnique as any).mockResolvedValue({
+      email: "test@velum.mx",
+      clinicId: null,
+      appointmentDepositAvailable: false,
+    });
 
     const app = await buildApp();
     const res = await request(app)
       .post("/deposit")
       .send(validBody);
 
-    // Will fail at Stripe API call — just verify not 409
+    // Falla en la llamada a Stripe (fake) — solo verificamos que NO sea 409.
     expect(res.status).not.toBe(409);
   });
 });

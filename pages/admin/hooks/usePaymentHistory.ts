@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { apiFetch, buildApiUrl } from '../../../services/apiClient';
+import { apiFetch } from '../../../services/apiClient';
+import { downloadBlob } from '../../../services/downloadBlob';
 import { useToast } from '../../../context/ToastContext';
 
 export const HIST_LIMIT = 50;
@@ -65,17 +66,10 @@ export const usePaymentHistory = (): PaymentHistoryHook => {
       if (histDateFrom) params.set('dateFrom', histDateFrom);
       if (histDateTo) params.set('dateTo', histDateTo);
       if (histStatus) params.set('status', histStatus);
-      const resp = await fetch(buildApiUrl(`/v1/payments/export?${params.toString()}`), { credentials: 'include' });
-      if (!resp.ok) throw new Error('Error al exportar');
-      const blob = await resp.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `pagos-${new Date().toISOString().slice(0, 10)}.csv`;
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch {
-      toast.error('No se pudo descargar el CSV');
+      const qs = params.toString();
+      await downloadBlob(`/v1/payments/export${qs ? `?${qs}` : ''}`, `pagos-${new Date().toISOString().slice(0, 10)}.csv`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'No se pudo descargar el CSV');
     }
   };
 

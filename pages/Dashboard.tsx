@@ -324,17 +324,22 @@ export const Dashboard: React.FC = () => {
       } catch { /* network or auth error — handled by apiFetch */ }
       finally { setIsLoadingData(false); }
 
+      // En error NO vaciamos la lista en silencio (la paciente creería que no
+      // tiene datos y podría tomar decisiones erróneas); avisamos con toast.
       setIsLoadingSessions(true);
       try { setSessions(await clinicalService.getMySessions()); }
-      catch { setSessions([]); } finally { setIsLoadingSessions(false); }
+      catch { toast.error("No se pudieron cargar tus sesiones. Revisa tu conexión."); }
+      finally { setIsLoadingSessions(false); }
 
       setIsLoadingAppointments(true);
       try { setAppointments(await clinicalService.listMyAppointments()); }
-      catch { setAppointments([]); } finally { setIsLoadingAppointments(false); }
+      catch { toast.error("No se pudieron cargar tus citas. Revisa tu conexión."); }
+      finally { setIsLoadingAppointments(false); }
 
       setIsLoadingPayments(true);
       try { setPayments(await clinicalService.getMyPayments()); }
-      catch { setPayments([]); } finally { setIsLoadingPayments(false); }
+      catch { toast.error("No se pudo cargar tu historial de pagos. Revisa tu conexión."); }
+      finally { setIsLoadingPayments(false); }
 
       try {
         const nd = await apiFetch<any>("/v1/notifications?limit=20");
@@ -376,6 +381,19 @@ export const Dashboard: React.FC = () => {
       window.history.replaceState(null, "", window.location.pathname + "#/dashboard");
       setActiveTab("billing");
       setTabKey(k => k + 1);
+      // El webhook de Stripe puede tardar en activar la membresía → refetch con
+      // reintentos cortos para que el tab billing refleje el estado real.
+      let cancelled = false;
+      void (async () => {
+        for (let i = 0; i < 4 && !cancelled; i++) {
+          await new Promise((r) => setTimeout(r, 2000));
+          const ms = await apiFetch<any>("/membership/status").catch(() => null);
+          if (cancelled || !ms) continue;
+          setMembershipData(ms);
+          if (ms?.status === "active") break;
+        }
+      })();
+      return () => { cancelled = true; };
     } else if (checkout === "cancelled") {
       toast.info("El pago fue cancelado. Puedes intentarlo cuando quieras.");
       window.history.replaceState(null, "", window.location.pathname + "#/dashboard");

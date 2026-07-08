@@ -232,9 +232,21 @@ export const getChargePublic = async (req: Request, res: Response) => {
 
   if (!charge) return res.status(404).json({ message: "Cobro no encontrado" });
 
+  // Endpoint PÚBLICO (solo protegido por la entropía del CUID): no exponer el
+  // email completo del paciente a quien tenga/adivine el ID. Se enmascara para
+  // que el titular reconozca que es suyo sin filtrar el contacto real.
+  const maskEmail = (email: string): string => {
+    const at = email.indexOf("@");
+    if (at <= 0) return "***";
+    const local = email.slice(0, at);
+    const head = local.slice(0, 1);
+    return `${head}${"*".repeat(Math.max(local.length - 1, 1))}${email.slice(at)}`;
+  };
+
   return res.json({
     charge: {
       ...charge,
+      user: charge.user ? { email: maskEmail(charge.user.email), profile: charge.user.profile } : charge.user,
       amountFormatted: formatAmount(charge.amount, charge.currency),
       intervalLabel: charge.interval ? INTERVAL_LABELS[charge.interval] : undefined,
     },

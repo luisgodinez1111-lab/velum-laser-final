@@ -56,15 +56,31 @@ export const applyRateLimits = (app: Express): void => {
     rateLimit({ windowMs: 60 * 1000, limit: 60, standardHeaders: true, legacyHeaders: false })
   );
 
-  // OTP resend — muy restrictivo para evitar spam
+  // OTP resend de custom-charge (PÚBLICO) — clave por ID de cobro para que nadie
+  // pueda bombardear el email de un paciente cambiando de IP. La ruta real es
+  // /resend (antes apuntaba a /resend-otp, inexistente → el limiter no aplicaba).
   app.use(
-    ["/api/v1/custom-charges/:id/resend-otp", "/api/v1/users/me/password/request-whatsapp-code"],
+    "/api/v1/custom-charges/:id/resend",
     rateLimit({
       windowMs: 15 * 60 * 1000,
       limit: 3,
       standardHeaders: true,
       legacyHeaders: false,
       message: { message: "Demasiadas solicitudes de código. Intenta de nuevo en 15 minutos." },
+      keyGenerator: (req) => `resend-otp:${req.params.id ?? req.ip}`,
+    })
+  );
+
+  // WhatsApp OTP request (autenticado) — clave por usuario/IP.
+  app.use(
+    "/api/v1/users/me/password/request-whatsapp-code",
+    rateLimit({
+      windowMs: 15 * 60 * 1000,
+      limit: 3,
+      standardHeaders: true,
+      legacyHeaders: false,
+      message: { message: "Demasiadas solicitudes de código. Intenta de nuevo en 15 minutos." },
+      keyGenerator: (req) => rateLimitKeyByUser(req, "wa-otp"),
     })
   );
 
@@ -142,6 +158,13 @@ export const applyRateLimits = (app: Express): void => {
       keyGenerator: (req) => rateLimitKeyByUser(req, "admin"),
       skip: (req) => req.method !== "POST",
     })
+  );
+
+  // Leads y eventos de marketing (PÚBLICOS) — límite estricto por IP para evitar
+  // inyección/spam de leads y disparos salientes a Meta desde cualquier origen.
+  app.use(
+    ["/api/v1/leads", "/v1/leads", "/api/v1/marketing/events"],
+    rateLimit({ windowMs: 10 * 60 * 1000, limit: 20, standardHeaders: true, legacyHeaders: false })
   );
 
   // Fallback global — cubre rutas sin limitador explícito

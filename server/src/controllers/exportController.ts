@@ -49,7 +49,7 @@ export const exportPayments = async (req: AuthRequest, res: Response) => {
       p.user?.email ?? "",
       [p.user?.profile?.firstName, p.user?.profile?.lastName].filter(Boolean).join(" "),
       p.membership?.planCode ?? "",
-      ((p.amount ?? 0) / 100).toFixed(2),
+      (p.amount ?? 0).toFixed(2), // Payment.amount en pesos enteros
       (p.currency ?? "MXN").toUpperCase(),
       p.status,
       p.stripePaymentIntentId ?? "",

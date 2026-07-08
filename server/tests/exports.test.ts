@@ -47,7 +47,7 @@ describe("exportPayments", () => {
     mockPaymentFindMany.mockResolvedValue([
       {
         id: "p1",
-        amount: 99000,
+        amount: 990, // pesos enteros (convención Payment.amount)
         currency: "mxn",
         status: "paid",
         description: "Plan mensual",
@@ -68,7 +68,7 @@ describe("exportPayments", () => {
     expect(res.text).toContain("Email");
     expect(res.text).toContain("Monto (MXN)");
     expect(res.text).toContain("ana@velum.mx");
-    expect(res.text).toContain("990.00"); // 99000 centavos / 100
+    expect(res.text).toContain("990.00"); // pesos enteros, sin dividir
   });
 
   it("devuelve solo la línea de headers cuando no hay pagos", async () => {

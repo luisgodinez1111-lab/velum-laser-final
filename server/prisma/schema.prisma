@@ -299,7 +299,7 @@ model Membership {
   stripePriceId        String?
   stripeCustomerId     String?
   planCode             String?
-  amount               Float?
+  amount               Int?
   currency             String?
   lastStripeEventId    String?
   lastStripeEventType  String?
@@ -310,7 +310,7 @@ model Membership {
   lastReminderSentAt   DateTime?
   createdAt            DateTime         @default(now())
   updatedAt            DateTime         @updatedAt
-  user                 User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user                 User             @relation(fields: [userId], references: [id], onDelete: Restrict)
   tenant               Tenant           @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   payments             Payment[]
 
@@ -335,7 +335,7 @@ model Document {
   size         Int?
   createdAt    DateTime       @default(now())
   updatedAt    DateTime       @updatedAt
-  user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user         User           @relation(fields: [userId], references: [id], onDelete: Restrict)
   tenant       Tenant         @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Cascade)
 
   @@index([userId])
@@ -369,6 +369,7 @@ model AuditLog {
   @@index([resourceType, createdAt])
   @@index([userId, createdAt])
   @@index([actorUserId, createdAt])
+  @@index([resourceId])
   @@index([tenantId])
 }
 
@@ -445,7 +446,7 @@ model MedicalIntake {
   rejectionReason    String?
   createdAt          DateTime                 @default(now())
   updatedAt          DateTime                 @updatedAt
-  user               User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user               User                     @relation(fields: [userId], references: [id], onDelete: Restrict)
   approvedBy         User?                    @relation("MedicalIntakeApprover", fields: [approvedByUserId], references: [id], onDelete: SetNull)
   tenant             Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   embeddings         MedicalIntakeEmbedding[]
@@ -663,7 +664,7 @@ model SessionTreatment {
   createdAt                   DateTime     @default(now())
   updatedAt                   DateTime     @updatedAt
   appointment                 Appointment? @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
-  user                        User         @relation("SessionMember", fields: [userId], references: [id], onDelete: Cascade)
+  user                        User         @relation("SessionMember", fields: [userId], references: [id], onDelete: Restrict)
   staffUser                   User         @relation("SessionStaff", fields: [staffUserId], references: [id], onDelete: Restrict)
   feedbackResponder           User?        @relation("SessionFeedbackResponder", fields: [feedbackRespondedBy], references: [id], onDelete: SetNull)
   tenant                      Tenant       @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Cascade)
@@ -694,7 +695,7 @@ model Payment {
   failureMessage        String?
   createdAt             DateTime      @default(now())
   updatedAt             DateTime      @updatedAt
-  user                  User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user                  User          @relation(fields: [userId], references: [id], onDelete: Restrict)
   membership            Membership?   @relation(fields: [membershipId], references: [id], onDelete: SetNull)
   tenant                Tenant        @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Cascade)
 

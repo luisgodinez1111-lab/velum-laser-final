@@ -165,7 +165,7 @@ export const exportPaymentsCSV = async (req: AuthRequest, res: Response) => {
 
     for (const p of batch) {
       const name = [p.user.profile?.firstName, p.user.profile?.lastName].filter(Boolean).join(" ") || "";
-      const amount = p.amount != null ? (p.amount / 100).toFixed(2) : "";
+      const amount = p.amount != null ? p.amount.toFixed(2) : ""; // pesos enteros
       const row = [
         p.createdAt.toISOString().slice(0, 10),
         name,

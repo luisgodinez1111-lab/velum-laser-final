@@ -51,23 +51,30 @@ export class ApiError extends Error {
 
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
+const IDEMPOTENT_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
+
 const fetchWithRetry = async (
   url: string,
   init: RequestInit,
   retries: number,
   backoff: number
 ): Promise<Response> => {
+  const method = (init.method ?? 'GET').toUpperCase();
+  const isIdempotent = IDEMPOTENT_METHODS.has(method);
   try {
     const response = await fetch(url, init);
 
-    // 429: espera el Retry-After del servidor antes de reintentar
+    // 429: el request no se procesó (rate limit) → reintentar es seguro para
+    // cualquier método. Retry-After puede venir en segundos o como fecha HTTP;
+    // si no es un número, usamos 5s (antes NaN → sleep(NaN) → retry inmediato).
     if (response.status === 429 && retries > 0) {
-      const retryAfter = parseInt(response.headers.get('Retry-After') ?? '5', 10);
+      const parsed = parseInt(response.headers.get('Retry-After') ?? '', 10);
+      const retryAfter = Number.isNaN(parsed) ? 5 : Math.min(Math.max(parsed, 0), 60);
       await sleep(retryAfter * 1000);
       return fetchWithRetry(url, init, retries - 1, backoff * 2);
     }
 
-    // 503: reintenta tras 2 segundos
+    // 503: servicio no disponible, el request no se procesó → reintenta.
     if (response.status === 503 && retries > 0) {
       await sleep(2000);
       return fetchWithRetry(url, init, retries - 1, backoff * 2);
@@ -75,8 +82,11 @@ const fetchWithRetry = async (
 
     return response;
   } catch (err) {
-    // Error de red (fetch failed, sin conexión) — reintenta con backoff
-    if (retries > 0 && !(err instanceof DOMException)) {
+    // Error de red: el request PUDO haberse procesado en el servidor. Solo
+    // reintentamos métodos idempotentes (GET/HEAD/OPTIONS) para no duplicar
+    // mutaciones (cobros, reservas, verificación OTP). POST/PATCH/PUT/DELETE
+    // se propagan al caller para que decida.
+    if (retries > 0 && isIdempotent && !(err instanceof DOMException)) {
       await sleep(backoff);
       return fetchWithRetry(url, init, retries - 1, backoff * 2);
     }
@@ -87,6 +97,16 @@ const fetchWithRetry = async (
 const generateRequestId = (): string => {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
   return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+};
+
+// ── Estado de sesión para el manejo de 401 ──────────────────────────────────
+// Solo redirigimos a login cuando había una sesión autenticada previa (token
+// expirado a mitad de sesión). Un visitante ANÓNIMO que dispara /users/me al
+// cargar el sitio público NO debe ser expulsado a la pantalla de login.
+// AuthContext actualiza este flag en login/logout/verificación de sesión.
+let hasAuthenticatedSession = false;
+export const setAuthenticatedSession = (value: boolean): void => {
+  hasAuthenticatedSession = value;
 };
 
 export const apiFetch = async <T>(
@@ -135,7 +155,9 @@ export const apiFetch = async <T>(
             return retryResp.json() as Promise<T>;
           }
         }
-        if (!window.location.hash.includes('/agenda?mode=login')) {
+        // Solo expulsar a login si había sesión autenticada (no a visitantes
+        // anónimos del sitio público cuya sesión-probe devuelve 401).
+        if (hasAuthenticatedSession && !window.location.hash.includes('/agenda?mode=login')) {
           window.location.replace('/#/agenda?mode=login');
         }
       }

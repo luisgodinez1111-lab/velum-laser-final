@@ -151,9 +151,12 @@ export const Memberships: React.FC = () => {
     setIsCheckingOut(true);
     try {
       await createSubscriptionCheckout(selectedTier);
-    } catch (err: any) {
-      toast.error(err?.message ?? "No se pudo iniciar el pago. Intenta de nuevo.");
-    } finally {
+      // Éxito: el navegador está redirigiendo a Stripe. NO re-habilitamos el
+      // botón (evita ventana de doble checkout) y limpiamos el plan pendiente
+      // para que no se herede a otra usuaria del mismo navegador.
+      try { localStorage.removeItem(PENDING_PLAN_KEY); } catch { /* ignore */ }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "No se pudo iniciar el pago. Intenta de nuevo.");
       setIsCheckingOut(false);
     }
   };

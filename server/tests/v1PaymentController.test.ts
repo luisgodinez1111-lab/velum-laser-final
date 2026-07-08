@@ -38,7 +38,7 @@ const ADMIN_ID = "admin-pay-001";
 const makePayment = (id: string, overrides = {}) => ({
   id,
   userId: USER_ID,
-  amount: 150000,
+  amount: 1500, // pesos enteros (convención Payment.amount)
   currency: "mxn",
   status: "paid",
   createdAt: new Date("2026-03-15T10:00:00Z"),
@@ -282,7 +282,7 @@ describe("exportPaymentsCSV", () => {
   it("exporta datos de pagos correctamente en filas CSV", async () => {
     const payment = {
       id: "p1",
-      amount: 150000,
+      amount: 1500, // pesos enteros (convención Payment.amount)
       currency: "mxn",
       status: "paid",
       createdAt: new Date("2026-03-15T10:00:00Z"),

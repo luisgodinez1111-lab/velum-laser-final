@@ -97,6 +97,14 @@ export async function processBatch(opts: DispatcherOptions): Promise<number> {
       await dispatchOne(row, tx, handlerTimeoutMs);
     }
     return rows.length;
+  }, {
+    // Timeout amplio: si el batch supera el default (5s), la tx hace ROLLBACK y
+    // revierte los marcados done/failed — pero los side effects de los handlers
+    // (emails, notificaciones) ya se ejecutaron → al reintentar se DUPLICAN.
+    // Ideal futuro: reclamar IDs en una tx corta (SKIP LOCKED → 'processing') y
+    // procesar/marcar cada evento FUERA de la transacción.
+    maxWait: 5_000,
+    timeout: 60_000,
   });
 }
 

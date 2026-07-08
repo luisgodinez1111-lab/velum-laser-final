@@ -1,6 +1,7 @@
 import { Resend } from "resend";
 import { logger } from "../utils/logger";
 import { env } from "../utils/env";
+import { escapeHtml as esc } from "../utils/html";
 
 // Dedicated Resend client exclusively for in-app notifications
 // Initialized lazily to avoid crash on startup when key is not set
@@ -27,6 +28,18 @@ async function withRetry<T>(fn: () => Promise<T>, attempts = 3, baseDelayMs = 50
     }
   }
   throw lastErr;
+}
+
+// El SDK de Resend no lanza: devuelve { data, error }. Convertimos error en
+// throw para que withRetry reintente y el fallo no se pierda en silencio.
+async function sendOrThrow(
+  client: Resend,
+  payload: Parameters<Resend["emails"]["send"]>[0]
+): Promise<void> {
+  const { error } = await client.emails.send(payload);
+  if (error) {
+    throw new Error(`[notifications] ${error.name ?? "error"}: ${error.message ?? "envío rechazado por Resend"}`);
+  }
 }
 
 function baseHtml(content: string): string {
@@ -82,7 +95,7 @@ export const sendNotificationEmail = async (
 ): Promise<void> => {
   const html = baseHtml(`
     <p style="${headingStyle}">${params.title}</p>
-    <p style="${bodyStyle}">Hola <strong>${params.name}</strong>,</p>
+    <p style="${bodyStyle}">Hola <strong>${esc(params.name)}</strong>,</p>
     <p style="${bodyStyle}">${params.body}</p>
     ${params.ctaLabel && params.ctaUrl
       ? `<div style="text-align:center;margin:28px 0;">
@@ -94,7 +107,7 @@ export const sendNotificationEmail = async (
   const client = getResend();
   if (!client) { logger.warn("[notifications] RESEND_KEY_NOTIFICATIONS not set — skipping user email"); return; }
   await withRetry(() =>
-    client.emails.send({ from: FROM, to, subject: params.subject, html })
+    sendOrThrow(client, { from: FROM, to, subject: params.subject, html })
   );
 };
 
@@ -121,7 +134,7 @@ export const sendAdminNotificationEmail = async (params: {
   const client = getResend();
   if (!client) { logger.warn("[notifications] RESEND_KEY_NOTIFICATIONS not set — skipping admin email"); return; }
   await withRetry(() =>
-    client.emails.send({
+    sendOrThrow(client, {
       from: FROM,
       to: adminEmail,
       subject: `[Admin] ${params.subject}`,

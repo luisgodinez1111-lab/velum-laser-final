@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Download, Loader2 } from 'lucide-react';
-import { buildApiUrl } from '../services/apiClient';
+import { downloadBlob } from '../services/downloadBlob';
+import { useToast } from '../context/ToastContext';
 
 interface ExportButtonProps {
   endpoint: string;
@@ -12,23 +13,21 @@ interface ExportButtonProps {
 
 export const ExportButton: React.FC<ExportButtonProps> = ({ endpoint, label, params = {}, className = "", onError }) => {
   const [loading, setLoading] = useState(false);
+  const toast = useToast();
 
   const handleExport = async () => {
     setLoading(true);
     try {
-      const url = new URL(buildApiUrl(endpoint), window.location.origin);
-      Object.entries(params).forEach(([k, v]) => v && url.searchParams.set(k, v));
-      const res = await fetch(url.toString(), { credentials: "include" });
-      if (!res.ok) throw new Error("Error en exportación");
-      const blob = await res.blob();
-      const link = document.createElement("a");
-      link.href = URL.createObjectURL(blob);
-      link.download = res.headers.get("Content-Disposition")?.match(/filename="(.+)"/)?.[1] ?? "export.csv";
-      link.click();
-      URL.revokeObjectURL(link.href);
+      const qs = Object.entries(params)
+        .filter(([, v]) => v)
+        .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
+        .join('&');
+      await downloadBlob(qs ? `${endpoint}?${qs}` : endpoint, "export.csv");
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Error al exportar';
-      if (onError) onError(msg);
+      // SIEMPRE notificar: si el caller no pasó onError, usar toast (antes el
+      // fallo se tragaba en silencio cuando Admin no pasaba onError).
+      if (onError) onError(msg); else toast.error(msg);
     } finally {
       setLoading(false);
     }

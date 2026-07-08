@@ -972,8 +972,8 @@ describe("Helpers puros — verificación a través de comportamiento observable
       ["active",             "active"],
       ["trialing",           "active"],
       ["past_due",           "past_due"],
-      ["incomplete",         "pending"],
-      ["incomplete_expired", "pending"],
+      ["incomplete",         "inactive"],
+      ["incomplete_expired", "inactive"],
       ["paused",             "paused"],
     ];
 

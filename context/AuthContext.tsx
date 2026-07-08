@@ -1,6 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { UserRole } from '../types';
 import { AuthUser, authService } from '../services/authService';
+import { setAuthenticatedSession } from '../services/apiClient';
 import { setSentryUser, clearSentryUser } from '../services/sentry';
 
 interface RegisterPayload {
@@ -32,6 +33,13 @@ interface AuthContextType {
   completeOnboarding: () => void;
 }
 
+// Key de localStorage del plan pre-seleccionado (pages/Memberships). Se limpia
+// al cerrar sesión para que no se herede a otra usuaria del mismo navegador.
+const PENDING_PLAN_KEY = 'velum_pending_plan';
+const clearPendingPlan = (): void => {
+  try { localStorage.removeItem(PENDING_PLAN_KEY); } catch { /* ignore */ }
+};
+
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -53,6 +61,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } else {
       clearSentryUser();
     }
+  }, [user]);
+
+  // Sincroniza el flag de sesión de apiClient: solo con sesión activa se
+  // permite el redirect a login ante un 401 (evita expulsar a anónimos).
+  useEffect(() => {
+    setAuthenticatedSession(!!user);
   }, [user]);
 
   useEffect(() => {
@@ -106,6 +120,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setUser(null);
         setMustChangePassword(false);
         setNeedsOnboarding(false);
+        clearPendingPlan();
       }, INACTIVITY_MS);
     };
 
@@ -151,6 +166,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setMustChangePassword(false);
       setNeedsOnboarding(false);
       setIsActionLoading(false);
+      clearPendingPlan();
     }
   }, []);
 

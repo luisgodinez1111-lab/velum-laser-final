@@ -2,9 +2,10 @@ import { Response } from "express";
 import bcrypt from "bcryptjs";
 import { prisma } from "../db/prisma";
 import { withTenantContext } from "../db/withTenantContext";
-import { AuthRequest } from "../middlewares/auth";
+import { AuthRequest, invalidateUserAuthCache } from "../middlewares/auth";
 import { normalizePhone, sendWhatsappOtpCode } from "../services/whatsappMetaService";
-import { recordPasswordHistory, isPasswordReused, validatePasswordStrength, hashPassword, verifyPassword } from "../utils/auth";
+import { recordPasswordHistory, isPasswordReused, validatePasswordStrength, hashPassword, verifyPassword, revokeAllRefreshTokens } from "../utils/auth";
+import { env, isProduction } from "../utils/env";
 import { generateOtp } from "../utils/crypto";
 import { safeIp } from "../utils/request";
 import { logger } from "../utils/logger";
@@ -228,6 +229,9 @@ export const changeMyPassword = async (req: AuthRequest, res: Response) => {
     data: { passwordHash, passwordChangedAt: new Date() }
   }));
   await recordPasswordHistory(userId, passwordHash);
+  // Revocar refresh tokens e invalidar caché de auth tras el cambio de contraseña.
+  await revokeAllRefreshTokens(userId).catch((err) => logger.warn({ err, userId }, "[member] change-password: revoke refresh tokens failed"));
+  invalidateUserAuthCache(userId);
 
   return res.json({ message: "Contrasena actualizada correctamente" });
 };
@@ -365,9 +369,16 @@ export const deleteMyAccount = async (req: AuthRequest, res: Response) => {
     });
   });
 
-  // Limpiar cookies de autenticación
-  res.clearCookie("token", { httpOnly: true, sameSite: "lax" });
-  res.clearCookie("refreshToken", { httpOnly: true, sameSite: "lax" });
+  // Limpiar cookies de autenticación con los NOMBRES y PATH reales — si no
+  // coinciden con los usados al setearlas, el navegador no las borra.
+  const clearOpts = {
+    httpOnly: true,
+    secure: isProduction || env.cookieSameSite === "none",
+    sameSite: env.cookieSameSite as "lax" | "strict" | "none",
+    ...(env.cookieDomain ? { domain: env.cookieDomain } : {}),
+  };
+  res.clearCookie(env.cookieName, clearOpts);
+  res.clearCookie(env.refreshCookieName, { ...clearOpts, path: "/auth/refresh" });
 
   logger.info({ userId }, "[gdpr] Account anonymized and deleted");
 

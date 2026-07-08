@@ -13,8 +13,8 @@ set -euo pipefail
 
 BACKUP_DIR="/home/velumadmin/backups/postgres"
 DB_CONTAINER="velum-laser-final-postgres-1"
-DB_USER="velumapp"
-DB_NAME="velum"
+DB_USER="${DB_USER:-postgres}"   # rol real del contenedor (antes 'velumapp' — inexistente → pg_dump fallaba)
+DB_NAME="${DB_NAME:-velum}"
 RETENTION_DAILY=30
 RETENTION_WEEKLY=12
 TIMESTAMP=$(date +"%Y%m%d_%H%M%S")

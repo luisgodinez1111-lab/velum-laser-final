@@ -53,7 +53,7 @@ const InnerApp: React.FC = () => {
                 <Route path="/"                              element={<Home />} />
                 <Route path="/memberships"                   element={<Memberships />} />
                 <Route path="/agenda"                        element={<Agenda />} />
-                <Route path="/dashboard"                     element={<Dashboard />} />
+                <Route path="/dashboard"                     element={<RequireRole roles={['member', 'staff', 'admin', 'system']} redirectTo="/agenda?mode=login"><Dashboard /></RequireRole>} />
                 <Route path="/admin"                         element={<Admin />} />
                 <Route path="/admin/whatsapp"                element={<RequireRole roles={['admin']} redirectTo="/admin"><AdminWhatsApp /></RequireRole>} />
                 <Route path="/admin/stripe"                  element={<RequireRole roles={['admin']} redirectTo="/admin"><AdminStripe /></RequireRole>} />
