@@ -139,3 +139,14 @@ services:
         value: "false"
       - key: LOG_LEVEL
         value: info
+
+      # ── Observabilidad (recomendado en prod — hoy corre a ciegas si faltan) ─
+      # El código ya inicializa Sentry/OTel SOLO si estas vars existen.
+      - key: SENTRY_DSN                    # ← pega tu DSN de Sentry para activar error tracking
+        sync: false
+      - key: SENTRY_ENVIRONMENT
+        value: production
+      - key: OTEL_EXPORTER_OTLP_ENDPOINT   # ← opcional: endpoint OTLP (Grafana Cloud u otro)
+        sync: false
+      - key: OTEL_EXPORTER_OTLP_HEADERS     # ← opcional: "Authorization=Basic <base64>"
+        sync: false

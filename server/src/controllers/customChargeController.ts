@@ -205,7 +205,10 @@ export const resendOtp = async (req: AuthRequest, res: Response) => {
       appBaseUrl: base,
     });
   } catch (err) {
+    // El correo del OTP es el propósito del endpoint: si falla, NO devolvemos
+    // 200 (éxito falso). Surface el error para que el cliente reintente.
     logger.error({ err }, "[custom-charge] Failed to resend OTP email");
+    throw new AppError("No se pudo reenviar el código por correo. Intenta de nuevo en unos minutos.", "EMAIL_SEND_FAILED", 502);
   }
 
   return res.json({ message: "OTP reenviado al cliente" });

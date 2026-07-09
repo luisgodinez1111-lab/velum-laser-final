@@ -244,7 +244,12 @@ app.use("/api/v1/stripe/webhook", stripeWebhookRouter);
 app.use(express.json({ limit: "1mb" }));
 
 // ── Docs ─────────────────────────────────────────────────────────────
-app.use("/docs", swaggerUi.serve, swaggerUi.setup(openApiSpec));
+// Swagger SOLO fuera de producción: no exponemos públicamente la superficie
+// de la API. En el VPS lo bloqueaba nginx; en Render/Vercel no hay ese borde,
+// así que el control vive en la app. En prod, /docs cae al 404 handler.
+if (env.nodeEnv !== "production") {
+  app.use("/docs", swaggerUi.serve, swaggerUi.setup(openApiSpec));
+}
 
 // ── Rutas auth ───────────────────────────────────────────────────────
 app.use("/auth", authRoutes);

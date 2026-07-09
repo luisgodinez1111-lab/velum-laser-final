@@ -1,0 +1,74 @@
+name: Neon DB Backup → R2
+
+# Respaldo automático de la base de datos de producción (Neon) a Cloudflare R2.
+# El dump vive en TU almacenamiento (R2), no en GitHub — apropiado para datos
+# de pacientes. Falla ruidosamente (GitHub notifica) si algo sale mal.
+#
+# Secrets requeridos (Settings → Secrets and variables → Actions):
+#   NEON_DATABASE_URL   → conexión DIRECTA de Neon (sin -pooler), rol owner
+#   R2_BUCKET           → nombre del bucket
+#   R2_ENDPOINT         → https://<accountid>.r2.cloudflarestorage.com
+#   R2_ACCESS_KEY_ID
+#   R2_SECRET_ACCESS_KEY
+#
+# Retención: configura una Lifecycle Rule en el bucket R2 (p.ej. borrar
+# objetos de db-backups/ > 90 días) para no acumular indefinidamente.
+
+on:
+  schedule:
+    - cron: "0 8 * * *"        # 08:00 UTC diario (~02:00 Chihuahua)
+  workflow_dispatch: {}         # permite lanzarlo a mano
+
+concurrency:
+  group: neon-backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Instalar cliente PostgreSQL 16
+        run: |
+          set -euo pipefail
+          sudo sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/pgdg.gpg
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client-16
+
+      - name: Dump de la base (formato custom, comprimido)
+        env:
+          PGCONNECT_TIMEOUT: "30"
+          DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
+        run: |
+          set -euo pipefail
+          if [ -z "${DATABASE_URL:-}" ]; then echo "::error::Falta el secret NEON_DATABASE_URL"; exit 1; fi
+          TS="$(date -u +%Y%m%d-%H%M%S)"
+          FILE="velum-neon-${TS}.dump"
+          echo "Dumping → ${FILE}"
+          pg_dump -Fc --no-owner --no-acl "${DATABASE_URL}" -f "${FILE}"
+          SIZE="$(stat -c%s "${FILE}")"
+          echo "Tamaño del dump: ${SIZE} bytes"
+          # Salvaguarda: un dump sano de este schema pesa mucho más que 10 KB.
+          if [ "${SIZE}" -lt 10240 ]; then
+            echo "::error::Dump sospechosamente pequeño (${SIZE} bytes) — posible fallo. Abortando."
+            exit 1
+          fi
+          echo "FILE=${FILE}" >> "${GITHUB_ENV}"
+
+      - name: Subir a Cloudflare R2
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          AWS_EC2_METADATA_DISABLED: "true"
+        run: |
+          set -euo pipefail
+          aws s3 cp "${FILE}" "s3://${{ secrets.R2_BUCKET }}/db-backups/${FILE}" \
+            --endpoint-url "${{ secrets.R2_ENDPOINT }}" \
+            --only-show-errors
+          echo "✅ Backup subido a R2: db-backups/${FILE}"
+
+      - name: Resumen
+        if: always()
+        run: echo "Backup job terminó con status=${{ job.status }}"
