@@ -1,4 +1,3 @@
-import { prisma } from "../db/prisma";
 import { withTenantContext } from "../db/withTenantContext";
 
 const DAYS_MS = 24 * 60 * 60 * 1000;

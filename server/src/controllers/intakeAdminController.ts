@@ -24,7 +24,6 @@ export const adminUpdatePatientIntake = async (req: AuthRequest, res: Response) 
     }
 
     const consentAccepted = intake.consentAccepted ?? current.consentAccepted;
-    const phototype       = intake.phototype       ?? current.phototype;
     const status          = (intake.consentAccepted && intake.phototype) ? 'submitted' : (intake.status ?? current.status);
 
     const updated = await prisma.medicalIntake.update({

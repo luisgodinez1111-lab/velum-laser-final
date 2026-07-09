@@ -4,7 +4,6 @@
  * cuando una cita cambia en Velum, y el encolado de esos jobs asíncronos.
  */
 import { GoogleCalendarIntegration, Prisma } from "@prisma/client";
-import { prisma } from "../db/prisma";
 import { withTenantContext } from "../db/withTenantContext";
 import { withGoogleCalendarClient } from "./googleCalendarClient";
 import { enqueueIntegrationJob, IntegrationJobType } from "./integrationJobService";

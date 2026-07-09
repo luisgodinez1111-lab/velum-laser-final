@@ -9,7 +9,7 @@ initSentry();
 
 import "express-async-errors";
 import * as Sentry from "@sentry/node";
-import express, { raw } from "express";
+import express from "express";
 import cors from "cors";
 import helmet from "helmet";
 import compression from "compression";

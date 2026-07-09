@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { listMarketingEvents, createLead, trackMarketingEvent } from "../controllers/v1LeadController";
-import { optionalAuth, requireAuth, requireRole } from "../middlewares/auth";
+import { requireAuth, requireRole } from "../middlewares/auth";
 
 export const v1LeadRoutes = Router();
 

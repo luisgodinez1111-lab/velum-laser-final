@@ -1,4 +1,3 @@
-import { AgendaWeeklyRule, AgendaSpecialDateRule } from "@prisma/client";
 import { prisma } from "../db/prisma";
 import { ensureAgendaDefaults } from "./agendaSetupService";
 import { normalizeDateKey } from "./agendaTimezoneUtils";

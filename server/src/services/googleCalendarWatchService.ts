@@ -5,7 +5,6 @@
  */
 import crypto from "crypto";
 import { GoogleCalendarIntegration, IntegrationJobStatus } from "@prisma/client";
-import { prisma } from "../db/prisma";
 import { withTenantContext } from "../db/withTenantContext";
 import { logger } from "../utils/logger";
 import { env } from "../utils/env";

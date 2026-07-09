@@ -12,7 +12,6 @@
  */
 import jwt from "jsonwebtoken";
 import { google } from "googleapis";
-import { prisma } from "../db/prisma";
 import { withTenantContext } from "../db/withTenantContext";
 import { decrypt, encrypt } from "../utils/crypto";
 import { env } from "../utils/env";
@@ -34,11 +33,9 @@ import {
 } from "./googleCalendarSyncService";
 import {
   runGoogleAppointmentSync,
-  enqueueGoogleAppointmentSync,
 } from "./googleCalendarPushService";
 import {
   ensureGoogleCalendarWatches,
-  enqueueGoogleCalendarSyncFromWebhook,
 } from "./googleCalendarWatchService";
 
 // ── OAuth / Status ────────────────────────────────────────────────────────────

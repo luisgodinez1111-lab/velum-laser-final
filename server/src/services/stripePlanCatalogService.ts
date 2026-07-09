@@ -64,7 +64,7 @@ const dedupe = (plans: StripePlanMapping[]): StripePlanMapping[] => {
   return Array.from(out.values());
 };
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- duck typing: appSetting puede no existir en todas las versiones del schema
+// duck typing: appSetting puede no existir en todas las versiones del schema
 const getAppSettingModel = (): any | null => {
   const model = prisma.appSetting;
   if (!model) return null;

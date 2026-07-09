@@ -1,7 +1,6 @@
 import { GoogleCalendarIntegration } from "@prisma/client";
 import { OAuth2Client } from "google-auth-library";
 import { calendar_v3, google } from "googleapis";
-import { prisma } from "../db/prisma";
 import { withTenantContext } from "../db/withTenantContext";
 import { decrypt, encrypt } from "../utils/crypto";
 import { env } from "../utils/env";

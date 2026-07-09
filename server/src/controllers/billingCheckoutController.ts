@@ -1,7 +1,6 @@
 import { Response } from "express";
 import crypto from "crypto";
 import { AuthRequest } from "../middlewares/auth";
-import { prisma } from "../db/prisma";
 import { withTenantContext } from "../db/withTenantContext";
 import { resolveStripeConfig } from "../services/stripeConfigService";
 import { findActivePlanByCode } from "../services/stripePlanCatalogService";

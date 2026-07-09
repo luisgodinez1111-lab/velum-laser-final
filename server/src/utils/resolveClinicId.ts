@@ -1,4 +1,3 @@
-import { prisma } from "../db/prisma";
 import { withTenantContext } from "../db/withTenantContext";
 import { env } from "./env";
 

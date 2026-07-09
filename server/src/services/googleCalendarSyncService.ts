@@ -5,7 +5,6 @@
  */
 import { GoogleCalendarIntegration } from "@prisma/client";
 import { calendar_v3 } from "googleapis";
-import { prisma } from "../db/prisma";
 import { withTenantContext } from "../db/withTenantContext";
 import { logger } from "../utils/logger";
 import { withGoogleCalendarClient } from "./googleCalendarClient";

@@ -1,6 +1,11 @@
 import { defineConfig } from "vitest/config";
 
 export default defineConfig({
+  // El backend es `environment: node` y no procesa CSS. Sin esto, Vite sube al
+  // root del monorepo y carga el postcss.config.js del frontend (tailwind), lo
+  // que acopla los tests del backend al toolchain CSS del frontend. Un PostCSS
+  // inline vacío evita esa búsqueda y desacopla ambos mundos.
+  css: { postcss: { plugins: [] } },
   test: {
     globals: true,
     environment: "node",

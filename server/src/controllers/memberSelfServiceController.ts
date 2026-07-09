@@ -7,7 +7,6 @@ import { normalizePhone, sendWhatsappOtpCode } from "../services/whatsappMetaSer
 import { recordPasswordHistory, isPasswordReused, validatePasswordStrength, hashPassword, verifyPassword, revokeAllRefreshTokens } from "../utils/auth";
 import { env, isProduction } from "../utils/env";
 import { generateOtp } from "../utils/crypto";
-import { safeIp } from "../utils/request";
 import { logger } from "../utils/logger";
 import { stripe } from "../services/stripeService";
 import { requireTenantId } from "../utils/tenantContext";

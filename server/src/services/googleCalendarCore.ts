@@ -4,7 +4,6 @@
  */
 import { AppointmentStatus, GoogleCalendarIntegration, Prisma } from "@prisma/client";
 import { calendar_v3 } from "googleapis";
-import { prisma } from "../db/prisma";
 import { withTenantContext } from "../db/withTenantContext";
 import { env } from "../utils/env";
 

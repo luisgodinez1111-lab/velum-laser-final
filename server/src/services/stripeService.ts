@@ -1,8 +1,6 @@
 import Stripe from "stripe";
 import { env } from "../utils/env";
-import { prisma } from "../db/prisma";
 import { withTenantContext } from "../db/withTenantContext";
-import { logger } from "../utils/logger";
 
 let _stripe: Stripe | null = null;
 
