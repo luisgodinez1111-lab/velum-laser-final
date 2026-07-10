@@ -1,8 +1,7 @@
 import { Request, Response } from "express";
 import crypto from "crypto";
 import { AuthRequest } from "../middlewares/auth";
-import { prisma } from "../db/prisma";
-import { withTenantContext } from "../db/withTenantContext";
+import { withTenantContext, withSystemContext, withExplicitTenant } from "../db/withTenantContext";
 import { parsePagination } from "../utils/pagination";
 import { paginated } from "../utils/response";
 import { queryParams } from "../utils/request";
@@ -217,7 +216,8 @@ export const resendOtp = async (req: AuthRequest, res: Response) => {
 // ── Public: Get charge details (no auth needed) ───────────────────────
 export const getChargePublic = async (req: Request, res: Response) => {
   const { id } = req.params;
-  const charge = await prisma.customCharge.findUnique({
+  // Endpoint PÚBLICO: resolvemos el cobro por id (CUID) → withSystemContext.
+  const charge = await withSystemContext((tx) => tx.customCharge.findUnique({
     where: { id },
     select: {
       id: true,
@@ -231,7 +231,7 @@ export const getChargePublic = async (req: Request, res: Response) => {
       expiresAt: true,
       user: { select: { email: true, profile: { select: { firstName: true } } } },
     },
-  });
+  }));
 
   if (!charge) return res.status(404).json({ message: "Cobro no encontrado" });
 
@@ -351,14 +351,14 @@ export const verifyOtpAndCheckout = async (req: Request, res: Response) => {
     return res.status(502).json({ message: "No se pudo crear el pago en Stripe", detail });
   }
 
-  // Save session URL for reference
-  await prisma.customCharge.update({
+  // Save session URL for reference. Público: write scoped al tenant del cobro.
+  await withExplicitTenant(charge.tenantId, (tx) => tx.customCharge.update({
     where: { id },
     data: {
       stripeSessionId: typeof json.id === "string" ? json.id : null,
       stripeSessionUrl: typeof json.url === "string" ? json.url : null,
     },
-  });
+  }));
 
   // Notify admins that the user accepted the charge (OTP verified)
   onCustomChargeAccepted({

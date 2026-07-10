@@ -73,6 +73,33 @@ export const withExplicitTenant = <T>(
 ): Promise<T> => withTenantContext(fn, { tenantIdOverride: tenantId });
 
 /**
+ * Como withTenantContext, pero SIEMPRE abre una transacción — aunque RLS esté
+ * apagado. Úsalo para bloques multi-statement que deben ser atómicos con
+ * independencia de RLS (p.ej. crear Lead + MarketingAttribution juntos).
+ *
+ * A diferencia de withTenantContext/withExplicitTenant (que en el fallback
+ * RLS-off corren `fn(prisma)` sin transacción), aquí la atomicidad se preserva
+ * siempre. El `SET LOCAL app.tenant_id` solo se emite cuando `rlsEnforce` y hay
+ * tenantId; el resto del tiempo es una transacción normal.
+ */
+export function withTenantTransaction<T>(
+  tenantId: string | undefined,
+  fn: (tx: Prisma.TransactionClient) => Promise<T>,
+): Promise<T> {
+  if (env.rlsBypassEmergency) {
+    return prisma.$transaction((tx) => fn(tx));
+  }
+  return runInTenantTx(() =>
+    prisma.$transaction(async (tx) => {
+      if (env.rlsEnforce && tenantId) {
+        await tx.$executeRaw`SELECT set_config('app.tenant_id', ${tenantId}, true)`;
+      }
+      return fn(tx);
+    }),
+  );
+}
+
+/**
  * Ejecuta `fn` DECLARANDO intención cross-tenant: corre SIN app.tenant_id.
  *
  * Úsalo únicamente cuando la operación no puede conocer el tenant todavía o
