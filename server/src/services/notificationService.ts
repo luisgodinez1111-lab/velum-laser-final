@@ -1,6 +1,5 @@
 import { Prisma } from "@prisma/client";
-import { prisma } from "../db/prisma";
-import { withTenantContext } from "../db/withTenantContext";
+import { withTenantContext, withExplicitTenant } from "../db/withTenantContext";
 import { logger } from "../utils/logger";
 import { broadcastToUser } from "./sseService";
 import { getTenantIdOr } from "../utils/tenantContext";
@@ -41,16 +40,18 @@ export interface CreateNotificationParams {
 // ── Create a single in-app notification ──────────────────────────────
 export const createNotification = async (params: CreateNotificationParams) => {
   try {
-    const created = await prisma.notification.create({
+    // Evento de sistema (webhook/cron/auth): tenant conocido → withExplicitTenant.
+    const tenantId = getTenantIdOr(env.defaultClinicId);
+    const created = await withExplicitTenant(tenantId, (tx) => tx.notification.create({
       data: {
         userId: params.userId,
         type: params.type,
         title: params.title,
         body: params.body,
         data: (params.data ?? {}) as Prisma.InputJsonValue,
-        tenantId: getTenantIdOr(env.defaultClinicId),
+        tenantId,
       },
-    });
+    }));
     // Push to connected SSE clients in real time
     broadcastToUser(params.userId, created);
     return created;
@@ -101,7 +102,7 @@ export const notifyAdmins = async (
       data: (data ?? {}) as Prisma.InputJsonValue,
       tenantId,
     }));
-    await prisma.notification.createMany({ data: rows });
+    await withExplicitTenant(tenantId, (tx) => tx.notification.createMany({ data: rows }));
     // Push via SSE to each admin that has an active stream
     for (const row of rows) {
       broadcastToUser(row.userId, row);
