@@ -58,7 +58,10 @@ export const CustomChargePage: React.FC = () => {
         setCharge(data.charge);
         // Start expiry countdown if charge is pending and has an expiresAt
         if (data.charge?.expiresAt && data.charge.status === "PENDING_ACCEPTANCE") {
-          const calcSecondsLeft = () => Math.max(0, Math.floor((new Date(data.charge.expiresAt).getTime() - Date.now()) / 1000));
+          // Capturamos el string ya narrowed: el narrowing del guard no
+          // sobrevive dentro del closure.
+          const expiresAt = data.charge.expiresAt;
+          const calcSecondsLeft = () => Math.max(0, Math.floor((new Date(expiresAt).getTime() - Date.now()) / 1000));
           setExpirySecondsLeft(calcSecondsLeft());
           expiryTimerRef.current = setInterval(() => {
             const secs = calcSecondsLeft();

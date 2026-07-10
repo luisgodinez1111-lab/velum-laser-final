@@ -49,6 +49,7 @@ type MeProfile = { fullName: string; email: string; phone: string };
 
 import { apiFetch } from "../services/apiClient";
 import { useDelayedLoading } from "../hooks/useDelayedLoading";
+import { getPasswordChecks } from "../utils/passwordStrength";
 
 const asString = (v: unknown, fallback = ""): string => (typeof v === "string" ? v : fallback);
 
@@ -203,13 +204,6 @@ const AppointmentCard: React.FC<{
   );
 };
 
-const getPasswordChecks = (value: string) => ({
-  length: value.length >= 12,
-  upper: /[A-Z]/.test(value),
-  lower: /[a-z]/.test(value),
-  number: /[0-9]/.test(value),
-  special: /[^A-Za-z0-9]/.test(value)
-});
 
 
 // ── Dashboard ─────────────────────────────────────────────────────────────────
@@ -339,29 +333,34 @@ export const Dashboard: React.FC = () => {
       // cascada de toasts encima de la pantalla de error).
       if (criticalFailed) return;
 
-      // En error NO vaciamos la lista en silencio (la paciente creería que no
-      // tiene datos y podría tomar decisiones erróneas); avisamos con toast.
+      // Cargas independientes en PARALELO (antes secuenciales → la latencia era
+      // la suma de 4 round-trips). Cada una conserva su flag de loading y su
+      // aviso de error. En error NO vaciamos la lista en silencio (la paciente
+      // creería que no tiene datos y podría tomar decisiones erróneas).
       setIsLoadingSessions(true);
-      try { setSessions(await clinicalService.getMySessions()); }
-      catch { toast.error("No se pudieron cargar tus sesiones. Revisa tu conexión."); }
-      finally { setIsLoadingSessions(false); }
-
       setIsLoadingAppointments(true);
-      try { setAppointments(await clinicalService.listMyAppointments()); }
-      catch { toast.error("No se pudieron cargar tus citas. Revisa tu conexión."); }
-      finally { setIsLoadingAppointments(false); }
-
       setIsLoadingPayments(true);
-      try { setPayments(await clinicalService.getMyPayments()); }
-      catch { toast.error("No se pudo cargar tu historial de pagos. Revisa tu conexión."); }
-      finally { setIsLoadingPayments(false); }
-
-      try {
-        const nd = await apiFetch<any>("/v1/notifications?limit=20");
-        const list: InAppNotif[] = nd?.items ?? [];
-        setInAppNotifs(list);
-        setInAppUnread(nd?.unread ?? list.filter((n) => !n.read).length);
-      } catch { /* silent */ }
+      await Promise.all([
+        clinicalService.getMySessions()
+          .then(setSessions)
+          .catch(() => toast.error("No se pudieron cargar tus sesiones. Revisa tu conexión."))
+          .finally(() => setIsLoadingSessions(false)),
+        clinicalService.listMyAppointments()
+          .then(setAppointments)
+          .catch(() => toast.error("No se pudieron cargar tus citas. Revisa tu conexión."))
+          .finally(() => setIsLoadingAppointments(false)),
+        clinicalService.getMyPayments()
+          .then(setPayments)
+          .catch(() => toast.error("No se pudo cargar tu historial de pagos. Revisa tu conexión."))
+          .finally(() => setIsLoadingPayments(false)),
+        apiFetch<any>("/v1/notifications?limit=20")
+          .then((nd) => {
+            const list: InAppNotif[] = nd?.items ?? [];
+            setInAppNotifs(list);
+            setInAppUnread(nd?.unread ?? list.filter((n) => !n.read).length);
+          })
+          .catch(() => { /* silent */ }),
+      ]);
     };
     void load();
 
@@ -575,6 +574,18 @@ export const Dashboard: React.FC = () => {
   const isSlow = useDelayedLoading(isLoadingData);
   const retryLoad = () => setReloadKey((k) => k + 1);
 
+  // Derivaciones de citas memoizadas por `appointments`: evita recalcular el
+  // filter+sort en cada re-render (p.ej. al teclear en los formularios).
+  // DEBEN declararse antes de los early returns de abajo (reglas de hooks).
+  const upcomingAppointments = useMemo(() => appointments.filter(
+    a => (a.status === "scheduled" || a.status === "confirmed") && new Date(a.startAt) >= new Date()
+  ).sort((a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime()), [appointments]);
+
+  const pastAppointments = useMemo(() => appointments.filter(
+    a => a.status === "completed" || a.status === "canceled" || a.status === "no_show" ||
+      ((a.status === "scheduled" || a.status === "confirmed") && new Date(a.startAt) < new Date())
+  ).sort((a, b) => new Date(b.startAt).getTime() - new Date(a.startAt).getTime()), [appointments]);
+
   // ── Guards ─────────────────────────────────────────────────────────────────
   if (isAuthLoading || (isAuthenticated && isLoadingData)) {
     return (
@@ -612,15 +623,6 @@ export const Dashboard: React.FC = () => {
   // ── Derived data ───────────────────────────────────────────────────────────
   const documents = (memberData as any)?.clinical?.documents || [];
   const pendingDocs = documents.filter((d: any) => !d.signed).length;
-
-  const upcomingAppointments = appointments.filter(
-    a => (a.status === "scheduled" || a.status === "confirmed") && new Date(a.startAt) >= new Date()
-  ).sort((a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime());
-
-  const pastAppointments = appointments.filter(
-    a => a.status === "completed" || a.status === "canceled" || a.status === "no_show" ||
-      ((a.status === "scheduled" || a.status === "confirmed") && new Date(a.startAt) < new Date())
-  ).sort((a, b) => new Date(b.startAt).getTime() - new Date(a.startAt).getTime());
 
   const membership       = membershipData;
   const membershipStatus = membership?.status ?? "inactive";
@@ -1363,17 +1365,17 @@ export const Dashboard: React.FC = () => {
                               <div className="px-4 py-4 flex items-start justify-between gap-3">
                                 <div>
                                   <p className="text-[12px] font-semibold text-velum-500 capitalize">{dateStr}</p>
-                                  {params?.zona && <p className="font-semibold text-velum-900 text-[15px] mt-1">{String(params.zona)}</p>}
+                                  {!!params?.zona && <p className="font-semibold text-velum-900 text-[15px] mt-1">{String(params.zona)}</p>}
                                 </div>
                                 <span className="shrink-0 text-[11px] font-semibold px-2.5 py-1 bg-success-50 text-success-700 border border-success-100 rounded-full">Completada</span>
                               </div>
                               {params && Object.keys(params).length > 0 && (
                                 <div className="px-4 pb-4 space-y-3">
                                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                                    {params.zona && <div className="bg-velum-50 rounded-xl p-3 text-center"><p className="text-[11px] font-medium text-velum-500">Zona</p><p className="text-[14px] font-semibold text-velum-900 mt-1 tabular-nums">{String(params.zona)}</p></div>}
-                                    {params.fluencia && <div className="bg-velum-50 rounded-xl p-3 text-center"><p className="text-[11px] font-medium text-velum-500">Energía</p><p className="text-[14px] font-semibold text-velum-900 mt-1 tabular-nums">{String(params.fluencia)} J/cm²</p></div>}
-                                    {params.frecuencia && <div className="bg-velum-50 rounded-xl p-3 text-center"><p className="text-[11px] font-medium text-velum-500">Velocidad</p><p className="text-[14px] font-semibold text-velum-900 mt-1 tabular-nums">{String(params.frecuencia)} Hz</p></div>}
-                                    {params.passes && <div className="bg-velum-50 rounded-xl p-3 text-center"><p className="text-[11px] font-medium text-velum-500">Pasadas</p><p className="text-[14px] font-semibold text-velum-900 mt-1 tabular-nums">{String(params.passes)}</p></div>}
+                                    {!!params.zona && <div className="bg-velum-50 rounded-xl p-3 text-center"><p className="text-[11px] font-medium text-velum-500">Zona</p><p className="text-[14px] font-semibold text-velum-900 mt-1 tabular-nums">{String(params.zona)}</p></div>}
+                                    {!!params.fluencia && <div className="bg-velum-50 rounded-xl p-3 text-center"><p className="text-[11px] font-medium text-velum-500">Energía</p><p className="text-[14px] font-semibold text-velum-900 mt-1 tabular-nums">{String(params.fluencia)} J/cm²</p></div>}
+                                    {!!params.frecuencia && <div className="bg-velum-50 rounded-xl p-3 text-center"><p className="text-[11px] font-medium text-velum-500">Velocidad</p><p className="text-[14px] font-semibold text-velum-900 mt-1 tabular-nums">{String(params.frecuencia)} Hz</p></div>}
+                                    {!!params.passes && <div className="bg-velum-50 rounded-xl p-3 text-center"><p className="text-[11px] font-medium text-velum-500">Pasadas</p><p className="text-[14px] font-semibold text-velum-900 mt-1 tabular-nums">{String(params.passes)}</p></div>}
                                   </div>
                                   <details className="group rounded-xl border border-velum-100 overflow-hidden">
                                     <summary className="flex items-center justify-between px-3 py-2.5 cursor-pointer text-[13px] font-semibold text-velum-600 hover:bg-velum-50 transition-colors duration-base ease-standard list-none">

@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import { Search, RefreshCw, ArrowRight, ChevronLeft, ChevronRight, Plus, Download } from 'lucide-react';
 import { Member } from '../types';
 import { Pill } from './adminSharedComponents';
-import { statusLabel, statusPill, intakeStatusLabel, riskOfMember } from './adminUtils';
+import { statusLabel, statusPill, intakeStatusLabel, riskOfMember } from './adminShared';
 import { DataTable, type Column, PageHeader } from '../components/ui';
 
 interface Props {

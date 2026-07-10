@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState, lazy, Suspense } from 'react';
 import { Link } from 'react-router-dom';
 import { PasswordInput } from '../components/PasswordInput';
 import { VelumLogo } from '../components/VelumLogo';
@@ -44,10 +44,13 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { memberService, auditService } from '../services/dataService';
 import { SessionTreatment, SessionCreatePayload, MedicalIntake } from '../services/clinicalService';
-import { AdminUsersPermissions } from "./AdminUsersPermissions";
 import { AdminCreatePatientDrawer } from "../components/AdminCreatePatientDrawer";
-import { AdminStripeSettings } from "./AdminStripeSettings";
-import { AdminWhatsAppSettings } from "./AdminWhatsAppSettings";
+// Settings pesados (chunk admin-settings ~103KB gz) cargados lazy: solo se
+// descargan cuando el admin abre la pestaña de configuración correspondiente,
+// no al entrar a /admin.
+const AdminUsersPermissions = lazy(() => import("./AdminUsersPermissions").then(m => ({ default: m.AdminUsersPermissions })));
+const AdminStripeSettings = lazy(() => import("./AdminStripeSettings").then(m => ({ default: m.AdminStripeSettings })));
+const AdminWhatsAppSettings = lazy(() => import("./AdminWhatsAppSettings").then(m => ({ default: m.AdminWhatsAppSettings })));
 import { AdminRiesgosSection } from "./AdminRiesgosSection";
 import { AdminCumplimientoSection } from "./AdminCumplimientoSection";
 import { AdminKPIsSection } from "./AdminKPIsSection";
@@ -375,8 +378,16 @@ export const Admin: React.FC = () => {
     }
   }, []);
 
+  const didLoadInitialAgenda = useRef(false);
   useEffect(() => {
     if (!isAuthenticated || !hasAccess) return;
+    // useAdminData ya trae la agenda del día inicial en su loadData; saltamos la
+    // PRIMERA ejecución para evitar el doble fetch en el mount. Solo refetch
+    // cuando el admin cambia de día.
+    if (!didLoadInitialAgenda.current) {
+      didLoadInitialAgenda.current = true;
+      return;
+    }
     let cancelled = false;
     const loadDaySnapshot = async () => {
       try {
@@ -1404,11 +1415,17 @@ export const Admin: React.FC = () => {
         ))}
       </div>
       {settingsCategory === 'agenda' && renderAgendaSettings()}
-      {settingsCategory === 'sistema' && <AdminUsersPermissions embedded />}
+      {settingsCategory === 'sistema' && (
+        <Suspense fallback={<div className="py-10 text-center text-sm text-velum-500">Cargando configuración…</div>}>
+          <AdminUsersPermissions embedded />
+        </Suspense>
+      )}
       {settingsCategory === 'integraciones' && (
         <div className="space-y-6">
-          <AdminStripeSettings embedded />
-          <AdminWhatsAppSettings embedded />
+          <Suspense fallback={<div className="py-10 text-center text-sm text-velum-500">Cargando configuración…</div>}>
+            <AdminStripeSettings embedded />
+            <AdminWhatsAppSettings embedded />
+          </Suspense>
 
           {/* Integration Jobs Monitor */}
           <div className="bg-white rounded-2xl border border-velum-100 p-5 space-y-4">

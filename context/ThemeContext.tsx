@@ -68,12 +68,6 @@ export const ThemeProvider: React.FC<{
   );
 };
 
-/** Acceso al theme. Sin provider, default 'light'. */
-export function useTheme(): Theme {
-  const ctx = useContext(ThemeCtx);
-  return ctx?.theme ?? 'light';
-}
-
 /** Acceso completo (theme + setters). Usar en el toggle. Lanza fuera de provider. */
 export function useThemeControls(): ThemeContextValue {
   const ctx = useContext(ThemeCtx);

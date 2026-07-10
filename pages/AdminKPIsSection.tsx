@@ -2,10 +2,8 @@ import React, { useMemo } from 'react';
 import { Users, Wallet, Target, AlertTriangle, FileText, Clock3 } from 'lucide-react';
 import { Member } from '../types';
 import { KpiCard } from './adminSharedComponents';
+import { formatMoney } from './adminShared';
 import { DataTable, type Column, PageHeader, SectionHeading } from '../components/ui';
-
-const formatMoney = (amount: number) =>
-  new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', maximumFractionDigits: 0 }).format(amount);
 
 interface Analytics {
   totalSocios: number;

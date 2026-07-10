@@ -1,7 +1,4 @@
 import { initSentry } from './services/sentry';
-// Sentry debe inicializarse antes de montar React para capturar errores tempranos.
-initSentry();
-
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
@@ -17,6 +14,15 @@ root.render(
     <App />
   </React.StrictMode>
 );
+
+// Sentry se inicializa TRAS el primer render, en tiempo idle, para no bloquear
+// el first paint. La ventana sin captura es de milisegundos; los errores de
+// render los cubre AppErrorBoundary.
+if (typeof window.requestIdleCallback === 'function') {
+  window.requestIdleCallback(() => initSentry());
+} else {
+  setTimeout(() => initSentry(), 1);
+}
 
 // Detectar actualizaciones del Service Worker
 if ('serviceWorker' in navigator) {

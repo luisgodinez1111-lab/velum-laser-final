@@ -27,11 +27,6 @@ export const recordLatency = (name: string, ms: number): void => {
   if (arr.length > MAX_LATENCY_SAMPLES) arr.shift();
 };
 
-/** Actualiza un gauge (valor puntual). */
-export const setGauge = (name: string, value: number): void => {
-  gauges.set(name, value);
-};
-
 /** Retorna snapshot completo para el endpoint de métricas. */
 export const getSnapshot = () => {
   const httpReqs: Record<string, number> = {};

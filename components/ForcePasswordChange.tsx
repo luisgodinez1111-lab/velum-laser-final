@@ -4,14 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { authService } from "../services/authService";
 import { useAuth } from "../context/AuthContext";
 import { Modal, Button } from "./ui";
-
-const getChecks = (v: string) => ({
-  length: v.length >= 12,
-  upper: /[A-Z]/.test(v),
-  lower: /[a-z]/.test(v),
-  number: /[0-9]/.test(v),
-  special: /[^A-Za-z0-9]/.test(v),
-});
+import { getPasswordChecks } from "../utils/passwordStrength";
 
 const CHECK_LABELS = [
   { key: "length",  label: "Mínimo 12 caracteres" },
@@ -32,7 +25,7 @@ export const ForcePasswordChange: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
-  const checks = getChecks(newPassword);
+  const checks = getPasswordChecks(newPassword);
   const score = Object.values(checks).filter(Boolean).length;
   const allPassed = Object.values(checks).every(Boolean);
 

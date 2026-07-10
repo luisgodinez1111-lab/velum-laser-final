@@ -104,8 +104,11 @@ export const getMedicalIntakeByUserId = async (req: AuthRequest, res: Response) 
 export const approveMedicalIntake = async (req: AuthRequest, res: Response) => {
   const payload = medicalIntakeApproveSchema.parse(req.body);
 
+  // Solo necesitamos existencia + id para el update; evitamos arrastrar
+  // signatureImageData (PHI, cientos de KB) y los JSON del expediente.
   const intake = await prisma.medicalIntake.findUnique({
-    where: { userId: req.params.userId }
+    where: { userId: req.params.userId },
+    select: { id: true }
   });
 
   if (!intake) {

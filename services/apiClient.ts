@@ -109,7 +109,7 @@ export const setAuthenticatedSession = (value: boolean): void => {
   hasAuthenticatedSession = value;
 };
 
-export const apiFetch = async <T>(
+const _doApiFetch = async <T>(
   path: string,
   options: RequestInit = {},
   timeoutMs = DEFAULT_TIMEOUT_MS
@@ -180,4 +180,31 @@ export const apiFetch = async <T>(
   } finally {
     clearTimeout(timer);
   }
+};
+
+// ── Dedupe de GETs en vuelo ──────────────────────────────────────────────────
+// Peticiones GET idénticas concurrentes comparten una sola promesa/fetch (p.ej.
+// varios componentes pidiendo los slots de agenda del mismo día a la vez). Solo
+// dedupe GETs "planos" (sin body, headers, ni signal custom) para no colapsar
+// peticiones que podrían diferir. Se limpia al resolver/rechazar (no es caché).
+const _inflightGets = new Map<string, Promise<unknown>>();
+
+export const apiFetch = <T>(
+  path: string,
+  options: RequestInit = {},
+  timeoutMs = DEFAULT_TIMEOUT_MS
+): Promise<T> => {
+  const method = (options.method ?? 'GET').toUpperCase();
+  const canDedupe = method === 'GET' && !options.body && !options.headers && !options.signal;
+  if (!canDedupe) return _doApiFetch<T>(path, options, timeoutMs);
+
+  const key = buildApiUrl(normalizeApiPath(path));
+  const existing = _inflightGets.get(key);
+  if (existing) return existing as Promise<T>;
+
+  const p = _doApiFetch<T>(path, options, timeoutMs).finally(() => {
+    _inflightGets.delete(key);
+  });
+  _inflightGets.set(key, p);
+  return p;
 };

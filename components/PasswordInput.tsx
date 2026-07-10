@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { Eye, EyeOff } from "lucide-react";
+import { passwordScore } from "../utils/passwordStrength";
 
 interface PasswordInputProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, "type"> {
   className?: string;
@@ -15,12 +16,7 @@ type StrengthLevel = {
 
 const getStrength = (value: string): StrengthLevel => {
   if (!value) return { score: 0, label: "", barColor: "", textColor: "" };
-  let score = 0;
-  if (value.length >= 12) score++;
-  if (/[A-Z]/.test(value)) score++;
-  if (/[a-z]/.test(value)) score++;
-  if (/[0-9]/.test(value)) score++;
-  if (/[^A-Za-z0-9]/.test(value)) score++;
+  const score = passwordScore(value);
 
   // Mapear score → tokens semánticos del design system (intent.*)
   if (score <= 2) return { score, label: "Débil",   barColor: "bg-danger-500",  textColor: "text-danger-700"  };

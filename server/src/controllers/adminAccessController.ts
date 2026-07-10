@@ -1,5 +1,5 @@
 import { Response } from "express";
-import bcrypt from "bcryptjs";
+import { bcrypt } from "../utils/bcrypt";
 import type { Role } from "@prisma/client";
 import { prisma } from "../db/prisma";
 import { withTenantContext } from "../db/withTenantContext";

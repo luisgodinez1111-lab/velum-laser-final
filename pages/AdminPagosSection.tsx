@@ -2,11 +2,8 @@ import React, { useMemo } from 'react';
 import { Download, Wallet, HandCoins, CheckCheck, Users, AlertTriangle, CheckCircle2, Search, Loader2, BarChart3, FileText } from 'lucide-react';
 import { Member } from '../types';
 import { KpiCard, Pill } from './adminSharedComponents';
-import { statusLabel, statusPill, riskOfMember } from './adminUtils';
+import { statusLabel, statusPill, riskOfMember, formatMoney } from './adminShared';
 import { DataTable, type Column, PageHeader, SectionHeading, SectionNav, type SectionNavItem } from '../components/ui';
-
-const formatMoney = (amount: number) =>
-  new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', maximumFractionDigits: 0 }).format(amount);
 
 interface ServerReports {
   users: number;

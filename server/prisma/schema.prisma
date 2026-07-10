@@ -3,8 +3,12 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  // Runtime: URL pooled de Neon (PgBouncer). directUrl: conexión DIRECTA para
+  // migraciones (Prisma solo usa directUrl en migrate/db push). start.sh
+  // garantiza DIRECT_URL con fallback a DATABASE_URL si no está configurada.
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 enum Role {

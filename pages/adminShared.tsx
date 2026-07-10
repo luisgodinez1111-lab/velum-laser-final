@@ -1,4 +1,5 @@
 import React from 'react';
+import { Member } from '../types';
 
 export const formatMoney = (amount: number) =>
   new Intl.NumberFormat('es-MX', {
@@ -45,7 +46,7 @@ export const apptStatusLabel = (status?: string) => {
     case 'confirmed': return { label: 'Confirmada', cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' };
     case 'completed': return { label: 'Completada', cls: 'bg-velum-100 text-velum-700 border-velum-200' };
     case 'canceled':  return { label: 'Cancelada',  cls: 'bg-zinc-100 text-zinc-500 border-zinc-200' };
-    case 'no_show':   return { label: 'No show',    cls: 'bg-red-50 text-red-600 border-red-200' };
+    case 'no_show':   return { label: 'No asistió', cls: 'bg-red-50 text-red-600 border-red-200' };
     default:          return { label: status ?? '—', cls: 'bg-zinc-100 text-zinc-500 border-zinc-200' };
   }
 };
@@ -53,3 +54,15 @@ export const apptStatusLabel = (status?: string) => {
 export const Pill: React.FC<{ label: string; cls: string }> = ({ label, cls }) => (
   <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${cls}`}>{label}</span>
 );
+
+export type HealthFlag = 'ok' | 'warning' | 'critical';
+
+// Semáforo de riesgo de una socia: crítico si tiene estado problemático Y sin
+// consentimiento; warning si algo falta; ok si activa y con consentimiento.
+export const riskOfMember = (member: Member): HealthFlag => {
+  const status = member.subscriptionStatus;
+  const consent = !!member.clinical?.consentFormSigned;
+  if ((status === 'past_due' || status === 'canceled' || status === 'inactive') && !consent) return 'critical';
+  if (status !== 'active' || !consent) return 'warning';
+  return 'ok';
+};
