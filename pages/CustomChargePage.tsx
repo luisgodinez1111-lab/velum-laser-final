@@ -1,9 +1,10 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
-import { CheckCircle2, XCircle, Loader2, CreditCard, ArrowRight, Clock } from "lucide-react";
+import { CheckCircle2, XCircle, Loader2, CreditCard, ArrowRight, Clock, RefreshCw } from "lucide-react";
 import { PillButton } from "../components/ui";
 import { apiFetch } from "../services/apiClient";
 import { track } from "../services/analytics";
+import { useDelayedLoading } from "../hooks/useDelayedLoading";
 
 type ChargeInfo = {
   id: string;
@@ -42,8 +43,16 @@ export const CustomChargePage: React.FC = () => {
   const resendTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const expiryTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  useEffect(() => {
+  // Indicador de "tardando…" solo si la carga excede 3 s.
+  const isSlow = useDelayedLoading(loading);
+
+  const load = useCallback(() => {
     if (!id) return;
+    // Reintentable: reseteamos estado y limpiamos cualquier timer previo para
+    // no duplicar intervalos al reintentar.
+    setLoading(true);
+    setLoadError("");
+    if (expiryTimerRef.current) clearInterval(expiryTimerRef.current);
     apiFetch<{ charge: ChargeInfo }>(`/v1/custom-charges/${id}`)
       .then((data) => {
         setCharge(data.charge);
@@ -61,6 +70,10 @@ export const CustomChargePage: React.FC = () => {
       .catch((e) => setLoadError(e.message || "No se encontró el cobro"))
       .finally(() => setLoading(false));
   }, [id]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
 
   useEffect(() => {
     return () => { if (expiryTimerRef.current) clearInterval(expiryTimerRef.current); };
@@ -183,8 +196,11 @@ export const CustomChargePage: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-velum-50 flex items-center justify-center">
+      <div className="min-h-screen bg-velum-50 flex flex-col items-center justify-center gap-3">
         <Loader2 size={28} className="text-velum-400 animate-spin" />
+        {isSlow && (
+          <p className="text-[13px] text-velum-500">Esto está tardando más de lo normal…</p>
+        )}
       </div>
     );
   }
@@ -196,6 +212,11 @@ export const CustomChargePage: React.FC = () => {
           <XCircle size={36} className="text-danger-500 mx-auto" />
           <h1 className="font-sans font-bold text-velum-900 text-xl tracking-tight">Cobro no encontrado</h1>
           <p className="text-[14px] text-velum-500">{loadError || "Este enlace no es válido o ya expiró."}</p>
+          {loadError && (
+            <PillButton variant="outlineDark" size="md" fullWidth onClick={load}>
+              <RefreshCw size={16} className="mr-2" /> Reintentar
+            </PillButton>
+          )}
         </div>
       </div>
     );

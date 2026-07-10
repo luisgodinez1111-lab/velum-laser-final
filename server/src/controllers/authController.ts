@@ -231,7 +231,10 @@ export const forgotPassword = async (req: Request, res: Response) => {
     const reset = await createPasswordReset(user.id);
     const resetUrl = `${env.appUrl}/#/reset-password?token=${reset.token}`;
     sendPasswordResetEmail(user.email, resetUrl).catch((err: unknown) => {
-      logger.warn({ err, email: user.email }, "[auth] No se pudo enviar correo de recuperación");
+      // Nivel error (no warn) para que el fallo de envío sea visible en
+      // monitoreo. Mantenemos la respuesta genérica anti-enumeración: el
+      // usuario nunca sabe si el correo existe o si el envío falló.
+      logger.error({ err, email: user.email }, "[auth] No se pudo enviar correo de recuperación");
     });
   }
 

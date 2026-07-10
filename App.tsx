@@ -67,11 +67,13 @@ const InnerApp: React.FC = () => {
             </Suspense>
           </Layout>
         </AppErrorBoundary>
+        {/* Overlays DENTRO del Router: usan useNavigate/useLocation, que lanzan
+            excepción (→ pantalla en blanco) si se renderizan fuera del Router. */}
+        {/* ForcePasswordChange takes priority — shown first (z-[9999]) */}
+        {mustChangePassword && <ForcePasswordChange />}
+        {/* After password is set, member-only onboarding appears (z-[9998]) */}
+        {!mustChangePassword && needsOnboarding && <MemberOnboardingFlow />}
       </Router>
-      {/* ForcePasswordChange takes priority — shown first (z-[9999]) */}
-      {mustChangePassword && <ForcePasswordChange />}
-      {/* After password is set, member-only onboarding appears (z-[9998]) */}
-      {!mustChangePassword && needsOnboarding && <MemberOnboardingFlow />}
     </>
   );
 };

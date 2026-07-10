@@ -48,6 +48,7 @@ type TabKey = "overview" | "citas" | "profile" | "security" | "records" | "histo
 type MeProfile = { fullName: string; email: string; phone: string };
 
 import { apiFetch } from "../services/apiClient";
+import { useDelayedLoading } from "../hooks/useDelayedLoading";
 
 const asString = (v: unknown, fallback = ""): string => (typeof v === "string" ? v : fallback);
 
@@ -224,6 +225,9 @@ export const Dashboard: React.FC = () => {
   const [memberData, setMemberData] = useState<Member | null>(null);
   const [membershipData, setMembershipData] = useState<any>(null);
   const [isLoadingData, setIsLoadingData] = useState(true);
+  // Error de la carga crítica (perfil/expediente) + disparador de reintento.
+  const [loadError, setLoadError] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
   const [sessions, setSessions] = useState<SessionTreatment[]>([]);
   const [isLoadingSessions, setIsLoadingSessions] = useState(false);
   const [appointments, setAppointments] = useState<import("../services/clinicalService").Appointment[]>([]);
@@ -299,6 +303,8 @@ export const Dashboard: React.FC = () => {
     if (!isAuthenticated) { navigate("/agenda?mode=login", { replace: true }); return; }
     const load = async () => {
       setIsLoadingData(true);
+      setLoadError(false);
+      let criticalFailed = false;
       try {
         if (user?.role === "member") {
           const [intake, docs, ms] = await Promise.all([
@@ -321,8 +327,17 @@ export const Dashboard: React.FC = () => {
         }
         const me = await apiFetch<any>("/v1/users/me/profile");
         setProfile({ fullName: asString(me?.fullName), email: asString(me?.email, asString(user?.email)), phone: asString(me?.phone) });
-      } catch { /* network or auth error — handled by apiFetch */ }
+      } catch {
+        // Falló la carga crítica (perfil/expediente): mostramos pantalla de
+        // error con opción de reintentar en vez de un dashboard vacío engañoso.
+        criticalFailed = true;
+        setLoadError(true);
+      }
       finally { setIsLoadingData(false); }
+
+      // Si lo crítico falló, no seguimos con sesiones/citas/pagos (evita una
+      // cascada de toasts encima de la pantalla de error).
+      if (criticalFailed) return;
 
       // En error NO vaciamos la lista en silencio (la paciente creería que no
       // tiene datos y podría tomar decisiones erróneas); avisamos con toast.
@@ -358,7 +373,7 @@ export const Dashboard: React.FC = () => {
       } catch { /* silent */ }
     }, 60_000);
     return () => clearInterval(pollInterval);
-  }, [isAuthLoading, isAuthenticated, navigate, user?.email, user?.id, user?.role]);
+  }, [isAuthLoading, isAuthenticated, navigate, user?.email, user?.id, user?.role, reloadKey]);
 
   // Fetch clinic contact config (public endpoint, no auth required)
   useEffect(() => {
@@ -556,6 +571,10 @@ export const Dashboard: React.FC = () => {
     { id: "q6", q: "¿Es seguro para todo tipo de piel?", a: "Nuestro protocolo incluye la evaluación de fototipo Fitzpatrick en tu expediente médico. Los parámetros del láser se ajustan individualmente para cada tipo de piel, desde el I hasta el VI." },
   ];
 
+  // Indicador de "tardando…" solo si la carga excede 3 s.
+  const isSlow = useDelayedLoading(isLoadingData);
+  const retryLoad = () => setReloadKey((k) => k + 1);
+
   // ── Guards ─────────────────────────────────────────────────────────────────
   if (isAuthLoading || (isAuthenticated && isLoadingData)) {
     return (
@@ -566,10 +585,29 @@ export const Dashboard: React.FC = () => {
           <Sk className="h-32 rounded-2xl" />
           <Sk className="h-24 rounded-2xl" />
         </div>
+        {isSlow && (
+          <p className="text-[13px] text-velum-500">Esto está tardando más de lo normal…</p>
+        )}
       </div>
     );
   }
   if (!isAuthenticated) return null;
+  // Falló la carga crítica: pantalla de error con reintento (en vez de un
+  // dashboard vacío que la paciente podría malinterpretar).
+  if (loadError) {
+    return (
+      <div className="min-h-screen bg-velum-50 flex items-center justify-center px-4">
+        <div className="bg-white rounded-3xl shadow-md p-10 max-w-sm w-full text-center space-y-4">
+          <AlertTriangle size={36} className="text-danger-500 mx-auto" />
+          <h1 className="font-sans font-bold text-velum-900 text-xl tracking-tight">No pudimos cargar tu información</h1>
+          <p className="text-[14px] text-velum-500">Revisa tu conexión e inténtalo de nuevo.</p>
+          <PillButton variant="outlineDark" size="md" fullWidth onClick={retryLoad}>
+            <RefreshCw size={16} className="mr-2" /> Reintentar
+          </PillButton>
+        </div>
+      </div>
+    );
+  }
 
   // ── Derived data ───────────────────────────────────────────────────────────
   const documents = (memberData as any)?.clinical?.documents || [];

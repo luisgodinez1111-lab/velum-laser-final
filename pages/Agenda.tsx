@@ -1249,14 +1249,6 @@ export const Agenda: React.FC = () => {
             >
               {isOtpLoading ? "Enviando..." : "Reenviar código"}
             </button>
-            <div />
-            <button
-              type="button"
-              onClick={() => { const pf = { fullName: `${firstName.trim()} ${lastName.trim()}`.trim(), phone: phone.trim(), birthDate }; setOtpCode(""); setOtpMessage(null); setPendingEmailVerify(false); refreshIntake(pf); }}
-              className="text-[12px] text-velum-400 hover:text-velum-600 transition-colors duration-base ease-standard"
-            >
-              Omitir y continuar →
-            </button>
           </div>
         </div>
       </div>
