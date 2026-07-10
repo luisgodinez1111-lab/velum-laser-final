@@ -137,7 +137,13 @@ const seedTenant = async (tenantId: string) => {
     await tx.medicalIntake.create({ data: { userId: user.id, tenantId } });
     const now = new Date();
     await tx.appointment.create({
-      data: { userId: user.id, clinicId: tenantId, startAt: now, endAt: new Date(now.getTime() + 3_600_000) },
+      data: {
+        userId: user.id,
+        createdByUserId: user.id, // NOT NULL en la BD gestionada (drift vs schema opcional)
+        clinicId: tenantId,
+        startAt: now,
+        endAt: new Date(now.getTime() + 3_600_000),
+      },
     });
   });
 };
