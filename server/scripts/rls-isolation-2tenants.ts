@@ -177,25 +177,45 @@ const auditLiveIsolation = async () => {
 
   // INSERT con tenantId de B desde el contexto de A → WITH CHECK lo rechaza.
   let insertBlocked = false;
+  // Obtenemos un userId válido de B bajo el contexto de B (funciona en modo
+  // permisivo y fail-closed); el INSERT sí corre bajo contexto A.
+  const uidB = await asTenant(B, async (tx) => {
+    const rows = await tx.$queryRawUnsafe<Array<{ id: string }>>(
+      `SELECT id FROM "User" WHERE "clinicId" = $1 LIMIT 1`,
+      B,
+    );
+    return rows[0]?.id ?? "missing";
+  });
   try {
     await asTenant(A, async (tx) => {
-      const anyUserOfB = await prisma.$queryRawUnsafe<Array<{ id: string }>>(
-        `SELECT id FROM "User" WHERE "clinicId" = $1 LIMIT 1`,
-        B,
-      );
-      // Nota: el SELECT de arriba corre fuera del contexto (permisivo) sólo para
-      // obtener un userId válido de B; el INSERT sí corre bajo contexto A.
-      const uid = anyUserOfB[0]?.id ?? "missing";
       await tx.$executeRawUnsafe(
         `INSERT INTO "Payment" (id, "tenantId", "userId", status, "createdAt", "updatedAt")
          VALUES ($1, $2, $3, 'pending', now(), now())`,
-        `${MARKER}xtenant`, B, uid,
+        `${MARKER}xtenant`, B, uidB,
       );
     });
   } catch {
     insertBlocked = true; // WITH CHECK violation esperado
   }
   check(insertBlocked, "INSERT de Payment con tenantId=B desde contexto A es rechazado (WITH CHECK)");
+  console.log();
+};
+
+// ── Parte 3: modo de la policy (permisivo vs fail-closed) ─────────────────────
+// Informativo: sin contexto, como app_user, ¿cuántas filas de prueba se ven?
+//   0  → fail-closed (Etapa 4 aplicada) · >0 → permisivo (fallback IS NULL aún activo).
+const auditPolicyMode = async () => {
+  console.log("── Parte 3: modo de la policy (informativo) ──");
+  const seenNoCtx = await asTenant(null, async (tx) => {
+    const rows = await tx.$queryRawUnsafe<Array<{ count: bigint }>>(
+      `SELECT count(*)::bigint AS count FROM "User" WHERE "clinicId" IN ($1, $2)`,
+      A, B,
+    );
+    return Number(rows[0].count);
+  });
+  console.log(seenNoCtx === 0
+    ? "  ✅ FAIL-CLOSED: sin contexto se ven 0 filas de prueba (Etapa 4 aplicada)."
+    : `  ℹ️  PERMISIVO: sin contexto se ven ${seenNoCtx} filas (fallback IS NULL — pre-Etapa 4).`);
   console.log();
 };
 
@@ -210,6 +230,7 @@ const run = async () => {
     await seedTenant(A);
     await seedTenant(B);
     await auditLiveIsolation();
+    await auditPolicyMode();
   } finally {
     await cleanup();
   }

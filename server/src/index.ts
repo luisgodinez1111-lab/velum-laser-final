@@ -51,6 +51,7 @@ import { aiRoutes } from "./routes/aiRoutes";
 import { reportError } from "./utils/errorReporter";
 import { openApiSpec } from "./openapi";
 import { prisma } from "./db/prisma";
+import { prismaSystem } from "./db/prismaSystem";
 import { withSystemContext } from "./db/withTenantContext";
 import { getSseConnectionCount } from "./services/notificationService";
 import { requestContext } from "./utils/requestContext";
@@ -354,7 +355,10 @@ const shutdown = (signal: string) => {
   // hace seguro re-procesar un batch a medias si el drain no alcanza).
   triggerWorkerStop?.();
   server.close(() => {
-    prisma.$disconnect().then(() => {
+    // Cierra ambos pools: el normal (app_user) y el privilegiado (prismaSystem).
+    // Si SYSTEM_DATABASE_URL no está seteado, prismaSystem === prisma → el
+    // segundo disconnect es un no-op inofensivo.
+    Promise.allSettled([prisma.$disconnect(), prismaSystem.$disconnect()]).then(() => {
       logger.info("[shutdown] Clean shutdown complete");
       process.exit(0);
     }).catch(() => process.exit(1));

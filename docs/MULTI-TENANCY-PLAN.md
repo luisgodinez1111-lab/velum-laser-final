@@ -83,9 +83,39 @@ RLS_ENFORCE (setea `app.tenant_id` con SET LOCAL directo). Los otros dos scripts
 `npm run rls:verify` (grants/rol) y `npm run rls:smoke` (aislamiento vs tenant inexistente).
 
 ### Etapa 4 — 🔴 Quitar el fallback permisivo (fail-closed) — el paso crítico
-- Migración que cambia las policies de `USING (app_current_tenant_id() IS NULL OR "clinicId" = …)` a `USING ("clinicId" = app_current_tenant_id())`.
+- Migración que cambia las policies de `USING (app_current_tenant_id() IS NULL OR col = …)` a `USING (col = app_current_tenant_id())`.
 - A partir de aquí: **sin contexto de tenant = 0 filas** (fail-closed). Es el aislamiento real.
 - Desplegar SOLO tras Etapas 2-3 verdes y con el kill-switch listo. Monitorear de cerca.
+
+**PREPARADA (rama `feat/rls-etapa-4-fail-closed`, sin desplegar):**
+
+*Decisión de arquitectura (elegida):* los reads legítimamente cross-tenant de
+`withSystemContext` (login por email, resolvers de webhook por id, refresh token por
+hash, barridos de mantenimiento) corren por una **conexión privilegiada** con un rol
+`BYPASSRLS` — en Neon ya existe `neondb_owner` (BYPASSRLS + login), no hay que crear
+nada. `app_user` (NOBYPASSRLS) sigue para todo lo tenant-scoped.
+
+*Piezas:*
+- Migración `server/prisma/migrations/20260710000000_rls_fail_closed/migration.sql`:
+  DO block que itera las 31 policies `tenant_isolation`, detecta la columna
+  (`tenantId`/`clinicId`) y las recrea estrictas; incluye auto-verificación con un
+  rol efímero no-bypass (sin contexto ⇒ 0 filas o EXCEPTION). Dry-run OK: 31/31
+  policies con columna detectable (27 tenantId + 4 clinicId).
+- `server/src/db/prismaSystem.ts`: 2º PrismaClient sobre `SYSTEM_DATABASE_URL`
+  (neondb_owner). Si la env no está seteada, reexporta el cliente normal (fallback
+  seguro pre-migración y en tests).
+- `withSystemContext` ahora corre contra `prismaSystem` (bypass) en vez de `prisma`.
+- Shutdown cierra ambos pools. `.env.example` documenta SYSTEM_DATABASE_URL / SYSTEM_DB_CONNECTION_LIMIT.
+
+*Orden de despliegue (ESTRICTO — invertirlo tira el login):*
+1. Setear `SYSTEM_DATABASE_URL` (neondb_owner) en el entorno.
+2. Desplegar la app con `prismaSystem` (esta rama). Verificar login/webhooks OK
+   (aún en modo permisivo — todo sigue funcionando).
+3. `prisma migrate deploy` → aplica la migración fail-closed.
+4. Validar: `npm run rls:isolation` debe mostrar "Parte 3: FAIL-CLOSED".
+- **Rollback:** `RLS_BYPASS_EMERGENCY=true` (bypass inmediato a nivel app, sin tocar
+  BD) o recrear las policies permisivas (mismo DO block con el prefijo `IS NULL OR`).
+- **Primero en staging/branch de Neon, nunca directo a prod.**
 
 ### Etapa 5 — Performance (gap D)
 - Medir el costo de la tx interactiva por query contra Neon. Opciones: agrupar operaciones por request en una sola tx, evaluar `SET` a nivel de sesión de conexión pooled, o un middleware que abra 1 tx por request en vez de por query.

@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "./prisma";
+import { prismaSystem } from "./prismaSystem";
 import { env } from "../utils/env";
 import { getTenantId, runInTenantTx, runAsSystem } from "../utils/tenantContext";
 
@@ -110,15 +111,19 @@ export function withTenantTransaction<T>(
  *         luego continuar con `withExplicitTenant(clinicId, …)`.
  *   - (D) jobs/crons: listar todos los tenants antes de iterar cada uno.
  *
- * Hoy corre en el cliente normal — la policy RLS con fallback permisivo
- * (`app.tenant_id IS NULL` ⇒ permite todo) lo cubre. Marca `runAsSystem` para
- * que el hook de auditoría NO lo reporte como wrap olvidado.
+ * Corre contra `prismaSystem` — la conexión PRIVILEGIADA (rol con BYPASSRLS,
+ * p.ej. neondb_owner vía SYSTEM_DATABASE_URL). Ese rol ignora las policies RLS,
+ * así que resuelve recursos cross-tenant sin `app.tenant_id` incluso bajo
+ * fail-closed (Etapa 4). Si SYSTEM_DATABASE_URL no está seteado, `prismaSystem`
+ * es el cliente normal (app_user) — seguro mientras la policy tenga fallback
+ * permisivo (pre-Etapa 4) y en tests.
  *
- * Etapa 4 (fail-closed): al quitar el fallback permisivo, éste será el único
- * camino sancionado sin tenant y podrá apuntarse a una conexión privilegiada.
+ * Marca `runAsSystem` para que el hook de auditoría no lo reporte como wrap
+ * olvidado. Úsalo SOLO para reads-resolver/mantenimiento cross-tenant; las
+ * escrituras tenant-scoped van por withExplicitTenant (app_user + tenant).
  */
 export function withSystemContext<T>(
   fn: (tx: Prisma.TransactionClient) => Promise<T>,
 ): Promise<T> {
-  return runAsSystem(() => fn(prisma as unknown as Prisma.TransactionClient));
+  return runAsSystem(() => fn(prismaSystem as unknown as Prisma.TransactionClient));
 }
