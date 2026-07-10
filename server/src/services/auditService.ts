@@ -1,5 +1,5 @@
 import { Prisma } from "@prisma/client";
-import { prisma } from "../db/prisma";
+import { withExplicitTenant } from "../db/withTenantContext";
 import { getTenantIdOr } from "../utils/tenantContext";
 import { env } from "../utils/env";
 
@@ -29,7 +29,10 @@ export const createAuditLog = async ({
   // actor = who performed the action; userId = subject of the action (defaults to actor)
   const actor = actorUserId ?? userId;
 
-  return prisma.auditLog.create({
+  // Helper transversal (pre-auth/público/autenticado): tenant vía getTenantIdOr,
+  // write scoped → withExplicitTenant (fail-closed-safe).
+  const tenantId = getTenantIdOr(env.defaultClinicId);
+  return withExplicitTenant(tenantId, (tx) => tx.auditLog.create({
     data: {
       userId: userId ?? actorUserId,
       actorUserId: actor,
@@ -40,7 +43,7 @@ export const createAuditLog = async ({
       result,
       ip,
       metadata,
-      tenantId: getTenantIdOr(env.defaultClinicId),
+      tenantId,
     }
-  });
+  }));
 };

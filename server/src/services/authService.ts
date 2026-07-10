@@ -1,7 +1,6 @@
 import { randomBytes } from "crypto";
 import { addHours } from "../utils/date";
-import { prisma } from "../db/prisma";
-import { withTenantContext } from "../db/withTenantContext";
+import { withSystemContext, withExplicitTenant } from "../db/withTenantContext";
 import { generateOtp } from "../utils/crypto";
 import { getTenantIdOr } from "../utils/tenantContext";
 import { env } from "../utils/env";
@@ -18,16 +17,14 @@ export const createEmailVerification = async (userId: string) => {
   const otp = generateOtp();
   const token = buildToken(userId, otp);
 
-  // Eliminar tokens anteriores del mismo usuario para evitar duplicados
-  await prisma.emailVerificationToken.deleteMany({ where: { userId } });
-
-  const record = await prisma.emailVerificationToken.create({
-    data: {
-      userId,
-      token,
-      expiresAt: addHours(24),
-      tenantId: getTenantIdOr(env.defaultClinicId),
-    }
+  // Pre-auth: tenant conocido (default) → withExplicitTenant. deleteMany+create
+  // en una tx atómica.
+  const tenantId = getTenantIdOr(env.defaultClinicId);
+  const record = await withExplicitTenant(tenantId, async (tx) => {
+    await tx.emailVerificationToken.deleteMany({ where: { userId } });
+    return tx.emailVerificationToken.create({
+      data: { userId, token, expiresAt: addHours(24), tenantId },
+    });
   });
 
   return { ...record, otp };
@@ -35,14 +32,18 @@ export const createEmailVerification = async (userId: string) => {
 
 export const consumeEmailVerification = async (userId: string, otp: string) => {
   const token = buildToken(userId, otp);
-  const record = await prisma.emailVerificationToken.findUnique({ where: { token } });
+  // Pre-auth: resolvemos el token global → withSystemContext.
+  const record = await withSystemContext((tx) => tx.emailVerificationToken.findUnique({ where: { token } }));
 
   if (!record || record.expiresAt < new Date()) {
     return null;
   }
 
-  await withTenantContext(async (tx) => tx.user.update({ where: { id: record.userId }, data: { emailVerifiedAt: new Date() } }));
-  await prisma.emailVerificationToken.delete({ where: { token } });
+  // Conocido el tenant del token → writes scoped en una tx atómica.
+  await withExplicitTenant(record.tenantId, async (tx) => {
+    await tx.user.update({ where: { id: record.userId }, data: { emailVerifiedAt: new Date() } });
+    await tx.emailVerificationToken.delete({ where: { token } });
+  });
   return record;
 };
 
@@ -52,29 +53,27 @@ export const consumeEmailVerification = async (userId: string, otp: string) => {
 export const createPasswordReset = async (userId: string) => {
   const token = randomBytes(32).toString("hex");
 
-  // Eliminar resets anteriores del mismo usuario
-  await prisma.passwordResetToken.deleteMany({ where: { userId } });
-
-  const record = await prisma.passwordResetToken.create({
-    data: {
-      userId,
-      token,
-      expiresAt: addHours(2),
-      tenantId: getTenantIdOr(env.defaultClinicId),
-    }
+  // Pre-auth: tenant conocido (default) → withExplicitTenant, tx atómica.
+  const tenantId = getTenantIdOr(env.defaultClinicId);
+  const record = await withExplicitTenant(tenantId, async (tx) => {
+    await tx.passwordResetToken.deleteMany({ where: { userId } });
+    return tx.passwordResetToken.create({
+      data: { userId, token, expiresAt: addHours(2), tenantId },
+    });
   });
 
   return { ...record, token };
 };
 
 export const consumePasswordReset = async (token: string) => {
-  const record = await prisma.passwordResetToken.findUnique({ where: { token } });
+  // Pre-auth: resolvemos el token global → withSystemContext.
+  const record = await withSystemContext((tx) => tx.passwordResetToken.findUnique({ where: { token } }));
 
   if (!record || record.expiresAt < new Date()) {
     return null;
   }
 
-  await prisma.passwordResetToken.delete({ where: { token } });
+  await withExplicitTenant(record.tenantId, (tx) => tx.passwordResetToken.delete({ where: { token } }));
   return record;
 };
 
@@ -85,16 +84,13 @@ export const createConsentOtp = async (userId: string) => {
   const otp = generateOtp();
   const token = buildToken(userId, otp);
 
-  // Eliminar OTPs anteriores del mismo usuario
-  await prisma.consentOtpToken.deleteMany({ where: { userId } });
-
-  const record = await prisma.consentOtpToken.create({
-    data: {
-      userId,
-      token,
-      expiresAt: addHours(1),
-      tenantId: getTenantIdOr(env.defaultClinicId),
-    }
+  // Pre-auth: tenant conocido (default) → withExplicitTenant, tx atómica.
+  const tenantId = getTenantIdOr(env.defaultClinicId);
+  const record = await withExplicitTenant(tenantId, async (tx) => {
+    await tx.consentOtpToken.deleteMany({ where: { userId } });
+    return tx.consentOtpToken.create({
+      data: { userId, token, expiresAt: addHours(1), tenantId },
+    });
   });
 
   return { ...record, otp };
@@ -102,12 +98,13 @@ export const createConsentOtp = async (userId: string) => {
 
 export const consumeConsentOtp = async (userId: string, otp: string) => {
   const token = buildToken(userId, otp);
-  const record = await prisma.consentOtpToken.findUnique({ where: { token } });
+  // Pre-auth: resolvemos el token global → withSystemContext.
+  const record = await withSystemContext((tx) => tx.consentOtpToken.findUnique({ where: { token } }));
 
   if (!record || record.expiresAt < new Date()) {
     return null;
   }
 
-  await prisma.consentOtpToken.delete({ where: { token } });
+  await withExplicitTenant(record.tenantId, (tx) => tx.consentOtpToken.delete({ where: { token } }));
   return record;
 };
