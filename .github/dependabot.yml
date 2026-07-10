@@ -1,0 +1,64 @@
+version: 2
+
+# Actualiza dependencias automáticamente. Los updates minor+patch se agrupan en
+# un solo PR por ecosistema (menos ruido, bajo riesgo); los majors llegan en PRs
+# individuales para revisarlos con cuidado. El CI (lint + tsc + tests + E2E)
+# valida cada PR antes de mergear.
+#
+# NOTA: las PRs automáticas de SEGURIDAD requieren además activar
+# "Dependabot security updates" en Settings → Code security del repo.
+
+updates:
+  # ── Frontend (raíz) ──────────────────────────────────────────────────
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 8
+    labels:
+      - "dependencies"
+      - "frontend"
+    commit-message:
+      prefix: "chore(deps)"
+      prefix-development: "chore(dev-deps)"
+    groups:
+      npm-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+
+  # ── Backend (server) ─────────────────────────────────────────────────
+  - package-ecosystem: "npm"
+    directory: "/server"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 8
+    labels:
+      - "dependencies"
+      - "backend"
+    commit-message:
+      prefix: "chore(deps)"
+      prefix-development: "chore(dev-deps)"
+    groups:
+      npm-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+
+  # ── GitHub Actions ───────────────────────────────────────────────────
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    labels:
+      - "dependencies"
+      - "ci"
+    commit-message:
+      prefix: "chore(ci)"
