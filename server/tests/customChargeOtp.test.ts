@@ -2,7 +2,7 @@
  * VALERIA — Custom charge: validación de OTP y flujo de verificación pública
  * Cubre: formato OTP regex, respuestas a OTP inválido, expirado, correcto.
  */
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import express from "express";
 import request from "supertest";
 
@@ -40,9 +40,10 @@ vi.mock("../src/services/stripeConfigService", () => ({
 
 import { resendCustomChargeOtp, verifyCustomChargeOtp } from "../src/services/customChargeService";
 
-// Mock global fetch for Stripe API calls
+// Mock global fetch for Stripe API calls. Se aplica/limpia por test (ver
+// beforeEach/afterEach) en vez de a nivel módulo, para no dejar un stub global
+// colgado que pueda filtrarse a otros archivos bajo la suite completa.
 const mockFetch = vi.fn();
-vi.stubGlobal("fetch", mockFetch);
 
 const buildApp = async () => {
   const { resendOtp, verifyOtpAndCheckout } = await import("../src/controllers/customChargeController");
@@ -55,10 +56,15 @@ const buildApp = async () => {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.stubGlobal("fetch", mockFetch);
   mockFetch.mockResolvedValue({
     ok: true,
     json: () => Promise.resolve({ id: "cs_test_123", url: "https://checkout.stripe.com/pay/cs_test_abc" }),
   });
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
 });
 
 describe("OTP regex — formato del código (6 alfanuméricos)", () => {
