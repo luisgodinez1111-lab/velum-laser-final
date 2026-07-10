@@ -70,6 +70,18 @@ Los 3 son intencionales (activación gradual). El plan los invierte con cuidado.
 - Test de integración: autenticado como usuario de A, **NO** debe ver ningún dato de B (users, appointments, payments, documents, intakes). Cubrir cada tabla tenant-scoped.
 - Confirmar 0 warnings de "tenant NULL" en los flujos ejercitados.
 
+**Implementado:** `server/scripts/rls-isolation-2tenants.ts` (`npm run rls:isolation`).
+Corre contra Postgres real conectado como `app_user` (NOBYPASSRLS) — recomendado
+un branch de Neon, no prod. Dos partes: (1) **auditoría de cobertura** — auto-descubre
+vía `information_schema` toda tabla con columna `tenantId`/`clinicId` y verifica que
+tenga RLS habilitado + policy (cubre "cada tabla" sin sembrar); (2) **prueba viva** —
+siembra tenants A y B (User/Payment/Appointment/MedicalIntake), verifica aislamiento
+cruzado de lecturas (A ve lo de A y CERO de B, y viceversa) y que las escrituras
+cross-tenant quedan bloqueadas (UPDATE de B desde A afecta 0 filas; INSERT con
+tenantId de B viola WITH CHECK). Idempotente: limpia antes y después. No depende de
+RLS_ENFORCE (setea `app.tenant_id` con SET LOCAL directo). Los otros dos scripts RLS:
+`npm run rls:verify` (grants/rol) y `npm run rls:smoke` (aislamiento vs tenant inexistente).
+
 ### Etapa 4 — 🔴 Quitar el fallback permisivo (fail-closed) — el paso crítico
 - Migración que cambia las policies de `USING (app_current_tenant_id() IS NULL OR "clinicId" = …)` a `USING ("clinicId" = app_current_tenant_id())`.
 - A partir de aquí: **sin contexto de tenant = 0 filas** (fail-closed). Es el aislamiento real.

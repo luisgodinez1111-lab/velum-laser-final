@@ -17,6 +17,9 @@
     "prisma:migrate": "prisma migrate deploy",
     "prisma:studio": "prisma studio",
     "seed": "tsx prisma/seed.ts",
+    "rls:verify": "tsx scripts/verify-rls-setup.ts",
+    "rls:smoke": "tsx scripts/smoke-rls-isolation.ts",
+    "rls:isolation": "tsx scripts/rls-isolation-2tenants.ts",
     "openapi:export": "tsx scripts/export-openapi.ts",
     "prepare": "husky"
   },
