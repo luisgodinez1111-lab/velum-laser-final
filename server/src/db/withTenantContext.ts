@@ -1,7 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "./prisma";
 import { env } from "../utils/env";
-import { getTenantId, runInTenantTx } from "../utils/tenantContext";
+import { getTenantId, runInTenantTx, runAsSystem } from "../utils/tenantContext";
 
 /**
  * Ejecuta `fn` dentro de una transacción Postgres con `app.tenant_id` seteado
@@ -71,3 +71,27 @@ export const withExplicitTenant = <T>(
   tenantId: string,
   fn: (tx: Prisma.TransactionClient) => Promise<T>,
 ): Promise<T> => withTenantContext(fn, { tenantIdOverride: tenantId });
+
+/**
+ * Ejecuta `fn` DECLARANDO intención cross-tenant: corre SIN app.tenant_id.
+ *
+ * Úsalo únicamente cuando la operación no puede conocer el tenant todavía o
+ * necesita cruzar tenants a propósito:
+ *   - (B) pre-auth: buscar user por email global en login/reset.
+ *   - (C) público/webhook: resolver el tenant desde un recurso por id/token
+ *         (p.ej. localizar el Payment/CustomCharge de un evento Stripe) para
+ *         luego continuar con `withExplicitTenant(clinicId, …)`.
+ *   - (D) jobs/crons: listar todos los tenants antes de iterar cada uno.
+ *
+ * Hoy corre en el cliente normal — la policy RLS con fallback permisivo
+ * (`app.tenant_id IS NULL` ⇒ permite todo) lo cubre. Marca `runAsSystem` para
+ * que el hook de auditoría NO lo reporte como wrap olvidado.
+ *
+ * Etapa 4 (fail-closed): al quitar el fallback permisivo, éste será el único
+ * camino sancionado sin tenant y podrá apuntarse a una conexión privilegiada.
+ */
+export function withSystemContext<T>(
+  fn: (tx: Prisma.TransactionClient) => Promise<T>,
+): Promise<T> {
+  return runAsSystem(() => fn(prisma as unknown as Prisma.TransactionClient));
+}

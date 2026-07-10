@@ -1,6 +1,6 @@
 import cron from "node-cron";
 import { prisma } from "../db/prisma";
-import { withTenantContext } from "../db/withTenantContext";
+import { withTenantContext, withSystemContext } from "../db/withTenantContext";
 import { logger } from "../utils/logger";
 import { sendAdminNotificationEmail } from "./notificationEmailService";
 import { notifyAdmins } from "./notificationService";
@@ -128,9 +128,10 @@ export const pruneOldNotifications = async (): Promise<void> => {
 export const pruneOldWebhookEvents = async (): Promise<void> => {
   const cutoff = new Date(Date.now() - WEBHOOK_EVENT_MAX_DAYS * 86400000);
   try {
-    const { count } = await prisma.webhookEvent.deleteMany({
+    // WebhookEvent no es tenant-scoped → withSystemContext.
+    const { count } = await withSystemContext((tx) => tx.webhookEvent.deleteMany({
       where: { processedAt: { lte: cutoff } },
-    });
+    }));
     if (count > 0) {
       logger.info({ count }, "[webhook-cleanup] Pruned old WebhookEvent records");
     }

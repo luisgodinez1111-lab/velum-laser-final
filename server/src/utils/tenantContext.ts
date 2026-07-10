@@ -71,3 +71,18 @@ export const runInTenantTx = <T>(fn: () => Promise<T>): Promise<T> => tenantTxSt
 
 /** True si la query actual corre dentro de withTenantContext (con SET LOCAL). */
 export const isInTenantTx = (): boolean => tenantTxStorage.getStore() === true;
+
+// ── Contexto SYSTEM / cross-tenant intencional (Etapa 2) ─────────────────────
+// Marca un scope que corre DELIBERADAMENTE sin app.tenant_id: lookups pre-auth
+// (login/reset por email global), resolución de tenant desde un recurso público
+// o webhook (por id/token), y jobs que iteran todos los tenants. El hook de
+// auditoría en db/prisma.ts lo trata igual que isInTenantTx (query "contabilizada",
+// no un wrap olvidado). En Etapa 4 (fail-closed) éste será el único camino
+// sancionado sin tenant.
+const systemCtxStorage = new AsyncLocalStorage<boolean>();
+
+/** Ejecuta `fn` marcado como cross-tenant intencional (sin app.tenant_id). */
+export const runAsSystem = <T>(fn: () => Promise<T>): Promise<T> => systemCtxStorage.run(true, fn);
+
+/** True si la query actual corre dentro de withSystemContext (cross-tenant intencional). */
+export const isInSystemCtx = (): boolean => systemCtxStorage.getStore() === true;

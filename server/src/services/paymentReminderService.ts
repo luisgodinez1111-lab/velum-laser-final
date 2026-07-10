@@ -1,5 +1,6 @@
 import cron from "node-cron";
 import { prisma } from "../db/prisma";
+import { withSystemContext } from "../db/withTenantContext";
 import { sendPaymentReminderEmail } from "./emailService";
 import { readStripePlanCatalog } from "./stripePlanCatalogService";
 import { sendWhatsappPaymentReminder } from "./whatsappMetaService";
@@ -24,8 +25,9 @@ async function acquireLock(): Promise<boolean> {
   const now = new Date();
   const lockExpiry = new Date(now.getTime() + LOCK_TTL_MINUTES * 60 * 1000);
 
-  // Check if lock exists and is still valid
-  const existing = await prisma.appSetting.findUnique({ where: { key: LOCK_KEY } });
+  // Check if lock exists and is still valid.
+  // AppSetting (lock distribuido) no es tenant-scoped → withSystemContext.
+  const existing = await withSystemContext((tx) => tx.appSetting.findUnique({ where: { key: LOCK_KEY } }));
   if (existing) {
     const lockData = existing.value as { lockedAt: string; expiresAt: string };
     if (new Date(lockData.expiresAt) > now) {
@@ -35,11 +37,11 @@ async function acquireLock(): Promise<boolean> {
 
   // Attempt to acquire lock with upsert
   try {
-    await prisma.appSetting.upsert({
+    await withSystemContext((tx) => tx.appSetting.upsert({
       where: { key: LOCK_KEY },
       create: { key: LOCK_KEY, value: { lockedAt: now.toISOString(), expiresAt: lockExpiry.toISOString() } },
       update: { value: { lockedAt: now.toISOString(), expiresAt: lockExpiry.toISOString() } },
-    });
+    }));
     return true;
   } catch {
     return false;
@@ -47,7 +49,7 @@ async function acquireLock(): Promise<boolean> {
 }
 
 async function releaseLock(): Promise<void> {
-  await prisma.appSetting.delete({ where: { key: LOCK_KEY } }).catch(() => {});
+  await withSystemContext((tx) => tx.appSetting.delete({ where: { key: LOCK_KEY } })).catch(() => {});
 }
 
 export const runPaymentReminders = async (): Promise<void> => {

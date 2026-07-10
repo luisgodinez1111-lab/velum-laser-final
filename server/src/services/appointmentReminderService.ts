@@ -1,6 +1,5 @@
 import cron from "node-cron";
-import { prisma } from "../db/prisma";
-import { withTenantContext } from "../db/withTenantContext";
+import { withTenantContext, withSystemContext } from "../db/withTenantContext";
 import { sendAppointmentReminderEmail } from "./emailService";
 import { sendWhatsappAppointmentReminder } from "./whatsappMetaService";
 import { logger } from "../utils/logger";
@@ -15,18 +14,19 @@ async function acquireLock(): Promise<boolean> {
   const now = new Date();
   const lockExpiry = new Date(now.getTime() + LOCK_TTL_MINUTES * 60 * 1000);
 
-  const existing = await prisma.appSetting.findUnique({ where: { key: LOCK_KEY } });
+  // AppSetting (lock distribuido) no es tenant-scoped → withSystemContext.
+  const existing = await withSystemContext((tx) => tx.appSetting.findUnique({ where: { key: LOCK_KEY } }));
   if (existing) {
     const lockData = existing.value as { expiresAt: string };
     if (new Date(lockData.expiresAt) > now) return false;
   }
 
   try {
-    await prisma.appSetting.upsert({
+    await withSystemContext((tx) => tx.appSetting.upsert({
       where: { key: LOCK_KEY },
       create: { key: LOCK_KEY, value: { lockedAt: now.toISOString(), expiresAt: lockExpiry.toISOString() } },
       update: { value: { lockedAt: now.toISOString(), expiresAt: lockExpiry.toISOString() } },
-    });
+    }));
     return true;
   } catch (err) {
     logger.warn({ err }, "[appointment-reminder] acquireLock DB write failed — skipping run");
@@ -35,7 +35,7 @@ async function acquireLock(): Promise<boolean> {
 }
 
 async function releaseLock(): Promise<void> {
-  await prisma.appSetting.delete({ where: { key: LOCK_KEY } }).catch((err: unknown) => {
+  await withSystemContext((tx) => tx.appSetting.delete({ where: { key: LOCK_KEY } })).catch((err: unknown) => {
     logger.warn({ err }, "[appointment-reminder] releaseLock failed — lock may expire naturally");
   });
 }

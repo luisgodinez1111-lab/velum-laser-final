@@ -1,23 +1,24 @@
-import { prisma } from "../db/prisma";
+import { withSystemContext } from "../db/withTenantContext";
 
 const PREFIX = "worker_last_run:";
 
 /** Called at the END of a successful cron job run to record its timestamp. */
 export const recordWorkerRun = async (workerName: string): Promise<void> => {
   const key = PREFIX + workerName;
-  await prisma.appSetting.upsert({
+  // AppSetting no es tenant-scoped (config/heartbeat global) → withSystemContext.
+  await withSystemContext((tx) => tx.appSetting.upsert({
     where: { key },
     create: { key, value: { lastRunAt: new Date().toISOString() } },
     update: { value: { lastRunAt: new Date().toISOString() } },
-  }).catch(() => {});
+  })).catch(() => {});
 };
 
 /** Returns a map of workerName → lastRunAt for all registered workers. */
 export const getWorkerStatus = async (): Promise<Record<string, string | null>> => {
-  const settings = await prisma.appSetting.findMany({
+  const settings = await withSystemContext((tx) => tx.appSetting.findMany({
     where: { key: { startsWith: PREFIX } },
     select: { key: true, value: true },
-  });
+  }));
   const result: Record<string, string | null> = {};
   for (const s of settings) {
     const name = s.key.replace(PREFIX, "");

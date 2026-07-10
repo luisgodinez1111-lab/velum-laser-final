@@ -1,5 +1,5 @@
 import { PrismaClient } from "@prisma/client";
-import { isInTenantTx } from "../utils/tenantContext";
+import { isInTenantTx, isInSystemCtx } from "../utils/tenantContext";
 import { logger } from "../utils/logger";
 
 // Ajuste del pool + compatibilidad con PgBouncer (endpoint pooled de Neon).
@@ -49,11 +49,14 @@ export const prisma = basePrisma.$extends({
   query: {
     $allModels: {
       async $allOperations({ model, operation, args, query }) {
-        if (RLS_AUDIT && !isInTenantTx()) {
+        // Se contabiliza como "OK" si corre dentro de withTenantContext (SET LOCAL)
+        // o dentro de withSystemContext (cross-tenant intencional). Lo demás es un
+        // wrap olvidado — candidato a fail-closed en Etapa 4.
+        if (RLS_AUDIT && !isInTenantTx() && !isInSystemCtx()) {
           const key = `${model ?? "raw"}.${operation}`;
           if (!warnedDirectQueries.has(key)) {
             warnedDirectQueries.add(key);
-            logger.warn({ model, operation }, "[rls-audit] query sin withTenantContext — candidata a envolver para Etapa 4");
+            logger.warn({ model, operation }, "[rls-audit] query sin withTenantContext/withSystemContext — candidata a envolver para Etapa 4");
           }
         }
         return query(args);
