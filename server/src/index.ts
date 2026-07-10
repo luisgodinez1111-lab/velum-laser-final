@@ -51,7 +51,7 @@ import { aiRoutes } from "./routes/aiRoutes";
 import { reportError } from "./utils/errorReporter";
 import { openApiSpec } from "./openapi";
 import { prisma } from "./db/prisma";
-import { withTenantContext } from "./db/withTenantContext";
+import { withSystemContext } from "./db/withTenantContext";
 import { getSseConnectionCount } from "./services/notificationService";
 import { requestContext } from "./utils/requestContext";
 import { getWorkerStatus } from "./utils/workerRegistry";
@@ -137,13 +137,14 @@ app.get("/api/v1/health/detailed", healthKeyOrAdmin, async (req: express.Request
     const todayEnd = new Date();
     todayEnd.setHours(23, 59, 59, 999);
 
-    const [activeMembers, appointmentsToday, pendingIntakes] = await Promise.all([
-      prisma.membership.count({ where: { status: "active" } }),
-      withTenantContext(async (tx) => tx.appointment.count({
+    // KPIs globales del sistema (cross-tenant, ops-level) → withSystemContext.
+    const [activeMembers, appointmentsToday, pendingIntakes] = await withSystemContext((tx) => Promise.all([
+      tx.membership.count({ where: { status: "active" } }),
+      tx.appointment.count({
         where: { startAt: { gte: todayStart, lte: todayEnd }, status: { not: "canceled" } },
-      })),
-      prisma.medicalIntake.count({ where: { status: "submitted" } }),
-    ]);
+      }),
+      tx.medicalIntake.count({ where: { status: "submitted" } }),
+    ]));
     checks.businessMetrics = { ok: true, activeMembers, appointmentsToday, pendingIntakes };
   } catch {
     checks.businessMetrics = { ok: true, error: "metrics_unavailable" };

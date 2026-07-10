@@ -1,6 +1,5 @@
 import cron from "node-cron";
-import { prisma } from "../db/prisma";
-import { withSystemContext } from "../db/withTenantContext";
+import { withSystemContext, withExplicitTenant } from "../db/withTenantContext";
 import { sendPaymentReminderEmail } from "./emailService";
 import { readStripePlanCatalog } from "./stripePlanCatalogService";
 import { sendWhatsappPaymentReminder } from "./whatsappMetaService";
@@ -73,7 +72,8 @@ export const runPaymentReminders = async (): Promise<void> => {
 
       const cutoff = new Date(now.getTime() - 20 * 60 * 60 * 1000);
 
-      const memberships = await prisma.membership.findMany({
+      // Barrido cross-tenant de membresías por vencer → withSystemContext.
+      const memberships = await withSystemContext((tx) => tx.membership.findMany({
         where: {
           status: "active",
           currentPeriodEnd: { gte: windowStart, lte: windowEnd },
@@ -91,7 +91,7 @@ export const runPaymentReminders = async (): Promise<void> => {
             },
           },
         },
-      });
+      }));
 
       for (const ms of memberships) {
         try {
@@ -110,11 +110,12 @@ export const runPaymentReminders = async (): Promise<void> => {
 
           const renewalDate = ms.currentPeriodEnd ? formatDate(ms.currentPeriodEnd) : "próximamente";
 
-          // Reserve the slot before sending — prevents duplicates if process crashes mid-send
-          await prisma.membership.update({
+          // Reserve the slot before sending — prevents duplicates if process crashes mid-send.
+          // Write por-fila con el tenant de la membresía (fail-closed-safe).
+          await withExplicitTenant(ms.tenantId, (tx) => tx.membership.update({
             where: { id: ms.id },
             data: { lastReminderSentAt: now },
-          });
+          }));
 
           await sendPaymentReminderEmail(ms.user.email, {
             name,

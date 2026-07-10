@@ -1,6 +1,6 @@
 import { createHash, randomInt, timingSafeEqual } from "crypto";
 import { prisma } from "../db/prisma";
-import { withTenantContext } from "../db/withTenantContext";
+import { withTenantContext, withSystemContext, withExplicitTenant } from "../db/withTenantContext";
 import { addHours } from "../utils/date";
 import { logger } from "../utils/logger";
 import { env } from "../utils/env";
@@ -164,10 +164,11 @@ export const markCustomChargePaid = async (chargeId: string, params: {
 
 /** Called by cron: creates renewal charges for RECURRING charges whose nextChargeAt is due. */
 export const renewRecurringCharges = async (): Promise<number> => {
-  const due = await prisma.customCharge.findMany({
+  // Barrido cross-tenant de cobros recurrentes vencidos → withSystemContext.
+  const due = await withSystemContext((tx) => tx.customCharge.findMany({
     where: { type: "RECURRING", status: "PAID", nextChargeAt: { lte: new Date() } },
     include: { user: { select: { id: true, email: true, profile: { select: { firstName: true, lastName: true } } } } },
-  });
+  }));
 
   let count = 0;
   const base = resolveBaseUrl();
@@ -185,8 +186,9 @@ export const renewRecurringCharges = async (): Promise<number> => {
         interval: charge.interval ?? undefined,
       });
 
-      // Clear nextChargeAt on the paid record to prevent re-processing
-      await prisma.customCharge.update({ where: { id: charge.id }, data: { nextChargeAt: null } });
+      // Clear nextChargeAt on the paid record to prevent re-processing.
+      // Write por-fila con el tenant del cobro (fail-closed-safe).
+      await withExplicitTenant(charge.tenantId, (tx) => tx.customCharge.update({ where: { id: charge.id }, data: { nextChargeAt: null } }));
 
       // Notify the user (in-app + OTP email)
       const userName = [charge.user.profile?.firstName, charge.user.profile?.lastName].filter(Boolean).join(" ") || charge.user.email;
