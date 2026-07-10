@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import { AlertTriangle, CircleAlert, ShieldCheck, Activity } from 'lucide-react';
 import { Member } from '../types';
 import { KpiCard, Pill } from './adminSharedComponents';
-import { riskOfMember, statusLabel, statusPill, intakeStatusLabel } from './adminUtils';
+import { riskOfMember, statusLabel, statusPill, intakeStatusLabel } from './adminShared';
 import { DataTable, type Column, PageHeader } from '../components/ui';
 
 interface Props {

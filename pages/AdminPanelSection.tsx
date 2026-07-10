@@ -1,7 +1,7 @@
 import React from 'react';
 import { CalendarDays, Activity, ArrowRight, AlertTriangle, CircleAlert, Users, ClipboardList } from 'lucide-react';
 import { AuditLogEntry } from '../types';
-import { apptStatusLabel } from './adminUtils';
+import { apptStatusLabel } from './adminShared';
 import { Card, Badge, EmptyState, PageHeader, Tooltip, type BadgeIntent } from '../components/ui';
 
 type HealthFlag = 'ok' | 'warning' | 'critical';

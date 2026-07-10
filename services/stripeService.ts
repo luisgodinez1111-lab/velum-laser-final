@@ -23,10 +23,6 @@ export const redirectToCustomerPortal = async (): Promise<void> => {
   }
 };
 
-export const checkSubscriptionStatus = async () => {
-  return apiFetch("/membership/status");
-};
-
 export const stripeService = {
   createAppointmentDeposit: async (payload: { startAt: string; endAt: string; reason?: string; cabinId?: string; treatmentId?: string; interestedPlanCode?: string }): Promise<string> => {
     const data = await apiFetch<{ checkoutUrl: string }>("/v1/billing/appointment-deposit", {

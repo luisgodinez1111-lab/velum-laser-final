@@ -49,6 +49,7 @@ type MeProfile = { fullName: string; email: string; phone: string };
 
 import { apiFetch } from "../services/apiClient";
 import { useDelayedLoading } from "../hooks/useDelayedLoading";
+import { getPasswordChecks } from "../utils/passwordStrength";
 
 const asString = (v: unknown, fallback = ""): string => (typeof v === "string" ? v : fallback);
 
@@ -203,13 +204,6 @@ const AppointmentCard: React.FC<{
   );
 };
 
-const getPasswordChecks = (value: string) => ({
-  length: value.length >= 12,
-  upper: /[A-Z]/.test(value),
-  lower: /[a-z]/.test(value),
-  number: /[0-9]/.test(value),
-  special: /[^A-Za-z0-9]/.test(value)
-});
 
 
 // ── Dashboard ─────────────────────────────────────────────────────────────────
@@ -339,29 +333,34 @@ export const Dashboard: React.FC = () => {
       // cascada de toasts encima de la pantalla de error).
       if (criticalFailed) return;
 
-      // En error NO vaciamos la lista en silencio (la paciente creería que no
-      // tiene datos y podría tomar decisiones erróneas); avisamos con toast.
+      // Cargas independientes en PARALELO (antes secuenciales → la latencia era
+      // la suma de 4 round-trips). Cada una conserva su flag de loading y su
+      // aviso de error. En error NO vaciamos la lista en silencio (la paciente
+      // creería que no tiene datos y podría tomar decisiones erróneas).
       setIsLoadingSessions(true);
-      try { setSessions(await clinicalService.getMySessions()); }
-      catch { toast.error("No se pudieron cargar tus sesiones. Revisa tu conexión."); }
-      finally { setIsLoadingSessions(false); }
-
       setIsLoadingAppointments(true);
-      try { setAppointments(await clinicalService.listMyAppointments()); }
-      catch { toast.error("No se pudieron cargar tus citas. Revisa tu conexión."); }
-      finally { setIsLoadingAppointments(false); }
-
       setIsLoadingPayments(true);
-      try { setPayments(await clinicalService.getMyPayments()); }
-      catch { toast.error("No se pudo cargar tu historial de pagos. Revisa tu conexión."); }
-      finally { setIsLoadingPayments(false); }
-
-      try {
-        const nd = await apiFetch<any>("/v1/notifications?limit=20");
-        const list: InAppNotif[] = nd?.items ?? [];
-        setInAppNotifs(list);
-        setInAppUnread(nd?.unread ?? list.filter((n) => !n.read).length);
-      } catch { /* silent */ }
+      await Promise.all([
+        clinicalService.getMySessions()
+          .then(setSessions)
+          .catch(() => toast.error("No se pudieron cargar tus sesiones. Revisa tu conexión."))
+          .finally(() => setIsLoadingSessions(false)),
+        clinicalService.listMyAppointments()
+          .then(setAppointments)
+          .catch(() => toast.error("No se pudieron cargar tus citas. Revisa tu conexión."))
+          .finally(() => setIsLoadingAppointments(false)),
+        clinicalService.getMyPayments()
+          .then(setPayments)
+          .catch(() => toast.error("No se pudo cargar tu historial de pagos. Revisa tu conexión."))
+          .finally(() => setIsLoadingPayments(false)),
+        apiFetch<any>("/v1/notifications?limit=20")
+          .then((nd) => {
+            const list: InAppNotif[] = nd?.items ?? [];
+            setInAppNotifs(list);
+            setInAppUnread(nd?.unread ?? list.filter((n) => !n.read).length);
+          })
+          .catch(() => { /* silent */ }),
+      ]);
     };
     void load();
 

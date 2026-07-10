@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import { CheckCircle2, XCircle } from 'lucide-react';
 import { Member } from '../types';
 import { Pill } from './adminSharedComponents';
-import { intakeStatusLabel } from './adminUtils';
+import { intakeStatusLabel } from './adminShared';
 import { DataTable, type Column, PageHeader, SectionHeading } from '../components/ui';
 
 interface Props {
