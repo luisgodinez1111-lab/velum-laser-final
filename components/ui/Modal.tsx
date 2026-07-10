@@ -125,13 +125,15 @@ export const Modal: React.FC<ModalProps> = ({
     };
   }, [isOpen, closeOnEsc, onClose]);
 
-  if (!isOpen) return null;
-
+  // Debe declararse ANTES del early return de abajo: un hook tras un return
+  // viola las reglas de hooks (crash #310 al abrir/cerrar el modal).
   const handleBackdropClick = useCallback((e: React.MouseEvent) => {
     if (e.target === e.currentTarget && closeOnBackdrop) {
       onClose();
     }
   }, [closeOnBackdrop, onClose]);
+
+  if (!isOpen) return null;
 
   const modalContent = (
     <div

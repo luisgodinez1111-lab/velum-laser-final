@@ -1852,9 +1852,10 @@ export const Admin: React.FC = () => {
 
   // ─── Comandos del CommandPalette (Cmd+K) ──────────────────────────────────
   // Tres grupos: Secciones (10), Pacientes (top 100), Acciones globales.
-  // Memoizado por members + activeSection para evitar reconstruir en cada
-  // render (members cambia rara vez).
-  const paletteCommands = useMemo<CommandItem[]>(() => {
+  // IIFE (no useMemo): este cálculo vive DESPUÉS del early return de login, así
+  // que como hook violaría las reglas de hooks (crash #310 al autenticarse el
+  // admin). Recalcular ~112 items por render es trivial.
+  const paletteCommands: CommandItem[] = ((): CommandItem[] => {
     const sectionCmds: CommandItem[] = NAV_SECTIONS.map((section) => ({
       id: `section:${section}`,
       label: `Ir a ${sectionMeta[section].label}`,
@@ -1905,11 +1906,7 @@ export const Admin: React.FC = () => {
     ];
 
     return [...sectionCmds, ...memberCmds, ...actionCmds];
-    // triggerLoadData y logout se referencian via closure — son estables
-    // (definidos en el componente). No se incluyen en deps porque cambian
-    // referencia en cada render y causarían rebuild innecesario.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [members]);
+  })();
 
   return (
     <ThemeProvider>

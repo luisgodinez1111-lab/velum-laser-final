@@ -88,6 +88,14 @@ export const SessionFeedbackPrompt: React.FC<Props> = ({ sessions, onSubmitted }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [recentlyResponded?.id, candidate]);
 
+  // sortedChips debe declararse ANTES de los early returns de abajo: un hook
+  // tras un return viola las reglas de hooks (crash #310).
+  const sortedChips = useMemo(() => {
+    if (!chips) return [];
+    const order: Record<FeedbackSeverity, number> = { none: 0, mild: 1, moderate: 2, severe: 3 };
+    return [...chips].sort((a, b) => order[a.severity] - order[b.severity]);
+  }, [chips]);
+
   // Si no hay candidato pendiente Y no hay respuesta reciente, no renderizar.
   if (!candidate && !recentlyResponded) return null;
 
@@ -175,12 +183,6 @@ export const SessionFeedbackPrompt: React.FC<Props> = ({ sessions, onSubmitted }
 
   // Los chips se renderizan agrupados por severidad para guiar visualmente.
   // El "ok" verde aparece primero, después los grises, después los warning, después los danger.
-  const sortedChips = useMemo(() => {
-    if (!chips) return [];
-    const order: Record<FeedbackSeverity, number> = { none: 0, mild: 1, moderate: 2, severe: 3 };
-    return [...chips].sort((a, b) => order[a.severity] - order[b.severity]);
-  }, [chips]);
-
   const chipClass = (chip: FeedbackChip, isSelected: boolean): string => {
     if (isSelected) {
       if (chip.id === 'ok') return 'bg-success-500 text-white border-success-500';
