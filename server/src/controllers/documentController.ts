@@ -33,7 +33,13 @@ function validateMagicBytes(buffer: Buffer, declaredMime: string): boolean {
 }
 
 export const listDocuments = async (req: AuthRequest, res: Response) => {
-  const documents = await prisma.document.findMany({ where: { userId: req.user!.id } });
+  // Orden determinista + cap defensivo (un usuario tiene pocos documentos, pero
+  // no dejamos un findMany sin límite).
+  const documents = await prisma.document.findMany({
+    where: { userId: req.user!.id },
+    orderBy: { createdAt: "desc" },
+    take: 200
+  });
   return res.json(documents);
 };
 

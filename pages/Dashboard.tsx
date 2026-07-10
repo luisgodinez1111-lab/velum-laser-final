@@ -574,6 +574,18 @@ export const Dashboard: React.FC = () => {
   const isSlow = useDelayedLoading(isLoadingData);
   const retryLoad = () => setReloadKey((k) => k + 1);
 
+  // Derivaciones de citas memoizadas por `appointments`: evita recalcular el
+  // filter+sort en cada re-render (p.ej. al teclear en los formularios).
+  // DEBEN declararse antes de los early returns de abajo (reglas de hooks).
+  const upcomingAppointments = useMemo(() => appointments.filter(
+    a => (a.status === "scheduled" || a.status === "confirmed") && new Date(a.startAt) >= new Date()
+  ).sort((a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime()), [appointments]);
+
+  const pastAppointments = useMemo(() => appointments.filter(
+    a => a.status === "completed" || a.status === "canceled" || a.status === "no_show" ||
+      ((a.status === "scheduled" || a.status === "confirmed") && new Date(a.startAt) < new Date())
+  ).sort((a, b) => new Date(b.startAt).getTime() - new Date(a.startAt).getTime()), [appointments]);
+
   // ── Guards ─────────────────────────────────────────────────────────────────
   if (isAuthLoading || (isAuthenticated && isLoadingData)) {
     return (
@@ -611,15 +623,6 @@ export const Dashboard: React.FC = () => {
   // ── Derived data ───────────────────────────────────────────────────────────
   const documents = (memberData as any)?.clinical?.documents || [];
   const pendingDocs = documents.filter((d: any) => !d.signed).length;
-
-  const upcomingAppointments = appointments.filter(
-    a => (a.status === "scheduled" || a.status === "confirmed") && new Date(a.startAt) >= new Date()
-  ).sort((a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime());
-
-  const pastAppointments = appointments.filter(
-    a => a.status === "completed" || a.status === "canceled" || a.status === "no_show" ||
-      ((a.status === "scheduled" || a.status === "confirmed") && new Date(a.startAt) < new Date())
-  ).sort((a, b) => new Date(b.startAt).getTime() - new Date(a.startAt).getTime());
 
   const membership       = membershipData;
   const membershipStatus = membership?.status ?? "inactive";

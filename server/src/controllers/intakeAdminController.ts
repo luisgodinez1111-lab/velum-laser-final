@@ -14,7 +14,12 @@ export const adminUpdatePatientIntake = async (req: AuthRequest, res: Response) 
     const { userId } = req.params;
     const intake = req.body ?? {};
 
-    const current = await prisma.medicalIntake.findUnique({ where: { userId } });
+    // Solo leemos consentAccepted y status de `current`; evitamos traer
+    // signatureImageData (PHI) y los JSON del expediente.
+    const current = await prisma.medicalIntake.findUnique({
+      where: { userId },
+      select: { id: true, consentAccepted: true, status: true }
+    });
     if (!current) return res.status(404).json({ message: 'Expediente no encontrado' });
 
     // Guard: signature image data must not exceed 2 MB decoded
