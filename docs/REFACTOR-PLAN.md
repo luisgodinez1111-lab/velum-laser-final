@@ -121,3 +121,23 @@ Objetivo: máximo retorno con riesgo casi nulo. Una sola rama, con tests.
 ## Orden recomendado
 
 **Ola 1 → deploy → Ola 2 → deploy → Ola 3 (una por PR).** El `pgbouncer` (Ola 1 #1) es semi-urgente: puede estar causando errores intermitentes en producción bajo carga.
+
+---
+
+## Notas de ejecución
+
+### Progreso
+- ✅ **Ola 0** (eslint backend / CI) — sesión previa
+- ✅ **Ola 1** (quick wins) — commit `c7cd174`
+- ✅ **Ola 2** (perf + tipado + bcrypt + vulns + strict) — `8c8baac` + `560d685`
+- ✅ **Ola 3-A** (CI gates: rules-of-hooks + hygiene test) — `f425396`
+- ✅ **Ola 3-C** (design system: consolidar Button, borrar legacy) — este PR
+- ⏳ Ola 3 pendiente: OpenAPI-desde-zod (ver abajo), partir god-files/services, AppError, rename rutas
+
+### ⚠️ typedApi está BLOQUEADO por deuda de OpenAPI (hallazgo de ejecución)
+Al intentar adoptar `typedApi` se descubrió que `server/src/openapi.ts` (299 líneas, objeto `paths` a mano) está **incompleto Y drifteado**:
+- Cubre ~38 paths; el frontend llama **72**.
+- Paths documentados **no coinciden** con las rutas reales (`/auth/forgot` vs ruta real `/auth/forgot-password`, `/auth/reset` vs `/auth/reset-password`).
+- La mayoría de endpoints **no tienen schemas** de request/response → `typedApi` daría `unknown`.
+
+**Adoptar typedApi contra ese spec daría tipos incorrectos** (peor que los tipos a mano). Prerequisito: **alinear el OpenAPI**. Enfoque recomendado: **generarlo desde los zod schemas** (las rutas ya validan con zod — `loginSchema`, etc.) usando `@asteasolutions/zod-to-openapi`, para que el contrato tenga single-source en los validators y **no vuelva a driftear**. Es un esfuerzo dedicado (varios PRs) — hacerlo antes de migrar el frontend a typedApi.
