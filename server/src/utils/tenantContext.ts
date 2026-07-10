@@ -58,3 +58,16 @@ export const getTenantIdOr = (fallback: string): string => getTenantId() ?? fall
  * workers de cola, crons y scripts CLI.
  */
 export const runWithTenant = <T>(ctx: TenantContext, fn: () => T): T => storage.run(ctx, fn);
+
+// ── Instrumentación RLS (Etapa 2) ────────────────────────────────────────────
+// Marca si estamos DENTRO de la transacción de withTenantContext (la que hizo
+// SET LOCAL app.tenant_id). El hook de auditoría en db/prisma.ts lo lee para
+// saber qué queries corren FUERA de ese wrapper (candidatas a fail-closed en
+// Etapa 4). No cambia comportamiento — solo observabilidad.
+const tenantTxStorage = new AsyncLocalStorage<boolean>();
+
+/** Ejecuta `fn` marcado como "dentro de la tx de tenant" (SET LOCAL activo). */
+export const runInTenantTx = <T>(fn: () => Promise<T>): Promise<T> => tenantTxStorage.run(true, fn);
+
+/** True si la query actual corre dentro de withTenantContext (con SET LOCAL). */
+export const isInTenantTx = (): boolean => tenantTxStorage.getStore() === true;

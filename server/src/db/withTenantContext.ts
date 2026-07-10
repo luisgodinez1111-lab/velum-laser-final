@@ -1,7 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "./prisma";
 import { env } from "../utils/env";
-import { getTenantId } from "../utils/tenantContext";
+import { getTenantId, runInTenantTx } from "../utils/tenantContext";
 
 /**
  * Ejecuta `fn` dentro de una transacción Postgres con `app.tenant_id` seteado
@@ -50,12 +50,16 @@ export async function withTenantContext<T>(
     return fn(prisma as unknown as Prisma.TransactionClient);
   }
 
-  return prisma.$transaction(async (tx) => {
-    // set_config(name, value, is_local) — equivalente a SET LOCAL pero usable
-    // dentro de una expression. is_local=true: el setting expira al cerrar tx.
-    await tx.$executeRaw`SELECT set_config('app.tenant_id', ${tenantId}, true)`;
-    return fn(tx);
-  });
+  // runInTenantTx marca este scope como "con SET LOCAL activo" para que el hook
+  // de auditoría en prisma.ts NO lo reporte como query sin contexto.
+  return runInTenantTx(() =>
+    prisma.$transaction(async (tx) => {
+      // set_config(name, value, is_local) — equivalente a SET LOCAL pero usable
+      // dentro de una expression. is_local=true: el setting expira al cerrar tx.
+      await tx.$executeRaw`SELECT set_config('app.tenant_id', ${tenantId}, true)`;
+      return fn(tx);
+    }),
+  );
 }
 
 /**
