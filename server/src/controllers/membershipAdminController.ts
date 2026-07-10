@@ -1,5 +1,4 @@
 import { Response } from "express";
-import { prisma } from "../db/prisma";
 import { AuthRequest } from "../middlewares/auth";
 import { membershipUpdateSchema } from "../validators/membership";
 import { createAuditLog } from "../services/auditService";
@@ -8,6 +7,7 @@ import { clean } from "../utils/strings";
 import { parsePagination } from "../utils/pagination";
 import { safeIp, queryParams } from "../utils/request";
 import { paginated } from "../utils/response";
+import { withTenantContext } from "../db/withTenantContext";
 
 const VALID_MEMBERSHIP_STATUSES = ['active', 'inactive', 'past_due', 'canceled', 'paused'] as const;
 type MembershipStatusValue = typeof VALID_MEMBERSHIP_STATUSES[number];
@@ -15,13 +15,13 @@ type MembershipStatusValue = typeof VALID_MEMBERSHIP_STATUSES[number];
 export const listMemberships = async (req: AuthRequest, res: Response) => {
   const { page, limit, skip } = parsePagination(queryParams(req));
   const [total, memberships] = await Promise.all([
-    prisma.membership.count(),
-    prisma.membership.findMany({
+    withTenantContext(async (tx) => tx.membership.count()),
+    withTenantContext(async (tx) => tx.membership.findMany({
       include: { user: true },
       orderBy: { createdAt: "desc" },
       skip,
       take: limit,
-    }),
+    })),
   ]);
   return paginated(res, memberships, { page, limit, total });
 };
@@ -30,14 +30,14 @@ export const updateMembershipStatus = async (req: AuthRequest, res: Response) =>
   const payload = membershipUpdateSchema.parse(req.body);
 
   // Atomic update — avoids TOCTOU race between findFirst and update
-  const { count } = await prisma.membership.updateMany({
+  const { count } = await withTenantContext(async (tx) => tx.membership.updateMany({
     where: { userId: req.params.userId },
     data: { status: payload.status },
-  });
+  }));
   if (count === 0) {
     return res.status(404).json({ message: "Membresía no encontrada" });
   }
-  const updated = await prisma.membership.findFirst({ where: { userId: req.params.userId } });
+  const updated = await withTenantContext(async (tx) => tx.membership.findFirst({ where: { userId: req.params.userId } }));
 
   await createAuditLog({
     userId: req.user?.id,
@@ -63,17 +63,17 @@ export const adminActivateMembership = async (req: AuthRequest, res: Response) =
     }
     const status = rawStatus as MembershipStatusValue;
 
-    const membership = await prisma.membership.findFirst({ where: { userId } });
+    const membership = await withTenantContext(async (tx) => tx.membership.findFirst({ where: { userId } }));
     if (!membership) return res.status(404).json({ message: 'Membresía no encontrada' });
 
-    const updated = await prisma.membership.update({
+    const updated = await withTenantContext(async (tx) => tx.membership.update({
       where: { id: membership.id },
       data: {
         status,
         ...(planCode ? { planCode, planId: planCode } : {}),
         source: 'admin'
       }
-    });
+    }));
 
     await createAuditLog({
       userId: req.user!.id,

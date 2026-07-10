@@ -1,6 +1,5 @@
 import { Response } from "express";
 import { bcrypt } from "../utils/bcrypt";
-import { prisma } from "../db/prisma";
 import { withTenantContext } from "../db/withTenantContext";
 import { AuthRequest, invalidateUserAuthCache } from "../middlewares/auth";
 import { normalizePhone, sendWhatsappOtpCode } from "../services/whatsappMetaService";
@@ -30,7 +29,7 @@ setInterval(() => {
 const asString = (v: unknown): string => (typeof v === "string" ? v.trim() : "");
 
 const getProfileRecord = async (userId: string) =>
-  prisma.profile.findUnique({ where: { userId } });
+  withTenantContext(async (tx) => tx.profile.findUnique({ where: { userId } }));
 
 const upsertProfileRecord = async (
   userId: string,
@@ -40,11 +39,11 @@ const upsertProfileRecord = async (
 ) => {
   const [firstName, ...rest] = fullName.trim().split(/\s+/);
   const lastName = rest.join(" ") || undefined;
-  return prisma.profile.upsert({
+  return withTenantContext(async (tx) => tx.profile.upsert({
     where: { userId },
     update: { firstName: firstName ?? null, lastName: lastName ?? null, phone },
     create: { userId, firstName: firstName ?? null, lastName: lastName ?? null, phone, tenantId: requireTenantId() },
-  });
+  }));
 };
 
 const getCurrentUser = async (userId: string) =>
@@ -141,16 +140,16 @@ export const requestMyPasswordWhatsappCode = async (req: AuthRequest, res: Respo
   const codeHash = await bcrypt.hash(code, 10);
   const expiresAt = new Date(Date.now() + OTP_TTL_MS);
 
-  await prisma.whatsappOtp.upsert({
+  await withTenantContext(async (tx) => tx.whatsappOtp.upsert({
     where: { userId },
     create: { userId, codeHash, phone, expiresAt, attempts: 0, tenantId: requireTenantId() },
     update: { codeHash, phone, expiresAt, attempts: 0 },
-  });
+  }));
 
   try {
     await sendWhatsappOtpCode(phone, code);
   } catch (error: unknown) {
-    await prisma.whatsappOtp.delete({ where: { userId } }).catch(() => {});
+    await withTenantContext(async (tx) => tx.whatsappOtp.delete({ where: { userId } })).catch(() => {});
     logger.error({ err: error }, "[selfService] WhatsApp OTP send failed");
     return res.status(500).json({ message: "No se pudo enviar el codigo por WhatsApp" });
   }
@@ -191,30 +190,30 @@ export const changeMyPassword = async (req: AuthRequest, res: Response) => {
   }
 
   // Purge expired OTPs before lookup
-  await prisma.whatsappOtp.deleteMany({ where: { expiresAt: { lt: new Date() } } });
+  await withTenantContext(async (tx) => tx.whatsappOtp.deleteMany({ where: { expiresAt: { lt: new Date() } } }));
 
-  const otp = await prisma.whatsappOtp.findUnique({ where: { userId } });
+  const otp = await withTenantContext(async (tx) => tx.whatsappOtp.findUnique({ where: { userId } }));
   if (!otp || otp.expiresAt < new Date()) {
-    if (otp) await prisma.whatsappOtp.delete({ where: { userId } }).catch(() => {});
+    if (otp) await withTenantContext(async (tx) => tx.whatsappOtp.delete({ where: { userId } })).catch(() => {});
     return res.status(400).json({ message: "Codigo de WhatsApp expirado o no solicitado" });
   }
 
   if (otp.attempts >= OTP_MAX_ATTEMPTS) {
-    await prisma.whatsappOtp.delete({ where: { userId } }).catch(() => {});
+    await withTenantContext(async (tx) => tx.whatsappOtp.delete({ where: { userId } })).catch(() => {});
     return res.status(429).json({ message: "Demasiados intentos de codigo, solicita uno nuevo" });
   }
 
   const codeOk = await bcrypt.compare(whatsappCode, otp.codeHash);
   if (!codeOk) {
-    await prisma.whatsappOtp.update({
+    await withTenantContext(async (tx) => tx.whatsappOtp.update({
       where: { userId },
       data: { attempts: { increment: 1 } },
-    });
+    }));
     return res.status(400).json({ message: "Codigo de WhatsApp invalido" });
   }
 
   // Consume OTP before updating password (prevent replay)
-  await prisma.whatsappOtp.delete({ where: { userId } }).catch(() => {});
+  await withTenantContext(async (tx) => tx.whatsappOtp.delete({ where: { userId } })).catch(() => {});
 
   // Prevent reuse of recent passwords
   const reused = await isPasswordReused(userId, newPassword);
@@ -259,25 +258,25 @@ export const getMyData = async (req: AuthRequest, res: Response) => {
         updatedAt: true,
       },
     })),
-    prisma.profile.findUnique({
+    withTenantContext(async (tx) => tx.profile.findUnique({
       where: { userId },
       select: { firstName: true, lastName: true, phone: true, birthDate: true, timezone: true, createdAt: true },
-    }),
-    prisma.membership.findUnique({
+    })),
+    withTenantContext(async (tx) => tx.membership.findUnique({
       where: { userId },
       select: { status: true, planCode: true, amount: true, currency: true, currentPeriodEnd: true, createdAt: true },
-    }),
+    })),
     withTenantContext(async (tx) => tx.appointment.findMany({
       where: { userId },
       select: { id: true, startAt: true, endAt: true, status: true, reason: true, createdAt: true },
       orderBy: { startAt: "desc" },
     })),
-    prisma.payment.findMany({
+    withTenantContext(async (tx) => tx.payment.findMany({
       where: { userId },
       select: { id: true, amount: true, currency: true, status: true, paidAt: true, createdAt: true },
       orderBy: { createdAt: "desc" },
-    }),
-    prisma.medicalIntake.findUnique({
+    })),
+    withTenantContext(async (tx) => tx.medicalIntake.findUnique({
       where: { userId },
       select: {
         status: true,
@@ -288,11 +287,11 @@ export const getMyData = async (req: AuthRequest, res: Response) => {
         createdAt: true,
         // signatureImageData excluida — contiene datos biométricos sensibles
       },
-    }),
-    prisma.document.findMany({
+    })),
+    withTenantContext(async (tx) => tx.document.findMany({
       where: { userId },
       select: { id: true, type: true, status: true, signedAt: true, createdAt: true },
-    }),
+    })),
   ]);
 
   return res.json({
@@ -331,10 +330,10 @@ export const deleteMyAccount = async (req: AuthRequest, res: Response) => {
   if (!user) return res.status(404).json({ message: "Usuario no encontrado" });
 
   // Cancelar suscripción Stripe activa
-  const membership = await prisma.membership.findUnique({
+  const membership = await withTenantContext(async (tx) => tx.membership.findUnique({
     where: { userId },
     select: { stripeSubscriptionId: true, status: true },
-  });
+  }));
   if (membership?.stripeSubscriptionId && membership.status === "active") {
     try {
       await stripe.subscriptions.cancel(membership.stripeSubscriptionId);
@@ -345,7 +344,7 @@ export const deleteMyAccount = async (req: AuthRequest, res: Response) => {
   }
 
   // Revocar todos los refresh tokens (fuerza cierre de sesión en todos los dispositivos)
-  await prisma.refreshToken.deleteMany({ where: { userId } });
+  await withTenantContext(async (tx) => tx.refreshToken.deleteMany({ where: { userId } }));
 
   // Anonimizar datos personales en una transacción atómica
   const anonymizedEmail = `deleted-${userId}@velum.invalid`;

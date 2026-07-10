@@ -3,7 +3,6 @@ import path from "path";
 import { AuthRequest } from "../middlewares/auth";
 import { documentSignSchema, documentUploadSchema } from "../validators/documents";
 import { generateStorageKey, readFile, saveFile } from "../services/storageService";
-import { prisma } from "../db/prisma";
 import { withTenantContext } from "../db/withTenantContext";
 import { requireTenantId } from "../utils/tenantContext";
 import { createAuditLog } from "../services/auditService";
@@ -35,11 +34,11 @@ function validateMagicBytes(buffer: Buffer, declaredMime: string): boolean {
 export const listDocuments = async (req: AuthRequest, res: Response) => {
   // Orden determinista + cap defensivo (un usuario tiene pocos documentos, pero
   // no dejamos un findMany sin límite).
-  const documents = await prisma.document.findMany({
+  const documents = await withTenantContext(async (tx) => tx.document.findMany({
     where: { userId: req.user!.id },
     orderBy: { createdAt: "desc" },
     take: 200
-  });
+  }));
   return res.json(documents);
 };
 
@@ -57,7 +56,7 @@ export const createUpload = async (req: AuthRequest, res: Response) => {
   }
   const key = generateStorageKey(req.user!.id, file.mimetype);
   await saveFile({ key, buffer: file.buffer });
-  const document = await prisma.document.create({
+  const document = await withTenantContext(async (tx) => tx.document.create({
     data: {
       userId: req.user!.id,
       type: payload.type,
@@ -67,7 +66,7 @@ export const createUpload = async (req: AuthRequest, res: Response) => {
       storageKey: key,
       tenantId: requireTenantId(),
     }
-  });
+  }));
   await createAuditLog({
     userId: req.user!.id,
     action: "document.upload",
@@ -80,9 +79,9 @@ export const createUpload = async (req: AuthRequest, res: Response) => {
 };
 
 export const downloadDocument = async (req: AuthRequest, res: Response) => {
-  const document = await prisma.document.findFirst({
+  const document = await withTenantContext(async (tx) => tx.document.findFirst({
     where: req.user!.role === "member" ? { id: req.params.id, userId: req.user!.id } : { id: req.params.id }
-  });
+  }));
   if (!document) {
     return res.status(404).json({ message: "Documento no encontrado" });
   }
@@ -97,23 +96,23 @@ export const downloadDocument = async (req: AuthRequest, res: Response) => {
 
 export const signDocument = async (req: AuthRequest, res: Response) => {
   const payload = documentSignSchema.parse(req.body);
-  const document = await prisma.document.findFirst({
+  const document = await withTenantContext(async (tx) => tx.document.findFirst({
     where: { id: req.params.id, userId: req.user!.id }
-  });
+  }));
   if (!document) {
     return res.status(404).json({ message: "Documento no encontrado" });
   }
   const signatureKey = path.join(req.user!.id, `signature-${document.id}.png`);
   const signatureBuffer = Buffer.from(payload.signature.replace(/^data:image\/png;base64,/, ""), "base64");
   await saveFile({ key: signatureKey, buffer: signatureBuffer });
-  const updated = await prisma.document.update({
+  const updated = await withTenantContext(async (tx) => tx.document.update({
     where: { id: document.id },
     data: {
       status: "signed",
       signedAt: new Date(),
       signatureKey
     }
-  });
+  }));
   await createAuditLog({
     userId: req.user!.id,
     action: "document.signed",

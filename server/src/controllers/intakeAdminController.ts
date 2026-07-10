@@ -1,10 +1,10 @@
 import { Response } from "express";
-import { prisma } from "../db/prisma";
 import { AuthRequest } from "../middlewares/auth";
 import { createAuditLog } from "../services/auditService";
 import { logger } from "../utils/logger";
 import { safeIp } from "../utils/request";
 import { decryptSignature as decryptSignatureData } from "../utils/phiCrypto";
+import { withTenantContext } from "../db/withTenantContext";
 
 // Max base64 signature size: 2 MB decoded ≈ 2.73 MB base64
 const MAX_SIGNATURE_B64_LEN = 3_000_000;
@@ -16,10 +16,10 @@ export const adminUpdatePatientIntake = async (req: AuthRequest, res: Response) 
 
     // Solo leemos consentAccepted y status de `current`; evitamos traer
     // signatureImageData (PHI) y los JSON del expediente.
-    const current = await prisma.medicalIntake.findUnique({
+    const current = await withTenantContext(async (tx) => tx.medicalIntake.findUnique({
       where: { userId },
       select: { id: true, consentAccepted: true, status: true }
-    });
+    }));
     if (!current) return res.status(404).json({ message: 'Expediente no encontrado' });
 
     // Guard: signature image data must not exceed 2 MB decoded
@@ -31,7 +31,7 @@ export const adminUpdatePatientIntake = async (req: AuthRequest, res: Response) 
     const consentAccepted = intake.consentAccepted ?? current.consentAccepted;
     const status          = (intake.consentAccepted && intake.phototype) ? 'submitted' : (intake.status ?? current.status);
 
-    const updated = await prisma.medicalIntake.update({
+    const updated = await withTenantContext(async (tx) => tx.medicalIntake.update({
       where: { userId },
       data: {
         ...(intake.personalJson  ? { personalJson:  intake.personalJson  } : {}),
@@ -42,7 +42,7 @@ export const adminUpdatePatientIntake = async (req: AuthRequest, res: Response) 
         status,
         ...(status === 'submitted' && current.status !== 'submitted' ? { submittedAt: new Date() } : {})
       }
-    });
+    }));
 
     await createAuditLog({
       userId: req.user!.id,

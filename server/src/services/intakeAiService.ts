@@ -11,12 +11,12 @@
  * está activo, así que las queries Prisma respetan RLS cuando se active
  * (Fase 1.4.b). Por ahora, el filtro por tenant es responsabilidad del query.
  */
-import { prisma } from "../db/prisma";
 import { logger } from "../utils/logger";
 import { getTenantContext } from "../utils/tenantContext";
 import { createAuditLog } from "./auditService";
 import { summarizeIntake, type IntakeSummaryResult } from "./aiProvider";
 import { notFound } from "../utils/AppError";
+import { withTenantContext } from "../db/withTenantContext";
 
 const MAX_PREVIOUS_SESSIONS = 10;
 
@@ -35,7 +35,7 @@ export async function summarizePatientForStaff(
 
   // Cargar intake + sesiones recientes en paralelo.
   const [intake, sessions] = await Promise.all([
-    prisma.medicalIntake.findUnique({
+    withTenantContext(async (tx) => tx.medicalIntake.findUnique({
       where: { userId: patientUserId },
       select: {
         id: true,
@@ -54,8 +54,8 @@ export async function summarizePatientForStaff(
           },
         },
       },
-    }),
-    prisma.sessionTreatment.findMany({
+    })),
+    withTenantContext(async (tx) => tx.sessionTreatment.findMany({
       where: { userId: patientUserId },
       orderBy: { createdAt: "desc" },
       take: MAX_PREVIOUS_SESSIONS,
@@ -65,7 +65,7 @@ export async function summarizePatientForStaff(
         adverseEvents: true,
         appointment: { select: { treatment: { select: { name: true } } } },
       },
-    }),
+    })),
   ]);
 
   if (!intake) {

@@ -1,5 +1,4 @@
 import { Response } from "express";
-import { prisma } from "../db/prisma";
 import { withTenantContext } from "../db/withTenantContext";
 import { AuthRequest } from "../middlewares/auth";
 import { createAuditLog } from "../services/auditService";
@@ -135,10 +134,10 @@ export const createAppointment = async (req: AuthRequest, res: Response) => {
   if (req.user?.role === "member") {
     const memberId = req.user.id;
 
-    const intake = await prisma.medicalIntake.findUnique({
+    const intake = await withTenantContext(async (tx) => tx.medicalIntake.findUnique({
       where: { userId: memberId },
       select: { status: true },
-    });
+    }));
     if (!intake || intake.status !== 'approved') {
       return res.status(403).json({
         message: "Completa tu expediente clínico antes de agendar.",
@@ -326,7 +325,7 @@ export const createAppointment = async (req: AuthRequest, res: Response) => {
     }
   }));
 
-  const agendaPolicy = await prisma.agendaPolicy.findFirst({ select: { timezone: true } });
+  const agendaPolicy = await withTenantContext(async (tx) => tx.agendaPolicy.findFirst({ select: { timezone: true } }));
   const TIMEZONE = agendaPolicy?.timezone ?? "America/Chihuahua";
   const userName = [appointment.user.profile?.firstName, appointment.user.profile?.lastName].filter(Boolean).join(" ") || appointment.user.email;
   onAppointmentBooked({
@@ -493,7 +492,7 @@ export const updateAppointment = async (req: AuthRequest, res: Response) => {
 
     const cancelledByClinic = req.user!.id !== appointment.userId;
     if (cancelledByClinic) {
-      const profile = await prisma.profile.findUnique({ where: { userId: canceled.user.id }, select: { firstName: true, lastName: true } });
+      const profile = await withTenantContext(async (tx) => tx.profile.findUnique({ where: { userId: canceled.user.id }, select: { firstName: true, lastName: true } }));
       const userName = [profile?.firstName, profile?.lastName].filter(Boolean).join(" ") || canceled.user.email;
       onAppointmentCancelledByClinic({
         userId: canceled.user.id,
@@ -505,7 +504,7 @@ export const updateAppointment = async (req: AuthRequest, res: Response) => {
         reason: cancelReason,
       }).catch((err) => logger.error({ err }, "[appointment] cancelled-by-clinic notification failed"));
     } else {
-      const profile = await prisma.profile.findUnique({ where: { userId: canceled.user.id }, select: { firstName: true, lastName: true } });
+      const profile = await withTenantContext(async (tx) => tx.profile.findUnique({ where: { userId: canceled.user.id }, select: { firstName: true, lastName: true } }));
       const userName = [profile?.firstName, profile?.lastName].filter(Boolean).join(" ") || canceled.user.email;
       onAppointmentCancelledByPatient({
         userName,
@@ -628,8 +627,11 @@ export const updateAppointment = async (req: AuthRequest, res: Response) => {
       throw error;
     }
   } else if (appointment.treatmentId) {
-    const persistedTreatment = await prisma.agendaTreatment.findUnique({
-      where: { id: appointment.treatmentId },
+    // Capturamos el id ya narrowed: el narrowing del `else if` no sobrevive
+    // dentro del closure de withTenantContext.
+    const treatmentId = appointment.treatmentId;
+    const persistedTreatment = await withTenantContext(async (tx) => tx.agendaTreatment.findUnique({
+      where: { id: treatmentId },
       select: {
         id: true,
         code: true,
@@ -644,7 +646,7 @@ export const updateAppointment = async (req: AuthRequest, res: Response) => {
           orderBy: [{ priority: "asc" }, { createdAt: "asc" }]
         }
       }
-    });
+    }));
     treatment = (persistedTreatment as ResolvedAgendaTreatment | null) ?? null;
   }
 

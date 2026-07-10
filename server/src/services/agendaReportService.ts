@@ -1,4 +1,3 @@
-import { prisma } from "../db/prisma";
 import { withTenantContext } from "../db/withTenantContext";
 import { toZonedParts, normalizeDateKey } from "./agendaTimezoneUtils";
 import { getEffectiveRule, buildAgendaSlots, cabinProductivityReport } from "./agendaAvailabilityService";
@@ -15,10 +14,10 @@ export const getAgendaDaySnapshot = async (dateKeyRaw: string) => {
   const { policy } = config;
 
   const [blocks, appointments] = await Promise.all([
-    prisma.agendaBlockedSlot.findMany({
+    withTenantContext(async (tx) => tx.agendaBlockedSlot.findMany({
       where: { dateKey },
       orderBy: [{ startMinute: "asc" }, { cabinId: "asc" }]
-    }),
+    })),
     withTenantContext(async (tx) => tx.appointment.findMany({
       where: {
         startAt: {
