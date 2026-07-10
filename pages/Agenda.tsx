@@ -306,7 +306,21 @@ export const Agenda: React.FC = () => {
         toast.info(err.message);
         return;
       }
-      toast.error("Credenciales incorrectas. Verifica tu correo y contraseña.");
+      // Distinguir credenciales mal (401) de errores de servidor/red/cold-start.
+      // Antes CUALQUIER error mostraba "credenciales incorrectas", lo que en un
+      // cold start de Render (servidor arrancando → 5xx/timeout) confundía: el
+      // usuario cree que la contraseña está mal cuando el servidor solo despierta.
+      const status = (err as { status?: number })?.status;
+      const message = (err as { message?: string })?.message;
+      if (status === 401) {
+        toast.error("Credenciales incorrectas. Verifica tu correo y contraseña.");
+      } else if (status === 429) {
+        toast.error(message ?? "Demasiados intentos. Espera unos minutos e intenta de nuevo.");
+      } else if (status === 0 || status === 408 || (typeof status === "number" && status >= 500)) {
+        toast.error("No pudimos conectar con el servidor (puede estar iniciando). Espera unos segundos e intenta de nuevo.");
+      } else {
+        toast.error(message ?? "No se pudo iniciar sesión. Intenta de nuevo.");
+      }
     }
   };
 
