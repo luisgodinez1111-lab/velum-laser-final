@@ -6,7 +6,7 @@
  * Extraído de utils/auth.ts — los imports existentes siguen funcionando
  * gracias a los re-exports en ese archivo.
  */
-import bcrypt from "bcryptjs";
+import { bcrypt } from "../utils/bcrypt";
 import crypto from "crypto";
 import { prisma } from "../db/prisma";
 import { env } from "../utils/env";

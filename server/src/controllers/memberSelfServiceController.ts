@@ -1,5 +1,5 @@
 import { Response } from "express";
-import bcrypt from "bcryptjs";
+import { bcrypt } from "../utils/bcrypt";
 import { prisma } from "../db/prisma";
 import { withTenantContext } from "../db/withTenantContext";
 import { AuthRequest, invalidateUserAuthCache } from "../middlewares/auth";

@@ -24,7 +24,7 @@ const mapDocuments = (documents: RawApiDocument[]): LegalDocument[] =>
     signed: doc.status === "signed",
     signedAt: doc.signedAt ? new Date(doc.signedAt).toLocaleDateString("es-MX") : undefined,
     version: doc.version ?? "1.0",
-    signatureUrl: doc.signatureKey
+    signatureUrl: doc.signatureKey ?? undefined
   }));
 
 const mapMember = (user: RawApiUser): Member => {
@@ -37,7 +37,7 @@ const mapMember = (user: RawApiUser): Member => {
     name,
     email: user.email,
     role: user.role as UserRole,
-    phone: user.profile?.phone,
+    phone: user.profile?.phone ?? undefined,
     plan: catalog?.name ?? tier?.name ?? membership?.planCode ?? "Plan Velum",
     amount: catalog?.amount ?? tier?.price ?? membership?.amount ?? undefined,
     interval: catalog?.interval ?? "month",

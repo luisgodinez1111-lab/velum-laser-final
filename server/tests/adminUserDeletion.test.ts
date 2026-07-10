@@ -6,7 +6,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import express from "express";
 import request from "supertest";
-import bcrypt from "bcryptjs";
+import { bcrypt } from "../src/utils/bcrypt";
 
 process.env.JWT_SECRET = "test-secret-32-bytes-minimum-len";
 process.env.DATABASE_URL = "postgresql://x:x@localhost/x";

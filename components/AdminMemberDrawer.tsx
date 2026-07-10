@@ -34,7 +34,7 @@ export type AdminMemberDrawerProps = {
   drawerDeleteMsg: string;
   drawerDeleteSending: boolean;
   drawerDeleting: boolean;
-  drawerOtpRef: React.RefObject<HTMLInputElement>;
+  drawerOtpRef: React.RefObject<HTMLInputElement | null>;
   onSetDrawerDeleteStep: (step: DrawerDeleteStep) => void;
   onSetDrawerDeleteOtp: (otp: string) => void;
   onSetDrawerDeleteMsg: (msg: string) => void;

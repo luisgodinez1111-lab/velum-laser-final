@@ -44,7 +44,7 @@ export interface CommandItem {
   /** Grupo visual. Items con mismo grupo se renderizan juntos. */
   group?: string;
   /** Icono lucide-react (componente). */
-  icon?: React.ComponentType<{ size?: number | string; className?: string }>;
+  icon?: React.ComponentType<{ size?: number; className?: string }>;
   /** Atajo a mostrar como kbd. Sólo display — no se registra. */
   shortcut?: string;
   /** Tokens adicionales para matching (sinónimos, IDs, etc.). */

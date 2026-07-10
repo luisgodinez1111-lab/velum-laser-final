@@ -1365,17 +1365,17 @@ export const Dashboard: React.FC = () => {
                               <div className="px-4 py-4 flex items-start justify-between gap-3">
                                 <div>
                                   <p className="text-[12px] font-semibold text-velum-500 capitalize">{dateStr}</p>
-                                  {params?.zona && <p className="font-semibold text-velum-900 text-[15px] mt-1">{String(params.zona)}</p>}
+                                  {!!params?.zona && <p className="font-semibold text-velum-900 text-[15px] mt-1">{String(params.zona)}</p>}
                                 </div>
                                 <span className="shrink-0 text-[11px] font-semibold px-2.5 py-1 bg-success-50 text-success-700 border border-success-100 rounded-full">Completada</span>
                               </div>
                               {params && Object.keys(params).length > 0 && (
                                 <div className="px-4 pb-4 space-y-3">
                                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                                    {params.zona && <div className="bg-velum-50 rounded-xl p-3 text-center"><p className="text-[11px] font-medium text-velum-500">Zona</p><p className="text-[14px] font-semibold text-velum-900 mt-1 tabular-nums">{String(params.zona)}</p></div>}
-                                    {params.fluencia && <div className="bg-velum-50 rounded-xl p-3 text-center"><p className="text-[11px] font-medium text-velum-500">Energía</p><p className="text-[14px] font-semibold text-velum-900 mt-1 tabular-nums">{String(params.fluencia)} J/cm²</p></div>}
-                                    {params.frecuencia && <div className="bg-velum-50 rounded-xl p-3 text-center"><p className="text-[11px] font-medium text-velum-500">Velocidad</p><p className="text-[14px] font-semibold text-velum-900 mt-1 tabular-nums">{String(params.frecuencia)} Hz</p></div>}
-                                    {params.passes && <div className="bg-velum-50 rounded-xl p-3 text-center"><p className="text-[11px] font-medium text-velum-500">Pasadas</p><p className="text-[14px] font-semibold text-velum-900 mt-1 tabular-nums">{String(params.passes)}</p></div>}
+                                    {!!params.zona && <div className="bg-velum-50 rounded-xl p-3 text-center"><p className="text-[11px] font-medium text-velum-500">Zona</p><p className="text-[14px] font-semibold text-velum-900 mt-1 tabular-nums">{String(params.zona)}</p></div>}
+                                    {!!params.fluencia && <div className="bg-velum-50 rounded-xl p-3 text-center"><p className="text-[11px] font-medium text-velum-500">Energía</p><p className="text-[14px] font-semibold text-velum-900 mt-1 tabular-nums">{String(params.fluencia)} J/cm²</p></div>}
+                                    {!!params.frecuencia && <div className="bg-velum-50 rounded-xl p-3 text-center"><p className="text-[11px] font-medium text-velum-500">Velocidad</p><p className="text-[14px] font-semibold text-velum-900 mt-1 tabular-nums">{String(params.frecuencia)} Hz</p></div>}
+                                    {!!params.passes && <div className="bg-velum-50 rounded-xl p-3 text-center"><p className="text-[11px] font-medium text-velum-500">Pasadas</p><p className="text-[14px] font-semibold text-velum-900 mt-1 tabular-nums">{String(params.passes)}</p></div>}
                                   </div>
                                   <details className="group rounded-xl border border-velum-100 overflow-hidden">
                                     <summary className="flex items-center justify-between px-3 py-2.5 cursor-pointer text-[13px] font-semibold text-velum-600 hover:bg-velum-50 transition-colors duration-base ease-standard list-none">

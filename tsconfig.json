@@ -1,6 +1,7 @@
 {
   "exclude": ["server", "node_modules", "dist"],
   "compilerOptions": {
+    "strict": true,
     "target": "ES2022",
     "experimentalDecorators": true,
     "useDefineForClassFields": false,
