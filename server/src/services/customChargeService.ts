@@ -1,5 +1,6 @@
 import { createHash, randomInt, timingSafeEqual } from "crypto";
 import { prisma } from "../db/prisma";
+import { withTenantContext } from "../db/withTenantContext";
 import { addHours } from "../utils/date";
 import { logger } from "../utils/logger";
 import { env } from "../utils/env";
@@ -228,10 +229,10 @@ export const cancelCustomCharge = async (chargeId: string) => {
 };
 
 export const resendCustomChargeOtp = async (chargeId: string) => {
-  const charge = await prisma.customCharge.findUnique({
+  const charge = await withTenantContext((tx) => tx.customCharge.findUnique({
     where: { id: chargeId },
     include: { user: { select: { email: true, profile: { select: { firstName: true, lastName: true } } } } },
-  });
+  }));
 
   if (!charge) return { error: "not_found" as const };
   if (charge.status !== "PENDING_ACCEPTANCE") return { error: "not_pending" as const };
@@ -239,10 +240,10 @@ export const resendCustomChargeOtp = async (chargeId: string) => {
   const otp = generateOtp();
   const otpHash = hashOtp(otp);
 
-  await prisma.customCharge.update({
+  await withTenantContext((tx) => tx.customCharge.update({
     where: { id: chargeId },
     data: { otpHash, otpExpiresAt: addHours(24), otpAttempts: 0 },
-  });
+  }));
 
   return { charge, otp };
 };

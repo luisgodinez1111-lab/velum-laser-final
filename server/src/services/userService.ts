@@ -1,4 +1,3 @@
-import { prisma } from "../db/prisma";
 import { withTenantContext } from "../db/withTenantContext";
 import { getTenantIdOr } from "../utils/tenantContext";
 import { env } from "../utils/env";
@@ -57,11 +56,11 @@ export const updateProfile = async (userId: string, data: {
   phone?: string;
   timezone?: string;
 }) => {
-  return prisma.profile.upsert({
+  return withTenantContext((tx) => tx.profile.upsert({
     where: { userId },
     create: { userId, ...data, tenantId: getTenantIdOr(env.defaultClinicId) },
     update: data
-  });
+  }));
 };
 
 export const getUserWithRelations = (userId: string) =>

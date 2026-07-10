@@ -113,40 +113,42 @@ export const notifyAdmins = async (
 
 // ── List notifications for a user (newest first, paginated) ──────────
 export const listNotifications = async (userId: string, limit = 30, skip = 0) => {
-  const [items, total, unread] = await Promise.all([
-    prisma.notification.findMany({
+  const [items, total, unread] = await withTenantContext((tx) => Promise.all([
+    tx.notification.findMany({
       where: { userId },
       orderBy: { createdAt: "desc" },
       take: limit,
       skip,
     }),
-    prisma.notification.count({ where: { userId } }),
-    prisma.notification.count({ where: { userId, read: false } }),
-  ]);
+    tx.notification.count({ where: { userId } }),
+    tx.notification.count({ where: { userId, read: false } }),
+  ]));
   return { items, total, unread };
 };
 
 // ── Count unread (fast, for badge) ───────────────────────────────────
 export const countUnread = async (userId: string) =>
-  prisma.notification.count({ where: { userId, read: false } });
+  withTenantContext((tx) => tx.notification.count({ where: { userId, read: false } }));
 
 // ── Mark one as read ─────────────────────────────────────────────────
 export const markRead = async (id: string, userId: string) => {
-  const n = await prisma.notification.findFirst({ where: { id, userId } });
-  if (!n) return null;
-  if (n.read) return n;
-  return prisma.notification.update({
-    where: { id },
-    data: { read: true, readAt: new Date() },
+  return withTenantContext(async (tx) => {
+    const n = await tx.notification.findFirst({ where: { id, userId } });
+    if (!n) return null;
+    if (n.read) return n;
+    return tx.notification.update({
+      where: { id },
+      data: { read: true, readAt: new Date() },
+    });
   });
 };
 
 // ── Mark all as read ─────────────────────────────────────────────────
 export const markAllRead = async (userId: string) =>
-  prisma.notification.updateMany({
+  withTenantContext((tx) => tx.notification.updateMany({
     where: { userId, read: false },
     data: { read: true, readAt: new Date() },
-  });
+  }));
 
 // ── Re-exports de event handlers para compatibilidad con imports existentes ──
 // Los handlers reales están en notificationEventHandlers.ts

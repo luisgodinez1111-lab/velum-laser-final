@@ -53,9 +53,9 @@ export const listCustomCharges = async (req: AuthRequest, res: Response) => {
     ...(status ? { status: status as "PENDING_ACCEPTANCE" | "ACCEPTED" | "PAID" | "CANCELLED" | "EXPIRED" } : {}),
   };
 
-  const [total, charges] = await Promise.all([
-    prisma.customCharge.count({ where }),
-    prisma.customCharge.findMany({
+  const [total, charges] = await withTenantContext((tx) => Promise.all([
+    tx.customCharge.count({ where }),
+    tx.customCharge.findMany({
       where,
       orderBy: { createdAt: "desc" },
       include: {
@@ -70,7 +70,7 @@ export const listCustomCharges = async (req: AuthRequest, res: Response) => {
       take: limit,
       skip,
     }),
-  ]);
+  ]));
 
   return paginated(res, charges, { page, limit, total });
 };
@@ -167,7 +167,7 @@ export const createCharge = async (req: AuthRequest, res: Response) => {
 // ── Admin: Cancel a custom charge ────────────────────────────────────
 export const cancelCharge = async (req: AuthRequest, res: Response) => {
   const { id } = req.params;
-  const existing = await prisma.customCharge.findUnique({ where: { id } });
+  const existing = await withTenantContext((tx) => tx.customCharge.findUnique({ where: { id } }));
   if (!existing) throw notFound("Cobro");
   if (existing.status === "PAID") throw badRequest("No se puede cancelar un cobro ya pagado");
 

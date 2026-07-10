@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import crypto from "crypto";
 import { Response } from "express";
 import { prisma } from "../db/prisma";
+import { withTenantContext } from "../db/withTenantContext";
 import { AuthRequest } from "../middlewares/auth";
 import { createAuditLog } from "../services/auditService";
 import { sendMetaEvent } from "../services/metaService";
@@ -169,7 +170,7 @@ export const listMarketingEvents = async (req: AuthRequest, res: Response) => {
   const eventName = typeof req.query.eventName === "string" ? req.query.eventName : undefined;
   const status = typeof req.query.status === "string" ? req.query.status : undefined;
 
-  const events = await prisma.marketingAttribution.findMany({
+  const events = await withTenantContext((tx) => tx.marketingAttribution.findMany({
     where: {
       ...(eventName ? { eventName } : {}),
       ...(status ? { metaStatus: status } : {})
@@ -186,7 +187,7 @@ export const listMarketingEvents = async (req: AuthRequest, res: Response) => {
     },
     orderBy: { createdAt: "desc" },
     take: limit
-  });
+  }));
 
   return res.json(events);
 };
