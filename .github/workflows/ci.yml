@@ -63,7 +63,7 @@ jobs:
 
   # ── Frontend ─────────────────────────────────────────────────────────
   frontend:
-    name: Frontend (typecheck + test + build)
+    name: Frontend (lint + typecheck + test + build)
     runs-on: ubuntu-latest
 
     steps:
@@ -82,6 +82,9 @@ jobs:
 
       - name: API types up-to-date with openapi.ts
         run: npm run codegen:check
+
+      - name: Lint (rules-of-hooks)
+        run: npm run lint
 
       - name: TypeScript check
         run: npx tsc --noEmit
