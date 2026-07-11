@@ -1,6 +1,6 @@
 import { AgendaPolicy, AgendaWeeklyRule, AgendaTreatment } from "@prisma/client";
-import { prisma } from "../db/prisma";
 import { env } from "../utils/env";
+import { withTenantContext } from "../db/withTenantContext";
 
 export const defaultPolicy: Pick<
   AgendaPolicy,
@@ -72,32 +72,32 @@ export const defaultTreatments: Array<
 ];
 
 const ensurePolicy = async () => {
-  const existing = await prisma.agendaPolicy.findFirst();
+  const existing = await withTenantContext(async (tx) => tx.agendaPolicy.findFirst());
   if (existing) {
     return existing;
   }
 
-  return prisma.agendaPolicy.create({
+  return withTenantContext(async (tx) => tx.agendaPolicy.create({
     data: { ...defaultPolicy, tenantId: env.defaultClinicId }
-  });
+  }));
 };
 
 const ensureCabins = async () => {
-  const count = await prisma.agendaCabin.count();
+  const count = await withTenantContext(async (tx) => tx.agendaCabin.count());
   if (count > 0) {
     return;
   }
 
-  await prisma.agendaCabin.createMany({
+  await withTenantContext(async (tx) => tx.agendaCabin.createMany({
     data: [
       { name: "Cabina 1", isActive: true, sortOrder: 1, tenantId: env.defaultClinicId },
       { name: "Cabina 2", isActive: true, sortOrder: 2, tenantId: env.defaultClinicId }
     ]
-  });
+  }));
 };
 
 const ensureWeeklyRules = async () => {
-  const existing = await prisma.agendaWeeklyRule.findMany();
+  const existing = await withTenantContext(async (tx) => tx.agendaWeeklyRule.findMany());
   if (existing.length === 7) {
     return;
   }
@@ -108,22 +108,22 @@ const ensureWeeklyRules = async () => {
     defaultWeeklyRules
       .filter((rule) => !existingByDay.has(rule.dayOfWeek))
       .map((rule) =>
-        prisma.agendaWeeklyRule.create({
+        withTenantContext(async (tx) => tx.agendaWeeklyRule.create({
           data: { ...rule, tenantId: env.defaultClinicId }
-        })
+        }))
       )
   );
 };
 
 const ensureTreatments = async () => {
-  const count = await prisma.agendaTreatment.count();
+  const count = await withTenantContext(async (tx) => tx.agendaTreatment.count());
   if (count > 0) {
     return;
   }
 
-  await prisma.agendaTreatment.createMany({
+  await withTenantContext(async (tx) => tx.agendaTreatment.createMany({
     data: defaultTreatments.map((t) => ({ ...t, tenantId: env.defaultClinicId }))
-  });
+  }));
 };
 
 export const ensureAgendaDefaults = async () => {

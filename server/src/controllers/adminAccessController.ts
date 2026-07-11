@@ -1,7 +1,6 @@
 import { Response } from "express";
 import { bcrypt } from "../utils/bcrypt";
 import type { Role } from "@prisma/client";
-import { prisma } from "../db/prisma";
 import { withTenantContext } from "../db/withTenantContext";
 import { AuthRequest } from "../middlewares/auth";
 import { createAuditLog } from "../services/auditService";
@@ -29,7 +28,7 @@ const MAX_OTP_ATTEMPTS = 5;
 const roleAllowed = new Set(["admin", "staff", "member"]);
 
 async function pruneExpiredOtps(): Promise<void> {
-  await prisma.deleteOtp.deleteMany({ where: { expiresAt: { lt: new Date() } } });
+  await withTenantContext(async (tx) => tx.deleteOtp.deleteMany({ where: { expiresAt: { lt: new Date() } } }));
 }
 
 /** GET /api/v1/me/totp/setup — genera secreto temporal (no lo guarda aún) */
@@ -372,10 +371,10 @@ export const deactivateUser = async (req: AuthRequest, res: Response) => {
 
     // Update membership status in DB
     if (sub?.stripeSubscriptionId) {
-      await prisma.membership.updateMany({
+      await withTenantContext(async (tx) => tx.membership.updateMany({
         where: { userId: targetUserId },
         data: { status: "canceled" },
-      });
+      }));
     }
 
     // Mark user as inactive
@@ -470,11 +469,11 @@ export const requestDeleteUserOtp = async (req: AuthRequest, res: Response) => {
     await pruneExpiredOtps();
 
     // Upsert: one pending OTP per actor at a time, resets attempt counter
-    await prisma.deleteOtp.upsert({
+    await withTenantContext(async (tx) => tx.deleteOtp.upsert({
       where: { actorUserId: actorId },
       create: { actorUserId: actorId, targetUserId, otpHash, expiresAt, tenantId: requireTenantId() },
       update: { targetUserId, otpHash, expiresAt, attempts: 0 },
-    });
+    }));
 
     try {
       await sendDeleteUserOtpEmail(actor.email, {
@@ -483,7 +482,7 @@ export const requestDeleteUserOtp = async (req: AuthRequest, res: Response) => {
         otp,
       });
     } catch (emailErr: unknown) {
-      await prisma.deleteOtp.delete({ where: { actorUserId: actorId } }).catch(() => {});
+      await withTenantContext(async (tx) => tx.deleteOtp.delete({ where: { actorUserId: actorId } })).catch(() => {});
       return res.status(502).json({ message: "No se pudo enviar el correo de autorización. Verifica la configuración de Resend." });
     }
 
@@ -517,12 +516,12 @@ export const deleteUser = async (req: AuthRequest, res: Response) => {
 
     await pruneExpiredOtps();
 
-    const entry = await prisma.deleteOtp.findUnique({ where: { actorUserId: actorId } });
+    const entry = await withTenantContext(async (tx) => tx.deleteOtp.findUnique({ where: { actorUserId: actorId } }));
     if (!entry) {
       return res.status(400).json({ message: "No hay un código OTP activo. Solicita uno nuevo." });
     }
     if (entry.expiresAt < new Date()) {
-      await prisma.deleteOtp.delete({ where: { actorUserId: actorId } }).catch(() => {});
+      await withTenantContext(async (tx) => tx.deleteOtp.delete({ where: { actorUserId: actorId } })).catch(() => {});
       return res.status(400).json({ message: "El código OTP ha expirado. Solicita uno nuevo." });
     }
     if (entry.targetUserId !== targetUserId) {
@@ -531,16 +530,16 @@ export const deleteUser = async (req: AuthRequest, res: Response) => {
 
     // Brute-force protection: max 5 attempts
     if (entry.attempts >= MAX_OTP_ATTEMPTS) {
-      await prisma.deleteOtp.delete({ where: { actorUserId: actorId } }).catch(() => {});
+      await withTenantContext(async (tx) => tx.deleteOtp.delete({ where: { actorUserId: actorId } })).catch(() => {});
       return res.status(429).json({ message: "Demasiados intentos incorrectos. Solicita un nuevo código OTP." });
     }
 
     const valid = await bcrypt.compare(otpInput, entry.otpHash);
     if (!valid) {
-      await prisma.deleteOtp.update({
+      await withTenantContext(async (tx) => tx.deleteOtp.update({
         where: { actorUserId: actorId },
         data: { attempts: { increment: 1 } },
-      });
+      }));
       const remaining = MAX_OTP_ATTEMPTS - (entry.attempts + 1);
       return res.status(400).json({
         message: remaining > 0
@@ -550,7 +549,7 @@ export const deleteUser = async (req: AuthRequest, res: Response) => {
     }
 
     // OTP valid — consume it immediately
-    await prisma.deleteOtp.delete({ where: { actorUserId: actorId } }).catch(() => {});
+    await withTenantContext(async (tx) => tx.deleteOtp.delete({ where: { actorUserId: actorId } })).catch(() => {});
 
     const target = await withTenantContext(async (tx) => tx.user.findUnique({
       where: { id: targetUserId },
@@ -559,10 +558,10 @@ export const deleteUser = async (req: AuthRequest, res: Response) => {
     if (!target) return res.status(404).json({ message: "Usuario no encontrado" });
 
     // Cancel Stripe subscription before deleting
-    const membership = await prisma.membership.findUnique({
+    const membership = await withTenantContext(async (tx) => tx.membership.findUnique({
       where: { userId: targetUserId },
       select: { stripeSubscriptionId: true },
-    });
+    }));
     if (membership?.stripeSubscriptionId) {
       try {
         await stripe.subscriptions.cancel(membership.stripeSubscriptionId);
@@ -574,11 +573,11 @@ export const deleteUser = async (req: AuthRequest, res: Response) => {
     }
 
     // Cancel Stripe subscriptions from RECURRING custom charges (avoid ghost subscriptions)
-    const recurringCharges = await prisma.customCharge.findMany({
+    const recurringCharges = await withTenantContext(async (tx) => tx.customCharge.findMany({
       where: { userId: targetUserId, type: "RECURRING", stripeSubscriptionId: { not: null } },
       select: { id: true, stripeSubscriptionId: true },
       take: 500,
-    });
+    }));
     for (const rc of recurringCharges) {
       if (rc.stripeSubscriptionId) {
         try {
@@ -596,10 +595,10 @@ export const deleteUser = async (req: AuthRequest, res: Response) => {
       where: { createdByUserId: targetUserId },
       data: { createdByUserId: actorId },
     }));
-    await prisma.sessionTreatment.updateMany({
+    await withTenantContext(async (tx) => tx.sessionTreatment.updateMany({
       where: { staffUserId: targetUserId },
       data: { staffUserId: actorId },
-    });
+    }));
 
     // Soft delete: mark user as deleted instead of hard-deleting
     await withTenantContext(async (tx) => tx.user.update({

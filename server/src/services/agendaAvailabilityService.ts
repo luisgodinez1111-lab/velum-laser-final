@@ -1,8 +1,8 @@
 import { Appointment, AgendaPolicy, AgendaCabin, AgendaBlockedSlot, AgendaWeeklyRule, AgendaSpecialDateRule } from "@prisma/client";
-import { prisma } from "../db/prisma";
 import { toZonedParts, overlapsRange, dayOfWeekForDateKey, appointmentRangeForDateKey, activeAgendaStatuses } from "./agendaTimezoneUtils";
 import { isBlockOverlapping, hasCabinConflictBatch, AgendaValidationError } from "./agendaConflictService";
 import { getAgendaConfig } from "./agendaConfigService";
+import { withTenantContext } from "../db/withTenantContext";
 
 export const getEffectiveRule = ({
   dateKey,
@@ -134,9 +134,9 @@ export const resolveAppointmentPlacement = async ({
     throw new AgendaValidationError("No hay cabinas activas configuradas");
   }
 
-  const blocks = await prisma.agendaBlockedSlot.findMany({
+  const blocks = await withTenantContext(async (tx) => tx.agendaBlockedSlot.findMany({
     where: { dateKey: start.dateKey }
-  });
+  }));
 
   const priorityCabinIds = Array.from(
     new Set(

@@ -1,6 +1,6 @@
 import cron from "node-cron";
 import { prisma } from "../db/prisma";
-import { withTenantContext } from "../db/withTenantContext";
+import { withTenantContext, withSystemContext } from "../db/withTenantContext";
 import { logger } from "../utils/logger";
 import { sendAdminNotificationEmail } from "./notificationEmailService";
 import { notifyAdmins } from "./notificationService";
@@ -44,24 +44,28 @@ export const prunePasswordHistory = async (): Promise<void> => {
   const delegate = passwordHistoryDelegate();
   if (!delegate) return; // model not yet migrated
   try {
-    // Keep only the newest PASSWORD_HISTORY_MAX_DEPTH entries per user — delete the rest
-    const rows = await prisma.$queryRaw<Array<{ userId: string; cnt: bigint }>>`
-      SELECT "userId", COUNT(*) AS cnt FROM "PasswordHistory" GROUP BY "userId" HAVING COUNT(*) > ${PASSWORD_HISTORY_MAX_DEPTH}
-    `;
-    for (const row of rows) {
-      const keep = await (delegate.findMany as (args: unknown) => Promise<Array<{ id: string }>>)({
-        where: { userId: row.userId },
-        orderBy: { createdAt: "desc" },
-        take: PASSWORD_HISTORY_MAX_DEPTH,
-        select: { id: true },
-      });
-      const keepIds = keep.map((r) => r.id);
-      await (delegate.deleteMany as (args: unknown) => Promise<unknown>)({
-        where: { userId: row.userId, id: { notIn: keepIds } },
-      });
-    }
-    if (rows.length > 0) {
-      logger.info({ users: rows.length }, "[pwd-history-cleanup] Pruned excess PasswordHistory entries");
+    // Mantenimiento cross-tenant (recorta el historial por usuario) → withSystemContext.
+    const prunedUsers = await withSystemContext(async () => {
+      // Keep only the newest PASSWORD_HISTORY_MAX_DEPTH entries per user — delete the rest
+      const rows = await prisma.$queryRaw<Array<{ userId: string; cnt: bigint }>>`
+        SELECT "userId", COUNT(*) AS cnt FROM "PasswordHistory" GROUP BY "userId" HAVING COUNT(*) > ${PASSWORD_HISTORY_MAX_DEPTH}
+      `;
+      for (const row of rows) {
+        const keep = await (delegate.findMany as (args: unknown) => Promise<Array<{ id: string }>>)({
+          where: { userId: row.userId },
+          orderBy: { createdAt: "desc" },
+          take: PASSWORD_HISTORY_MAX_DEPTH,
+          select: { id: true },
+        });
+        const keepIds = keep.map((r) => r.id);
+        await (delegate.deleteMany as (args: unknown) => Promise<unknown>)({
+          where: { userId: row.userId, id: { notIn: keepIds } },
+        });
+      }
+      return rows.length;
+    });
+    if (prunedUsers > 0) {
+      logger.info({ users: prunedUsers }, "[pwd-history-cleanup] Pruned excess PasswordHistory entries");
     }
   } catch (err) {
     logger.warn({ err }, "[pwd-history-cleanup] Failed to prune PasswordHistory (table may not exist yet)");
@@ -70,9 +74,10 @@ export const prunePasswordHistory = async (): Promise<void> => {
 
 export const pruneExpiredRefreshTokens = async (): Promise<void> => {
   try {
-    const { count } = await prisma.refreshToken.deleteMany({
+    // Barrido cross-tenant de tokens vencidos → withSystemContext.
+    const { count } = await withSystemContext((tx) => tx.refreshToken.deleteMany({
       where: { expiresAt: { lt: new Date() } },
-    });
+    }));
     if (count > 0) {
       logger.info({ count }, "[refresh-cleanup] Pruned expired RefreshTokens");
     }
@@ -86,17 +91,18 @@ const ACCEPTED_PAYMENT_WINDOW_MS = 2 * 60 * 60 * 1000; // 2 h to complete paymen
 export const expireCustomCharges = async (): Promise<void> => {
   try {
     const twoHoursAgo = new Date(Date.now() - ACCEPTED_PAYMENT_WINDOW_MS);
-    const [pending, accepted] = await Promise.all([
-      prisma.customCharge.updateMany({
+    // Barrido cross-tenant de cobros vencidos → withSystemContext.
+    const [pending, accepted] = await withSystemContext((tx) => Promise.all([
+      tx.customCharge.updateMany({
         where: { status: "PENDING_ACCEPTANCE", expiresAt: { lt: new Date() } },
         data: { status: "EXPIRED" },
       }),
       // Expire ACCEPTED charges where the user never completed payment within 2h
-      prisma.customCharge.updateMany({
+      tx.customCharge.updateMany({
         where: { status: "ACCEPTED", acceptedAt: { lt: twoHoursAgo } },
         data: { status: "EXPIRED" },
       }),
-    ]);
+    ]));
     const count = pending.count + accepted.count;
     if (count > 0) {
       logger.info({ pending: pending.count, accepted: accepted.count }, "[charge-cleanup] Marked expired CustomCharges as EXPIRED");
@@ -114,9 +120,10 @@ export const expireCustomCharges = async (): Promise<void> => {
 export const pruneOldNotifications = async (): Promise<void> => {
   const cutoff = new Date(Date.now() - NOTIFICATION_READ_MAX_DAYS * 86400000);
   try {
-    const { count } = await prisma.notification.deleteMany({
+    // Barrido cross-tenant de notificaciones leídas antiguas → withSystemContext.
+    const { count } = await withSystemContext((tx) => tx.notification.deleteMany({
       where: { read: true, createdAt: { lte: cutoff } },
-    });
+    }));
     if (count > 0) {
       logger.info({ count }, "[notification-cleanup] Pruned old read Notifications");
     }
@@ -128,9 +135,10 @@ export const pruneOldNotifications = async (): Promise<void> => {
 export const pruneOldWebhookEvents = async (): Promise<void> => {
   const cutoff = new Date(Date.now() - WEBHOOK_EVENT_MAX_DAYS * 86400000);
   try {
-    const { count } = await prisma.webhookEvent.deleteMany({
+    // WebhookEvent no es tenant-scoped → withSystemContext.
+    const { count } = await withSystemContext((tx) => tx.webhookEvent.deleteMany({
       where: { processedAt: { lte: cutoff } },
-    });
+    }));
     if (count > 0) {
       logger.info({ count }, "[webhook-cleanup] Pruned old WebhookEvent records");
     }

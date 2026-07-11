@@ -1,6 +1,5 @@
 import { Response } from "express";
 import { AuthRequest } from "../middlewares/auth";
-import { prisma } from "../db/prisma";
 import { withTenantContext } from "../db/withTenantContext";
 import { changePlanSchema } from "../validators/membership";
 import { createCheckoutSession, createCustomerPortal, ensureCustomer } from "../services/stripeService";
@@ -10,7 +9,7 @@ import { readStripePlanCatalog } from "../services/stripePlanCatalogService";
 
 export const getMembershipStatus = async (req: AuthRequest, res: Response) => {
   const [membership, user] = await Promise.all([
-    prisma.membership.findFirst({ where: { userId: req.user!.id } }),
+    withTenantContext(async (tx) => tx.membership.findFirst({ where: { userId: req.user!.id } })),
     withTenantContext(async (tx) => tx.user.findUnique({ where: { id: req.user!.id }, select: { interestedPlanCode: true, appointmentDepositAvailable: true } })),
   ]);
   if (!membership) return res.json({ interestedPlanCode: user?.interestedPlanCode ?? null, appointmentDepositAvailable: user?.appointmentDepositAvailable ?? false });

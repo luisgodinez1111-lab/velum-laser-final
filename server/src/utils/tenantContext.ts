@@ -58,3 +58,31 @@ export const getTenantIdOr = (fallback: string): string => getTenantId() ?? fall
  * workers de cola, crons y scripts CLI.
  */
 export const runWithTenant = <T>(ctx: TenantContext, fn: () => T): T => storage.run(ctx, fn);
+
+// ── Instrumentación RLS (Etapa 2) ────────────────────────────────────────────
+// Marca si estamos DENTRO de la transacción de withTenantContext (la que hizo
+// SET LOCAL app.tenant_id). El hook de auditoría en db/prisma.ts lo lee para
+// saber qué queries corren FUERA de ese wrapper (candidatas a fail-closed en
+// Etapa 4). No cambia comportamiento — solo observabilidad.
+const tenantTxStorage = new AsyncLocalStorage<boolean>();
+
+/** Ejecuta `fn` marcado como "dentro de la tx de tenant" (SET LOCAL activo). */
+export const runInTenantTx = <T>(fn: () => Promise<T>): Promise<T> => tenantTxStorage.run(true, fn);
+
+/** True si la query actual corre dentro de withTenantContext (con SET LOCAL). */
+export const isInTenantTx = (): boolean => tenantTxStorage.getStore() === true;
+
+// ── Contexto SYSTEM / cross-tenant intencional (Etapa 2) ─────────────────────
+// Marca un scope que corre DELIBERADAMENTE sin app.tenant_id: lookups pre-auth
+// (login/reset por email global), resolución de tenant desde un recurso público
+// o webhook (por id/token), y jobs que iteran todos los tenants. El hook de
+// auditoría en db/prisma.ts lo trata igual que isInTenantTx (query "contabilizada",
+// no un wrap olvidado). En Etapa 4 (fail-closed) éste será el único camino
+// sancionado sin tenant.
+const systemCtxStorage = new AsyncLocalStorage<boolean>();
+
+/** Ejecuta `fn` marcado como cross-tenant intencional (sin app.tenant_id). */
+export const runAsSystem = <T>(fn: () => Promise<T>): Promise<T> => systemCtxStorage.run(true, fn);
+
+/** True si la query actual corre dentro de withSystemContext (cross-tenant intencional). */
+export const isInSystemCtx = (): boolean => systemCtxStorage.getStore() === true;

@@ -1,7 +1,7 @@
 import { Prisma } from "@prisma/client";
 import crypto from "crypto";
 import { Response } from "express";
-import { prisma } from "../db/prisma";
+import { withTenantContext, withTenantTransaction, withSystemContext, withExplicitTenant } from "../db/withTenantContext";
 import { AuthRequest } from "../middlewares/auth";
 import { createAuditLog } from "../services/auditService";
 import { sendMetaEvent } from "../services/metaService";
@@ -15,7 +15,7 @@ export const createLead = async (req: AuthRequest, res: Response) => {
 
   const tenantId = getTenantIdOr(env.defaultClinicId);
 
-  const { lead, attribution } = await prisma.$transaction(async (tx) => {
+  const { lead, attribution } = await withTenantTransaction(tenantId, async (tx) => {
     const newLead = await tx.lead.create({
       data: {
         name: payload.name,
@@ -72,7 +72,7 @@ export const createLead = async (req: AuthRequest, res: Response) => {
     }
   });
 
-  const updatedAttribution = await prisma.marketingAttribution.update({
+  const updatedAttribution = await withExplicitTenant(tenantId, (tx) => tx.marketingAttribution.update({
     where: { id: attribution.id },
     data: {
       metaStatus: metaResult.status,
@@ -80,7 +80,7 @@ export const createLead = async (req: AuthRequest, res: Response) => {
       responseSummary: metaResult.responseSummary as Prisma.InputJsonValue | undefined,
       sentAt: metaResult.status === "sent" ? new Date() : null
     }
-  });
+  }));
 
   await createAuditLog({
     userId: req.user?.id,
@@ -101,16 +101,18 @@ export const createLead = async (req: AuthRequest, res: Response) => {
 
 export const trackMarketingEvent = async (req: AuthRequest, res: Response) => {
   const payload = marketingEventSchema.parse(req.body);
+  const tenantId = getTenantIdOr(env.defaultClinicId);
 
-  const existing = await prisma.marketingAttribution.findUnique({
+  // Endpoint público: dedup por eventId (lookup cross-tenant) → withSystemContext.
+  const existing = await withSystemContext((tx) => tx.marketingAttribution.findUnique({
     where: { eventId: payload.eventId }
-  });
+  }));
 
   if (existing) {
     return res.status(200).json({ accepted: true, deduped: true, eventId: payload.eventId, status: existing.metaStatus });
   }
 
-  const attribution = await prisma.marketingAttribution.create({
+  const attribution = await withExplicitTenant(tenantId, (tx) => tx.marketingAttribution.create({
     data: {
       leadId: payload.leadId,
       userId: payload.userId ?? req.user?.id,
@@ -118,13 +120,13 @@ export const trackMarketingEvent = async (req: AuthRequest, res: Response) => {
       eventId: payload.eventId,
       fbp: payload.fbp,
       fbc: payload.fbc,
-      tenantId: getTenantIdOr(env.defaultClinicId),
+      tenantId,
       requestSummary: {
         eventTime: payload.eventTime,
         customData: payload.customData as Prisma.InputJsonValue | undefined
       } as Prisma.InputJsonValue
     }
-  });
+  }));
 
   const metaResult = await sendMetaEvent({
     eventName: payload.eventName,
@@ -138,7 +140,7 @@ export const trackMarketingEvent = async (req: AuthRequest, res: Response) => {
     customData: payload.customData
   });
 
-  await prisma.marketingAttribution.update({
+  await withExplicitTenant(tenantId, (tx) => tx.marketingAttribution.update({
     where: { id: attribution.id },
     data: {
       metaStatus: metaResult.status,
@@ -146,7 +148,7 @@ export const trackMarketingEvent = async (req: AuthRequest, res: Response) => {
       responseSummary: metaResult.responseSummary as Prisma.InputJsonValue | undefined,
       sentAt: metaResult.status === "sent" ? new Date() : null
     }
-  });
+  }));
 
   await createAuditLog({
     userId: req.user?.id,
@@ -169,7 +171,7 @@ export const listMarketingEvents = async (req: AuthRequest, res: Response) => {
   const eventName = typeof req.query.eventName === "string" ? req.query.eventName : undefined;
   const status = typeof req.query.status === "string" ? req.query.status : undefined;
 
-  const events = await prisma.marketingAttribution.findMany({
+  const events = await withTenantContext((tx) => tx.marketingAttribution.findMany({
     where: {
       ...(eventName ? { eventName } : {}),
       ...(status ? { metaStatus: status } : {})
@@ -186,7 +188,7 @@ export const listMarketingEvents = async (req: AuthRequest, res: Response) => {
     },
     orderBy: { createdAt: "desc" },
     take: limit
-  });
+  }));
 
   return res.json(events);
 };

@@ -1,6 +1,5 @@
 import { Response } from "express";
 import { Prisma } from "@prisma/client";
-import { prisma } from "../db/prisma";
 import { withTenantContext } from "../db/withTenantContext";
 import { AuthRequest } from "../middlewares/auth";
 import { roleUpdateSchema } from "../validators/admin";
@@ -119,7 +118,7 @@ export const getMemberHistory = async (req: AuthRequest, res: Response) => {
   const userId = req.params.userId;
 
   const [sessions, appointments, payments] = await Promise.all([
-    prisma.sessionTreatment.findMany({
+    withTenantContext(async (tx) => tx.sessionTreatment.findMany({
       where: { userId },
       include: {
         appointment: { select: { id: true, startAt: true, status: true } },
@@ -127,18 +126,18 @@ export const getMemberHistory = async (req: AuthRequest, res: Response) => {
       },
       orderBy: { createdAt: "desc" },
       take: 50,
-    }),
+    })),
     withTenantContext(async (tx) => tx.appointment.findMany({
       where: { userId },
       include: { treatment: { select: { name: true } } },
       orderBy: { startAt: "desc" },
       take: 50,
     })),
-    prisma.payment.findMany({
+    withTenantContext(async (tx) => tx.payment.findMany({
       where: { userId },
       orderBy: { createdAt: "desc" },
       take: 50,
-    }),
+    })),
   ]);
 
   return res.json({ sessions, appointments, payments });

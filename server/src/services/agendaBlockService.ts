@@ -1,9 +1,9 @@
-import { prisma } from "../db/prisma";
 import { normalizeDateKey } from "./agendaTimezoneUtils";
 import { AgendaValidationError } from "./agendaConflictService";
 import { ensureAgendaDefaults } from "./agendaSetupService";
 import { getTenantIdOr } from "../utils/tenantContext";
 import { env } from "../utils/env";
+import { withTenantContext } from "../db/withTenantContext";
 
 export const createAgendaBlock = async ({
   dateKey,
@@ -23,13 +23,13 @@ export const createAgendaBlock = async ({
   await ensureAgendaDefaults();
 
   if (cabinId) {
-    const cabin = await prisma.agendaCabin.findUnique({ where: { id: cabinId } });
+    const cabin = await withTenantContext(async (tx) => tx.agendaCabin.findUnique({ where: { id: cabinId } }));
     if (!cabin || !cabin.isActive) {
       throw new AgendaValidationError("La cabina indicada no existe o no está activa", 404);
     }
   }
 
-  return prisma.agendaBlockedSlot.create({
+  return withTenantContext(async (tx) => tx.agendaBlockedSlot.create({
     data: {
       dateKey: normalizeDateKey(dateKey),
       startMinute,
@@ -39,15 +39,15 @@ export const createAgendaBlock = async ({
       createdByUserId: actorUserId,
       tenantId: getTenantIdOr(env.defaultClinicId),
     }
-  });
+  }));
 };
 
 export const deleteAgendaBlock = async (blockId: string) => {
-  const block = await prisma.agendaBlockedSlot.findUnique({ where: { id: blockId } });
+  const block = await withTenantContext(async (tx) => tx.agendaBlockedSlot.findUnique({ where: { id: blockId } }));
   if (!block) {
     throw new AgendaValidationError("Bloqueo no encontrado", 404);
   }
 
-  await prisma.agendaBlockedSlot.delete({ where: { id: blockId } });
+  await withTenantContext(async (tx) => tx.agendaBlockedSlot.delete({ where: { id: blockId } }));
   return block;
 };

@@ -8,8 +8,8 @@
  *   - Calcular las cabinas preferidas para un tratamiento
  *   - Derivar el endAt de una cita a partir del tratamiento o del payload
  */
-import { prisma } from "../db/prisma";
 import { AgendaValidationError } from "./agendaService";
+import { withTenantContext } from "../db/withTenantContext";
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
 
@@ -33,14 +33,14 @@ export type ResolvedAgendaTreatment = {
  */
 export const hasClinicalEligibility = async (userId: string) => {
   const [intake, membership] = await Promise.all([
-    prisma.medicalIntake.findUnique({
+    withTenantContext(async (tx) => tx.medicalIntake.findUnique({
       where: { userId },
       select: { status: true },
-    }),
-    prisma.membership.findUnique({
+    })),
+    withTenantContext(async (tx) => tx.membership.findUnique({
       where: { userId },
       select: { status: true },
-    }),
+    })),
   ]);
 
   return {
@@ -75,10 +75,10 @@ export const resolveTreatmentForAppointment = async (args: {
   };
 
   if (args.treatmentId) {
-    const treatment = await prisma.agendaTreatment.findUnique({
+    const treatment = await withTenantContext(async (tx) => tx.agendaTreatment.findUnique({
       where: { id: args.treatmentId },
       select: TREATMENT_SELECT,
-    });
+    }));
     if (!treatment || !treatment.isActive) {
       throw new AgendaValidationError("El tratamiento indicado no existe o está inactivo", 404);
     }
@@ -88,10 +88,10 @@ export const resolveTreatmentForAppointment = async (args: {
   const code = args.reason?.trim().toLowerCase();
   if (!code) return null;
 
-  const treatment = await prisma.agendaTreatment.findFirst({
+  const treatment = await withTenantContext(async (tx) => tx.agendaTreatment.findFirst({
     where: { code, isActive: true },
     select: TREATMENT_SELECT,
-  });
+  }));
 
   return (treatment as ResolvedAgendaTreatment | null) ?? null;
 };

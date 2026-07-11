@@ -1,6 +1,5 @@
 import { Prisma } from "@prisma/client";
-import { prisma } from "../db/prisma";
-import { withTenantContext } from "../db/withTenantContext";
+import { withTenantContext, withExplicitTenant } from "../db/withTenantContext";
 import { logger } from "../utils/logger";
 import { broadcastToUser } from "./sseService";
 import { getTenantIdOr } from "../utils/tenantContext";
@@ -41,16 +40,18 @@ export interface CreateNotificationParams {
 // ── Create a single in-app notification ──────────────────────────────
 export const createNotification = async (params: CreateNotificationParams) => {
   try {
-    const created = await prisma.notification.create({
+    // Evento de sistema (webhook/cron/auth): tenant conocido → withExplicitTenant.
+    const tenantId = getTenantIdOr(env.defaultClinicId);
+    const created = await withExplicitTenant(tenantId, (tx) => tx.notification.create({
       data: {
         userId: params.userId,
         type: params.type,
         title: params.title,
         body: params.body,
         data: (params.data ?? {}) as Prisma.InputJsonValue,
-        tenantId: getTenantIdOr(env.defaultClinicId),
+        tenantId,
       },
-    });
+    }));
     // Push to connected SSE clients in real time
     broadcastToUser(params.userId, created);
     return created;
@@ -101,7 +102,7 @@ export const notifyAdmins = async (
       data: (data ?? {}) as Prisma.InputJsonValue,
       tenantId,
     }));
-    await prisma.notification.createMany({ data: rows });
+    await withExplicitTenant(tenantId, (tx) => tx.notification.createMany({ data: rows }));
     // Push via SSE to each admin that has an active stream
     for (const row of rows) {
       broadcastToUser(row.userId, row);
@@ -113,40 +114,42 @@ export const notifyAdmins = async (
 
 // ── List notifications for a user (newest first, paginated) ──────────
 export const listNotifications = async (userId: string, limit = 30, skip = 0) => {
-  const [items, total, unread] = await Promise.all([
-    prisma.notification.findMany({
+  const [items, total, unread] = await withTenantContext((tx) => Promise.all([
+    tx.notification.findMany({
       where: { userId },
       orderBy: { createdAt: "desc" },
       take: limit,
       skip,
     }),
-    prisma.notification.count({ where: { userId } }),
-    prisma.notification.count({ where: { userId, read: false } }),
-  ]);
+    tx.notification.count({ where: { userId } }),
+    tx.notification.count({ where: { userId, read: false } }),
+  ]));
   return { items, total, unread };
 };
 
 // ── Count unread (fast, for badge) ───────────────────────────────────
 export const countUnread = async (userId: string) =>
-  prisma.notification.count({ where: { userId, read: false } });
+  withTenantContext((tx) => tx.notification.count({ where: { userId, read: false } }));
 
 // ── Mark one as read ─────────────────────────────────────────────────
 export const markRead = async (id: string, userId: string) => {
-  const n = await prisma.notification.findFirst({ where: { id, userId } });
-  if (!n) return null;
-  if (n.read) return n;
-  return prisma.notification.update({
-    where: { id },
-    data: { read: true, readAt: new Date() },
+  return withTenantContext(async (tx) => {
+    const n = await tx.notification.findFirst({ where: { id, userId } });
+    if (!n) return null;
+    if (n.read) return n;
+    return tx.notification.update({
+      where: { id },
+      data: { read: true, readAt: new Date() },
+    });
   });
 };
 
 // ── Mark all as read ─────────────────────────────────────────────────
 export const markAllRead = async (userId: string) =>
-  prisma.notification.updateMany({
+  withTenantContext((tx) => tx.notification.updateMany({
     where: { userId, read: false },
     data: { read: true, readAt: new Date() },
-  });
+  }));
 
 // ── Re-exports de event handlers para compatibilidad con imports existentes ──
 // Los handlers reales están en notificationEventHandlers.ts

@@ -1,5 +1,4 @@
 import { Response } from "express";
-import { prisma } from "../db/prisma";
 import { withTenantContext } from "../db/withTenantContext";
 import { AuthRequest } from "../middlewares/auth";
 import { auditFilterSchema } from "../validators/audit";
@@ -34,7 +33,7 @@ export const listAuditLogs = async (req: AuthRequest, res: Response) => {
   const where = buildAuditWhere(parsed);
 
   const [logs, total] = await Promise.all([
-    prisma.auditLog.findMany({
+    withTenantContext(async (tx) => tx.auditLog.findMany({
       where,
       include: {
         user: { select: { id: true, email: true, role: true } },
@@ -44,8 +43,8 @@ export const listAuditLogs = async (req: AuthRequest, res: Response) => {
       orderBy: { createdAt: "desc" },
       take: pageSize,
       skip,
-    }),
-    prisma.auditLog.count({ where }),
+    })),
+    withTenantContext(async (tx) => tx.auditLog.count({ where })),
   ]);
 
   return paginated(res, logs, { page, limit: pageSize, total });
@@ -67,7 +66,7 @@ export const exportAuditLogsCSV = async (req: AuthRequest, res: Response) => {
   let hasMore = true;
 
   while (hasMore) {
-    const batch = await prisma.auditLog.findMany({
+    const batch = await withTenantContext(async (tx) => tx.auditLog.findMany({
       where,
       include: {
         actorUser: { select: { email: true } },
@@ -76,7 +75,7 @@ export const exportAuditLogsCSV = async (req: AuthRequest, res: Response) => {
       orderBy: [{ createdAt: "asc" }, { id: "asc" }],
       take: BATCH,
       ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
-    });
+    }));
 
     for (const log of batch) {
       const row = [
@@ -105,9 +104,9 @@ export const exportAuditLogsCSV = async (req: AuthRequest, res: Response) => {
 export const reports = async (req: AuthRequest, res: Response) => {
   const [users, active, pastDue, documents] = await Promise.all([
     withTenantContext(async (tx) => tx.user.count()),
-    prisma.membership.count({ where: { status: "active" } }),
-    prisma.membership.count({ where: { status: "past_due" } }),
-    prisma.document.count({ where: { status: "pending" } })
+    withTenantContext(async (tx) => tx.membership.count({ where: { status: "active" } })),
+    withTenantContext(async (tx) => tx.membership.count({ where: { status: "past_due" } })),
+    withTenantContext(async (tx) => tx.document.count({ where: { status: "pending" } }))
   ]);
 
   if (req.query.format === "csv") {
@@ -123,13 +122,13 @@ export const reports = async (req: AuthRequest, res: Response) => {
 export const listDocumentsAdmin = async (req: AuthRequest, res: Response) => {
   const { page, limit, skip } = parsePagination(queryParams(req));
   const [total, documents] = await Promise.all([
-    prisma.document.count(),
-    prisma.document.findMany({
+    withTenantContext(async (tx) => tx.document.count()),
+    withTenantContext(async (tx) => tx.document.findMany({
       include: { user: true },
       orderBy: { createdAt: "desc" },
       skip,
       take: limit,
-    }),
+    })),
   ]);
   return paginated(res, documents, { page, limit, total });
 };

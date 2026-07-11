@@ -1,5 +1,5 @@
 import { createHash, randomInt, timingSafeEqual } from "crypto";
-import { prisma } from "../db/prisma";
+import { withTenantContext, withSystemContext, withExplicitTenant } from "../db/withTenantContext";
 import { addHours } from "../utils/date";
 import { logger } from "../utils/logger";
 import { env } from "../utils/env";
@@ -48,7 +48,9 @@ export const createCustomCharge = async (params: {
   const otpExpiresAt = addHours(24);
   const expiresAt = params.expiresInHours ? addHours(params.expiresInHours) : addHours(72);
 
-  const charge = await prisma.customCharge.create({
+  // Tenant conocido (admin autenticado o cron con default) → withExplicitTenant.
+  const tenantId = getTenantIdOr(env.defaultClinicId);
+  const charge = await withExplicitTenant(tenantId, (tx) => tx.customCharge.create({
     data: {
       userId: params.userId,
       createdByAdminId: params.createdByAdminId,
@@ -62,32 +64,36 @@ export const createCustomCharge = async (params: {
       otpExpiresAt,
       status: "PENDING_ACCEPTANCE",
       expiresAt,
-      tenantId: getTenantIdOr(env.defaultClinicId),
+      tenantId,
     },
     include: {
       user: { select: { id: true, email: true, profile: { select: { firstName: true, lastName: true } } } },
     },
-  });
+  }));
 
   return { charge, otp };
 };
 
 export const verifyCustomChargeOtp = async (chargeId: string, otp: string) => {
-  const charge = await prisma.customCharge.findUnique({
+  // Endpoint público (OTP): resolvemos el cobro por id → withSystemContext.
+  const charge = await withSystemContext((tx) => tx.customCharge.findUnique({
     where: { id: chargeId },
     include: {
       user: { select: { id: true, email: true, stripeCustomerId: true } },
     },
-  });
+  }));
 
   if (!charge) return { error: "not_found" as const };
+
+  // A partir de aquí conocemos el tenant del cobro → writes con withExplicitTenant.
+  const tenantId = charge.tenantId;
 
   if (charge.status === "PAID") return { error: "already_paid" as const };
   if (charge.status === "CANCELLED") return { error: "cancelled" as const };
   if (charge.status === "EXPIRED") return { error: "expired" as const };
 
   if (charge.expiresAt && charge.expiresAt < new Date()) {
-    await prisma.customCharge.update({ where: { id: chargeId }, data: { status: "EXPIRED" } });
+    await withExplicitTenant(tenantId, (tx) => tx.customCharge.update({ where: { id: chargeId }, data: { status: "EXPIRED" } }));
     return { error: "expired" as const };
   }
 
@@ -101,30 +107,30 @@ export const verifyCustomChargeOtp = async (chargeId: string, otp: string) => {
 
   if (!otpMatchesSafe(charge.otpHash!, otp)) {
     // increment is atomic at DB level — no race risk here
-    await prisma.customCharge.update({
+    await withExplicitTenant(tenantId, (tx) => tx.customCharge.update({
       where: { id: chargeId },
       data: { otpAttempts: { increment: 1 } },
-    });
+    }));
     return { error: "invalid_otp" as const };
   }
 
   // OTP is valid — accept atomically using updateMany with status guard.
   // This prevents a race condition where two concurrent requests both pass
   // the hash check and both try to accept the same charge.
-  const accepted = await prisma.customCharge.updateMany({
+  const accepted = await withExplicitTenant(tenantId, (tx) => tx.customCharge.updateMany({
     where: { id: chargeId, status: "PENDING_ACCEPTANCE" },
     data: { status: "ACCEPTED", acceptedAt: new Date(), otpHash: null },
-  });
+  }));
 
   if (accepted.count === 0) {
     // Another concurrent request already accepted (or status changed)
     return { error: "already_paid" as const };
   }
 
-  const updated = await prisma.customCharge.findUnique({
+  const updated = await withExplicitTenant(tenantId, (tx) => tx.customCharge.findUnique({
     where: { id: chargeId },
     include: { user: { select: { id: true, email: true, stripeCustomerId: true } } },
-  });
+  }));
 
   return { charge: updated! };
 };
@@ -147,10 +153,11 @@ export const markCustomChargePaid = async (chargeId: string, params: {
   stripeSubscriptionId?: string;
   stripeSessionId?: string;
 }) => {
-  const charge = await prisma.customCharge.findUnique({ where: { id: chargeId }, select: { type: true, interval: true } });
+  // Webhook (sin JWT): resolvemos el cobro por id → withSystemContext.
+  const charge = await withSystemContext((tx) => tx.customCharge.findUnique({ where: { id: chargeId }, select: { type: true, interval: true, tenantId: true } }));
   const nextChargeAt = charge?.type === "RECURRING" ? computeNextChargeAt(charge.interval) : undefined;
 
-  return prisma.customCharge.update({
+  return withExplicitTenant(charge?.tenantId ?? env.defaultClinicId, (tx) => tx.customCharge.update({
     where: { id: chargeId },
     data: {
       status: "PAID",
@@ -158,15 +165,16 @@ export const markCustomChargePaid = async (chargeId: string, params: {
       nextChargeAt: nextChargeAt ?? null,
       ...params,
     },
-  });
+  }));
 };
 
 /** Called by cron: creates renewal charges for RECURRING charges whose nextChargeAt is due. */
 export const renewRecurringCharges = async (): Promise<number> => {
-  const due = await prisma.customCharge.findMany({
+  // Barrido cross-tenant de cobros recurrentes vencidos → withSystemContext.
+  const due = await withSystemContext((tx) => tx.customCharge.findMany({
     where: { type: "RECURRING", status: "PAID", nextChargeAt: { lte: new Date() } },
     include: { user: { select: { id: true, email: true, profile: { select: { firstName: true, lastName: true } } } } },
-  });
+  }));
 
   let count = 0;
   const base = resolveBaseUrl();
@@ -184,8 +192,9 @@ export const renewRecurringCharges = async (): Promise<number> => {
         interval: charge.interval ?? undefined,
       });
 
-      // Clear nextChargeAt on the paid record to prevent re-processing
-      await prisma.customCharge.update({ where: { id: charge.id }, data: { nextChargeAt: null } });
+      // Clear nextChargeAt on the paid record to prevent re-processing.
+      // Write por-fila con el tenant del cobro (fail-closed-safe).
+      await withExplicitTenant(charge.tenantId, (tx) => tx.customCharge.update({ where: { id: charge.id }, data: { nextChargeAt: null } }));
 
       // Notify the user (in-app + OTP email)
       const userName = [charge.user.profile?.firstName, charge.user.profile?.lastName].filter(Boolean).join(" ") || charge.user.email;
@@ -221,17 +230,20 @@ export const renewRecurringCharges = async (): Promise<number> => {
 };
 
 export const cancelCustomCharge = async (chargeId: string) => {
-  return prisma.customCharge.update({
+  // Llamado desde admin (con JWT) y desde rutas de error/cleanup (sin contexto).
+  // Resolvemos el tenant del cobro y escribimos scoped → fail-closed-safe.
+  const existing = await withSystemContext((tx) => tx.customCharge.findUnique({ where: { id: chargeId }, select: { tenantId: true } }));
+  return withExplicitTenant(existing?.tenantId ?? env.defaultClinicId, (tx) => tx.customCharge.update({
     where: { id: chargeId },
     data: { status: "CANCELLED" },
-  });
+  }));
 };
 
 export const resendCustomChargeOtp = async (chargeId: string) => {
-  const charge = await prisma.customCharge.findUnique({
+  const charge = await withTenantContext((tx) => tx.customCharge.findUnique({
     where: { id: chargeId },
     include: { user: { select: { email: true, profile: { select: { firstName: true, lastName: true } } } } },
-  });
+  }));
 
   if (!charge) return { error: "not_found" as const };
   if (charge.status !== "PENDING_ACCEPTANCE") return { error: "not_pending" as const };
@@ -239,10 +251,10 @@ export const resendCustomChargeOtp = async (chargeId: string) => {
   const otp = generateOtp();
   const otpHash = hashOtp(otp);
 
-  await prisma.customCharge.update({
+  await withTenantContext((tx) => tx.customCharge.update({
     where: { id: chargeId },
     data: { otpHash, otpExpiresAt: addHours(24), otpAttempts: 0 },
-  });
+  }));
 
   return { charge, otp };
 };

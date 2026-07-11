@@ -1,5 +1,5 @@
 import cron from "node-cron";
-import { prisma } from "../db/prisma";
+import { withSystemContext, withExplicitTenant } from "../db/withTenantContext";
 import { sendPaymentReminderEmail } from "./emailService";
 import { readStripePlanCatalog } from "./stripePlanCatalogService";
 import { sendWhatsappPaymentReminder } from "./whatsappMetaService";
@@ -24,8 +24,9 @@ async function acquireLock(): Promise<boolean> {
   const now = new Date();
   const lockExpiry = new Date(now.getTime() + LOCK_TTL_MINUTES * 60 * 1000);
 
-  // Check if lock exists and is still valid
-  const existing = await prisma.appSetting.findUnique({ where: { key: LOCK_KEY } });
+  // Check if lock exists and is still valid.
+  // AppSetting (lock distribuido) no es tenant-scoped → withSystemContext.
+  const existing = await withSystemContext((tx) => tx.appSetting.findUnique({ where: { key: LOCK_KEY } }));
   if (existing) {
     const lockData = existing.value as { lockedAt: string; expiresAt: string };
     if (new Date(lockData.expiresAt) > now) {
@@ -35,11 +36,11 @@ async function acquireLock(): Promise<boolean> {
 
   // Attempt to acquire lock with upsert
   try {
-    await prisma.appSetting.upsert({
+    await withSystemContext((tx) => tx.appSetting.upsert({
       where: { key: LOCK_KEY },
       create: { key: LOCK_KEY, value: { lockedAt: now.toISOString(), expiresAt: lockExpiry.toISOString() } },
       update: { value: { lockedAt: now.toISOString(), expiresAt: lockExpiry.toISOString() } },
-    });
+    }));
     return true;
   } catch {
     return false;
@@ -47,7 +48,7 @@ async function acquireLock(): Promise<boolean> {
 }
 
 async function releaseLock(): Promise<void> {
-  await prisma.appSetting.delete({ where: { key: LOCK_KEY } }).catch(() => {});
+  await withSystemContext((tx) => tx.appSetting.delete({ where: { key: LOCK_KEY } })).catch(() => {});
 }
 
 export const runPaymentReminders = async (): Promise<void> => {
@@ -71,7 +72,8 @@ export const runPaymentReminders = async (): Promise<void> => {
 
       const cutoff = new Date(now.getTime() - 20 * 60 * 60 * 1000);
 
-      const memberships = await prisma.membership.findMany({
+      // Barrido cross-tenant de membresías por vencer → withSystemContext.
+      const memberships = await withSystemContext((tx) => tx.membership.findMany({
         where: {
           status: "active",
           currentPeriodEnd: { gte: windowStart, lte: windowEnd },
@@ -89,7 +91,7 @@ export const runPaymentReminders = async (): Promise<void> => {
             },
           },
         },
-      });
+      }));
 
       for (const ms of memberships) {
         try {
@@ -108,11 +110,12 @@ export const runPaymentReminders = async (): Promise<void> => {
 
           const renewalDate = ms.currentPeriodEnd ? formatDate(ms.currentPeriodEnd) : "próximamente";
 
-          // Reserve the slot before sending — prevents duplicates if process crashes mid-send
-          await prisma.membership.update({
+          // Reserve the slot before sending — prevents duplicates if process crashes mid-send.
+          // Write por-fila con el tenant de la membresía (fail-closed-safe).
+          await withExplicitTenant(ms.tenantId, (tx) => tx.membership.update({
             where: { id: ms.id },
             data: { lastReminderSentAt: now },
-          });
+          }));
 
           await sendPaymentReminderEmail(ms.user.email, {
             name,

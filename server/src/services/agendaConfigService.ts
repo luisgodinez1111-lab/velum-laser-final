@@ -4,6 +4,7 @@ import { normalizeDateKey } from "./agendaTimezoneUtils";
 import { AgendaValidationError } from "./agendaConflictService";
 import { getTenantIdOr } from "../utils/tenantContext";
 import { env } from "../utils/env";
+import { withTenantContext } from "../db/withTenantContext";
 
 export type AgendaConfigPayload = {
   timezone?: string;
@@ -37,18 +38,18 @@ export const getAgendaConfig = async () => {
   await ensureAgendaDefaults();
 
   const [policy, cabins, treatments, weeklyRules, specialDateRules] = await Promise.all([
-    prisma.agendaPolicy.findFirstOrThrow(),
-    prisma.agendaCabin.findMany({ orderBy: [{ sortOrder: "asc" }, { name: "asc" }] }),
-    prisma.agendaTreatment.findMany({
+    withTenantContext(async (tx) => tx.agendaPolicy.findFirstOrThrow()),
+    withTenantContext(async (tx) => tx.agendaCabin.findMany({ orderBy: [{ sortOrder: "asc" }, { name: "asc" }] })),
+    withTenantContext(async (tx) => tx.agendaTreatment.findMany({
       orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
       include: {
         cabinRules: {
           orderBy: [{ priority: "asc" }, { createdAt: "asc" }]
         }
       }
-    }),
-    prisma.agendaWeeklyRule.findMany({ orderBy: { dayOfWeek: "asc" } }),
-    prisma.agendaSpecialDateRule.findMany({ orderBy: { dateKey: "asc" }, take: 365 })
+    })),
+    withTenantContext(async (tx) => tx.agendaWeeklyRule.findMany({ orderBy: { dayOfWeek: "asc" } })),
+    withTenantContext(async (tx) => tx.agendaSpecialDateRule.findMany({ orderBy: { dateKey: "asc" }, take: 365 }))
   ]);
 
   return {
@@ -66,7 +67,7 @@ export const getAgendaConfig = async () => {
 export const updateAgendaConfig = async (payload: AgendaConfigPayload) => {
   await ensureAgendaDefaults();
 
-  const policy = await prisma.agendaPolicy.findFirstOrThrow();
+  const policy = await withTenantContext(async (tx) => tx.agendaPolicy.findFirstOrThrow());
   const effectiveSlotMinutes = payload.slotMinutes ?? policy.slotMinutes;
 
   const txTenantId = getTenantIdOr(env.defaultClinicId);

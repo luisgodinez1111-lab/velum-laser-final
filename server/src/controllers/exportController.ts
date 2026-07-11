@@ -1,6 +1,5 @@
 import { Response } from "express";
 import { AuthRequest } from "../middlewares/auth";
-import { prisma } from "../db/prisma";
 import { withTenantContext } from "../db/withTenantContext";
 import { logger } from "../utils/logger";
 import { createAuditLog } from "../services/auditService";
@@ -30,7 +29,7 @@ export const exportPayments = async (req: AuthRequest, res: Response) => {
       ...(to   ? { createdAt: { lte: new Date(to)   } } : {}),
     };
 
-    const payments = await prisma.payment.findMany({
+    const payments = await withTenantContext((tx) => tx.payment.findMany({
       where,
       orderBy: { createdAt: "desc" },
       take: 10_000,
@@ -40,7 +39,7 @@ export const exportPayments = async (req: AuthRequest, res: Response) => {
         user: { select: { email: true, profile: { select: { firstName: true, lastName: true } } } },
         membership: { select: { planCode: true } },
       },
-    });
+    }));
 
     const header = ["ID", "Fecha", "Email", "Nombre", "Plan", "Monto (MXN)", "Moneda", "Estado", "Stripe PI"];
     const rows = payments.map(p => [

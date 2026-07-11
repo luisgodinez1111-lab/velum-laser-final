@@ -1,9 +1,9 @@
 import { Response } from "express";
-import { prisma } from "../db/prisma";
 import { AuthRequest } from "../middlewares/auth";
 import { parsePagination } from "../utils/pagination";
 import { paginated } from "../utils/response";
 import { queryParams } from "../utils/request";
+import { withTenantContext } from "../db/withTenantContext";
 
 const buildPaymentWhere = (req: AuthRequest) => {
   const userId   = typeof req.query.userId   === "string" ? req.query.userId   : undefined;
@@ -28,13 +28,13 @@ export const getMyPayments = async (req: AuthRequest, res: Response) => {
   const where = { userId: req.user!.id };
 
   const [total, data] = await Promise.all([
-    prisma.payment.count({ where }),
-    prisma.payment.findMany({
+    withTenantContext(async (tx) => tx.payment.count({ where })),
+    withTenantContext(async (tx) => tx.payment.findMany({
       where,
       orderBy: { createdAt: "desc" },
       skip,
       take: limit,
-    }),
+    })),
   ]);
 
   return paginated(res, data, { page, limit, total });
@@ -45,8 +45,8 @@ export const listPaymentsAdmin = async (req: AuthRequest, res: Response) => {
   const where = buildPaymentWhere(req);
 
   const [total, payments] = await Promise.all([
-    prisma.payment.count({ where }),
-    prisma.payment.findMany({
+    withTenantContext(async (tx) => tx.payment.count({ where })),
+    withTenantContext(async (tx) => tx.payment.findMany({
       where,
       include: {
         user: { select: { id: true, email: true } },
@@ -55,7 +55,7 @@ export const listPaymentsAdmin = async (req: AuthRequest, res: Response) => {
       orderBy: { createdAt: "desc" },
       skip,
       take: limit
-    })
+    }))
   ]);
 
   return paginated(res, payments, { page, limit, total });
@@ -76,7 +76,7 @@ export const getPaymentReconciliationReport = async (req: AuthRequest, res: Resp
     paymentsWithNoMembership,
   ] = await Promise.all([
     // Active memberships with no paid payment in the last 30 days (potential Stripe sync issue)
-    prisma.membership.findMany({
+    withTenantContext(async (tx) => tx.membership.findMany({
       where: {
         status: "active",
         user: {
@@ -93,9 +93,9 @@ export const getPaymentReconciliationReport = async (req: AuthRequest, res: Resp
         user: { select: { email: true } },
       },
       take: 50,
-    }),
+    })),
     // Paid payments whose associated membership is not active
-    prisma.payment.findMany({
+    withTenantContext(async (tx) => tx.payment.findMany({
       where: {
         status: "paid",
         membership: { status: { not: "active" } },
@@ -111,15 +111,15 @@ export const getPaymentReconciliationReport = async (req: AuthRequest, res: Resp
         membership: { select: { status: true } },
       },
       take: 50,
-    }),
+    })),
     // Payment failures in the last 30 days
-    prisma.payment.count({
+    withTenantContext(async (tx) => tx.payment.count({
       where: { status: "failed", createdAt: { gte: thirtyDaysAgo } },
-    }),
+    })),
     // Paid payments with no linked membership
-    prisma.payment.count({
+    withTenantContext(async (tx) => tx.payment.count({
       where: { status: "paid", membershipId: null, stripeSubscriptionId: { not: null } },
-    }),
+    })),
   ]);
 
   return res.json({
@@ -153,7 +153,7 @@ export const exportPaymentsCSV = async (req: AuthRequest, res: Response) => {
   let hasMore = true;
 
   while (hasMore) {
-    const batch = await prisma.payment.findMany({
+    const batch = await withTenantContext(async (tx) => tx.payment.findMany({
       where,
       include: {
         user: { select: { email: true, profile: { select: { firstName: true, lastName: true } } } },
@@ -161,7 +161,7 @@ export const exportPaymentsCSV = async (req: AuthRequest, res: Response) => {
       orderBy: { createdAt: "desc" },
       take: BATCH,
       ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
-    });
+    }));
 
     for (const p of batch) {
       const name = [p.user.profile?.firstName, p.user.profile?.lastName].filter(Boolean).join(" ") || "";

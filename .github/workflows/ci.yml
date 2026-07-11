@@ -17,7 +17,9 @@ jobs:
 
     services:
       postgres:
-        image: postgres:16-alpine
+        # pgvector/pgvector en vez de postgres:16-alpine — la migración
+        # 20260427005000 hace CREATE EXTENSION vector, que la imagen vanilla no trae.
+        image: pgvector/pgvector:pg16
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
@@ -32,6 +34,9 @@ jobs:
 
     env:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/velum_test
+      # El schema define directUrl=env("DIRECT_URL") para migraciones; en CI
+      # apuntamos al mismo Postgres local (como hace start.sh: DIRECT_URL:-$DATABASE_URL).
+      DIRECT_URL: postgresql://postgres:postgres@localhost:5432/velum_test
       JWT_SECRET: test-secret-with-at-least-32-characters-here
       INTEGRATIONS_ENC_KEY: test-enc-key-with-at-least-32-characters
       NODE_ENV: test
@@ -47,7 +52,10 @@ jobs:
           cache-dependency-path: server/package-lock.json
 
       - name: Install dependencies
-        run: npm ci
+        # --legacy-peer-deps: server tiene eslint@9 con @typescript-eslint@7 (pide
+        # eslint@8) — mismo patrón que los jobs frontend/E2E. Sin esto npm ci falla
+        # con ERESOLVE y el job Backend nunca validaba (tsc/tests no corrían).
+        run: npm ci --legacy-peer-deps
 
       - name: Lint
         run: npm run lint

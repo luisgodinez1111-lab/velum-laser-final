@@ -6,8 +6,7 @@ import { verifyTotpCode, decryptTotpSecret } from "../utils/totp";
 import { hashPassword, signToken, verifyPassword, createRefreshToken, rotateRefreshToken, revokeRefreshToken, revokeAllRefreshTokens, recordPasswordHistory, isPasswordReused, validatePasswordStrength } from "../utils/auth";
 import { env, isProduction } from "../utils/env";
 import { createEmailVerification, createPasswordReset, consumeEmailVerification, consumePasswordReset, createConsentOtp, consumeConsentOtp } from "../services/authService";
-import { prisma } from "../db/prisma";
-import { withTenantContext } from "../db/withTenantContext";
+import { withTenantContext, withSystemContext, withExplicitTenant } from "../db/withTenantContext";
 import { createAuditLog } from "../services/auditService";
 import { sendPasswordResetEmail, sendEmailVerificationEmail, sendConsentOtpEmail } from "../services/emailService";
 import { onNewMember } from "../services/notificationService";
@@ -79,20 +78,24 @@ export const register = async (req: Request, res: Response) => {
     birthDate: payload.birthDate
   });
 
-  const latestLead = await prisma.lead.findFirst({
+  // Pre-auth: resolvemos el lead por email global → withSystemContext.
+  const latestLead = await withSystemContext((tx) => tx.lead.findFirst({
     where: { email: user.email, convertedUserId: null },
     orderBy: { createdAt: "desc" }
-  });
+  }));
 
   if (latestLead) {
-    await prisma.lead.update({
-      where: { id: latestLead.id },
-      data: { convertedUserId: user.id }
-    });
+    // Writes scoped al tenant del lead resuelto, en una tx atómica.
+    await withExplicitTenant(latestLead.tenantId, async (tx) => {
+      await tx.lead.update({
+        where: { id: latestLead.id },
+        data: { convertedUserId: user.id }
+      });
 
-    await prisma.marketingAttribution.updateMany({
-      where: { leadId: latestLead.id },
-      data: { userId: user.id }
+      await tx.marketingAttribution.updateMany({
+        where: { leadId: latestLead.id },
+        data: { userId: user.id }
+      });
     });
   }
 

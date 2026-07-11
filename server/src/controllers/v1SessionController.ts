@@ -1,6 +1,5 @@
 import { Prisma } from "@prisma/client";
 import { Response } from "express";
-import { prisma } from "../db/prisma";
 import { withTenantContext } from "../db/withTenantContext";
 import { AuthRequest } from "../middlewares/auth";
 import { createAuditLog } from "../services/auditService";
@@ -79,7 +78,7 @@ export const listMySessions = async (req: AuthRequest, res: Response) => {
   const where = filterUserId ? { userId: filterUserId } : undefined;
 
   const [sessions, total] = await Promise.all([
-    prisma.sessionTreatment.findMany({
+    withTenantContext(async (tx) => tx.sessionTreatment.findMany({
       where,
       include: {
         appointment: true,
@@ -89,8 +88,8 @@ export const listMySessions = async (req: AuthRequest, res: Response) => {
       orderBy: { createdAt: "desc" },
       skip,
       take: limit,
-    }),
-    prisma.sessionTreatment.count({ where }),
+    })),
+    withTenantContext(async (tx) => tx.sessionTreatment.count({ where })),
   ]);
 
   return paginated(res, sessions, { page, limit, total });
@@ -107,7 +106,7 @@ export const adminListSessions = async (req: AuthRequest, res: Response) => {
   };
 
   const [sessions, total] = await Promise.all([
-    prisma.sessionTreatment.findMany({
+    withTenantContext(async (tx) => tx.sessionTreatment.findMany({
       where,
       include: {
         appointment: { select: { id: true, startAt: true, status: true } },
@@ -117,8 +116,8 @@ export const adminListSessions = async (req: AuthRequest, res: Response) => {
       orderBy: { createdAt: "desc" },
       skip,
       take: limit,
-    }),
-    prisma.sessionTreatment.count({ where }),
+    })),
+    withTenantContext(async (tx) => tx.sessionTreatment.count({ where })),
   ]);
 
   return paginated(res, sessions, { page, limit, total });
@@ -127,12 +126,12 @@ export const adminListSessions = async (req: AuthRequest, res: Response) => {
 export const addSessionFeedback = async (req: AuthRequest, res: Response) => {
   const payload = sessionFeedbackSchema.parse(req.body);
 
-  const session = await prisma.sessionTreatment.findUnique({
+  const session = await withTenantContext(async (tx) => tx.sessionTreatment.findUnique({
     where: { id: req.params.sessionId },
     include: {
       user: { select: { id: true, email: true, profile: { select: { firstName: true, lastName: true } } } },
     },
-  });
+  }));
 
   if (!session) {
     return res.status(404).json({ message: "Sesión no encontrada" });
@@ -150,7 +149,7 @@ export const addSessionFeedback = async (req: AuthRequest, res: Response) => {
   const severity = deriveFeedbackSeverity(chips);
   const hasAdverseReaction = isAdverseReaction(severity);
 
-  const updated = await prisma.sessionTreatment.update({
+  const updated = await withTenantContext(async (tx) => tx.sessionTreatment.update({
     where: { id: session.id },
     data: {
       memberFeedback: payload.memberFeedback ?? null,
@@ -159,7 +158,7 @@ export const addSessionFeedback = async (req: AuthRequest, res: Response) => {
       feedbackHasAdverseReaction: hasAdverseReaction,
       feedbackAt: new Date(),
     }
-  });
+  }));
 
   await createAuditLog({
     userId: req.user!.id,
@@ -199,12 +198,12 @@ export const addSessionFeedback = async (req: AuthRequest, res: Response) => {
 export const respondToSessionFeedback = async (req: AuthRequest, res: Response) => {
   const payload = sessionFeedbackResponseSchema.parse(req.body);
 
-  const session = await prisma.sessionTreatment.findUnique({
+  const session = await withTenantContext(async (tx) => tx.sessionTreatment.findUnique({
     where: { id: req.params.sessionId },
     include: {
       user: { select: { id: true, email: true, profile: { select: { firstName: true, lastName: true } } } },
     },
-  });
+  }));
 
   if (!session) {
     return res.status(404).json({ message: "Sesión no encontrada" });
@@ -214,14 +213,14 @@ export const respondToSessionFeedback = async (req: AuthRequest, res: Response) 
     return res.status(400).json({ message: "Esta sesión no tiene feedback del paciente para responder" });
   }
 
-  const updated = await prisma.sessionTreatment.update({
+  const updated = await withTenantContext(async (tx) => tx.sessionTreatment.update({
     where: { id: session.id },
     data: {
       feedbackResponseNote: payload.responseNote,
       feedbackRespondedBy: req.user!.id,
       feedbackRespondedAt: new Date(),
     },
-  });
+  }));
 
   await createAuditLog({
     userId: req.user!.id,

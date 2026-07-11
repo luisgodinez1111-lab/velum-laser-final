@@ -51,7 +51,8 @@ import { aiRoutes } from "./routes/aiRoutes";
 import { reportError } from "./utils/errorReporter";
 import { openApiSpec } from "./openapi";
 import { prisma } from "./db/prisma";
-import { withTenantContext } from "./db/withTenantContext";
+import { prismaSystem } from "./db/prismaSystem";
+import { withSystemContext } from "./db/withTenantContext";
 import { getSseConnectionCount } from "./services/notificationService";
 import { requestContext } from "./utils/requestContext";
 import { getWorkerStatus } from "./utils/workerRegistry";
@@ -137,13 +138,14 @@ app.get("/api/v1/health/detailed", healthKeyOrAdmin, async (req: express.Request
     const todayEnd = new Date();
     todayEnd.setHours(23, 59, 59, 999);
 
-    const [activeMembers, appointmentsToday, pendingIntakes] = await Promise.all([
-      prisma.membership.count({ where: { status: "active" } }),
-      withTenantContext(async (tx) => tx.appointment.count({
+    // KPIs globales del sistema (cross-tenant, ops-level) → withSystemContext.
+    const [activeMembers, appointmentsToday, pendingIntakes] = await withSystemContext((tx) => Promise.all([
+      tx.membership.count({ where: { status: "active" } }),
+      tx.appointment.count({
         where: { startAt: { gte: todayStart, lte: todayEnd }, status: { not: "canceled" } },
-      })),
-      prisma.medicalIntake.count({ where: { status: "submitted" } }),
-    ]);
+      }),
+      tx.medicalIntake.count({ where: { status: "submitted" } }),
+    ]));
     checks.businessMetrics = { ok: true, activeMembers, appointmentsToday, pendingIntakes };
   } catch {
     checks.businessMetrics = { ok: true, error: "metrics_unavailable" };
@@ -353,7 +355,10 @@ const shutdown = (signal: string) => {
   // hace seguro re-procesar un batch a medias si el drain no alcanza).
   triggerWorkerStop?.();
   server.close(() => {
-    prisma.$disconnect().then(() => {
+    // Cierra ambos pools: el normal (app_user) y el privilegiado (prismaSystem).
+    // Si SYSTEM_DATABASE_URL no está seteado, prismaSystem === prisma → el
+    // segundo disconnect es un no-op inofensivo.
+    Promise.allSettled([prisma.$disconnect(), prismaSystem.$disconnect()]).then(() => {
       logger.info("[shutdown] Clean shutdown complete");
       process.exit(0);
     }).catch(() => process.exit(1));

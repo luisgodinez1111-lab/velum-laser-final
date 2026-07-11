@@ -5,7 +5,7 @@ import {
   getStripeWebhookConfig,
   handleBusinessStripeEvent,
 } from "../services/stripeWebhookService";
-import { prisma } from "../db/prisma";
+import { withSystemContext } from "../db/withTenantContext";
 import { logger } from "../utils/logger";
 
 const getStripeSignature = (req: Request): string => {
@@ -59,9 +59,10 @@ export const stripeWebhookController = async (req: Request, res: Response): Prom
   // race condition where two simultaneous requests both pass the findUnique check.
   let isDuplicate = false;
   try {
-    await prisma.webhookEvent.create({
+    // WebhookEvent es tabla de dedupe global (sin tenantId) → withSystemContext.
+    await withSystemContext((tx) => tx.webhookEvent.create({
       data: { stripeEventId: event.id, type: event.type, processedAt: new Date() },
-    });
+    }));
   } catch (err) {
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
       // Unique constraint violation — another worker already registered this event

@@ -1,8 +1,8 @@
 import { Response } from "express";
-import { prisma } from "../db/prisma";
 import { AuthRequest } from "../middlewares/auth";
 import { auditFilterSchema } from "../validators/audit";
 import { paginated } from "../utils/response";
+import { withTenantContext } from "../db/withTenantContext";
 
 export const listAuditLogsV1 = async (req: AuthRequest, res: Response) => {
   const parsed = auditFilterSchema.parse(req.query);
@@ -31,8 +31,8 @@ export const listAuditLogsV1 = async (req: AuthRequest, res: Response) => {
   const userSelect = { id: true, email: true, role: true } as const;
 
   const [total, logs] = await Promise.all([
-    prisma.auditLog.count({ where }),
-    prisma.auditLog.findMany({
+    withTenantContext(async (tx) => tx.auditLog.count({ where })),
+    withTenantContext(async (tx) => tx.auditLog.findMany({
       where,
       ...(withRelations ? {
         include: {
@@ -44,7 +44,7 @@ export const listAuditLogsV1 = async (req: AuthRequest, res: Response) => {
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       skip,
       take: limit,
-    })
+    }))
   ]);
 
   return paginated(res, logs, { page, limit, total });

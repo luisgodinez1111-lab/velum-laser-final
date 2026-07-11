@@ -1,9 +1,9 @@
 import { Response } from "express";
-import { prisma } from "../db/prisma";
 import { AuthRequest } from "../middlewares/auth";
+import { withTenantContext } from "../db/withTenantContext";
 
 export const listWebhookEvents = async (_req: AuthRequest, res: Response) => {
-  const events = await prisma.webhookEvent.findMany({
+  const events = await withTenantContext(async (tx) => tx.webhookEvent.findMany({
     orderBy: { createdAt: "desc" },
     take: 200,
     select: {
@@ -13,7 +13,7 @@ export const listWebhookEvents = async (_req: AuthRequest, res: Response) => {
       processedAt: true,
       createdAt: true
     }
-  });
+  }));
 
   return res.json({ events });
 };

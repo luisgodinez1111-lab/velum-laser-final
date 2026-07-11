@@ -1,7 +1,8 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "./prisma";
+import { prismaSystem } from "./prismaSystem";
 import { env } from "../utils/env";
-import { getTenantId } from "../utils/tenantContext";
+import { getTenantId, runInTenantTx, runAsSystem } from "../utils/tenantContext";
 
 /**
  * Ejecuta `fn` dentro de una transacción Postgres con `app.tenant_id` seteado
@@ -50,12 +51,16 @@ export async function withTenantContext<T>(
     return fn(prisma as unknown as Prisma.TransactionClient);
   }
 
-  return prisma.$transaction(async (tx) => {
-    // set_config(name, value, is_local) — equivalente a SET LOCAL pero usable
-    // dentro de una expression. is_local=true: el setting expira al cerrar tx.
-    await tx.$executeRaw`SELECT set_config('app.tenant_id', ${tenantId}, true)`;
-    return fn(tx);
-  });
+  // runInTenantTx marca este scope como "con SET LOCAL activo" para que el hook
+  // de auditoría en prisma.ts NO lo reporte como query sin contexto.
+  return runInTenantTx(() =>
+    prisma.$transaction(async (tx) => {
+      // set_config(name, value, is_local) — equivalente a SET LOCAL pero usable
+      // dentro de una expression. is_local=true: el setting expira al cerrar tx.
+      await tx.$executeRaw`SELECT set_config('app.tenant_id', ${tenantId}, true)`;
+      return fn(tx);
+    }),
+  );
 }
 
 /**
@@ -67,3 +72,58 @@ export const withExplicitTenant = <T>(
   tenantId: string,
   fn: (tx: Prisma.TransactionClient) => Promise<T>,
 ): Promise<T> => withTenantContext(fn, { tenantIdOverride: tenantId });
+
+/**
+ * Como withTenantContext, pero SIEMPRE abre una transacción — aunque RLS esté
+ * apagado. Úsalo para bloques multi-statement que deben ser atómicos con
+ * independencia de RLS (p.ej. crear Lead + MarketingAttribution juntos).
+ *
+ * A diferencia de withTenantContext/withExplicitTenant (que en el fallback
+ * RLS-off corren `fn(prisma)` sin transacción), aquí la atomicidad se preserva
+ * siempre. El `SET LOCAL app.tenant_id` solo se emite cuando `rlsEnforce` y hay
+ * tenantId; el resto del tiempo es una transacción normal.
+ */
+export function withTenantTransaction<T>(
+  tenantId: string | undefined,
+  fn: (tx: Prisma.TransactionClient) => Promise<T>,
+): Promise<T> {
+  if (env.rlsBypassEmergency) {
+    return prisma.$transaction((tx) => fn(tx));
+  }
+  return runInTenantTx(() =>
+    prisma.$transaction(async (tx) => {
+      if (env.rlsEnforce && tenantId) {
+        await tx.$executeRaw`SELECT set_config('app.tenant_id', ${tenantId}, true)`;
+      }
+      return fn(tx);
+    }),
+  );
+}
+
+/**
+ * Ejecuta `fn` DECLARANDO intención cross-tenant: corre SIN app.tenant_id.
+ *
+ * Úsalo únicamente cuando la operación no puede conocer el tenant todavía o
+ * necesita cruzar tenants a propósito:
+ *   - (B) pre-auth: buscar user por email global en login/reset.
+ *   - (C) público/webhook: resolver el tenant desde un recurso por id/token
+ *         (p.ej. localizar el Payment/CustomCharge de un evento Stripe) para
+ *         luego continuar con `withExplicitTenant(clinicId, …)`.
+ *   - (D) jobs/crons: listar todos los tenants antes de iterar cada uno.
+ *
+ * Corre contra `prismaSystem` — la conexión PRIVILEGIADA (rol con BYPASSRLS,
+ * p.ej. neondb_owner vía SYSTEM_DATABASE_URL). Ese rol ignora las policies RLS,
+ * así que resuelve recursos cross-tenant sin `app.tenant_id` incluso bajo
+ * fail-closed (Etapa 4). Si SYSTEM_DATABASE_URL no está seteado, `prismaSystem`
+ * es el cliente normal (app_user) — seguro mientras la policy tenga fallback
+ * permisivo (pre-Etapa 4) y en tests.
+ *
+ * Marca `runAsSystem` para que el hook de auditoría no lo reporte como wrap
+ * olvidado. Úsalo SOLO para reads-resolver/mantenimiento cross-tenant; las
+ * escrituras tenant-scoped van por withExplicitTenant (app_user + tenant).
+ */
+export function withSystemContext<T>(
+  fn: (tx: Prisma.TransactionClient) => Promise<T>,
+): Promise<T> {
+  return runAsSystem(() => fn(prismaSystem as unknown as Prisma.TransactionClient));
+}

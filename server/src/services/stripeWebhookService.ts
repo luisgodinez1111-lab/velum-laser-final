@@ -1,7 +1,7 @@
 import Stripe from "stripe";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../db/prisma";
-import { withTenantContext } from "../db/withTenantContext";
+import { withTenantContext, withSystemContext, withExplicitTenant } from "../db/withTenantContext";
 import { logger } from "../utils/logger";
 import { env } from "../utils/env";
 import {
@@ -185,8 +185,10 @@ const filterDataByFields = (delegateName: string, data: JsonObject): JsonObject 
 const readAppSettingValue = async (key: string): Promise<unknown> => {
   const delegate = getDelegate("appSetting");
   if (!delegate?.findUnique) return null;
+  const findUnique = delegate.findUnique;
   try {
-    const row = (await delegate.findUnique({ where: { key } })) as JsonObject | null;
+    // AppSetting no es tenant-scoped → withSystemContext (silencia el hook de auditoría).
+    const row = (await withSystemContext(() => findUnique({ where: { key } }))) as JsonObject | null;
     if (!row) return null;
     return row.value ?? null;
   } catch (err) {
@@ -329,30 +331,28 @@ const upsertMembership = async (input: MembershipUpsertInput): Promise<void> => 
     return;
   }
 
-  const delegate = getDelegate(delegateName);
-  if (!delegate) return;
+  if (!getDelegate(delegateName)) return;
 
   const fields = getDelegateFieldSet(delegateName);
   let existing: JsonObject | null = null;
 
   try {
-    if (input.stripeSubscriptionId && fields.has("stripeSubscriptionId") && delegate.findFirst) {
-      existing = (await delegate.findFirst({
-        where: { stripeSubscriptionId: input.stripeSubscriptionId },
-      })) as JsonObject | null;
-    }
-
-    if (!existing && input.stripeCustomerId && fields.has("stripeCustomerId") && delegate.findFirst) {
-      existing = (await delegate.findFirst({
-        where: { stripeCustomerId: input.stripeCustomerId },
-      })) as JsonObject | null;
-    }
-
-    if (!existing && input.userId && fields.has("userId") && delegate.findFirst) {
-      existing = (await delegate.findFirst({
-        where: { userId: input.userId },
-      })) as JsonObject | null;
-    }
+    // Webhook: resolvemos la membresía por ids de Stripe → withSystemContext (tx delegate).
+    existing = await withSystemContext(async (tx) => {
+      const d = (tx as Record<string, unknown>)[delegateName] as Delegate | null;
+      if (!d?.findFirst) return null;
+      let found: JsonObject | null = null;
+      if (input.stripeSubscriptionId && fields.has("stripeSubscriptionId")) {
+        found = (await d.findFirst({ where: { stripeSubscriptionId: input.stripeSubscriptionId } })) as JsonObject | null;
+      }
+      if (!found && input.stripeCustomerId && fields.has("stripeCustomerId")) {
+        found = (await d.findFirst({ where: { stripeCustomerId: input.stripeCustomerId } })) as JsonObject | null;
+      }
+      if (!found && input.userId && fields.has("userId")) {
+        found = (await d.findFirst({ where: { userId: input.userId } })) as JsonObject | null;
+      }
+      return found;
+    });
   } catch (error) {
     // Re-throw: si el lookup de membresía falla por BD, propagamos para que Stripe reintente
     logger.error({ err: error }, "[stripe-webhook] membership lookup failed — re-throwing for Stripe retry");
@@ -386,23 +386,29 @@ const upsertMembership = async (input: MembershipUpsertInput): Promise<void> => 
   }
 
   try {
-    const existingId = cleanString(existing?.id);
-    if (existing && existingId && delegate.update) {
-      await delegate.update({
-        where: { id: existingId },
-        data: filtered,
-      });
-      return;
-    }
+    // Webhook single-tenant: la membresía pertenece al DEFAULT_CLINIC_ID → withExplicitTenant.
+    // El create lleva tenantId="default" por @default del schema; WITH CHECK pasa.
+    await withExplicitTenant(env.defaultClinicId, async (tx) => {
+      const d = (tx as Record<string, unknown>)[delegateName] as Delegate | null;
+      if (!d) return;
+      const existingId = cleanString(existing?.id);
+      if (existing && existingId && d.update) {
+        await d.update({
+          where: { id: existingId },
+          data: filtered,
+        });
+        return;
+      }
 
-    if (fields.has("userId") && !cleanString(filtered.userId)) {
-      logger.warn("[stripe-webhook] membership create skipped: missing userId");
-      return;
-    }
+      if (fields.has("userId") && !cleanString(filtered.userId)) {
+        logger.warn("[stripe-webhook] membership create skipped: missing userId");
+        return;
+      }
 
-    if (delegate.create) {
-      await delegate.create({ data: filtered });
-    }
+      if (d.create) {
+        await d.create({ data: filtered });
+      }
+    });
   } catch (error) {
     // Re-throw: si el write de membresía falla, el webhook debe devolver 500 a Stripe
     // para que reintente. Un catch silencioso aquí dejaría al usuario sin membresía activa
@@ -464,11 +470,12 @@ const processCheckoutCompleted = async (event: Stripe.Event, stripe: Stripe): Pr
   if (cleanString(metadata.type) === "custom_charge") {
     const customChargeId = cleanString(metadata.customChargeId);
     if (customChargeId) {
-      // Idempotency guard — skip if already PAID to prevent double notifications
-      const existing = await prisma.customCharge.findUnique({
+      // Idempotency guard — skip if already PAID to prevent double notifications.
+      // Webhook (sin JWT): resolvemos el cobro por id → withSystemContext.
+      const existing = await withSystemContext((tx) => tx.customCharge.findUnique({
         where: { id: customChargeId },
-        select: { status: true },
-      });
+        select: { status: true, tenantId: true },
+      }));
       if (!existing || existing.status === "PAID") {
         logger.info({ customChargeId }, "[stripe-webhook] custom_charge already PAID or not found — skipping");
         return;
@@ -476,7 +483,7 @@ const processCheckoutCompleted = async (event: Stripe.Event, stripe: Stripe): Pr
 
       const paymentIntentId = extractExpandableId(session.payment_intent);
       const subscriptionId = extractExpandableId(session.subscription);
-      const updatedCharge = await prisma.customCharge.update({
+      const updatedCharge = await withExplicitTenant(existing.tenantId, (tx) => tx.customCharge.update({
         where: { id: customChargeId },
         data: {
           status: "PAID",
@@ -488,7 +495,7 @@ const processCheckoutCompleted = async (event: Stripe.Event, stripe: Stripe): Pr
         include: {
           user: { select: { id: true, email: true, profile: { select: { firstName: true, lastName: true } } } },
         },
-      }).catch((err: Error) => {
+      })).catch((err: Error) => {
         logger.error({ err }, "[stripe-webhook] Failed to mark custom charge as paid");
         return null;
       });
@@ -672,11 +679,12 @@ const processCheckoutCompleted = async (event: Stripe.Event, stripe: Stripe): Pr
       }).catch((err) => logger.error({ err }, "[stripe-webhook] membership_activated notification failed"));
     }
 
-    // Register Payment record for the checkout (first invoice)
-    const checkoutMembership = await prisma.membership.findFirst({
+    // Register Payment record for the checkout (first invoice).
+    // Webhook: resolvemos la membresía por stripeSubscriptionId → withSystemContext.
+    const checkoutMembership = await withSystemContext((tx) => tx.membership.findFirst({
       where: { stripeSubscriptionId: subCtx.stripeSubscriptionId },
       select: { id: true },
-    }).catch(() => null);
+    })).catch(() => null);
     const sessionPaymentIntent = extractExpandableId(session.payment_intent);
     if (session.invoice || sessionPaymentIntent) {
       await upsertPaymentRecord({
@@ -710,9 +718,13 @@ const upsertPaymentRecord = async (input: {
   failureMessage?: string | null;
 }): Promise<void> => {
   if (!input.userId || !input.stripeInvoiceId) return;
+  // Capturamos los valores ya narrowed: el guard no sobrevive dentro del closure.
+  const userId = input.userId;
+  const stripeInvoiceId = input.stripeInvoiceId;
   try {
-    await prisma.payment.upsert({
-      where: { stripeInvoiceId: input.stripeInvoiceId },
+    // Webhook single-tenant: el pago pertenece al DEFAULT_CLINIC_ID → withExplicitTenant.
+    await withExplicitTenant(env.defaultClinicId, (tx) => tx.payment.upsert({
+      where: { stripeInvoiceId },
       update: {
         stripeEventId: input.stripeEventId,
         stripePaymentIntentId: input.stripePaymentIntentId ?? undefined,
@@ -727,10 +739,10 @@ const upsertPaymentRecord = async (input: {
         failedAt: input.status === "failed" ? new Date() : undefined,
       },
       create: {
-        userId: input.userId,
+        userId,
         membershipId: input.membershipId ?? undefined,
         stripeEventId: input.stripeEventId,
-        stripeInvoiceId: input.stripeInvoiceId,
+        stripeInvoiceId,
         stripePaymentIntentId: input.stripePaymentIntentId ?? undefined,
         stripeSubscriptionId: input.stripeSubscriptionId ?? undefined,
         amount: input.amount ?? undefined,
@@ -745,7 +757,7 @@ const upsertPaymentRecord = async (input: {
         // input.userId.clinicId o derivar de stripeAccountId.
         tenantId: env.defaultClinicId,
       },
-    });
+    }));
   } catch (err) {
     // El evento ya quedó marcado como procesado (idempotencia at-most-once), así
     // que NO reintentamos aquí para no duplicar side effects; pero alertamos a
@@ -794,10 +806,11 @@ const processInvoiceEvent = async (event: Stripe.Event, stripe: Stripe, success:
 
   // Register Payment record for history tracking
   if (userId) {
-    const membership = await prisma.membership.findFirst({
+    // Webhook: resolvemos la membresía por stripeSubscriptionId → withSystemContext.
+    const membership = await withSystemContext((tx) => tx.membership.findFirst({
       where: { stripeSubscriptionId: subscriptionId },
       select: { id: true },
-    }).catch(() => null);
+    })).catch(() => null);
     // last_payment_error no está en el tipo estático de Stripe.Invoice pero puede venir en el webhook
     const invoiceRaw = invoice as unknown as Record<string, unknown>;
     const lastPaymentError = invoiceRaw.last_payment_error as Record<string, unknown> | undefined;
@@ -905,14 +918,21 @@ const processCustomerDeleted = async (event: Stripe.Event): Promise<void> => {
       const delegate = getDelegate(delegateName);
       const fields = getDelegateFieldSet(delegateName);
       if (delegate?.update && fields.has("stripeCustomerId")) {
-        // Find membership by stripeCustomerId
-        const existing = delegate.findFirst
-          ? ((await delegate.findFirst({ where: { stripeCustomerId } })) as { id: string } | null)
-          : null;
-        if (existing?.id && delegate.update) {
-          await delegate.update({
-            where: { id: existing.id },
-            data: filterDataByFields(delegateName, { status: "canceled", updatedAt: new Date() }),
+        // Webhook: resolvemos la membresía por stripeCustomerId → withSystemContext (tx delegate).
+        const existing = (await withSystemContext(async (tx) => {
+          const d = (tx as Record<string, unknown>)[delegateName] as Delegate | null;
+          return d?.findFirst ? d.findFirst({ where: { stripeCustomerId } }) : null;
+        })) as { id: string } | null;
+        if (existing?.id) {
+          // Write single-tenant → withExplicitTenant(DEFAULT_CLINIC_ID).
+          await withExplicitTenant(env.defaultClinicId, async (tx) => {
+            const d = (tx as Record<string, unknown>)[delegateName] as Delegate | null;
+            if (d?.update) {
+              await d.update({
+                where: { id: existing.id },
+                data: filterDataByFields(delegateName, { status: "canceled", updatedAt: new Date() }),
+              });
+            }
           });
         }
       }
@@ -957,10 +977,11 @@ const processChargeRefunded = async (event: Stripe.Event): Promise<void> => {
 
   try {
     if (paymentIntentId) {
-      await prisma.payment.updateMany({
+      // Webhook single-tenant: el pago pertenece al DEFAULT_CLINIC_ID → withExplicitTenant.
+      await withExplicitTenant(env.defaultClinicId, (tx) => tx.payment.updateMany({
         where: { stripePaymentIntentId: paymentIntentId },
         data: { status: "refunded" },
-      });
+      }));
     }
     logger.info(
       { eventId: event.id, paymentIntentId, amount },

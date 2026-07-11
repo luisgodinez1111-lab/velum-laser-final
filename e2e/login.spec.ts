@@ -58,3 +58,17 @@ test.describe("Login — mapeo de errores", () => {
     await expect(page.getByText(/credenciales incorrectas/i)).toHaveCount(0);
   });
 });
+
+test.describe("Recuperación de contraseña", () => {
+  // Regresión: el link de forgot desde ?mode=login estaba roto — __effectiveViewState
+  // (de la URL) ganaba sobre viewState="forgot" y re-renderizaba el login.
+  test("forgot password → confirmación 'enlace enviado'", async ({ page }) => {
+    await mockBackend(page); // POST /auth/forgot-password cae al catch-all 200 (respuesta genérica)
+    await page.goto(LOGIN_URL);
+    await page.getByRole("button", { name: /olvidaste tu contraseña/i }).click();
+    await expect(page.getByRole("heading", { name: /restablecer contraseña/i })).toBeVisible();
+    await page.getByPlaceholder("correo@ejemplo.com").first().fill("paciente@velum.test");
+    await page.getByRole("button", { name: /enviar enlace/i }).click();
+    await expect(page.getByRole("heading", { name: /enlace enviado/i })).toBeVisible();
+  });
+});

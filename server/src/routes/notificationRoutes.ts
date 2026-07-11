@@ -9,7 +9,7 @@ import {
   readAllNotifications,
 } from "../controllers/notificationController";
 import { registerSseClient, unregisterSseClient } from "../services/notificationService";
-import { prisma } from "../db/prisma";
+import { withTenantContext } from "../db/withTenantContext";
 
 export const notificationRoutes = Router();
 
@@ -30,11 +30,11 @@ notificationRoutes.get("/api/v1/notifications/stream", requireAuth, async (req, 
     const since = new Date(sinceRaw);
     if (!isNaN(since.getTime())) {
       try {
-        const missed = await prisma.notification.findMany({
+        const missed = await withTenantContext((tx) => tx.notification.findMany({
           where: { userId, createdAt: { gt: since } },
           orderBy: { createdAt: "asc" },
           take: 50,
-        });
+        }));
         for (const n of missed) {
           res.write(`data: ${JSON.stringify(n)}\n\n`);
         }

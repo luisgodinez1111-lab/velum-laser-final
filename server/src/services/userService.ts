@@ -1,10 +1,10 @@
-import { prisma } from "../db/prisma";
-import { withTenantContext } from "../db/withTenantContext";
+import { withTenantContext, withSystemContext } from "../db/withTenantContext";
 import { getTenantIdOr } from "../utils/tenantContext";
 import { env } from "../utils/env";
 
+// Pre-auth: lookup por email global (no conocemos el tenant aún) → withSystemContext.
 export const getUserByEmail = (email: string) =>
-  withTenantContext(async (tx) => tx.user.findUnique({ where: { email } }));
+  withSystemContext((tx) => tx.user.findUnique({ where: { email } }));
 
 export const createUser = async (data: {
   email: string;
@@ -57,11 +57,11 @@ export const updateProfile = async (userId: string, data: {
   phone?: string;
   timezone?: string;
 }) => {
-  return prisma.profile.upsert({
+  return withTenantContext((tx) => tx.profile.upsert({
     where: { userId },
     create: { userId, ...data, tenantId: getTenantIdOr(env.defaultClinicId) },
     update: data
-  });
+  }));
 };
 
 export const getUserWithRelations = (userId: string) =>

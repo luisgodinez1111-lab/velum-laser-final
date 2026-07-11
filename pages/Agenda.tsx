@@ -658,7 +658,7 @@ export const Agenda: React.FC = () => {
       ? (__guestMode as "intro" | "login" | "register")
       : (["intro", "login", "register"].includes(viewState) ? (viewState as "intro" | "login" | "register") : "intro");
 
-  if (!isAuthenticated && __effectiveViewState === "intro") {
+  if (!isAuthenticated && __effectiveViewState === "intro" && viewState !== "forgot" && viewState !== "forgot-sent") {
     return (
       <div className="min-h-[calc(100vh-7rem)] flex animate-fade-in">
         {/* Brand panel — Apple híbrido sin blobs */}
@@ -756,7 +756,7 @@ export const Agenda: React.FC = () => {
     );
   }
 
-  if (!isAuthenticated && __effectiveViewState === "login") {
+  if (!isAuthenticated && __effectiveViewState === "login" && viewState !== "forgot" && viewState !== "forgot-sent") {
     return (
       <div className="min-h-[calc(100vh-7rem)] flex animate-fade-in">
         {/* Brand panel — Apple híbrido sin blobs */}
@@ -911,7 +911,7 @@ export const Agenda: React.FC = () => {
     );
   }
 
-  if (!isAuthenticated && __effectiveViewState === "register") {
+  if (!isAuthenticated && __effectiveViewState === "register" && viewState !== "forgot" && viewState !== "forgot-sent") {
     return (
       <div className="min-h-[calc(100vh-7rem)] flex animate-fade-in">
         {/* Brand panel — Apple híbrido sin blobs */}

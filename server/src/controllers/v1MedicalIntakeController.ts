@@ -1,6 +1,5 @@
 import { Prisma } from "@prisma/client";
 import { Response } from "express";
-import { prisma } from "../db/prisma";
 import { withTenantContext } from "../db/withTenantContext";
 import { AuthRequest } from "../middlewares/auth";
 import { createAuditLog } from "../services/auditService";
@@ -14,11 +13,11 @@ import { getTenantIdOr } from "../utils/tenantContext";
 import { env } from "../utils/env";
 
 const ensureIntake = async (userId: string) => {
-  return prisma.medicalIntake.upsert({
+  return withTenantContext(async (tx) => tx.medicalIntake.upsert({
     where: { userId },
     update: {},
     create: { userId, status: "draft", tenantId: getTenantIdOr(env.defaultClinicId) }
-  });
+  }));
 };
 
 export const getMyMedicalIntake = async (req: AuthRequest, res: Response) => {
@@ -47,7 +46,7 @@ export const updateMyMedicalIntake = async (req: AuthRequest, res: Response) => 
     ? `sig_${current.id}_${Date.now()}`
     : (payload.signatureKey ?? undefined);
 
-  const updated = await prisma.medicalIntake.update({
+  const updated = await withTenantContext(async (tx) => tx.medicalIntake.update({
     where: { id: current.id },
     data: {
       personalJson: payload.personalJson as Prisma.InputJsonValue | undefined,
@@ -63,7 +62,7 @@ export const updateMyMedicalIntake = async (req: AuthRequest, res: Response) => 
       rejectedAt: requestedStatus === "submitted" ? null : current.rejectedAt,
       rejectionReason: requestedStatus === "submitted" ? null : current.rejectionReason
     }
-  });
+  }));
 
   await createAuditLog({
     userId: req.user!.id,
@@ -93,7 +92,7 @@ export const updateMyMedicalIntake = async (req: AuthRequest, res: Response) => 
 export const getMedicalIntakeByUserId = async (req: AuthRequest, res: Response) => {
   const userId = String(req.params.userId ?? "").trim();
   if (!userId) throw badRequest("userId requerido");
-  const intake = await prisma.medicalIntake.findUnique({ where: { userId } });
+  const intake = await withTenantContext(async (tx) => tx.medicalIntake.findUnique({ where: { userId } }));
   if (!intake) throw notFound("Expediente");
   return res.json({
     ...intake,
@@ -106,10 +105,10 @@ export const approveMedicalIntake = async (req: AuthRequest, res: Response) => {
 
   // Solo necesitamos existencia + id para el update; evitamos arrastrar
   // signatureImageData (PHI, cientos de KB) y los JSON del expediente.
-  const intake = await prisma.medicalIntake.findUnique({
+  const intake = await withTenantContext(async (tx) => tx.medicalIntake.findUnique({
     where: { userId: req.params.userId },
     select: { id: true }
-  });
+  }));
 
   if (!intake) {
     return res.status(404).json({ message: "Expediente no encontrado" });
@@ -119,7 +118,7 @@ export const approveMedicalIntake = async (req: AuthRequest, res: Response) => {
     return res.status(400).json({ message: "Debes indicar motivo de rechazo" });
   }
 
-  const updated = await prisma.medicalIntake.update({
+  const updated = await withTenantContext(async (tx) => tx.medicalIntake.update({
     where: { id: intake.id },
     data: payload.approved
       ? {
@@ -136,7 +135,7 @@ export const approveMedicalIntake = async (req: AuthRequest, res: Response) => {
           approvedAt: null,
           approvedByUserId: null
         }
-  });
+  }));
 
   await createAuditLog({
     userId: req.user!.id,
