@@ -39,10 +39,13 @@ export async function withTenantContext<T>(
   const tenantId = options?.tenantIdOverride ?? getTenantId();
 
   // Kill switch de emergencia: bypass total aún con rlsEnforce=true.
-  // Diseñado para incidentes productivos donde se necesita desactivar RLS
-  // sin rebuild ni tocar otra config — solo editar .env + restart.
+  // Enruta por `prismaSystem` (conexión owner/BYPASSRLS) — NO por `prisma`
+  // (app_user), porque bajo policies fail-closed app_user sin app.tenant_id ve
+  // 0 filas: correr como owner es lo único que ignora RLS de verdad. Si
+  // SYSTEM_DATABASE_URL no está seteada, prismaSystem === prisma (irrelevante,
+  // porque sin esa URL tampoco hay fail-closed activo).
   if (env.rlsBypassEmergency) {
-    return fn(prisma as unknown as Prisma.TransactionClient);
+    return fn(prismaSystem as unknown as Prisma.TransactionClient);
   }
 
   // Si RLS está apagado o no hay contexto, ejecuta fn con el cliente normal
@@ -87,8 +90,10 @@ export function withTenantTransaction<T>(
   tenantId: string | undefined,
   fn: (tx: Prisma.TransactionClient) => Promise<T>,
 ): Promise<T> {
+  // Kill switch: transacciona sobre la conexión owner (BYPASSRLS) para ignorar
+  // RLS de verdad bajo fail-closed (ver nota en withTenantContext).
   if (env.rlsBypassEmergency) {
-    return prisma.$transaction((tx) => fn(tx));
+    return prismaSystem.$transaction((tx) => fn(tx));
   }
   return runInTenantTx(() =>
     prisma.$transaction(async (tx) => {
