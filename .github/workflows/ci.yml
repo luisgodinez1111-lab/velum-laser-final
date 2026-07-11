@@ -17,7 +17,9 @@ jobs:
 
     services:
       postgres:
-        image: postgres:16-alpine
+        # pgvector/pgvector en vez de postgres:16-alpine — la migración
+        # 20260427005000 hace CREATE EXTENSION vector, que la imagen vanilla no trae.
+        image: pgvector/pgvector:pg16
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
