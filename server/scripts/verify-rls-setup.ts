@@ -24,8 +24,22 @@ const bad = (msg: string) => { console.log(`  ❌ ${msg}`); failures++; };
 const run = async () => {
   console.log("=== Verificación de setup RLS (read-only) ===\n");
 
+  // 0. ¿Como QUÉ rol conecta ESTA sesión? — el gate de Etapa 4.
+  //    Si la app conecta como un rol con BYPASSRLS/superuser, las policies NO
+  //    filtran (fail-closed no aísla). Debe conectar como app_user (NOBYPASSRLS).
+  console.log("0. Conexión actual (¿este DATABASE_URL respeta RLS?)");
+  const conn = await prisma.$queryRaw<Array<{ current_user: string; is_super: boolean; bypassrls: boolean }>>`
+    SELECT current_user,
+           current_setting('is_superuser')::bool AS is_super,
+           (SELECT rolbypassrls FROM pg_roles WHERE rolname = current_user) AS bypassrls`;
+  const c = conn[0];
+  console.log(`  ℹ️  Conectado como: ${c.current_user}`);
+  if (c.is_super) bad(`${c.current_user} ES superuser → BYPASSEA RLS (fail-closed NO aislaría). Conecta como app_user.`);
+  else if (c.bypassrls) bad(`${c.current_user} tiene BYPASSRLS → NO respeta policies. Conecta como app_user para runtime.`);
+  else ok(`${c.current_user} respeta RLS (NOSUPERUSER + NOBYPASSRLS) — correcto para el runtime de la app`);
+
   // 1. Rol app_user: existe + NOSUPERUSER + NOBYPASSRLS + LOGIN
-  console.log("1. Rol app_user");
+  console.log("\n1. Rol app_user");
   const roles = await prisma.$queryRaw<Array<{ rolsuper: boolean; rolbypassrls: boolean; rolcanlogin: boolean }>>`
     SELECT rolsuper, rolbypassrls, rolcanlogin FROM pg_roles WHERE rolname = 'app_user'`;
   if (roles.length === 0) {
